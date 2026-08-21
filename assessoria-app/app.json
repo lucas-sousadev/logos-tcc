@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "assessoria-app",
+    "slug": "assessoria-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "assessoriaapp",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
