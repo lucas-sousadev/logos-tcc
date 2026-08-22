@@ -9,6 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import BackButton from "@/components/ui/BackButton";
 
 export default function LoginFuncionario() {
   const router = useRouter();
@@ -59,8 +60,10 @@ export default function LoginFuncionario() {
       <View style={styles.header} />
 
       <View style={styles.content}>
+        <BackButton />
+
         <Text style={styles.title}>
-          LOGIN DO FUNCIONÁRIO
+          Login - Funcionário
         </Text>
 
         <Text style={styles.subtitle}>

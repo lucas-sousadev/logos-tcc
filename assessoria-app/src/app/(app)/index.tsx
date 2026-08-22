@@ -1,44 +1,98 @@
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
-import { useAuth } from "../../contexts/AuthContext";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
 import { useRouter } from "expo-router";
 
+import Header from "../../components/layout/Header";
+import { useAuth } from "../../contexts/AuthContext";
+
 export default function Dashboard() {
-  const { usuario, logout } = useAuth();
   const router = useRouter();
-  
-  async function handleLogout() {
-    await logout();
-  }
+
+  const { usuario, logout } = useAuth();
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>LOGOS</Text>
+      <Header />
 
-      <Text style={styles.subtitle}>
-        Usuário autenticado
-      </Text>
-
-      <Text>Nome: {usuario?.nome}</Text>
-      <Text>E-mail: {usuario?.email}</Text>
-      <Text>Perfil: {usuario?.perfil}</Text>
-      <Text>Assessoria: {usuario?.assessoria_id}</Text>
-
-       <TouchableOpacity
-        style={styles.button}
-        onPress={handleLogout}
+      <ScrollView
+        contentContainerStyle={styles.content}
       >
-        <Text style={styles.buttonText}>SAIR</Text>
-      </TouchableOpacity>
+        <Text style={styles.sectionTitle}>
+          Visão geral
+        </Text>
 
-      {usuario?.perfil === "ASSESSOR" && (
+        <View style={styles.cardsRow}>
+          <View style={styles.card}>
+            <Text style={styles.cardNumber}>
+              0
+            </Text>
+
+            <Text style={styles.cardLabel}>
+              Releases
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardNumber}>
+              0
+            </Text>
+
+            <Text style={styles.cardLabel}>
+              Clippings
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardsRow}>
+          <View style={styles.card}>
+            <Text style={styles.cardNumber}>
+              0
+            </Text>
+
+            <Text style={styles.cardLabel}>
+              Jornalistas
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardNumber}>
+              0
+            </Text>
+
+            <Text style={styles.cardLabel}>
+              Clientes
+            </Text>
+          </View>
+        </View>
+
+        {usuario?.perfil === "ASSESSOR" && (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() =>
+              router.push("/(app)/convites")
+            }
+          >
+            <Text style={styles.secondaryButtonText}>
+              GERENCIAR CONVITES
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.push("/(app)/convites")}
+          style={styles.logoutButton}
+          onPress={logout}
         >
-          <Text style={styles.buttonText}>
-            CONVITES
+          <Text style={styles.logoutText}>
+            SAIR
           </Text>
         </TouchableOpacity>
-      )}
+      </ScrollView>
     </View>
   );
 }
@@ -46,30 +100,79 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F4F4F4",
+  },
+
+  content: {
+    padding: 20,
+  },
+
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 18,
+    color: "#222",
+  },
+
+  cardsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  card: {
+    flex: 1,
+    minHeight: 120,
+    padding: 18,
+
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+
+    justifyContent: "center",
+  },
+
+  cardNumber: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#4D86FF",
+  },
+
+  cardLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 5,
+  },
+
+  secondaryButton: {
+    marginTop: 20,
+    height: 50,
+
+    borderWidth: 1.5,
+    borderColor: "#4D86FF",
+    borderRadius: 25,
+
     justifyContent: "center",
     alignItems: "center",
-    gap: 8,
   },
 
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
+  secondaryButtonText: {
+    color: "#4D86FF",
+    fontWeight: "700",
   },
 
-  subtitle: {
-    fontSize: 18,
-    marginBottom: 10,
-  },
-  button: {
-    marginTop: 25,
-    backgroundColor: "#4D86FF",
-    paddingHorizontal: 40,
-    paddingVertical: 12,
+  logoutButton: {
+    marginTop: 30,
+    height: 50,
+
     borderRadius: 25,
+    backgroundColor: "#E74C3C",
+
+    justifyContent: "center",
+    alignItems: "center",
   },
 
-  buttonText: {
+  logoutText: {
     color: "#FFF",
-    fontWeight: "bold",
+    fontWeight: "700",
   },
 });

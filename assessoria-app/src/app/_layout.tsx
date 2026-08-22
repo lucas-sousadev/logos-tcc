@@ -9,15 +9,19 @@ function RootNavigator() {
   }
 
   return (
-    <Stack>
+    <Stack screenOptions={{
+        headerShown: false,
+      }}>
       <Stack.Protected guard={autenticado}>
-        <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        <Stack.Screen name="(app)"/>
       </Stack.Protected>
 
       <Stack.Protected guard={!autenticado}>
-        <Stack.Screen name="entrar" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="cadastro" options={{ headerShown: false }} />
+        <Stack.Screen name="entrar"/>
+        <Stack.Screen name="login-assessor"/>
+        <Stack.Screen name="login-funcionario"/>
+        <Stack.Screen name="cadastro" />
+        <Stack.Screen name="cadastro-funcionario"/>
       </Stack.Protected>
     </Stack>
   );

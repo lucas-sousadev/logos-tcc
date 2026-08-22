@@ -11,6 +11,7 @@ import { useRouter } from "expo-router";
 
 import { useAuth } from "../contexts/AuthContext";
 import { Convite } from "../services/auth";
+import BackButton from "@/components/ui/BackButton";
 
 export default function CadastroFuncionario() {
     const router = useRouter();
@@ -117,6 +118,7 @@ export default function CadastroFuncionario() {
 
   return (
     <View style={styles.container}>
+      <BackButton />
       {etapa === 1 ? (
         <>
           <Text style={styles.title}>

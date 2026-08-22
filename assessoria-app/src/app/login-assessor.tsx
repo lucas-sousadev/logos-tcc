@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { getToken } from "../services/auth";
+import BackButton from "@/components/ui/BackButton";
 
 export default function LoginAssessor() {
   const router = useRouter();
@@ -71,14 +72,16 @@ export default function LoginAssessor() {
   return (
     <View style={styles.container}>
       <View style={styles.header} />
-
+    
       <View style={styles.content}>
+        <BackButton />
+
         <Text style={styles.title}>
-          LOGIN DO ASSESSOR
+          Login - Assessor
         </Text>
 
         <Text style={styles.subtitle}>
-          Entre na sua conta
+          Entre na sua conta!
         </Text>
 
         <Text style={styles.label}>

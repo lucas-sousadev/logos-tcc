@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
+import BackButton from "@/components/ui/BackButton";
 
 export default function Cadastro() {
   const { registerAssessoria } = useAuth();
@@ -83,6 +84,8 @@ export default function Cadastro() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <BackButton />
+      
       <Text style={styles.title}>Criar assessoria</Text>
 
       <Text style={styles.section}>Dados da assessoria</Text>
