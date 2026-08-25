@@ -11,11 +11,11 @@ import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { getToken } from "../services/auth";
 import BackButton from "@/components/ui/BackButton";
+import { Colors } from "../constants/colors";
 
 export default function LoginAssessor() {
   const router = useRouter();
   const { login, logout } = useAuth();
-
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -23,39 +23,28 @@ export default function LoginAssessor() {
   async function handleLogin() {
     if (!email.trim() || !senha) {
       Alert.alert(
-        "Atenção",
-        "Informe o e-mail e a senha."
+      "Atenção",
+       "Informe o e-mail e a senha."
       );
       return;
     }
 
     try {
       setCarregando(true);
-
       await login(
         email, 
         senha,
         "ASSESSOR" 
       );
 
-      const token = await getToken();
+    const token = await getToken();
 
-      /*
-       * O AuthContext já carregou o usuário.
-       * A proteção da navegação será aplicada pelo
-       * RootLayout.
-       */
       router.replace("/(app)");
     } catch (error) {
       console.error(
         "Erro no login do assessor:",
         error
       );
-
-      /*
-       * Caso futuramente adicionemos uma validação
-       * específica de perfil aqui, podemos limpar a sessão.
-       */
       await logout();
 
       Alert.alert(
@@ -162,7 +151,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     marginBottom: 40,
   },
 
@@ -183,7 +172,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     height: 52,
     borderRadius: 30,
     alignItems: "center",
@@ -199,7 +188,7 @@ const styles = StyleSheet.create({
 
   link: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     marginTop: 25,
   },
 });

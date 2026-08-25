@@ -5,7 +5,7 @@ import {
 } from "react-native";
 
 import Header from "@/components/layout/Header";
-
+import { Colors } from "@/constants/colors";
 export default function Releases() {
   return (
     <View style={styles.container}>
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   },
 
   text: {
-    color: "#666",
+    color: Colors.cinzaClaro,
     marginTop: 8,
   },
 });

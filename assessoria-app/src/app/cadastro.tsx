@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
 import BackButton from "@/components/ui/BackButton";
+import { Colors } from "../constants/colors";
 
 export default function Cadastro() {
   const { registerAssessoria } = useAuth();
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
   button: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 15,

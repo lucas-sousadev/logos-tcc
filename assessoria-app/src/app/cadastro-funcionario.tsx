@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { Convite } from "../services/auth";
 import BackButton from "@/components/ui/BackButton";
+import { Colors } from "../constants/colors";
 
 export default function CadastroFuncionario() {
     const router = useRouter();
@@ -20,7 +21,6 @@ export default function CadastroFuncionario() {
         validarConvite,
         registerFuncionario,
     } = useAuth();
-
     const [etapa, setEtapa] = useState<1 | 2>(1);
 
     const [codigo, setCodigo] = useState("");
@@ -45,7 +45,6 @@ export default function CadastroFuncionario() {
             setErro("Digite o código do convite.");
             return;
         }
-
         try {
             setCarregando(true);
 
@@ -66,7 +65,7 @@ export default function CadastroFuncionario() {
                 : "Não foi possível validar o convite."
             );
         } finally {
-            setCarregando(false);
+          setCarregando(false);
         }
     }
 
@@ -278,7 +277,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     textAlign: "center",
-    color: "#666",
+    color: Colors.cinzaClaro,
     marginBottom: 30,
   },
 
@@ -299,7 +298,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     height: 52,
     borderRadius: 30,
     alignItems: "center",
@@ -322,13 +321,13 @@ const styles = StyleSheet.create({
 
   infoText: {
     textAlign: "center",
-    color: "#666",
+    color: "#707070",
     marginBottom: 25,
   },
 
   link: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     marginTop: 25,
   },
   errorText: {

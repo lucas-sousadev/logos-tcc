@@ -2,16 +2,18 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Image,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Colors } from '@/constants/colors';
 
 export default function Entrar() {
   const router = useRouter();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>ENTRAR</Text>
+      <Image source={require("@/assets/images/LOGOS-logo.png")} style={styles.logo} />
 
       <TouchableOpacity
         style={styles.button}
@@ -44,12 +46,13 @@ export default function Entrar() {
         </Text>
       </TouchableOpacity>
 
+        <Text style={styles.createText}>
+          Ainda não possui uma assessoria? 
+        </Text>
       <TouchableOpacity
         onPress={() => router.push("/cadastro")}
       >
-        <Text style={styles.createText}>
-          Ainda não possui uma assessoria? Criar assessoria
-        </Text>
+        <Text style={styles.assessoriaText}>Clique aqui para criar uma!</Text>
       </TouchableOpacity>
     </View>
   );
@@ -61,6 +64,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 25,
   },
+  logo: {
+    width: 300,
+    height: 90,
+    alignSelf: "center",
+    marginBottom: 40,
+  },
 
   title: {
     fontSize: 32,
@@ -70,7 +79,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     padding: 15,
     borderRadius: 30,
     marginBottom: 20,
@@ -85,7 +94,7 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 2,
-    borderColor: "#4D86FF",
+    borderColor: Colors.corPrincipal,
     padding: 13,
     borderRadius: 30,
     marginBottom: 30,
@@ -93,13 +102,22 @@ const styles = StyleSheet.create({
   },
 
   secondaryButtonText: {
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     fontSize: 18,
     fontWeight: "bold",
   },
 
   createText: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: "#161c29",
+    fontSize: 15,
+  },
+
+  assessoriaText: {
+    textAlign: "center",
+    fontWeight: "bold",    
+    color: Colors.corPrincipal,
+    marginTop: 5,
+    fontSize: 15,
   },
 });

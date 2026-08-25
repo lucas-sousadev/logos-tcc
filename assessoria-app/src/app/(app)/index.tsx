@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../contexts/AuthContext";
+import { Colors } from "@/constants/colors";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -124,39 +125,35 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 120,
     padding: 18,
-
     backgroundColor: "#FFF",
     borderRadius: 16,
-
     justifyContent: "center",
   },
 
   cardNumber: {
     fontSize: 30,
     fontWeight: "800",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
   },
 
   cardLabel: {
     fontSize: 14,
-    color: "#666",
+    color: Colors.cinzaClaro,
     marginTop: 5,
   },
 
   secondaryButton: {
     marginTop: 20,
     height: 50,
-
     borderWidth: 1.5,
-    borderColor: "#4D86FF",
+    borderColor: Colors.corTerciaria,
     borderRadius: 25,
-
     justifyContent: "center",
     alignItems: "center",
   },
 
   secondaryButtonText: {
-    color: "#4D86FF",
+    color: Colors.corTerciaria,
     fontWeight: "700",
   },
 

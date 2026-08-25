@@ -1,6 +1,5 @@
 import { Stack } from "expo-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
-
 function RootNavigator() {
   const { autenticado, carregando } = useAuth();
 

@@ -7,7 +7,7 @@ import {
 } from "react-native";
 
 import { useRouter } from "expo-router";
-
+import { Colors } from "@/constants/colors";
 import Header from "@/components/layout/Header";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -116,6 +116,6 @@ const styles = StyleSheet.create({
 
   itemDescription: {
     marginTop: 5,
-    color: "#666",
+    color: Colors.cinzaClaro,
   },
 });

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
+import { Colors } from "@/constants/colors";
 
 import BackButton from "../../components/ui/BackButton";
 import { useAuth } from "../../contexts/AuthContext";
@@ -309,7 +310,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     textAlign: "center",
-    color: "#666",
+    color: Colors.cinzaClaro,
     marginBottom: 35,
   },
 
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
 
   button: {
     height: 52,
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
 
   message: {
     textAlign: "center",
-    color: "#666",
+    color: Colors.cinzaClaro,
     marginBottom: 25,
   },
   
@@ -392,7 +393,7 @@ historyTitle: {
 },
 
 emptyText: {
-  color: "#666",
+  color: Colors.cinzaClaro,
 },
 
 historyItem: {
@@ -426,7 +427,7 @@ statusAtivo: {
 },
 
 statusUtilizado: {
-  color: "#666",
+  color: Colors.cinzaClaro,
 },
 
 statusExpirado: {
@@ -446,7 +447,7 @@ errorText: {
 loadMoreButton: {
   height: 48,
   borderWidth: 1,
-  borderColor: "#4D86FF",
+  borderColor: Colors.corPrincipal,
   borderRadius: 24,
   justifyContent: "center",
   alignItems: "center",
@@ -455,7 +456,7 @@ loadMoreButton: {
 },
 
 loadMoreText: {
-  color: "#4D86FF",
+  color: Colors.corPrincipal,
   fontWeight: "bold",
 },
 

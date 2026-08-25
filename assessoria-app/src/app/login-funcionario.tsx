@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import BackButton from "@/components/ui/BackButton";
+import { Colors } from "../constants/colors";
 
 export default function LoginFuncionario() {
   const router = useRouter();
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     marginBottom: 40,
   },
 
@@ -171,7 +172,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#4D86FF",
+    backgroundColor: Colors.corPrincipal,
     height: 52,
     borderRadius: 30,
     alignItems: "center",
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
 
   link: {
     textAlign: "center",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     marginTop: 25,
   },
 });

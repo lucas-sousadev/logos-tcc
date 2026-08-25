@@ -5,6 +5,7 @@ import {
 } from "react-native";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { Colors } from "@/constants/colors";
 
 interface HeaderProps {
   title?: string;
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#4D86FF",
+    color: Colors.corPrincipal,
     letterSpacing: 1,
   },
 
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: "#4D86FF",
+    color: "var(--corPrincipal)",
     fontSize: 16,
     fontWeight: "700",
   },
