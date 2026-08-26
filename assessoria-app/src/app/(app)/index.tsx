@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   cardNumber: {
     fontSize: 30,
     fontWeight: "800",
-    color: Colors.corPrincipal,
+    color: Colors.corSecundaria,
   },
 
   cardLabel: {

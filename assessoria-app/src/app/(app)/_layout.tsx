@@ -42,6 +42,20 @@ export default function AppLayout() {
       />
 
       <Tabs.Screen
+        name="clipping"
+        options={{
+          title: "Clipping",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons
+              name="newspaper-outline"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+      
+      <Tabs.Screen
         name="mailing"
         options={{
           title: "Mailing",
@@ -69,19 +83,6 @@ export default function AppLayout() {
         }}
       />
 
-      <Tabs.Screen
-        name="clipping"
-        options={{
-          title: "Clipping",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="newspaper-outline"
-              size={size}
-              color={color}
-            />
-          ),
-        }}
-      />
 
       <Tabs.Screen
         name="mais"

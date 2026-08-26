@@ -70,24 +70,13 @@ export default function CadastroFuncionario() {
     }
 
     async function handleCadastro() {
-        if (
-        !nome.trim() ||
-        !email.trim() ||
-        !senha ||
-        !confirmarSenha
-        ) {
-        Alert.alert(
-            "Atenção",
-            "Preencha todos os campos."
-        );
+        if (!nome.trim() || !email.trim() || !senha || !confirmarSenha) {
+        setErro("Preencha todos os campos obrigatórios (*).");
         return;
         }
 
         if (senha !== confirmarSenha) {
-        Alert.alert(
-            "Atenção",
-            "As senhas não coincidem."
-        );
+        setErro("As senhas não coincidem.");
         return;
         }
 
@@ -104,9 +93,7 @@ export default function CadastroFuncionario() {
 
         router.replace("/(app)");
         } catch (error) {
-        Alert.alert(
-            "Erro",
-            error instanceof Error
+        setErro(error instanceof Error
             ? error.message
             : "Não foi possível criar a conta."
         );
@@ -128,7 +115,7 @@ export default function CadastroFuncionario() {
             Informe o código recebido pela sua assessoria.
           </Text>
             {erro ? (
-            <Text style={styles.errorText}>
+            <Text style={styles.error}>
                 {erro}
             </Text>
             ) : null}
@@ -183,7 +170,7 @@ export default function CadastroFuncionario() {
 
         <TextInput
             style={styles.input}
-            placeholder="Seu nome"
+            placeholder="Seu nome*"
             value={nome}
             onChangeText={setNome}
         />
@@ -194,7 +181,7 @@ export default function CadastroFuncionario() {
 
         <TextInput
             style={styles.input}
-            placeholder="Seu e-mail"
+            placeholder="Seu e-mail*"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
@@ -217,7 +204,7 @@ export default function CadastroFuncionario() {
 
         <TextInput
             style={styles.input}
-            placeholder="Sua senha"
+            placeholder="Sua senha*"
             secureTextEntry
             value={senha}
             onChangeText={setSenha}
@@ -229,12 +216,13 @@ export default function CadastroFuncionario() {
 
         <TextInput
          style={styles.input}
-            placeholder="Digite novamente"
+            placeholder="Confirme sua senha*"
             secureTextEntry
             value={confirmarSenha}
             onChangeText={setConfirmarSenha}
           />
 
+        {erro ? (<Text style={styles.error}> {erro} </Text>) : null}
         <TouchableOpacity
            style={styles.button}
             onPress={handleCadastro}
@@ -330,9 +318,9 @@ const styles = StyleSheet.create({
     color: Colors.corPrincipal,
     marginTop: 25,
   },
-  errorText: {
+  error: {
     textAlign: "center",
-    color: "#FF0000",
+    color: "red",
     marginBottom: 10,
   },
 });

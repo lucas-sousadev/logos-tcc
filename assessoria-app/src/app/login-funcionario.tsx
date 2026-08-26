@@ -19,13 +19,10 @@ export default function LoginFuncionario() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
-
+  const [erro, setErro] = useState("");
   async function handleLogin() {
     if (!email.trim() || !senha) {
-      Alert.alert(
-        "Atenção",
-        "Informe o e-mail e a senha."
-      );
+      setErro("Informe o e-mail e a senha.");
       return;
     }
 
@@ -45,11 +42,9 @@ export default function LoginFuncionario() {
         error
       );
 
-      Alert.alert(
-        "Erro",
-        error instanceof Error
-          ? error.message
-          : "Não foi possível realizar o login."
+    setErro(error instanceof Error
+      ? error.message
+      : "Não foi possível realizar o login."
       );
     } finally {
       setCarregando(false);
@@ -59,65 +54,66 @@ export default function LoginFuncionario() {
   return (
     <View style={styles.container}>
       <View style={styles.header} />
+        <View style={styles.content}>
+          <BackButton />
 
-      <View style={styles.content}>
-        <BackButton />
-
-        <Text style={styles.title}>
-          Login - Funcionário
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Entre na sua conta
-        </Text>
-
-        <Text style={styles.label}>
-          E-mail
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Digite seu e-mail"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <Text style={styles.label}>
-          Senha
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Digite sua senha"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-        />
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleLogin}
-          disabled={carregando}
-        >
-          <Text style={styles.buttonText}>
-            {carregando
-              ? "ENTRANDO..."
-              : "ENTRAR"}
+          <Text style={styles.title}>
+            Login - Funcionário
           </Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() =>
-            router.push("/cadastro-funcionario")
-          }
-        >
-          <Text style={styles.link}>
-            Ainda não tenho uma conta
+          <Text style={styles.subtitle}>
+            Entre na sua conta
           </Text>
-        </TouchableOpacity>
-      </View>
+
+          <Text style={styles.label}>
+            E-mail
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Digite seu e-mail"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+
+          <Text style={styles.label}>
+            Senha
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Digite sua senha"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+          />
+
+          {erro ? (<Text style={styles.erro}>{erro}</Text>) : null}
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleLogin}
+            disabled={carregando}
+          >
+            <Text style={styles.buttonText}>
+              {carregando
+                ? "ENTRANDO..."
+                : "ENTRAR"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push("/cadastro-funcionario")
+            }
+          >
+            <Text style={styles.link}>
+              Ainda não tenho uma conta
+            </Text>
+          </TouchableOpacity>
+        </View>
     </View>
   );
 }
@@ -191,4 +187,9 @@ const styles = StyleSheet.create({
     color: Colors.corPrincipal,
     marginTop: 25,
   },
+  erro: {
+    textAlign: "center",
+    color: "red",
+    marginBottom: 10,
+  }
 });

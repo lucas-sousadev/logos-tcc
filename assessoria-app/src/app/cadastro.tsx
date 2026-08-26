@@ -19,13 +19,14 @@ export default function Cadastro() {
   const [assessoriaEmail, setAssessoriaEmail] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [telefone, setTelefone] = useState("");
-
+  
   const [assessorNome, setAssessorNome] = useState("");
   const [assessorEmail, setAssessorEmail] = useState("");
   const [assessorTelefone, setAssessorTelefone] = useState("");
 
   const [senha, setSenha] = useState("");
 
+  const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   
   async function handleCadastro() {
@@ -35,10 +36,7 @@ export default function Cadastro() {
       !assessorEmail.trim() ||
       !senha
     ) {
-      Alert.alert(
-        "Atenção",
-        "Preencha os campos obrigatórios."
-      );
+      setErro("Preencha todos os campos obrigatórios (*).");
       return;
     }
 
@@ -66,15 +64,13 @@ export default function Cadastro() {
        * entrada depois de confirmar o cadastro.
        */
       Alert.alert(
-        "Cadastro realizado",
-        "A assessoria foi criada com sucesso."
+        "Cadastro realizado com sucesso!",
+        "Entre como assessor para se conectar à sua assessoria.",
       );
     } catch (error) {
       console.error("Erro no cadastro:", error);
 
-      Alert.alert(
-        "Erro",
-        error instanceof Error
+      setErro(error instanceof Error
           ? error.message
           : "Não foi possível criar a assessoria."
       );
@@ -155,7 +151,7 @@ export default function Cadastro() {
         value={assessorTelefone}
         onChangeText={setAssessorTelefone}
       />
-      
+      {erro ? (<Text style={styles.erro}>{erro}</Text>) : null}
       <TouchableOpacity
         style={styles.button}
         onPress={handleCadastro}
@@ -199,7 +195,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 15,
   },
-
+  erro:{
+    textAlign: "center",
+    color: "red",
+  },
   button: {
     height: 52,
     borderRadius: 26,
