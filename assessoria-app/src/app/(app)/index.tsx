@@ -1,7 +1,6 @@
 import {
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -10,87 +9,186 @@ import { useRouter } from "expo-router";
 
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../contexts/AuthContext";
-import { Colors } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
+
+import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
 
 export default function Dashboard() {
   const router = useRouter();
 
-  const { usuario, logout } = useAuth();
+  const { theme, mode, toggleTheme } = useTheme();
+  const { usuario } = useAuth();
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
       <Header />
 
       <ScrollView
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.sectionTitle}>
+        <Text
+          weight="SemiBold"
+          style={styles.sectionTitle}
+        >
           Visão geral
         </Text>
 
         <View style={styles.cardsRow}>
-          <View style={styles.card}>
-            <Text style={styles.cardNumber}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <Text
+              weight="Bold"
+              style={[
+                styles.cardNumber,
+                {
+                  color: theme.textoTerciaria,
+                },
+              ]}
+            >
               0
             </Text>
 
-            <Text style={styles.cardLabel}>
+            <Text
+              weight="Medium"
+              style={styles.cardLabel}
+            >
               Releases
             </Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardNumber}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <Text
+              weight="Bold"
+              style={[
+                styles.cardNumber,
+                {
+                  color: theme.textoTerciaria,
+                },
+              ]}
+            >
               0
             </Text>
 
-            <Text style={styles.cardLabel}>
+            <Text
+              weight="Medium"
+              style={styles.cardLabel}
+            >
               Clippings
             </Text>
           </View>
         </View>
 
         <View style={styles.cardsRow}>
-          <View style={styles.card}>
-            <Text style={styles.cardNumber}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <Text
+              weight="Bold"
+              style={[
+                styles.cardNumber,
+                {
+                  color: theme.textoTerciaria,
+                },
+              ]}
+            >
               0
             </Text>
 
-            <Text style={styles.cardLabel}>
+            <Text
+              weight="Medium"
+              style={styles.cardLabel}
+            >
               Jornalistas
             </Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardNumber}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <Text
+              weight="Bold"
+              style={[
+                styles.cardNumber,
+                {
+                  color: theme.textoTerciaria,
+                },
+              ]}
+            >
               0
             </Text>
 
-            <Text style={styles.cardLabel}>
+            <Text
+              weight="Medium"
+              style={styles.cardLabel}
+            >
               Clientes
             </Text>
           </View>
         </View>
 
         {usuario?.perfil === "ASSESSOR" && (
-          <TouchableOpacity
-            style={styles.secondaryButton}
+          <Button
+            title="GERENCIAR CONVITES"
+            variant="primary"
+            style={styles.invitesButton}
             onPress={() =>
               router.push("/(app)/convites")
             }
-          >
-            <Text style={styles.secondaryButtonText}>
-              GERENCIAR CONVITES
-            </Text>
-          </TouchableOpacity>
+          />
         )}
 
         <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={logout}
+          onPress={toggleTheme}
+          activeOpacity={0.7}
+          style={styles.themeButton}
         >
-          <Text style={styles.logoutText}>
-            SAIR
+          <Text
+            weight="Medium"
+            style={[
+              styles.themeText,
+              {
+                color: theme.textoTerciaria,
+              },
+            ]}
+          >
+            {mode === "light"
+              ? "Ir para modo escuro"
+              : "Ir para modo claro"}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -101,7 +199,6 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F4F4",
   },
 
   content: {
@@ -110,9 +207,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 22,
-    fontWeight: "700",
     marginBottom: 18,
-    color: "#222",
   },
 
   cardsRow: {
@@ -125,51 +220,32 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 120,
     padding: 18,
-    backgroundColor: "#FFF",
+
+    borderWidth: 2,
     borderRadius: 16,
+
     justifyContent: "center",
   },
 
   cardNumber: {
     fontSize: 30,
-    fontWeight: "800",
-    color: Colors.corSecundaria,
   },
 
   cardLabel: {
     fontSize: 14,
-    color: Colors.cinzaClaro,
     marginTop: 5,
   },
 
-  secondaryButton: {
+  invitesButton: {
     marginTop: 20,
-    height: 50,
-    borderWidth: 1.5,
-    borderColor: Colors.corTerciaria,
-    borderRadius: 25,
-    justifyContent: "center",
+  },
+
+  themeButton: {
     alignItems: "center",
+    marginTop: 25,
   },
 
-  secondaryButtonText: {
-    color: Colors.corTerciaria,
-    fontWeight: "700",
-  },
-
-  logoutButton: {
-    marginTop: 30,
-    height: 50,
-
-    borderRadius: 25,
-    backgroundColor: "#E74C3C",
-
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  logoutText: {
-    color: "#FFF",
-    fontWeight: "700",
+  themeText: {
+    fontSize: 14,
   },
 });

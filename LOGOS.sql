@@ -443,7 +443,8 @@ CREATE TABLE clippings (
 		REFERENCES veiculos(id, assessoria_id)
 		ON DELETE RESTRICT,
         
-	UNIQUE KEY uq_clipping_id_assessoria (id, assessoria_id)
+	UNIQUE KEY uq_clipping_id_assessoria (id, assessoria_id),
+    INDEX idx_clippings_assessoria_data (assessoria_id,data_publicacao)
 );
 
 -- 13. RELATÓRIOS

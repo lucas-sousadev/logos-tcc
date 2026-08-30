@@ -2,10 +2,14 @@ import {
   StyleSheet,
   Text,
   View,
+  TouchableOpacity,
 } from "react-native";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { Colors } from "@/constants/colors";
+import { Ionicons } from "@expo/vector-icons";
+import { Fonts } from "@/constants/fonts";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface HeaderProps {
   title?: string;
@@ -14,7 +18,8 @@ interface HeaderProps {
 export default function Header({
   title = "LOGOS",
 }: HeaderProps) {
-  const { usuario } = useAuth();
+  const { usuario, logout } = useAuth();
+  const { theme } = useTheme();  
 
   const nome = usuario?.nome || "Usuário";
 
@@ -27,54 +32,69 @@ export default function Header({
     .toUpperCase();
 
   return (
-    <View style={styles.container}>
-      <View>
-        <Text style={styles.logo}>LOGOS</Text>
+  <View style={[styles.container, {backgroundColor: theme.background, borderBottomColor: theme.borda}]}>
+    <View>
+      <Text style={[styles.logo, {color: theme.texto}]}>LOGOS</Text>
 
-        <Text style={styles.greeting}>
-          {title === "LOGOS"
-            ? `Olá, ${nome}`
-            : title}
-        </Text>
-      </View>
+      <Text style={[styles.greeting, {color: theme.textoTerciaria}]}>
+        {title === "LOGOS" ? `Olá, ${nome}` : title}
+      </Text>
+    </View>
 
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {iniciais}
-        </Text>
+    <View style={styles.actions}>
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={logout}
+      >
+        <Ionicons
+          name="log-out-outline"
+          size={26}
+          color={Colors.corTexto}
+        />
+      </TouchableOpacity>
+
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {iniciais}
+          </Text>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  
   container: {
     minHeight: 90,
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 15,
-
+    
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
+    borderBottomWidth: 2,
   },
 
   logo: {
     fontSize: 14,
     fontWeight: "800",
-    color: Colors.corPrincipal,
+    fontFamily: Fonts.MontserratRegular,
     letterSpacing: 1,
   },
 
   greeting: {
     fontSize: 22,
-    fontWeight: "700",
-    color: "#222",
+    fontFamily: Fonts.MontserratBold,
     marginTop: 3,
+  },
+
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
+    marginRight: 10
   },
 
   avatar: {
@@ -84,11 +104,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F0FF",
     justifyContent: "center",
     alignItems: "center",
+        marginRight: 10
+
   },
 
   avatarText: {
-    color: "var(--corPrincipal)",
+    color: Colors.corTextoBack,
     fontSize: 16,
     fontWeight: "700",
+  },
+
+  logoutButton: {
+    height: 40,
+    width: 40,
+    borderRadius: 10,
+    backgroundColor: "red",
+
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

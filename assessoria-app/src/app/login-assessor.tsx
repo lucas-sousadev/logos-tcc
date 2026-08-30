@@ -1,25 +1,30 @@
 import {
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
-  Alert,
+  Image
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+
 import { useAuth } from "../contexts/AuthContext";
-import { getToken } from "../services/auth";
+import { useTheme } from "@/contexts/ThemeContext";
+
 import BackButton from "@/components/ui/BackButton";
-import { Colors } from "../constants/colors";
+import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
 
 export default function LoginAssessor() {
   const router = useRouter();
+
+  const { theme, mode, toggleTheme } = useTheme();
   const { login, logout } = useAuth();
+
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
-    const [erro, setErro] = useState("");
+  const [erro, setErro] = useState("");
 
   async function handleLogin() {
     if (!email.trim() || !senha) {
@@ -29,24 +34,27 @@ export default function LoginAssessor() {
 
     try {
       setCarregando(true);
+      setErro("");
+
       await login(
-        email, 
+        email,
         senha,
-        "ASSESSOR" 
+        "ASSESSOR"
       );
 
-      const token = await getToken();
       router.replace("/(app)");
     } catch (error) {
       console.error(
         "Erro no login do assessor:",
         error
       );
+
       await logout();
 
-      setErro(error instanceof Error
-        ? error.message
-        : "Não foi possível realizar o login."
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível realizar o login."
       );
     } finally {
       setCarregando(false);
@@ -54,142 +62,184 @@ export default function LoginAssessor() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header} />
-        <View style={styles.content}>
-          <BackButton />
-
-          <Text style={styles.title}>
-            Login - Assessor
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Entre na sua conta!
-          </Text>
-
-          <Text style={styles.label}>
-            E-mail
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Digite seu e-mail"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >     
+      <BackButton
+        />
+      
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.backgroundContainer,
+          },
+        ]}
+      />
+        <Image
+            source={
+              mode === "light"
+                ? require("@/assets/images/background-logos-white.png")
+                : require("@/assets/images/background-logos-dark.png")
+            }
+            style={styles.backgroundImage}
+            resizeMode="cover"
           />
+     
+        
+        <Text
+          weight="Medium"
+          style={styles.title}
+        >
+          Login - Assessor
+        </Text>
 
-          <Text style={styles.label}>
-            Senha
+        <Text
+          weight="Regular"
+          style={[
+            styles.subtitle,
+            {
+              color: theme.textoTerciaria,
+            },
+          ]}
+        >
+          Entre na sua conta!
+        </Text>
+
+        
+        <Input
+          label="E-mail"
+          placeholder="Digite seu e-mail"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <Input
+          label="Senha"
+          placeholder="Digite sua senha"
+          secureTextEntry
+          value={senha}
+          onChangeText={setSenha}
+        />
+
+        {erro ? (
+          <Text
+            weight="Medium"
+            style={styles.erro}
+          >
+            {erro}
           </Text>
+        ) : null}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Digite sua senha"
-            secureTextEntry
-            value={senha}
-            onChangeText={setSenha}
-          />
+        <Button
+          title="ENTRAR"
+          loading={carregando}
+          onPress={handleLogin}
+          style={styles.loginButton}
+        />
 
-          {erro? <Text style={styles.erro}>{erro}</Text> : null}
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleLogin}
-            disabled={carregando}
-          >
-            <Text style={styles.buttonText}>
-              {carregando
-                ? "ENTRANDO..."
-                : "ENTRAR"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/cadastro")}
-          >
-            <Text style={styles.link}>
+        <TouchableOpacity
+          onPress={() => router.push("/cadastro")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.link}>
+            Não possui login?{" "}
+            <Text
+              weight="SemiBold"
+              style={{
+                color: theme.textoTerciaria,
+              }}
+            >
               Criar uma nova assessoria
             </Text>
-          </TouchableOpacity>
-        </View>
-    </View>
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+                  onPress={toggleTheme}
+                  activeOpacity={0.7}
+                  style={[styles.themeButton, {alignSelf: "center", paddingTop: 40}]}
+                >
+                  <Text
+                    weight="Medium"
+                    style={[
+                      {
+                        color: theme.texto,
+                      },
+                    ]}
+                  >
+                    {mode === "light"
+                      ? " Alternar para modo escuro"
+                      : " Alternar para modo claro"}
+                  </Text>
+                </TouchableOpacity>
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F4F4",
+    paddingHorizontal: 25,
   },
 
   header: {
     height: 180,
-    backgroundColor: "#1E5CCB",
   },
-
-  content: {
-    flex: 1,
-    backgroundColor: "#F4F4F4",
-    borderTopLeftRadius: 50,
-    borderTopRightRadius: 50,
-    marginTop: -50,
-    paddingHorizontal: 25,
-    paddingTop: 50,
+  backgroundImage: {
+  ...StyleSheet.absoluteFill,
+  width: "100%",
+  height: "100%",
+},
+  themeButton: {
+    alignSelf: "flex-end",
+    marginBottom: 20,
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: "bold",
+    fontSize: 28,
     textAlign: "center",
   },
 
   subtitle: {
     textAlign: "center",
-    color: Colors.corPrincipal,
+    marginTop: 5,
     marginBottom: 40,
   },
 
   label: {
     fontSize: 15,
-    fontWeight: "600",
     marginBottom: 8,
   },
 
   input: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    paddingHorizontal: 15,
     height: 50,
+    paddingHorizontal: 15,
+
+    borderWidth: 1.5,
+    borderRadius: 12,
+
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#DDD",
   },
 
-  button: {
-    backgroundColor: Colors.corPrincipal,
-    height: 52,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
+  loginButton: {
     marginTop: 10,
-  },
-
-  buttonText: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
   },
 
   link: {
     textAlign: "center",
-    color: Colors.corPrincipal,
     marginTop: 25,
   },
+
   erro: {
-    color: "red",
+    color: "#EF4444",
     marginBottom: 10,
     textAlign: "center",
-  }
+  },
 });

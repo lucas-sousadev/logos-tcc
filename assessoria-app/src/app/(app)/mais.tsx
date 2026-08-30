@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import Header from "@/components/layout/Header";
 import { useAuth } from "../../contexts/AuthContext";
+import { Fonts } from "@/constants/fonts";
 
 export default function Mais() {
   const router = useRouter();
@@ -92,7 +93,7 @@ export default function Mais() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F4F4",
+    backgroundColor: Colors.background,
   },
 
   content: {
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 20,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "#E5E5E5",
   },
 

@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-const API_URL = "http://192.168.0.11/LOGOS/logos-api/public";
+const API_URL = "http://192.168.0.10/LOGOS/logos-api/public";
 
 const TOKEN_KEY = "logos_token";
 const REFRESH_TOKEN_KEY = "logos_refresh_token";

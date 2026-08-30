@@ -2,24 +2,27 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Image
 } from "react-native";
 import { useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+
+import Text from "@/components/ui/Text";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 import BackButton from "@/components/ui/BackButton";
-import { Colors } from "../constants/colors";
 
 export default function Cadastro() {
+  const {theme, mode} = useTheme();
   const { registerAssessoria } = useAuth();
   const [assessoriaNome, setAssessoriaNome] = useState("");
   const [assessoriaEmail, setAssessoriaEmail] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [telefone, setTelefone] = useState("");
-  
+
   const [assessorNome, setAssessorNome] = useState("");
   const [assessorEmail, setAssessorEmail] = useState("");
   const [assessorTelefone, setAssessorTelefone] = useState("");
@@ -80,118 +83,191 @@ export default function Cadastro() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View
+      style={[
+        styles.screen,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+       <Image
+          source={
+            mode === "light"
+            ? require("@/assets/images/background-logos-white.png")
+            : require("@/assets/images/background-logos-dark.png")
+          }
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        />
       <BackButton />
-      
-      <Text style={styles.title}>Criar assessoria</Text>
 
-      <Text style={styles.section}>Dados da assessoria</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Nome da assessoria *"
-        value={assessoriaNome}
-        onChangeText={setAssessoriaNome}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="E-mail da assessoria"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        value={assessoriaEmail}
-        onChangeText={setAssessoriaEmail}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="CNPJ"
-        value={cnpj}
-        onChangeText={setCnpj}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Telefone"
-        keyboardType="phone-pad"
-        value={telefone}
-        onChangeText={setTelefone}
-      />
-
-      <Text style={styles.section}>Dados do assessor</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Nome do assessor *"
-        value={assessorNome}
-        onChangeText={setAssessorNome}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="E-mail do assessor *"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        value={assessorEmail}
-        onChangeText={setAssessorEmail}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Senha *"
-        secureTextEntry
-        value={senha}
-        onChangeText={setSenha}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Telefone do assessor"
-        keyboardType="phone-pad"
-        value={assessorTelefone}
-        onChangeText={setAssessorTelefone}
-      />
-      {erro ? (<Text style={styles.erro}>{erro}</Text>) : null}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleCadastro}
-        disabled={carregando}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.buttonText}>
-          {carregando ? "CRIANDO..." : "CRIAR ASSESSORIA"}
+        <Text
+          weight="SemiBold"
+          style={styles.title}
+        >
+          Criar assessoria
         </Text>
-      </TouchableOpacity>
-    </ScrollView>
+
+        <View style={styles.sectionContainer}>
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.section,
+                {
+                  color: theme.texto,
+                  borderBottomColor: theme.backgroundContainer,
+                },
+              ]}
+            >
+              Dados da assessoria
+            </Text>
+        </View>
+
+        <Input
+          label="Nome da assessoria *"
+          placeholder="Digite o nome da assessoria"
+          value={assessoriaNome}
+          onChangeText={setAssessoriaNome}
+        />
+
+        <Input
+          label="E-mail da assessoria"
+          placeholder="Digite o e-mail da assessoria"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={assessoriaEmail}
+          onChangeText={setAssessoriaEmail}
+        />
+
+        <Input
+          label="CNPJ"
+          placeholder="Digite o CNPJ"
+          keyboardType="numeric"
+          value={cnpj}
+          onChangeText={setCnpj}
+        />
+
+        <Input
+          label="Telefone"
+          placeholder="Digite o telefone"
+          keyboardType="phone-pad"
+          value={telefone}
+          onChangeText={setTelefone}
+        />
+
+         <View style={styles.sectionContainer}>
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.section,
+                {
+                  color: theme.texto,
+                  borderBottomColor: theme.backgroundContainer,
+                }, 
+              ]}
+            >
+              Dados do assessor
+            </Text>
+        </View>
+
+        <Input
+          label="Nome do assessor *"
+          placeholder="Digite o nome do assessor"
+          value={assessorNome}
+          onChangeText={setAssessorNome}
+        />
+
+        <Input
+          label="E-mail do assessor *"
+          placeholder="Digite o e-mail do assessor"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={assessorEmail}
+          onChangeText={setAssessorEmail}
+        />
+
+        <Input
+          label="Senha *"
+          placeholder="Digite uma senha"
+          secureTextEntry
+          value={senha}
+          onChangeText={setSenha}
+        />
+
+        <Input
+          label="Telefone do assessor"
+          placeholder="Digite o telefone do assessor"
+          keyboardType="phone-pad"
+          value={assessorTelefone}
+          onChangeText={setAssessorTelefone}
+        />
+
+        {erro ? (
+          <Text
+            weight="Medium"
+            style={styles.erro}
+          >
+            {erro}
+          </Text>
+        ) : null}
+
+        <Button
+          title="CRIAR ASSESSORIA"
+          loading={carregando}
+          onPress={handleCadastro}
+          style={styles.button}
+        />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 25,
-    justifyContent: "center",
+   screen: {
+    flex: 1,
   },
 
+  container: {
+    flexGrow: 1,
+    
+    paddingHorizontal: 25,
+    paddingTop: 100,
+    paddingBottom: 30,
+  },
+  backgroundImage: {
+  ...StyleSheet.absoluteFill,
+  width: "100%",
+  height: "100%",
+},
   title: {
     fontSize: 30,
-    fontWeight: "bold",
     marginBottom: 30,
+    justifyContent: "center",
     textAlign: "center",
+  },
+
+  sectionContainer: {
+  alignSelf: "flex-start",
   },
 
   section: {
     fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 15,
     marginTop: 15,
+    marginBottom: 15,
+    paddingBottom: 5,
+    borderBottomWidth: 1.5,
   },
 
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: "#DDD",
     borderRadius: 10,
-    backgroundColor: "#FFF",
+
     paddingHorizontal: 15,
     marginBottom: 15,
   },
@@ -202,15 +278,12 @@ const styles = StyleSheet.create({
   button: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.corPrincipal,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 15,
   },
 
   buttonText: {
-    color: "#FFF",
     fontSize: 17,
-    fontWeight: "bold",
   },
 });

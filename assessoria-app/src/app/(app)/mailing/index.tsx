@@ -6,10 +6,14 @@ import {
 
 import Header from "@/components/layout/Header";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Mailing() {
+  const {theme} = useTheme();
+  
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, {backgroundColor: theme.background}]}>
       <Header title="Mailing" />
 
       <View style={styles.content}>
@@ -28,7 +32,7 @@ export default function Mailing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F4F4",
+    backgroundColor: Colors.background,
   },
 
   content: {

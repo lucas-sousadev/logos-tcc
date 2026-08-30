@@ -2,28 +2,51 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
+import {
+  Montserrat_400Regular,
+  Montserrat_500Medium,
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+  Montserrat_800ExtraBold,
+} from "@expo-google-fonts/montserrat";
+import { useFonts } from "expo-font";
+import { Fonts } from "@/constants/fonts"
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function AppLayout() {
-      const insets = useSafeAreaInsets();
+    const insets = useSafeAreaInsets();
+    const [fontsLoaded] = useFonts({
+      Montserrat_400Regular,
+      Montserrat_500Medium,
+      Montserrat_600SemiBold,
+      Montserrat_700Bold,
+      Montserrat_800ExtraBold,
+    });
+
+    if (!fontsLoaded) {
+      return null;
+    }
+    const { theme } = useTheme();
+
   return (
 
     <Tabs
       screenOptions={{
       headerShown: false,
-        tabBarActiveTintColor: Colors.corPrincipal,
-        tabBarInactiveTintColor: "#50525a",
+        tabBarActiveTintColor: theme.textoTerciaria,
+        tabBarInactiveTintColor: theme.texto,
         tabBarStyle: {
-          height: 60 + insets.bottom,
+          height: 70 + insets.bottom,
           paddingTop: 6,
           paddingBottom: insets.bottom + 8,
-          borderTopWidth: 1,
-          borderTopColor: "#E5E5E5",
-          backgroundColor: "#FFF",
+          borderTopWidth: 2,
+          borderTopColor: theme.borda,
+          backgroundColor: theme.background,
         },
 
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "600",
+          fontFamily: Fonts.MontserratMedium,
         },
       }}
     >

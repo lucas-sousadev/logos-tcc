@@ -1,28 +1,43 @@
 import {
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
-import { Colors } from "@/constants/colors";
 
-import BackButton from "../../components/ui/BackButton";
-import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ConviteHistorico,
-} from "../../services/auth";
+} from "@/services/auth";
+
+import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import BackButton from "@/components/ui/BackButton";
+
 export default function Convites() {
   const router = useRouter();
-  const { usuario, criarConvite, listarConvites } = useAuth();
-    const [historico, setHistorico] = useState<ConviteHistorico[]>([]);
-    const [erro, setErro] = useState("");
-    const [pagina, setPagina] = useState(1);
-    const [temMais, setTemMais] = useState(false);
-    const [carregandoMais, setCarregandoMais] =useState(false);
-  const [email, setEmail] = useState("");
+
+  const { theme } = useTheme();
+
+  const {
+    usuario,
+    criarConvite,
+    listarConvites,
+  } = useAuth();
+
+  const [historico, setHistorico] = useState<
+    ConviteHistorico[]
+  >([]);
+
+  const [erro, setErro] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [temMais, setTemMais] = useState(false);
+  const [carregandoMais, setCarregandoMais] =
+    useState(false);
+
   const [carregando, setCarregando] = useState(false);
 
   const [convite, setConvite] = useState<{
@@ -32,257 +47,416 @@ export default function Convites() {
   } | null>(null);
 
   useEffect(() => {
-  carregarHistorico();
-}, []);
+    carregarHistorico();
+  }, []);
 
-async function carregarHistorico() {
-  try {
-    const resposta = await listarConvites(
-      1,
-      20
-    );
+  async function carregarHistorico() {
+    try {
+      const resposta = await listarConvites(1, 20);
 
-    setHistorico(resposta.convites || []);
-    setPagina(1);
-    setTemMais(
-      resposta.pagination?.has_next ?? false
-    );
-  } catch (error) {
-    console.error(
-      "Erro ao carregar histórico de convites:",
-      error
-    );
-  }
-}
-async function carregarMais() {
-  if (!temMais || carregandoMais) {
-    return;
-  }
-
-  try {
-    setCarregandoMais(true);
-
-    const proximaPagina = pagina + 1;
-
-    const resposta = await listarConvites(
-      proximaPagina,
-      20
-    );
-
-    setHistorico((atual) => [
-      ...atual,
-      ...(resposta.convites || [])
-    ]);
-
-    setPagina(proximaPagina);
-
-    setTemMais(
-      resposta.pagination?.has_next ?? false
-    );
-
-  } catch (error) {
-    console.error(
-      "Erro ao carregar mais convites:",
-      error
-    );
-  } finally {
-    setCarregandoMais(false);
-  }
-}
-  async function handleCriarConvite() {
-  setErro("");
-
-  try {
-    setCarregando(true);
-    setConvite(null);
-
-    const resultado = await criarConvite();
-
-    if (!resultado.convite) {
-      throw new Error(
-        "A API não retornou os dados do convite."
+      setHistorico(resposta.convites || []);
+      setPagina(1);
+      setTemMais(
+        resposta.pagination?.has_next ?? false
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar histórico de convites:",
+        error
       );
     }
-
-    setConvite(resultado.convite);
-    await carregarHistorico();
-  } catch (error) {
-    console.error(
-      "Erro ao criar convite:",
-      error
-    );
-
-    setErro(
-      error instanceof Error
-        ? "Limite de 3 convites atingido. Aguarde 5 minutos para criar outro."
-        : "Não foi possível criar o convite."
-    );
-  } finally {
-    setCarregando(false);
   }
-}
+
+  async function carregarMais() {
+    if (!temMais || carregandoMais) {
+      return;
+    }
+
+    try {
+      setCarregandoMais(true);
+
+      const proximaPagina = pagina + 1;
+
+      const resposta = await listarConvites(
+        proximaPagina,
+        20
+      );
+
+      setHistorico((atual) => [
+        ...atual,
+        ...(resposta.convites || []),
+      ]);
+
+      setPagina(proximaPagina);
+
+      setTemMais(
+        resposta.pagination?.has_next ?? false
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar mais convites:",
+        error
+      );
+    } finally {
+      setCarregandoMais(false);
+    }
+  }
+
+  async function handleCriarConvite() {
+    setErro("");
+    setConvite(null);
+
+    try {
+      setCarregando(true);
+
+      const resultado = await criarConvite();
+
+      if (!resultado.convite) {
+        throw new Error(
+          "A API não retornou os dados do convite."
+        );
+      }
+
+      setConvite(resultado.convite);
+
+      await carregarHistorico();
+    } catch (error) {
+      console.error(
+        "Erro ao criar convite:",
+        error
+      );
+
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível criar o convite."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   if (usuario?.perfil !== "ASSESSOR") {
     return (
-      <View style={styles.container}>
-        <BackButton />    
+      <View
+        style={[
+          styles.restrictedContainer,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <BackButton />
 
-        <Text style={styles.title}>
+        <Text
+          weight="SemiBold"
+          style={styles.title}
+        >
           Acesso restrito
         </Text>
 
-        <Text style={styles.message}>
+        <Text
+          style={[
+            styles.message,
+            {
+              color: theme.textoSub,
+            },
+          ]}
+        >
           Apenas assessores podem criar convites.
         </Text>
 
-        <TouchableOpacity
-          style={styles.button}
+        <Button
+          title="VOLTAR"
+          variant="outline"
           onPress={() => router.back()}
-        >
-          <Text style={styles.buttonText}>
-            VOLTAR
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-        <BackButton />
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <BackButton />
 
-        <Text style={styles.title}>
+      <Text
+        weight="SemiBold"
+        style={styles.title}
+      >
         Convites
-        </Text>
+      </Text>
 
-        <Text style={styles.subtitle}>
+      <Text
+        style={[
+          styles.subtitle,
+          {
+            color: theme.textoTerciaria,
+          },
+        ]}
+      >
         Crie um convite para adicionar um funcionário
         à sua assessoria.
-        </Text>
+      </Text>
 
-        <TouchableOpacity
-        style={styles.button}
+      <Button
+        title="GERAR CONVITE"
+        loading={carregando}
         onPress={handleCriarConvite}
-        disabled={carregando}
+        style={styles.generateButton}
+      />
+
+      {erro ? (
+        <Text
+          weight="Medium"
+          style={styles.errorText}
         >
-        <Text style={styles.buttonText}>
-            {carregando
-            ? "CRIANDO..."
-            : "GERAR CONVITE"}
+          {erro}
         </Text>
-        </TouchableOpacity>
+      ) : null}
 
-        {erro ? (
-        <Text style={styles.errorText}>
-            {erro}
-        </Text>
-        ) : null}        
-
-        {convite && (
-        <View style={styles.result}>
-            <Text style={styles.resultTitle}>
+      {convite && (
+        <View
+          style={[
+            styles.result,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.borda,
+            },
+          ]}
+        >
+          <Text
+            weight="SemiBold"
+            style={styles.resultTitle}
+          >
             Convite criado
-            </Text>
+          </Text>
 
-            <Text style={styles.code}>
+          <Text
+            weight="ExtraBold"
+            style={[
+              styles.code,
+              {
+                color: theme.textoTerciaria,
+              },
+            ]}
+          >
             {convite.codigo}
-            </Text>
+          </Text>
 
-            <Text style={styles.expiration}>
+          <Text
+            style={[
+              styles.expiration,
+              {
+                color: theme.textoSub,
+              },
+            ]}
+          >
             Válido até:{" "}
             {formatarData(convite.expira_em)}
-            </Text>
+          </Text>
 
-            <Text style={styles.info}>
+          <Text
+            style={[
+              styles.info,
+              {
+                color: theme.textoSub,
+              },
+            ]}
+          >
             Envie este código para o funcionário.
-            </Text>
+          </Text>
         </View>
-        )}
-        
-        <View style={styles.historyContainer}>
-        <Text style={styles.historyTitle}>
-            Histórico de convites
+      )}
+
+      <View style={styles.historyContainer}>
+        <Text
+          weight="SemiBold"
+          style={styles.historyTitle}
+        >
+          Histórico de convites
         </Text>
 
         {historico.length === 0 ? (
-            <Text style={styles.emptyText}>
+          <Text
+            style={[
+              styles.emptyText,
+              {
+                color: theme.textoSub,
+              },
+            ]}
+          >
             Nenhum convite criado.
-            </Text>
+          </Text>
         ) : (
-            historico.map((item) => (
+          historico.map((item) => (
             <View
-                key={item.id}
-                style={styles.historyItem}
+              key={item.id}
+              style={[
+                styles.historyItem,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.borda,
+                },
+              ]}
             >
-                <View style={styles.historyTop}>
-                <Text style={styles.historyCode}>
-                    {item.codigo}
+              <View style={styles.historyTop}>
+                <Text
+                  weight="SemiBold"
+                  style={styles.historyCode}
+                >
+                  {item.codigo}
                 </Text>
 
                 <Text
-                    style={[
+                  weight="SemiBold"
+                  style={[
                     styles.status,
                     item.status === "ATIVO" &&
-                        styles.statusAtivo,
+                      styles.statusAtivo,
                     item.status === "UTILIZADO" &&
-                        styles.statusUtilizado,
+                      styles.statusUtilizado,
                     item.status === "EXPIRADO" &&
-                        styles.statusExpirado,
-                    ]}
+                      styles.statusExpirado,
+                  ]}
                 >
-                    {item.status}
+                  {item.status}
                 </Text>
-                </View>
+              </View>
 
-                <Text style={styles.historyInfo}>
-                Criado por: {item.criado_por}
-                </Text>
+              <Text
+                style={[
+                  styles.historyInfo,
+                  {
+                    color: theme.texto,
+                  },
+                ]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={{
+                    color: theme.textoTerciaria,
+                  }}
+                >
+                  Criado por:
+                </Text>{" "}
+                {item.criado_por}
+              </Text>
 
-                <Text style={styles.historyInfo}>
-                Criado em: {formatarData(item.created_at)}
-                </Text>
+              <Text
+                style={[
+                  styles.historyInfo,
+                  {
+                    color: theme.texto,
+                  },
+                ]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={{
+                    color: theme.textoTerciaria,
+                  }}
+                >
+                  Criado em:
+                </Text>{" "}
+                {formatarData(item.created_at)}
+              </Text>
 
-                <Text style={styles.historyInfo}>
-                Expira em: {formatarData(item.expira_em)}
-                </Text>
+              <Text
+                style={[
+                  styles.historyInfo,
+                  {
+                    color: theme.texto,
+                  },
+                ]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={{
+                    color: theme.textoTerciaria,
+                  }}
+                >
+                  Expira em:
+                </Text>{" "}
+                {formatarData(item.expira_em)}
+              </Text>
 
-                {item.utilizado_por && (
-                <Text style={styles.historyInfo}>
-                    Utilizado por: {item.utilizado_por}
+              {item.utilizado_por && (
+                <Text
+                  style={[
+                    styles.historyInfo,
+                    {
+                      color: theme.texto,
+                    },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      color: theme.textoTerciaria,
+                    }}
+                  >
+                    Utilizado por:
+                  </Text>{" "}
+                  {item.utilizado_por}
                 </Text>
-                )}
+              )}
 
-                {item.utilizado_em && (
-                <Text style={styles.historyInfo}>
-                    Utilizado em:{" "}
-                    {formatarData(item.utilizado_em)}
+              {item.utilizado_em && (
+                <Text
+                  style={[
+                    styles.historyInfo,
+                    {
+                      color: theme.texto,
+                    },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      color: theme.textoTerciaria,
+                    }}
+                  >
+                    Utilizado em:
+                  </Text>{" "}
+                  {formatarData(item.utilizado_em)}
                 </Text>
-                )}
+              )}
             </View>
-            ))
+          ))
         )}
-        {temMais && (
-            <TouchableOpacity
-                style={styles.loadMoreButton}
-                onPress={carregarMais}
-                disabled={carregandoMais}
-            >
-                <Text style={styles.loadMoreText}>
-                {carregandoMais
-                    ? "CARREGANDO..."
-                    : "CARREGAR MAIS"}
-                </Text>
-            </TouchableOpacity>
-            )}
 
-            {!temMais && historico.length > 0 && (
-            <Text style={styles.endText}>
-                Todos os convites foram carregados.
-            </Text>
-            )}
-        </View>
+        {temMais && (
+          <Button
+            title="CARREGAR MAIS"
+            variant="outline"
+            loading={carregandoMais}
+            onPress={carregarMais}
+            style={styles.loadMoreButton}
+          />
+        )}
+
+        {!temMais && historico.length > 0 && (
+          <Text
+            style={[
+              styles.endText,
+              {
+                color: theme.textoTerciaria,
+              },
+            ]}
+          >
+            Todos os convites foram carregados.
+          </Text>
+        )}
+      </View>
     </ScrollView>
-    );
+  );
 }
 
 function formatarData(data: string): string {
@@ -296,173 +470,134 @@ function formatarData(data: string): string {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 25,
+
+    paddingHorizontal: 25,
     paddingTop: 90,
-    backgroundColor: "#F4F4F4",
-},
+    paddingBottom: 30,
+  },
+
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 25,
+  },
 
   title: {
     fontSize: 30,
-    fontWeight: "bold",
     textAlign: "center",
     marginBottom: 10,
-},
+  },
 
   subtitle: {
     textAlign: "center",
-    color: Colors.cinzaClaro,
     marginBottom: 35,
   },
 
-  label: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-
-  input: {
-    height: 50,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-
-  button: {
-    height: 52,
-    backgroundColor: Colors.corPrincipal,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
+  generateButton: {
     marginTop: 5,
-  },
-
-  buttonText: {
-    color: "#FFF",
-    fontSize: 17,
-    fontWeight: "bold",
   },
 
   result: {
     marginTop: 30,
+
     padding: 20,
+
     borderRadius: 15,
-    backgroundColor: "#EAF4EA",
+    borderWidth: 1,
+
     alignItems: "center",
   },
 
   resultTitle: {
     fontSize: 18,
-    fontWeight: "bold",
     marginBottom: 15,
   },
 
   code: {
     fontSize: 23,
-    fontWeight: "bold",
     letterSpacing: 2,
     marginBottom: 15,
   },
 
   expiration: {
-    color: "#555",
     marginBottom: 10,
   },
 
   info: {
     textAlign: "center",
-    color: "#555",
   },
 
   message: {
     textAlign: "center",
-    color: Colors.cinzaClaro,
     marginBottom: 25,
   },
-  
-historyContainer: {
-  marginTop: 35,
-},
 
-historyTitle: {
-  fontSize: 22,
-  fontWeight: "bold",
-  marginBottom: 15,
-},
+  historyContainer: {
+    marginTop: 35,
+  },
 
-emptyText: {
-  color: Colors.cinzaClaro,
-},
+  historyTitle: {
+    fontSize: 22,
+    marginBottom: 15,
+  },
 
-historyItem: {
-  backgroundColor: "#FFF",
-  borderRadius: 12,
-  padding: 15,
-  marginBottom: 12,
-  borderWidth: 1,
-  borderColor: "#DDD",
-},
+  emptyText: {
+    marginBottom: 10,
+  },
 
-historyTop: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 10,
-},
+  historyItem: {
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 12,
 
-historyCode: {
-  fontSize: 16,
-  fontWeight: "bold",
-},
+    borderWidth: 2,
+  },
 
-status: {
-  fontSize: 12,
-  fontWeight: "bold",
-},
+  historyTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
 
-statusAtivo: {
-  color: "#2E8B57",
-},
+    marginBottom: 10,
+  },
 
-statusUtilizado: {
-  color: Colors.cinzaClaro,
-},
+  historyCode: {
+    fontSize: 16,
+  },
 
-statusExpirado: {
-  color: "#D32F2F",
-},
+  status: {
+    fontSize: 12,
+  },
 
-historyInfo: {
-  color: "#555",
-  marginBottom: 4,
-},
-errorText: {
-  color: "#D32F2F",
-  textAlign: "center",
-  fontWeight: "600",
-  marginTop: 15,
-},
-loadMoreButton: {
-  height: 48,
-  borderWidth: 1,
-  borderColor: Colors.corPrincipal,
-  borderRadius: 24,
-  justifyContent: "center",
-  alignItems: "center",
-  marginTop: 5,
-  marginBottom: 20,
-},
+  statusAtivo: {
+    color: "#2E8B57",
+  },
 
-loadMoreText: {
-  color: Colors.corPrincipal,
-  fontWeight: "bold",
-},
+  statusUtilizado: {
+    color: "#808080",
+  },
 
-endText: {
-  textAlign: "center",
-  color: "#777",
-  marginBottom: 20,
-},
+  statusExpirado: {
+    color: "#D32F2F",
+  },
+
+  historyInfo: {
+    marginBottom: 4,
+  },
+
+  errorText: {
+    color: "#D32F2F",
+    textAlign: "center",
+    marginTop: 15,
+  },
+
+  loadMoreButton: {
+    marginTop: 5,
+    marginBottom: 20,
+  },
+
+  endText: {
+    textAlign: "center",
+    marginBottom: 20,
+  },
 });

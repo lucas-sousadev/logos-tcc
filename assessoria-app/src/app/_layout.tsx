@@ -1,7 +1,28 @@
 import { Stack } from "expo-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import {
+  Montserrat_400Regular,
+  Montserrat_500Medium,
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+  Montserrat_800ExtraBold,
+} from "@expo-google-fonts/montserrat";
+import { useFonts } from "expo-font";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+
 function RootNavigator() {
   const { autenticado, carregando } = useAuth();
+  const [fontsLoaded] = useFonts({
+      Montserrat_400Regular,
+      Montserrat_500Medium,
+      Montserrat_600SemiBold,
+      Montserrat_700Bold,
+      Montserrat_800ExtraBold,
+    });
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   if (carregando) {
     return null;
@@ -28,8 +49,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RootNavigator/>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
