@@ -6,7 +6,9 @@ import {
 } from "react-native";
 
 import { useRouter } from "expo-router";
-
+import { useEffect } from "react";
+import { getToken } from "../../services/auth";
+import { Ionicons } from "@expo/vector-icons";
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -18,8 +20,16 @@ export default function Dashboard() {
   const router = useRouter();
 
   const { theme, mode, toggleTheme } = useTheme();
-  const { usuario } = useAuth();
+  const { usuario, logout } = useAuth();
+  useEffect(() => {
+    async function mostrarToken() {
+      const token = await getToken();
+      console.log("ACCESS TOKEN ATUAL:", token);
+      localStorage.getItem("logos_token")
+    }
 
+    mostrarToken();
+  }, []);
   return (
     <View
       style={[
@@ -191,6 +201,7 @@ export default function Dashboard() {
               : "Ir para modo claro"}
           </Text>
         </TouchableOpacity>
+
       </ScrollView>
     </View>
   );
@@ -248,4 +259,5 @@ const styles = StyleSheet.create({
   themeText: {
     fontSize: 14,
   },
+  
 });

@@ -45,3 +45,28 @@ $router->get(
     middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
 );
 
+//funcionarios e permissoes
+
+$router->get(
+    "/api/funcionarios",
+    "UsuarioController:listarFuncionarios",
+    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+);
+$router->get(
+    "/api/permissoes",
+    "PermissaoController:listarTodas",
+    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+);
+
+$router->get(
+    "/api/funcionarios/permissoes",
+    "PermissaoController:listarDoFuncionario",
+    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+);
+
+$router->put(
+    "/api/funcionarios/permissoes",
+    "PermissaoController:atualizarFuncionario",
+    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+);
+

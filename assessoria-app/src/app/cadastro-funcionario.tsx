@@ -230,9 +230,6 @@ export default function CadastroFuncionario() {
               weight="SemiBold"
               style={[
                 styles.successText,
-                {
-                  color: theme.textoSecundaria,
-                },
               ]}
             >
               Convite válido
@@ -369,6 +366,7 @@ const styles = StyleSheet.create({
   },
 
   successText: {
+    color: "green",
     textAlign: "center",
     marginBottom: 10,
   },

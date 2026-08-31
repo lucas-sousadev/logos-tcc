@@ -105,5 +105,36 @@ class Usuario
 
         return $usuario ?: null;
     }
+    public static function listarFuncionariosPorAssessoria(
+        int $assessoriaId
+    ): array {
+        $pdo = Connection::get();
+
+        $sql = "
+            SELECT
+                id,
+                assessoria_id,
+                nome,
+                email,
+                telefone,
+                perfil,
+                ativo,
+                email_verificado,
+                ultimo_login,
+                created_at
+            FROM usuarios
+            WHERE assessoria_id = :assessoria_id
+            AND perfil = 'FUNCIONARIO'
+            ORDER BY nome ASC
+        ";
+
+        $stmt = $pdo->prepare($sql);
+
+        $stmt->execute([
+            'assessoria_id' => $assessoriaId
+        ]);
+
+        return $stmt->fetchAll();
+    }
 }
 

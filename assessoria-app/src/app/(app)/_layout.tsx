@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
 import {
   Montserrat_400Regular,
   Montserrat_500Medium,
@@ -122,31 +121,47 @@ export default function AppLayout() {
       />
 
       <Tabs.Screen
-        name="clientes"
-        options={{
-          href: null,
-        }}
-      />
+  name="clientes"
+  options={{
+    href: null,
+  }}
+/>
 
-      <Tabs.Screen
-        name="relatorios"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="veiculos"
-        options={{
-          href: null,
-        }}
-      />
+<Tabs.Screen
+  name="relatorios"
+  options={{
+    href: null,
+  }}
+/>
 
-      <Tabs.Screen
-        name="convites"
-        options={{
-          href: null,
-        }}
-      />
+<Tabs.Screen
+  name="veiculos"
+  options={{
+    href: null,
+  }}
+/>
+
+<Tabs.Screen
+  name="convites"
+  options={{
+    href: null,
+  }}
+/>
+
+<Tabs.Screen
+  name="funcionarios"
+  options={{
+    href: null,
+  }}
+/>
+
+<Tabs.Screen
+  name="configuracoes"
+  options={{
+    href: null,
+  }}
+/>
+      
     </Tabs>
   );
 }

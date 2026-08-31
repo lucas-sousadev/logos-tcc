@@ -226,7 +226,7 @@ export default function Convites() {
           style={[
             styles.result,
             {
-              backgroundColor: theme.surface,
+              backgroundColor: theme.background,
               borderColor: theme.borda,
             },
           ]}
@@ -254,7 +254,7 @@ export default function Convites() {
             style={[
               styles.expiration,
               {
-                color: theme.textoSub,
+                color: theme.texto,
               },
             ]}
           >
@@ -266,11 +266,11 @@ export default function Convites() {
             style={[
               styles.info,
               {
-                color: theme.textoSub,
+                color: theme.texto,
               },
             ]}
           >
-            Envie este código para o funcionário.
+            Envie este código para o <Text style={{color:theme.textoTerciaria}}>funcionário. </Text>
           </Text>
         </View>
       )}

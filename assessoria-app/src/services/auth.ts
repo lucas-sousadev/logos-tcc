@@ -365,7 +365,7 @@ export async function me(): Promise<Usuario> {
 }
 
 
-// CADASTRO DE ASSESSORIA
+// cadastro de assessoriA
 
 export interface RegisterAssessoriaData {
   assessoria_nome: string;
@@ -650,4 +650,190 @@ export async function listarConvites(
   }
 
   return data;
+}
+
+// sistema de funcionarios e permissoes
+
+export interface Funcionario {
+  id: number;
+  assessoria_id: number;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  perfil: "FUNCIONARIO";
+  ativo: boolean;
+  email_verificado: boolean;
+  ultimo_login: string | null;
+  created_at: string;
+}
+
+export interface ListarFuncionariosResponse {
+  success: boolean;
+  message?: string;
+  funcionarios?: Funcionario[];
+}
+
+export async function listarFuncionarios(): Promise<Funcionario[]> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/funcionarios`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: ListarFuncionariosResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.funcionarios
+  ) {
+    throw new Error(
+      data.message ||
+      "Não foi possível carregar os funcionários."
+    );
+  }
+
+  return data.funcionarios;
+}
+
+export interface Permissao {
+  id: number;
+  modulo: string;
+  acao: string;
+  descricao: string | null;
+}
+
+export interface ListarPermissoesResponse {
+  success: boolean;
+  message?: string;
+  permissoes?: Permissao[];
+}
+
+export interface ListarPermissoesFuncionarioResponse {
+  success: boolean;
+  message?: string;
+  usuario_id?: number;
+  permissoes?: Permissao[];
+}
+
+export async function listarTodasPermissoes(): Promise<Permissao[]> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/permissoes`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: ListarPermissoesResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.permissoes
+  ) {
+    throw new Error(
+      data.message ||
+        "Não foi possível carregar as permissões."
+    );
+  }
+
+  return data.permissoes;
+}
+
+export async function listarPermissoesFuncionario(
+  usuarioId: number
+): Promise<Permissao[]> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/funcionarios/permissoes?usuario_id=${usuarioId}`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: ListarPermissoesFuncionarioResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.permissoes
+  ) {
+    throw new Error(
+      data.message ||
+        "Não foi possível carregar as permissões do funcionário."
+    );
+  }
+
+  return data.permissoes;
+}
+
+export async function atualizarPermissoesFuncionario(
+  usuarioId: number,
+  permissoes: number[]
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/funcionarios/permissoes`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        usuario_id: usuarioId,
+        permissoes,
+      }),
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: {
+    success: boolean;
+    message?: string;
+  };
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.message ||
+        "Não foi possível atualizar as permissões."
+    );
+  }
 }
