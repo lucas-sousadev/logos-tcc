@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../contexts/AuthContext";
-import { Convite } from "../services/auth";
+import { Convite } from "../services/api/auth";
 import { useTheme } from "@/contexts/ThemeContext";
 
 import BackButton from "@/components/ui/BackButton";

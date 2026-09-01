@@ -30,7 +30,7 @@ import {
   listarPermissoesFuncionario as authListarPermissoesFuncionario,
   atualizarPermissoesFuncionario as authAtualizarPermissoesFuncionario,
   Permissao,
-} from "../services/auth";
+} from "@/services/api/auth";
 
 interface AuthContextData {
   usuario: Usuario | null;

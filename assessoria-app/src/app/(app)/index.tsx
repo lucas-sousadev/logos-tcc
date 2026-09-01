@@ -13,7 +13,7 @@ import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 
-import { Funcionario } from "@/services/auth";
+import { Funcionario, getToken } from "@/services/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -21,7 +21,7 @@ export default function Dashboard() {
   const router = useRouter();
 
   const { theme } = useTheme();
-
+  
   const {
     usuario,
     listarFuncionarios,
@@ -50,6 +50,17 @@ export default function Dashboard() {
     carregarFuncionarios();
   }, [usuario]);
 
+  
+  useEffect(() => {
+    async function mostrarToken() {
+      const token = await getToken();
+      console.log("ACCESS TOKEN ATUAL:", token);
+      localStorage.getItem("logos_token")
+    }
+
+    mostrarToken();
+  }, []);
+ 
   return (
     <View
       style={[

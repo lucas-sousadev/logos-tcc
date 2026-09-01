@@ -1,5 +1,9 @@
 <?php
+$authMiddleware =
+    \Logos\AssessoriaApi\Middleware\AuthMiddleware::class;
 
+$permissionMiddleware =
+    \Logos\AssessoriaApi\Middleware\PermissionMiddleware::class;
 $router->get("/", "HomeController:index");
 
 // login e logout 
@@ -7,7 +11,9 @@ $router->post("/api/auth/login", "AuthController:login");
 $router->get(
     "/api/auth/me",
     "AuthController:me",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );  
 $router->post(
     "/api/auth/logout",
@@ -33,7 +39,9 @@ $router->post(
 $router->post(
     "/api/convites",
     "ConviteController:criar",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 $router->post(
     "/api/convites/validar",
@@ -42,7 +50,9 @@ $router->post(
 $router->get(
     "/api/convites",
     "ConviteController:listar",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 
 //funcionarios e permissoes
@@ -50,23 +60,82 @@ $router->get(
 $router->get(
     "/api/funcionarios",
     "UsuarioController:listarFuncionarios",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 $router->get(
     "/api/permissoes",
     "PermissaoController:listarTodas",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 
 $router->get(
     "/api/funcionarios/permissoes",
     "PermissaoController:listarDoFuncionario",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 
 $router->put(
     "/api/funcionarios/permissoes",
     "PermissaoController:atualizarFuncionario",
-    middleware: \Logos\AssessoriaApi\Middleware\AuthMiddleware::class
+    middleware: [
+        $authMiddleware
+    ]
 );
 
+// mailing
+
+$router->get(
+    "/api/jornalistas",
+    "JornalistaController:listar",
+    "MAILING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->get(
+    "/api/jornalistas/{id}",
+    "JornalistaController:buscar",
+    "MAILING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/jornalistas",
+    "JornalistaController:criar",
+    "MAILING.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->put(
+    "/api/jornalistas/{id}",
+    "JornalistaController:atualizar",
+    "MAILING.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/jornalistas/{id}",
+    "JornalistaController:excluir",
+    "MAILING.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);

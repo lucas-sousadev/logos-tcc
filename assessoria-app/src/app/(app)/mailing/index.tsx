@@ -1,30 +1,382 @@
 import {
+  ActivityIndicator,
+  ScrollView,
   StyleSheet,
-  Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+
+import { Ionicons } from "@expo/vector-icons";
+
 import Header from "@/components/layout/Header";
-import { Colors } from "@/constants/colors";
-import { Fonts } from "@/constants/fonts";
+import SearchBar from "@/components/ui/SearchBar";
+import Button from "@/components/ui/Button";
+import Text from "@/components/ui/Text";
+
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
+
+import { Jornalista, listarJornalistas } from "@/services/api/jornalista";
+
+interface Filtros {
+  estado: string;
+  cidade: string;
+  cargo: string;
+  veiculoId?: number;
+  ativo?: number;
+}
 
 export default function Mailing() {
-  const {theme} = useTheme();
+  const router = useRouter();
+  const { theme } = useTheme();
   
+  const {
+    usuario,
+  } = useAuth();
+  // possivel problema de pesquisa assíncrona para ser resolvido caso leia isso novamente.
+  const [buscaAplicada, setBuscaAplicada] =
+  useState("");
+
+  const [jornalistas, setJornalistas] =
+    useState<Jornalista[]>([]);
+
+  const [busca, setBusca] = useState("");
+
+  const [filtros, setFiltros] =
+    useState<Filtros>({
+      estado: "",
+      cidade: "",
+      cargo: "",
+      ativo: 1,
+    });
+
+  const [carregando, setCarregando] =
+    useState(true);
+
+  const [carregandoMais, setCarregandoMais] =
+    useState(false);
+
+  const [pagina, setPagina] = useState(1);
+
+  const [temMais, setTemMais] =
+    useState(false);
+
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBuscaAplicada(busca);
+    }, 450);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [busca]);
+
+  useEffect(() => {
+    carregarJornalistas(true);
+  }, [buscaAplicada, filtros]);
+  async function carregarJornalistas(
+    reset = false
+  ) {
+    try {
+      if (reset) {
+        setCarregando(true);
+        setPagina(1);
+      } else {
+        setCarregandoMais(true);
+      }
+
+      const paginaAtual = reset
+        ? 1
+        : pagina + 1;
+
+      const resposta =
+        await listarJornalistas({
+          page: paginaAtual,
+          limit: 50,
+          busca: buscaAplicada,
+          estado: filtros.estado,
+          cidade: filtros.cidade,
+          cargo: filtros.cargo,
+          veiculo_id: filtros.veiculoId,
+          ativo: filtros.ativo,
+        });
+
+      if (reset) {
+        setJornalistas(
+          resposta.jornalistas
+        );
+      } else {
+        setJornalistas((atual) => [
+          ...atual,
+          ...resposta.jornalistas,
+        ]);
+      }
+
+      setPagina(paginaAtual);
+
+      setTotal(
+        resposta.pagination.total
+      );
+
+      setTemMais(
+        resposta.pagination.has_next
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar mailing:",
+        error
+      );
+    } finally {
+      setCarregando(false);
+      setCarregandoMais(false);
+    }
+  }
+
+  function filtrosAtivos() {
+    return Boolean(
+      filtros.estado ||
+      filtros.cidade ||
+      filtros.cargo ||
+      filtros.veiculoId ||
+      filtros.ativo !== 1
+    );
+  }
+
+  if (carregando) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor:
+              theme.background,
+          },
+        ]}
+      >
+        <Header title="Mailing" />
+
+        <View style={styles.loading}>
+          <ActivityIndicator
+            size="large"
+            color={theme.primaria}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, {backgroundColor: theme.background}]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor:
+            theme.background,
+        },
+      ]}
+    >
       <Header title="Mailing" />
 
-      <View style={styles.content}>
-        <Text style={styles.title}>
-          Mailing
-        </Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <SearchBar
+          value={busca}
+          onChangeText={setBusca}
+          placeholder="Buscar jornalistas..."
+          filterActive={filtrosAtivos()}
+        />
 
-        <Text style={styles.text}>
-          Gerenciamento de jornalistas.
-        </Text>
-      </View>
+        <View style={styles.topRow}>
+          <Text
+            weight="Medium"
+            style={[
+              styles.count,
+              {
+                color: theme.textoSub,
+              },
+            ]}
+          >
+            {total} jornalistas
+          </Text>
+
+          {usuario?.perfil ===
+            "ASSESSOR" && (
+            <Button
+              title="NOVO"
+              size="small"
+              onPress={() =>
+                router.push(
+                  "/mailing/formulario"
+                )
+              }
+              style={styles.newButton}
+            />
+          )}
+        </View>
+
+        {jornalistas.length === 0 ? (
+          <View
+            style={[
+              styles.empty,
+              {
+                borderColor:
+                  theme.borda,
+              },
+            ]}
+          >
+            <Ionicons
+              name="people-outline"
+              size={34}
+              color={theme.textoSub}
+            />
+
+            <Text
+              weight="SemiBold"
+              style={styles.emptyTitle}
+            >
+              Nenhum jornalista encontrado
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyText,
+                {
+                  color:
+                    theme.textoSub,
+                },
+              ]}
+            >
+              Tente alterar a busca ou os filtros.
+            </Text>
+          </View>
+        ) : (
+          jornalistas.map((jornalista) => (
+            <TouchableOpacity
+              key={jornalista.id}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname:
+                    "/mailing/[id]",
+                  params: {
+                    id:
+                      jornalista.id.toString(),
+                  },
+                })
+              }
+              style={[
+                styles.item,
+                {
+                  backgroundColor:
+                    theme.background,
+                  borderColor:
+                    theme.borda,
+                },
+              ]}
+            >
+              <View style={styles.itemMain}>
+                <View
+                  style={[
+                    styles.avatar,
+                    {
+                      backgroundColor:
+                        theme
+                          .backgroundContainer,
+                    },
+                  ]}
+                >
+                  <Text
+                    weight="Bold"
+                    style={{
+                      color:
+                        theme
+                          .textoContainer,
+                    }}
+                  >
+                    {jornalista.nome
+                      .charAt(0)
+                      .toUpperCase()}
+                  </Text>
+                </View>
+
+                <View
+                  style={styles.itemInfo}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={
+                      styles.itemName
+                    }
+                  >
+                    {jornalista.nome}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.itemEmail,
+                      {
+                        color:
+                          theme.textoSub,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {jornalista.email}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.itemMeta,
+                      {
+                        color:
+                          theme.texto,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {[
+                      jornalista.cargo,
+                      jornalista.cidade &&
+                        jornalista.estado
+                        ? `${jornalista.cidade} - ${jornalista.estado}`
+                        : jornalista.cidade ||
+                          jornalista.estado,
+                      jornalista.veiculo_nome,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward-outline"
+                  size={21}
+                  color={theme.texto}
+                />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+
+        {temMais && (
+          <Button
+            title="CARREGAR MAIS"
+            variant="outline"
+            loading={carregandoMais}
+            onPress={() =>
+              carregarJornalistas(false)
+            }
+            style={styles.moreButton}
+          />
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -32,20 +384,99 @@ export default function Mailing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
 
   content: {
     padding: 20,
+    paddingBottom: 30,
   },
 
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
 
-  text: {
-    color: Colors.cinzaClaro,
+  count: {
+    fontSize: 13,
+  },
+
+  newButton: {
+    width: 85,
+  },
+
+  item: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 10,
+  },
+
+  itemMain: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  avatar: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  itemInfo: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 10,
+  },
+
+  itemName: {
+    fontSize: 16,
+  },
+
+  itemEmail: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  itemMeta: {
+    fontSize: 12,
+    marginTop: 5,
+  },
+
+  empty: {
+    minHeight: 220,
+    borderWidth: 1.5,
+    borderRadius: 16,
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    padding: 25,
+    marginTop: 10,
+  },
+
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 16,
+  },
+
+  emptyText: {
+    marginTop: 5,
+    textAlign: "center",
+    fontSize: 13,
+  },
+
+  moreButton: {
     marginTop: 8,
+  },
+
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

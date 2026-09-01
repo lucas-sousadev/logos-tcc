@@ -19,7 +19,7 @@ import Text from "@/components/ui/Text";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Funcionario } from "@/services/auth";
+import { Funcionario } from "@/services/api/auth";
 
 export default function FuncionarioDetalhes() {
   const router = useRouter();

@@ -11,11 +11,11 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ConviteHistorico,
-} from "@/services/auth";
+} from "@/services/api/auth";
 
+import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
-import BackButton from "@/components/ui/BackButton";
 
 export default function Convites() {
   const router = useRouter();
@@ -137,17 +137,21 @@ export default function Convites() {
   }
 
   if (usuario?.perfil !== "ASSESSOR") {
-    return (
-      <View
-        style={[
-          styles.restrictedContainer,
-          {
-            backgroundColor: theme.background,
-          },
-        ]}
-      >
-        <BackButton />
+  return (
+    <View
+      style={[
+        styles.screen,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <Header
+        title="Convites"
+        showBackButton
+      />
 
+      <View style={styles.restrictedContainer}>
         <Text
           weight="SemiBold"
           style={styles.title}
@@ -172,26 +176,28 @@ export default function Convites() {
           onPress={() => router.back()}
         />
       </View>
-    );
-  }
+    </View>
+  );
+}
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
-    >
-      <BackButton />
+    <View
+    style={[
+      styles.screen,
+      {
+        backgroundColor: theme.background,
+      },
+    ]}
+  >
+    <Header
+      title="Convites"
+      showBackButton
+    />
 
-      <Text
-        weight="SemiBold"
-        style={styles.title}
-      >
-        Convites
-      </Text>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.container}
+    >
 
       <Text
         style={[
@@ -201,7 +207,7 @@ export default function Convites() {
           },
         ]}
       >
-        Crie um convite para adicionar um funcionário
+        Crie e compartilhe um convite para adicionar um funcionário
         à sua assessoria.
       </Text>
 
@@ -456,6 +462,7 @@ export default function Convites() {
         )}
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -468,14 +475,16 @@ function formatarData(data: string): string {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
+  screen: {
+  flex: 1,
+},
 
-    paddingHorizontal: 25,
-    paddingTop: 90,
-    paddingBottom: 30,
-  },
-
+container: {
+  flexGrow: 1,
+  paddingHorizontal: 25,
+  paddingTop: 25,
+  paddingBottom: 30,
+},
   restrictedContainer: {
     flex: 1,
     justifyContent: "center",

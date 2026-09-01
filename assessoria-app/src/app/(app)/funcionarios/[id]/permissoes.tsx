@@ -25,7 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   Funcionario,
   Permissao,
-} from "@/services/auth";
+} from "@/services/api/auth";
 
 export default function Permissoes() {
    const { theme } = useTheme();
