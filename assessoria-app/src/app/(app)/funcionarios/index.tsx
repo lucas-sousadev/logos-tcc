@@ -97,7 +97,7 @@ export default function Funcionarios() {
         },
       ]}
     >
-      <Header title="Funcionários" />
+      <Header title="Funcionários" showBackButton/>
 
       <ScrollView
         contentContainerStyle={styles.content}

@@ -69,7 +69,7 @@ export default function AppLayout() {
           title: "Clipping",
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name="newspaper-outline"
+              name="document-outline"
               size={size}
               color={color}
             />
@@ -97,7 +97,7 @@ export default function AppLayout() {
           title: "Releases",
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name="document-text-outline"
+              name="newspaper-outline"
               size={size}
               color={color}
             />

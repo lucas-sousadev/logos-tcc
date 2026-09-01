@@ -5,31 +5,51 @@ import {
   View,
 } from "react-native";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
-import { getToken } from "../../services/auth";
 import { Ionicons } from "@expo/vector-icons";
-import Header from "../../components/layout/Header";
-import { useAuth } from "../../contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
 
+import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
+
+import { Funcionario } from "@/services/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Dashboard() {
   const router = useRouter();
 
-  const { theme, mode, toggleTheme } = useTheme();
-  const { usuario, logout } = useAuth();
+  const { theme } = useTheme();
+
+  const {
+    usuario,
+    listarFuncionarios,
+  } = useAuth();
+
+  const [funcionarios, setFuncionarios] =
+    useState<Funcionario[]>([]);
+
   useEffect(() => {
-    async function mostrarToken() {
-      const token = await getToken();
-      console.log("ACCESS TOKEN ATUAL:", token);
-      localStorage.getItem("logos_token")
+    async function carregarFuncionarios() {
+      if (usuario?.perfil !== "ASSESSOR") {
+        return;
+      }
+
+      try {
+        const dados = await listarFuncionarios();
+        setFuncionarios(dados);
+      } catch (error) {
+        console.error(
+          "Erro ao carregar funcionários:",
+          error
+        );
+      }
     }
 
-    mostrarToken();
-  }, []);
+    carregarFuncionarios();
+  }, [usuario]);
+
   return (
     <View
       style={[
@@ -42,6 +62,7 @@ export default function Dashboard() {
       <Header />
 
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
         <Text
@@ -52,157 +73,179 @@ export default function Dashboard() {
         </Text>
 
         <View style={styles.cardsRow}>
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.borda,
-              },
-            ]}
-          >
-            <Text
-              weight="Bold"
-              style={[
-                styles.cardNumber,
-                {
-                  color: theme.textoTerciaria,
-                },
-              ]}
-            >
-              0
-            </Text>
+          <DashboardCard
+            value="0"
+            label="Releases"
+            icon="newspaper-outline"
+          />
 
-            <Text
-              weight="Medium"
-              style={styles.cardLabel}
-            >
-              Releases
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.borda,
-              },
-            ]}
-          >
-            <Text
-              weight="Bold"
-              style={[
-                styles.cardNumber,
-                {
-                  color: theme.textoTerciaria,
-                },
-              ]}
-            >
-              0
-            </Text>
-
-            <Text
-              weight="Medium"
-              style={styles.cardLabel}
-            >
-              Clippings
-            </Text>
-          </View>
+          <DashboardCard
+            value="0"
+            label="Clippings"
+            icon="document-outline"
+          />
         </View>
 
         <View style={styles.cardsRow}>
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.borda,
-              },
-            ]}
-          >
-            <Text
-              weight="Bold"
-              style={[
-                styles.cardNumber,
-                {
-                  color: theme.textoTerciaria,
-                },
-              ]}
-            >
-              0
-            </Text>
+          <DashboardCard
+            value="0"
+            label="Mailing"
+            icon="people-outline"
+          />
 
-            <Text
-              weight="Medium"
-              style={styles.cardLabel}
-            >
-              Jornalistas
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.borda,
-              },
-            ]}
-          >
-            <Text
-              weight="Bold"
-              style={[
-                styles.cardNumber,
-                {
-                  color: theme.textoTerciaria,
-                },
-              ]}
-            >
-              0
-            </Text>
-
-            <Text
-              weight="Medium"
-              style={styles.cardLabel}
-            >
-              Clientes
-            </Text>
-          </View>
+          <DashboardCard
+            value="0"
+            label="Clientes"
+            icon="business-outline"
+          />
         </View>
+
+        {usuario?.perfil === "ASSESSOR" && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() =>
+              router.push("/funcionarios")
+            }
+            style={[
+              styles.options,
+              {
+                backgroundColor:
+                  theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <View style={styles.optionsContent}>
+              <View style={styles.optionInfo}>
+                <View
+                  style={[
+                    styles.optionIcon,
+                    {
+                      backgroundColor:
+                        theme.backgroundContainer,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="people-outline"
+                    size={21}
+                    color={theme.textoContainer}
+                  />
+                </View>
+
+                <View>
+                  <Text
+                    weight="Bold"
+                    style={[
+                      styles.optionNumber,
+                      {
+                        color:
+                          theme.textoTerciaria,
+                      },
+                    ]}
+                  >
+                    {funcionarios.length}
+                  </Text>
+
+                  <Text
+                    weight="Medium"
+                    style={[
+                      styles.optionLabel,
+                      {
+                        color: theme.texto,
+                      },
+                    ]}
+                  >
+                    Funcionários
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons
+                name="arrow-forward-outline"
+                size={22}
+                color={theme.texto}
+              />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {usuario?.perfil === "ASSESSOR" && (
           <Button
             title="GERENCIAR CONVITES"
             variant="primary"
-            style={styles.invitesButton}
             onPress={() =>
               router.push("/(app)/convites")
             }
+            style={styles.invitesButton}
           />
         )}
-
-        <TouchableOpacity
-          onPress={toggleTheme}
-          activeOpacity={0.7}
-          style={styles.themeButton}
-        >
-          <Text
-            weight="Medium"
-            style={[
-              styles.themeText,
-              {
-                color: theme.textoTerciaria,
-              },
-            ]}
-          >
-            {mode === "light"
-              ? "Ir para modo escuro"
-              : "Ir para modo claro"}
-          </Text>
-        </TouchableOpacity>
-
       </ScrollView>
+    </View>
+  );
+}
+
+interface DashboardCardProps {
+  value: string;
+  label: string;
+  icon: React.ComponentProps<
+    typeof Ionicons
+  >["name"];
+}
+
+function DashboardCard({
+  value,
+  label,
+  icon,
+}: DashboardCardProps) {
+  const { theme } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.background,
+          borderColor: theme.borda,
+        },
+      ]}
+    >
+      <View style={styles.cardTop}>
+        <View
+          style={[
+            styles.cardIcon,
+            {
+              backgroundColor:
+                theme.backgroundContainer,
+            },
+          ]}
+        >
+          <Ionicons
+            name={icon}
+            size={21}
+            color={theme.textoContainer}
+          />
+        </View>
+      </View>
+
+      <Text
+        weight="Bold"
+        style={[
+          styles.cardNumber,
+          {
+            color: theme.textoTerciaria,
+          },
+        ]}
+      >
+        {value}
+      </Text>
+
+      <Text
+        weight="Medium"
+        style={styles.cardLabel}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -214,6 +257,7 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 20,
+    paddingBottom: 30,
   },
 
   sectionTitle: {
@@ -229,35 +273,82 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    minHeight: 120,
+    minHeight: 135,
     padding: 18,
 
     borderWidth: 2,
     borderRadius: 16,
+  },
+
+  cardTop: {
+    marginBottom: 8,
+  },
+
+  cardIcon: {
+    width: 38,
+    height: 38,
+
+    borderRadius: 11,
 
     justifyContent: "center",
+    alignItems: "center",
   },
 
   cardNumber: {
     fontSize: 30,
+    lineHeight: 34,
   },
 
   cardLabel: {
     fontSize: 14,
-    marginTop: 5,
+    marginTop: 3,
+  },
+
+  options: {
+    minHeight: 105,
+
+    borderRadius: 16,
+    borderWidth: 2,
+
+    padding: 18,
+  },
+
+  optionsContent: {
+    flex: 1,
+
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  optionInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  optionIcon: {
+    width: 42,
+    height: 42,
+
+    borderRadius: 12,
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    marginRight: 12,
+  },
+
+  optionNumber: {
+    fontSize: 27,
+    lineHeight: 31,
+  },
+
+  optionLabel: {
+    fontSize: 14,
+    marginTop: 2,
   },
 
   invitesButton: {
-    marginTop: 20,
+    marginTop: 18,
   },
-
-  themeButton: {
-    alignItems: "center",
-    marginTop: 25,
-  },
-
-  themeText: {
-    fontSize: 14,
-  },
-  
 });

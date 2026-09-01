@@ -2,6 +2,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  StatusBar
 } from "react-native";
 
 import { useRouter } from "expo-router";
@@ -10,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
-import { Fonts } from "@/constants/fonts";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface HeaderProps {
   title?: string;
@@ -26,9 +27,10 @@ export default function Header({
   onBackPress,
 }: HeaderProps) {
   const router = useRouter();
-
+  const insets = useSafeAreaInsets();
+  
   const { usuario } = useAuth();
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
 
   const nome = usuario?.nome || "Usuário";
 
@@ -54,12 +56,22 @@ export default function Header({
   }
 
   return (
+    <>
+    <StatusBar
+      barStyle={
+        mode === "dark"
+          ? "light-content"
+          : "dark-content"
+      }
+      backgroundColor={theme.background}
+    />
     <View
       style={[
         styles.container,
         {
           backgroundColor: theme.background,
           borderBottomColor: theme.borda,
+          paddingTop: insets.top + 8,
         },
       ]}
     >
@@ -145,23 +157,24 @@ export default function Header({
         </View>
       </View>
     </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 90,
+  minHeight: 90,
 
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 15,
+  paddingHorizontal: 20,
+  paddingTop: 12,
+  paddingBottom: 15,
 
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
 
-    borderBottomWidth: 2,
-  },
+  borderBottomWidth: 2,
+},
 
   leftSection: {
     flex: 1,

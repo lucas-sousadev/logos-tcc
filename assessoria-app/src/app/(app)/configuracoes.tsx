@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function Configuracoes() {
-  const { theme } = useTheme();
+  const { theme, mode, toggleTheme } = useTheme();
   const { usuario, logout } = useAuth();
   return (
     <View
@@ -50,6 +50,25 @@ export default function Configuracoes() {
                   color={theme.texto}
                 />
         </TouchableOpacity>
+
+        <TouchableOpacity
+                  onPress={toggleTheme}
+                  activeOpacity={0.7}
+                  style={[styles.themeButton, {alignSelf: "center", paddingTop: 40}]}
+                >
+                  <Text
+                    weight="Medium"
+                    style={[
+                      {
+                        color: theme.texto,
+                      },
+                    ]}
+                  >
+                    {mode === "light"
+                      ? " Alternar para modo escuro"
+                      : " Alternar para modo claro"}
+                  </Text>
+                </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -80,5 +99,9 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
     alignItems: "center",
+  },
+  themeButton: {
+    alignSelf: "flex-end",
+    marginBottom: 20,
   },
 });

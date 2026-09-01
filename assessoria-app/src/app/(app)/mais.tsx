@@ -6,108 +6,172 @@ import {
 } from "react-native";
 
 import { useRouter } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { Ionicons } from "@expo/vector-icons";
+
 import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
 
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+
+interface MenuItemProps {
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  onPress: () => void;
+}
 
 export default function Mais() {
   const router = useRouter();
-  const { theme, mode } = useTheme();
+
+  const { theme } = useTheme();
   const { usuario } = useAuth();
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.background}]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
       <Header title="Mais" />
 
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <TouchableOpacity
-          style={[styles.item, {borderColor: theme.borda}]}
+        <Text
+          weight="SemiBold"
+          style={styles.sectionTitle}
+        >
+          Gerenciamento
+        </Text>
+
+        <MenuItem
+          title="Clientes"
+          description="Gerencie os clientes da assessoria."
+          icon="business-outline"
           onPress={() =>
             router.push("/clientes")
           }
-        >
-          <Text style={[styles.itemTitle, {color: theme.textoTerciaria}]}>
-            Clientes
-          </Text>
+        />
 
-            <Text style={[styles.itemDescription, {color: theme.texto}]}>
-            Gerencie os clientes da assessoria.
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.item, {borderColor: theme.borda}]}
-          onPress={() =>
-            router.push("/relatorios")
-          }
-        >
-          <Text style={[styles.itemTitle, {color: theme.textoTerciaria}]}>
-            Relatórios
-          </Text>
-
-            <Text style={[styles.itemDescription, {color: theme.texto}]}>
-            Gere e consulte relatórios.
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.item, {borderColor: theme.borda}]}
+        <MenuItem
+          title="Veículos"
+          description="Gerencie os veículos de comunicação cadastrados."
+          icon="radio-outline"
           onPress={() =>
             router.push("/veiculos")
           }
-        >
-          <Text style={[styles.itemTitle, {color: theme.textoTerciaria}]}>
-            Veículos
-          </Text>
+        />
 
-            <Text style={[styles.itemDescription, {color: theme.texto}]}>
-            Gere e consulte informações sobre veículos de comunicação cadastrados.
-          </Text>
-        </TouchableOpacity>
-
-        {usuario?.perfil === "ASSESSOR" && (
-          <TouchableOpacity
-          style={[styles.item, {borderColor: theme.borda}]}
-            onPress={() =>
-              router.push("/(app)/convites")
-            }
-          >
-            <Text style={[styles.itemTitle, {color: theme.textoTerciaria}]}>
-              Convites
-            </Text>
-
-            <Text style={[styles.itemDescription, {color: theme.texto}]}>
-              Convide funcionários para a assessoria.
-            </Text>
-          </TouchableOpacity>
-        )}
+        <MenuItem
+          title="Relatórios"
+          description="Gere e consulte os relatórios da assessoria."
+          icon="bar-chart-outline"
+          onPress={() =>
+            router.push("/relatorios")
+          }
+        />
 
         {usuario?.perfil === "ASSESSOR" && (
-          <TouchableOpacity
-          style={[styles.item, {borderColor: theme.borda}]}
-            onPress={() =>
-              router.push("/funcionarios")
-            }
-          >
-            <Text
-              weight="SemiBold"
-              style={[styles.itemTitle, {color: theme.textoTerciaria}]}
-            >
-              Funcionários
-            </Text>
+          <>
+            <MenuItem
+              title="Funcionários"
+              description="Gerencie funcionários e suas permissões."
+              icon="people-outline"
+              onPress={() =>
+                router.push("/funcionarios")
+              }
+            />
 
-            <Text style={[styles.itemDescription, {color: theme.texto}]}>
-              Gerencie funcionários e permissões.
-            </Text>
-          </TouchableOpacity>
+            <MenuItem
+              title="Convites"
+              description="Crie e acompanhe convites para funcionários."
+              icon="mail-outline"
+              onPress={() =>
+                router.push("/(app)/convites")
+              }
+            />
+          </>
         )}
       </ScrollView>
     </View>
+  );
+}
+
+function MenuItem({
+  title,
+  description,
+  icon,
+  onPress,
+}: MenuItemProps) {
+  const { theme } = useTheme();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        styles.item,
+        {
+          backgroundColor: theme.background,
+          borderColor: theme.borda,
+        },
+      ]}
+    >
+      <View style={styles.itemContent}>
+        <View
+          style={[
+            styles.iconContainer,
+            {
+              backgroundColor:
+                theme.backgroundContainer,
+              },
+            ]}
+        >
+          <Ionicons
+            name={icon}
+            size={22}
+            color={theme.textoContainer}
+          />
+        </View>
+
+        <View style={styles.textContainer}>
+          <Text
+            weight="SemiBold"
+            style={[
+              styles.itemTitle,
+              {
+                color: theme.textoTerciaria,
+              },
+            ]}
+          >
+            {title}
+          </Text>
+
+          <Text
+            weight="Regular"
+            style={[
+              styles.itemDescription,
+              {
+                color: theme.texto,
+              },
+            ]}
+          >
+            {description}
+          </Text>
+        </View>
+
+        <Ionicons
+          name="arrow-forward-outline"
+          size={21}
+          color={theme.texto}
+        />
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -118,21 +182,47 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 20,
-    gap: 12,
+    paddingBottom: 30,
+  },
+
+  sectionTitle: {
+    fontSize: 22,
+    marginBottom: 18,
   },
 
   item: {
     borderRadius: 16,
-    padding: 20,
     borderWidth: 2,
+    padding: 17,
+    marginBottom: 12,
+  },
+
+  itemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  textContainer: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 10,
   },
 
   itemTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
   },
 
   itemDescription: {
-    marginTop: 5,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
   },
 });

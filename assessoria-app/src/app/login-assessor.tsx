@@ -161,24 +161,6 @@ export default function LoginAssessor() {
             </Text>
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-                  onPress={toggleTheme}
-                  activeOpacity={0.7}
-                  style={[styles.themeButton, {alignSelf: "center", paddingTop: 40}]}
-                >
-                  <Text
-                    weight="Medium"
-                    style={[
-                      {
-                        color: theme.texto,
-                      },
-                    ]}
-                  >
-                    {mode === "light"
-                      ? " Alternar para modo escuro"
-                      : " Alternar para modo claro"}
-                  </Text>
-                </TouchableOpacity>
       </View>
   );
 }
@@ -190,17 +172,13 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    height: 180,
+    height: 240,
   },
   backgroundImage: {
   ...StyleSheet.absoluteFill,
   width: "100%",
   height: "100%",
 },
-  themeButton: {
-    alignSelf: "flex-end",
-    marginBottom: 20,
-  },
 
   title: {
     fontSize: 28,

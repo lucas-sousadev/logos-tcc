@@ -62,9 +62,10 @@ export default function Cadastro() {
       console.log("Usuário:", data.usuario);
 
       /*
-       * O AuthContext ainda não está sendo atualizado por essa
-       * função. Por isso, nesta etapa vamos apenas voltar para a
-       * entrada depois de confirmar o cadastro.
+      o AuthContext ainda não está sendo atualizado por essa
+      função 
+      por isso, nesta etapa vamos apenas voltar para a
+      entrada depois de confirmar o cadastro.
        */
       Alert.alert(
         "Cadastro realizado com sucesso!",
