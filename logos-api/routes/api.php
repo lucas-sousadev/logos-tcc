@@ -145,3 +145,54 @@ $router->delete(
         $permissionMiddleware
     ]
 );
+
+// veiculos 
+$router->get(
+    "/api/veiculos",
+    "VeiculoController:listar",
+    "VEICULOS.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->get(
+    "/api/veiculos/{id}",
+    "VeiculoController:buscar",
+    "VEICULOS.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/veiculos",
+    "VeiculoController:criar",
+    "VEICULOS.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->put(
+    "/api/veiculos/{id}",
+    "VeiculoController:atualizar",
+    "VEICULOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/veiculos/{id}",
+    "VeiculoController:excluir",
+    "VEICULOS.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);

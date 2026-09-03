@@ -32,6 +32,7 @@ CREATE TABLE usuarios (
 
     nome VARCHAR(150) NOT NULL,
     email VARCHAR(150) NOT NULL,
+    telefone VARCHAR(30) NULL,
     senha_hash VARCHAR(255) NOT NULL,
 
     perfil ENUM('ASSESSOR', 'FUNCIONARIO')
