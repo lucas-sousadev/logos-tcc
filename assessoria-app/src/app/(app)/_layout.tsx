@@ -11,8 +11,10 @@ import {
 import { useFonts } from "expo-font";
 import { Fonts } from "@/constants/fonts"
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AppLayout() {
+    const { temPermissao } = useAuth();
     const insets = useSafeAreaInsets();
     const [fontsLoaded] = useFonts({
       Montserrat_400Regular,
@@ -67,6 +69,12 @@ export default function AppLayout() {
         name="clipping"
         options={{
           title: "Clipping",
+          href: temPermissao(
+            "CLIPPING",
+            "VISUALIZAR"
+          )
+            ? "/clipping"
+            : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
               name="document-outline"
@@ -76,11 +84,17 @@ export default function AppLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="mailing"
         options={{
           title: "Mailing",
+          href: temPermissao(
+            "MAILING",
+            "VISUALIZAR"
+          )
+            ? "/mailing"
+            : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
               name="people-outline"
@@ -95,6 +109,12 @@ export default function AppLayout() {
         name="releases"
         options={{
           title: "Releases",
+          href: temPermissao(
+            "RELEASES",
+            "VISUALIZAR"
+          )
+            ? "/releases"
+            : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
               name="newspaper-outline"
@@ -120,7 +140,7 @@ export default function AppLayout() {
         }}
       />
 
-      <Tabs.Screen
+<Tabs.Screen
   name="clientes"
   options={{
     href: null,

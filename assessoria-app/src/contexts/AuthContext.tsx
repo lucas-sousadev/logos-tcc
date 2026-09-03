@@ -29,11 +29,13 @@ import {
   listarTodasPermissoes as authListarTodasPermissoes,
   listarPermissoesFuncionario as authListarPermissoesFuncionario,
   atualizarPermissoesFuncionario as authAtualizarPermissoesFuncionario,
+  listarMinhasPermissoes as authListarMinhasPermissoes,
   Permissao,
 } from "@/services/api/auth";
 
 interface AuthContextData {
   usuario: Usuario | null;
+  permissoesUsuario: Permissao[];
   carregando: boolean;
   autenticado: boolean;
   login: (
@@ -78,6 +80,11 @@ interface AuthContextData {
     usuarioId: number,
     permissoes: number[]
   ) => Promise<void>;
+
+  temPermissao: (
+    modulo: string,
+    acao: string
+  ) => boolean;
 }
 
 const AuthContext = createContext<AuthContextData | undefined>(undefined);
@@ -89,7 +96,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
-
+  
   useEffect(() => {
     async function carregarSessao() {
       try {
@@ -101,12 +108,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const usuarioAtual = await me();
 
+        if (usuarioAtual.perfil === "FUNCIONARIO") {
+          const permissoes =
+            await authListarMinhasPermissoes();
+
+          setPermissoesUsuario(permissoes);
+        } else {
+          setPermissoesUsuario([]);
+        }
+
         setUsuario(usuarioAtual);
       } catch (error) {
         console.error("Erro ao restaurar sessão:", error);
 
         await clearSession();
         setUsuario(null);
+        setPermissoesUsuario([]);
       } finally {
         setCarregando(false);
       }
@@ -116,34 +133,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   async function login(
-    email: string,
-    senha: string,
-    perfilEsperado?: Usuario["perfil"]
-  ): Promise<void> {
-    const resposta = await authLogin(
-      email,
-      senha
+  email: string,
+  senha: string,
+  perfilEsperado?: Usuario["perfil"]
+): Promise<void> {
+  const resposta = await authLogin(
+    email,
+    senha
+  );
+
+  if (!resposta.usuario) {
+    throw new Error(
+      "A API não retornou o usuário."
     );
+  }
 
-    if (!resposta.usuario) {
-      throw new Error(
-        "A API não retornou o usuário."
-      );
-    }
+  if (
+    perfilEsperado &&
+    resposta.usuario.perfil !== perfilEsperado
+  ) {
+    await authLogout();
 
+    throw new Error(
+      "Esta conta não pertence a este tipo de acesso."
+    );
+  }
+
+  try {
     if (
-      perfilEsperado &&
-      resposta.usuario.perfil !== perfilEsperado
+      resposta.usuario.perfil ===
+      "FUNCIONARIO"
     ) {
-      await authLogout();
+      const permissoes =
+        await authListarMinhasPermissoes();
 
-      throw new Error(
-        "Esta conta não pertence a este tipo de acesso."
-      );
+      setPermissoesUsuario(permissoes);
+    } else {
+      setPermissoesUsuario([]);
     }
 
     setUsuario(resposta.usuario);
+  } catch (error) {
+    await authLogout();
+
+    setUsuario(null);
+    setPermissoesUsuario([]);
+
+    throw error;
   }
+}
 
   async function registerAssessoria(
     dados: RegisterAssessoriaData
@@ -161,7 +199,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   async function logout(): Promise<void> {
     await authLogout();
+
     setUsuario(null);
+    setPermissoesUsuario([]);
   }
 
   async function validarConvite(
@@ -262,23 +302,53 @@ async function atualizarPermissoesFuncionario(
     permissoes
   );
 }
+
+  const [permissoesUsuario, setPermissoesUsuario] =
+  useState<Permissao[]>([]);
+
+  function temPermissao(
+    modulo: string,
+    acao: string
+  ): boolean {
+    if (!usuario) {
+      return false;
+    }
+
+    if (usuario.perfil === "ASSESSOR") {
+      return true;
+    }
+
+    return permissoesUsuario.some(
+      (permissao) =>
+        permissao.modulo === modulo &&
+        permissao.acao === acao
+    );
+  }
+
   return (
     <AuthContext.Provider
       value={{
         usuario,
+        permissoesUsuario,
         carregando,
         autenticado: usuario !== null,
+
         login,
         registerAssessoria,
         logout,
+
         validarConvite,
         registerFuncionario,
+
         criarConvite,
         listarConvites,
+
         listarFuncionarios,
         listarTodasPermissoes,
         listarPermissoesFuncionario,
         atualizarPermissoesFuncionario,
+
+        temPermissao,
       }}
     >
       {children}

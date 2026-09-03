@@ -88,6 +88,12 @@ $router->put(
     ]
 );
 
+$router->get(
+    "/api/auth/permissoes",
+    "AuthController:minhasPermissoes",
+    middleware: [$authMiddleware]
+);
+
 // mailing
 
 $router->get(

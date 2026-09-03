@@ -357,6 +357,29 @@ class AuthService
             $usuarioId = (int) $pdo->lastInsertId();
 
             /*
+            * Permissões iniciais do novo funcionário.
+            */
+            $stmt = $pdo->prepare("
+                INSERT INTO usuario_permissoes (
+                    usuario_id,
+                    permissao_id
+                )
+                SELECT
+                    :usuario_id,
+                    id
+                FROM permissoes
+                WHERE
+                    (modulo = 'MAILING' AND acao = 'VISUALIZAR')
+                    OR (modulo = 'CLIPPING' AND acao = 'VISUALIZAR')
+                    OR (modulo = 'VEICULOS' AND acao = 'VISUALIZAR')
+                    OR (modulo = 'RELATORIOS' AND acao = 'VISUALIZAR')
+            ");
+
+            $stmt->execute([
+                'usuario_id' => $usuarioId
+            ]);
+
+            /*
             * Marca o convite como utilizado.
             */
             $stmt = $pdo->prepare("

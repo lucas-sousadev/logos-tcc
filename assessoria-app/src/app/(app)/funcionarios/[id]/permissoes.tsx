@@ -41,6 +41,7 @@ export default function Permissoes() {
     listarTodasPermissoes,
     listarPermissoesFuncionario,
     atualizarPermissoesFuncionario,
+    temPermissao
   } = useAuth();
 
   
@@ -54,8 +55,8 @@ export default function Permissoes() {
     useState<number[]>([]);
 
     const [permissoesOriginais, setPermissoesOriginais] =
-  useState<number[]>([]);
-  
+    useState<number[]>([]);
+
     const adicionadas =
     selecionadas.filter(
         (id) =>
@@ -175,16 +176,51 @@ export default function Permissoes() {
 }
 
   function alternarPermissao(
-    permissaoId: number
+    permissao: Permissao
   ) {
-    setSelecionadas((atual) =>
-      atual.includes(permissaoId)
-        ? atual.filter(
+    if (
+      permissao.acao !== "VISUALIZAR" &&
+      permissaoBloqueada(permissao)
+    ) {
+      return;
+    }
+
+    setSelecionadas((atuais) => {
+      const selecionada =
+        atuais.includes(permissao.id);
+
+      if (selecionada) {
+        const novas =
+          atuais.filter(
             (id) =>
-              id !== permissaoId
-          )
-        : [...atual, permissaoId]
-    );
+              id !== permissao.id
+          );
+          
+        if (
+          permissao.acao === "VISUALIZAR"
+        ) {
+          return novas.filter((id) => {
+            const outra = permissoes.find(
+              (p) => p.id === id
+            );
+
+            return (
+              !outra ||
+              outra.modulo !==
+                permissao.modulo
+            );
+          });
+        }
+
+        return novas;
+      }
+
+      return [
+        ...atuais,
+        permissao.id,
+      ];
+    });
+    
   }
 
   function handleBack() {
@@ -195,6 +231,36 @@ export default function Permissoes() {
   router.back();
 }
 
+  function possuiVisualizar(
+    modulo: string
+  ): boolean {
+    const permissaoVisualizar = permissoes.find(
+      (permissao) =>
+        permissao.modulo === modulo &&
+        permissao.acao === "VISUALIZAR"
+    );
+
+    if (!permissaoVisualizar) {
+      return false;
+    }
+
+    return selecionadas.includes(
+      permissaoVisualizar.id
+    );
+  }
+
+  function permissaoBloqueada(
+    permissao: Permissao
+  ): boolean {
+    if (permissao.acao === "VISUALIZAR") {
+      return false;
+    }
+
+    return !possuiVisualizar(
+      permissao.modulo
+    );
+  }
+  
   function descartarAlteracoes() {
     setSelecionadas(
         [...permissoesOriginais]
@@ -480,23 +546,24 @@ export default function Permissoes() {
                       selecionadas.includes(
                         permissao.id
                       );
+                        const bloqueada = permissaoBloqueada(permissao);
+
 
                     return (
                       <TouchableOpacity
-                        key={
-                          permissao.id
-                        }
-                        activeOpacity={0.8}
-                        onPress={() =>
-                          alternarPermissao(
-                            permissao.id
-                          )
-                        }
+                        key={permissao.id}
+                        disabled={bloqueada}
+                        activeOpacity={bloqueada ? 1 : 0.8}
+                        onPress={() => {
+                          if (!bloqueada) {
+                            alternarPermissao(permissao);
+                          }
+                        }}
                         style={[
                           styles.permissionRow,
                           {
-                            borderTopColor:
-                              theme.borda,
+                            borderTopColor: theme.borda,
+                            opacity: bloqueada ? 0.55 : 1,
                           },
                         ]}
                       >
@@ -507,53 +574,66 @@ export default function Permissoes() {
                         >
                           <View style={styles.actionRow}>
                             <Text
-                                weight="SemiBold"
-                                style={styles.permissionAction}
+                              weight="SemiBold"
+                              style={[
+                                styles.permissionAction,
+                                {
+                                  color: bloqueada
+                                    ? theme.textoSub
+                                    : theme.texto,
+                                },
+                              ]}
                             >
-                                {formatarAcao(
-                                permissao.acao
-                                )}
+                              {formatarAcao(permissao.acao)}
                             </Text>
 
+                            {bloqueada && (
+                              <Ionicons
+                                name="lock-closed-outline"
+                                size={13}
+                                color={theme.textoSub}
+                              />
+                            )}
+
                             {foiAdicionada && (
-                                <View
+                              <View
                                 style={[
-                                    styles.changeBadge,
-                                    {
+                                  styles.changeBadge,
+                                  {
                                     backgroundColor:
-                                        theme.backgroundContainer,
-                                    },
+                                      theme.backgroundContainer,
+                                  },
                                 ]}
-                                >
+                              >
                                 <Text
-                                    weight="SemiBold"
-                                    style={[
+                                  weight="SemiBold"
+                                  style={[
                                     styles.changeBadgeText,
                                     {
-                                        color:
+                                      color:
                                         theme.textoContainer,
                                     },
-                                    ]}
+                                  ]}
                                 >
-                                    NOVA
+                                  NOVA
                                 </Text>
-                                </View>
+                              </View>
                             )}
 
                             {foiRemovida && (
-                                <View
+                              <View
                                 style={[
-                                    styles.changeBadge,
-                                    styles.removedBadge,
+                                  styles.changeBadge,
+                                  styles.removedBadge,
                                 ]}
-                                >
+                              >
                                 <Text
-                                    weight="SemiBold"
-                                    style={styles.removedBadgeText}
+                                  weight="SemiBold"
+                                  style={styles.removedBadgeText}
                                 >
-                                    REMOVIDA
+                                  REMOVIDA
                                 </Text>
-                                </View>
+                              </View>
                             )}
                             </View>
 
@@ -576,12 +656,15 @@ export default function Permissoes() {
                           style={[
                             styles.checkbox,
                             {
-                              borderColor:
-                                marcada
+                              borderColor: bloqueada
+                                ? theme.textoSub
+                                : marcada
                                   ? theme.primaria
                                   : theme.borda,
-                              backgroundColor:
-                                marcada
+
+                              backgroundColor: bloqueada
+                                ? "transparent"
+                                : marcada
                                   ? theme.backgroundContainer
                                   : "transparent",
                             },

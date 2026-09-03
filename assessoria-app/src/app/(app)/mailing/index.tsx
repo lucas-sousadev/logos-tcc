@@ -6,8 +6,10 @@ import {
   View,
 } from "react-native";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import { useState, useCallback } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import FilterModal from "@/components/ui/FilterModal";
+import type { FiltrosMailing } from "@/components/ui/FilterModal";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -21,32 +23,25 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { Jornalista, listarJornalistas } from "@/services/api/jornalista";
 
-interface Filtros {
-  estado: string;
-  cidade: string;
-  cargo: string;
-  veiculoId?: number;
-  ativo?: number;
-}
-
 export default function Mailing() {
   const router = useRouter();
   const { theme } = useTheme();
   
   const {
-    usuario,
+    usuario, temPermissao
   } = useAuth();
-  // possivel problema de pesquisa assíncrona para ser resolvido caso leia isso novamente.
+
+  const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] =
-  useState("");
+    useState("");
 
   const [jornalistas, setJornalistas] =
     useState<Jornalista[]>([]);
 
-  const [busca, setBusca] = useState("");
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
 
   const [filtros, setFiltros] =
-    useState<Filtros>({
+    useState<FiltrosMailing>({
       estado: "",
       cidade: "",
       cargo: "",
@@ -66,22 +61,8 @@ export default function Mailing() {
 
   const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setBuscaAplicada(busca);
-    }, 450);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [busca]);
-
-  useEffect(() => {
-    carregarJornalistas(true);
-  }, [buscaAplicada, filtros]);
-  async function carregarJornalistas(
-    reset = false
-  ) {
+  const carregarJornalistas = useCallback(
+  async (reset = false) => {
     try {
       if (reset) {
         setCarregando(true);
@@ -107,9 +88,7 @@ export default function Mailing() {
         });
 
       if (reset) {
-        setJornalistas(
-          resposta.jornalistas
-        );
+        setJornalistas(resposta.jornalistas);
       } else {
         setJornalistas((atual) => [
           ...atual,
@@ -135,6 +114,35 @@ export default function Mailing() {
       setCarregando(false);
       setCarregandoMais(false);
     }
+  },
+  [
+    pagina,
+    buscaAplicada,
+    filtros,
+  ]
+); 
+
+useFocusEffect(
+    useCallback(() => {
+      carregarJornalistas(true);
+    }, [carregarJornalistas])
+  );
+  function realizarBusca() {
+    setBuscaAplicada(
+      busca.trim()
+    );
+  }
+
+  function abrirFiltros() {
+    setFiltrosAberto(true);
+  }
+
+  function aplicarFiltros(
+    novosFiltros: FiltrosMailing
+  ) {
+    setPagina(1);
+    setFiltros(novosFiltros);
+    setFiltrosAberto(false);
   }
 
   function filtrosAtivos() {
@@ -190,6 +198,8 @@ export default function Mailing() {
           value={busca}
           onChangeText={setBusca}
           placeholder="Buscar jornalistas..."
+          onSearch={realizarBusca}
+          onFilterPress={abrirFiltros}
           filterActive={filtrosAtivos()}
         />
 
@@ -206,8 +216,7 @@ export default function Mailing() {
             {total} jornalistas
           </Text>
 
-          {usuario?.perfil ===
-            "ASSESSOR" && (
+          {temPermissao("MAILING", "CRIAR") && (
             <Button
               title="NOVO"
               size="small"
@@ -377,6 +386,12 @@ export default function Mailing() {
           />
         )}
       </ScrollView>
+      <FilterModal
+        visible={filtrosAberto}
+        filtros={filtros}
+        onClose={() => setFiltrosAberto(false)}
+        onApply={aplicarFiltros}
+      />
     </View>
   );
 }

@@ -239,7 +239,7 @@ export async function authenticatedFetch(
 
   return response;
 }
-// LOGIN
+// login
 
 export async function login(
   email: string,
@@ -296,7 +296,7 @@ export async function login(
   return data;
 }
 
-// LOGOUT
+// logout
 
 export async function logout(): Promise<void> {
   const refreshToken =
@@ -319,7 +319,7 @@ export async function logout(): Promise<void> {
     }
   } finally {
     
-      // Mesmo se a API estiver indisponível, remove a sessão local.
+      // mesmo se a API não estiver disponivel, ele remove a sessão local 
     await clearSession();
   }
 }
@@ -836,4 +836,42 @@ export async function atualizarPermissoesFuncionario(
         "Não foi possível atualizar as permissões."
     );
   }
+}
+
+export async function listarMinhasPermissoes(): Promise<Permissao[]> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/auth/permissoes`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: {
+    success: boolean;
+    permissoes?: Permissao[];
+    message?: string;
+  };
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.permissoes
+  ) {
+    throw new Error(
+      data.message ||
+        "Não foi possível carregar suas permissões."
+    );
+  }
+
+  return data.permissoes;
 }

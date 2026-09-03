@@ -1,93 +1,81 @@
+import React from "react";
 import {
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Search, SlidersHorizontal } from "lucide-react-native";
 
-import { Ionicons } from "@expo/vector-icons";
-
+import Input from "@/components/ui/Input";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
-  placeholder?: string;
+  onSearch?: () => void;
   onFilterPress?: () => void;
   filterActive?: boolean;
+  placeholder?: string;
 }
 
 export default function SearchBar({
   value,
   onChangeText,
-  placeholder = "Pesquisar...",
+  onSearch,
   onFilterPress,
   filterActive = false,
+  placeholder = "Pesquisar...",
 }: SearchBarProps) {
   const { theme } = useTheme();
 
   return (
     <View style={styles.container}>
-      <View
-        style={[
-          styles.search,
-          {
-            backgroundColor: theme.surface,
-            borderColor: theme.borda,
-          },
-        ]}
-      >
-        <Ionicons
-          name="search-outline"
-          size={21}
-          color={theme.textoSub}
-        />
-
-        <TextInput
+      <View style={styles.searchContainer}>
+        <Input
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={theme.textoSub}
-          autoCapitalize="none"
-          style={[
-            styles.input,
-            {
-              color: theme.textoInput,
-            },
-          ]}
+          returnKeyType="search"
+          onSubmitEditing={onSearch}
+          containerStyle={styles.inputContainer}
+          style={styles.input}
         />
 
-        {value.length > 0 && (
-          <TouchableOpacity
-            onPress={() => onChangeText("")}
-          >
-            <Ionicons
-              name="close-circle"
-              size={19}
-              color={theme.textoSub}
-            />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={onSearch}
+          style={[
+            styles.iconButton,
+            {
+              backgroundColor: theme.backgroundContainer,
+            },
+          ]}
+          activeOpacity={0.8}
+        >
+          <Search
+            size={20}
+            color={theme.textoContainer}
+          />
+        </TouchableOpacity>
       </View>
 
       {onFilterPress && (
         <TouchableOpacity
+          onPress={onFilterPress}
           style={[
             styles.filterButton,
             {
-              backgroundColor:
-                filterActive
-                  ? theme.backgroundContainer
-                  : theme.background,
-              borderColor: theme.borda,
+              borderColor: filterActive
+                ? theme.primaria
+                : theme.borda,
+              backgroundColor: filterActive
+                ? theme.backgroundContainer
+                : theme.background,
             },
           ]}
-          onPress={onFilterPress}
           activeOpacity={0.8}
         >
-          <Ionicons
-            name="options-outline"
-            size={22}
+          <SlidersHorizontal
+            size={20}
             color={
               filterActive
                 ? theme.textoContainer
@@ -102,40 +90,43 @@ export default function SearchBar({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 15,
-  },
-
-  search: {
-    flex: 1,
-    height: 50,
-
-    borderWidth: 1.5,
-    borderRadius: 14,
-
-    paddingHorizontal: 14,
-
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  searchContainer: {
+    flex: 1,
+    position: "relative",
+  },
+
+  inputContainer: {
+    marginBottom: 0,
   },
 
   input: {
-    flex: 1,
+    paddingRight: 50,
+  },
 
-    fontSize: 14,
-    marginLeft: 9,
-    paddingVertical: 0,
+  iconButton: {
+    position: "absolute",
+    right: 7,
+    top: 7,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   filterButton: {
     width: 50,
     height: 50,
-
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
-
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -2,11 +2,13 @@
 
 namespace Logos\AssessoriaApi\Controllers;
 
+use Logos\AssessoriaApi\Services\PermissaoService;
 use Logos\AssessoriaApi\Services\RefreshTokenService;
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\JwtService;
 use Logos\AssessoriaApi\Models\Usuario;
 use Logos\AssessoriaApi\Services\AuthService;
+use Throwable;
 
 class AuthController
 {
@@ -392,6 +394,44 @@ class AuthController
             echo json_encode([
                 'success' => false,
                 'message' => 'Não foi possível renovar a sessão.'
+            ]);
+        }
+    }
+
+
+    public function minhasPermissoes(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            http_response_code(401);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Usuário não autenticado.'
+            ]);
+
+            return;
+        }
+
+        try {
+            $permissoes =
+                PermissaoService::listarDoUsuario(
+                    (int) $usuario->sub
+                );
+
+            echo json_encode([
+                'success' => true,
+                'permissoes' => $permissoes
+            ]);
+        } catch (Throwable $e) {
+            http_response_code(500);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Não foi possível carregar suas permissões.'
             ]);
         }
     }

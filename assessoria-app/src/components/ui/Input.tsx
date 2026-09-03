@@ -11,16 +11,20 @@ import {
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
 import { Fonts } from "@/constants/fonts";
+import { Ionicons } from "@expo/vector-icons";
+
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  showChanged?: boolean;
 }
 
 export default function Input({
   label,
   error,
   containerStyle,
+  showChanged = false,
   style,
   ...props
 }: InputProps) {
@@ -29,12 +33,22 @@ export default function Input({
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
-        <Text
-          weight="Medium"
-          style={styles.label}
-        >
-          {label}
-        </Text>
+        <View style={styles.labelRow}>
+          <Text
+            weight="Medium"
+            style={styles.label}
+          >
+            {label}
+          </Text>
+
+          {showChanged && (
+            <Ionicons
+              name="create-outline"
+              size={15}
+              color={theme.primaria}
+            />
+          )}
+        </View>
       ) : null}
 
       <TextInput
@@ -47,7 +61,7 @@ export default function Input({
             borderColor: error
               ? "#EF4444"
               : theme.borda,
-            fontFamily: Fonts.MontserratRegular
+            fontFamily: Fonts.MontserratRegular,
           },
           style,
         ]}
@@ -72,19 +86,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 8,
+  },
+
   label: {
     fontSize: 15,
-    marginBottom: 8,
   },
 
   input: {
     height: 50,
-
     paddingHorizontal: 15,
-
     borderWidth: 1.5,
     borderRadius: 12,
-
     fontSize: 14,
   },
 

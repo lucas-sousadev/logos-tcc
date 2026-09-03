@@ -25,7 +25,7 @@ export default function Mais() {
   const router = useRouter();
 
   const { theme } = useTheme();
-  const { usuario } = useAuth();
+  const { usuario, temPermissao } = useAuth();
 
   return (
     <View
@@ -48,25 +48,30 @@ export default function Mais() {
         >
           Gerenciamento
         </Text>
+        
+        {temPermissao("CLIENTES", "VISUALIZAR") && (
+          <MenuItem
+            title="Clientes"
+            description="Gerencie os clientes da assessoria."
+            icon="business-outline"
+            onPress={() =>
+              router.push("/clientes")
+            }
+          />
+        )}
 
-        <MenuItem
-          title="Clientes"
-          description="Gerencie os clientes da assessoria."
-          icon="business-outline"
-          onPress={() =>
-            router.push("/clientes")
-          }
-        />
-
-        <MenuItem
-          title="Veículos"
-          description="Gerencie os veículos de comunicação cadastrados."
+        {temPermissao("VEICULOS", "VISUALIZAR") && (
+          <MenuItem
+            title="Veículos"
+            description="Gerencie os veículos de comunicação cadastrados."
           icon="radio-outline"
           onPress={() =>
             router.push("/veiculos")
           }
         />
+        )}
 
+        {temPermissao("RELATORIOS", "VISUALIZAR") && (
         <MenuItem
           title="Relatórios"
           description="Gere e consulte os relatórios da assessoria."
@@ -75,6 +80,7 @@ export default function Mais() {
             router.push("/relatorios")
           }
         />
+        )}
 
         {usuario?.perfil === "ASSESSOR" && (
           <>

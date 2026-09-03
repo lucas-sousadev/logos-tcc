@@ -1,6 +1,5 @@
 -- banco do LOGOS 
 -- MySQL 8+
--- ============================================================
 
 CREATE DATABASE IF NOT EXISTS logos
     CHARACTER SET utf8mb4
@@ -58,9 +57,7 @@ CREATE TABLE usuarios (
 ) ENGINE=InnoDB;
 
 
--- ============================================================
 -- 3. PERMISSÕES
--- ============================================================
 
 CREATE TABLE permissoes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -163,8 +160,6 @@ CREATE TABLE clientes (
 
 
 -- 7. VEÍCULOS
--- Reutilizáveis dentro da assessoria.
--- Não pertencem a clientes.
 
 CREATE TABLE veiculos (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -194,10 +189,7 @@ CREATE TABLE veiculos (
     INDEX idx_veiculos_assessoria (assessoria_id)
 ) ENGINE=InnoDB;
 
-
-
 -- 8. JORNALISTAS / MAILING
--- Cada assessoria possui seu próprio mailing.
 
 CREATE TABLE jornalistas (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -243,7 +235,6 @@ CREATE TABLE jornalistas (
 
 
 -- 9. TEMPLATES DE RELEASE
--- Os blocos são armazenados em JSON.
 
 CREATE TABLE templates (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -342,7 +333,6 @@ CREATE TABLE releases (
 
 
 -- 11. HISTÓRICO DE DESTINATÁRIOS DO RELEASE
--- Um registro para cada jornalista que recebeu/tentou receber.
 
 CREATE TABLE release_destinatarios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -365,12 +355,12 @@ CREATE TABLE release_destinatarios (
 
     erro_mensagem TEXT NULL,
 
-    -- Rastreamento de abertura.
+    -- rastreamento de abertura
     tracking_token CHAR(64) NULL,
     aberto_em DATETIME NULL,
     aberturas_quantidade INT UNSIGNED NOT NULL DEFAULT 0,
 
-    -- Preparação para rastreamento de clique.
+    -- preparação para rastreamento de clique
     clicado_em DATETIME NULL,
     cliques_quantidade INT UNSIGNED NOT NULL DEFAULT 0,
 
@@ -397,9 +387,7 @@ CREATE TABLE release_destinatarios (
     INDEX idx_release_destinatarios_status (status)
 ) ENGINE=InnoDB;
 
-
 -- 12. CLIPPING
-
 
 CREATE TABLE clippings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -410,9 +398,8 @@ CREATE TABLE clippings (
 
     data_publicacao DATE NOT NULL,
 
-    -- Permite múltiplas categorias.
-    -- Exemplo:
-    -- ["Agronegócio", "Economia"]
+    -- permite múltiplas categorias
+    -- ex: ["Agronegócio", "Economia"]
     categorias JSON NULL,
 
     programa_secao VARCHAR(150) NULL,
@@ -547,7 +534,6 @@ CREATE TABLE relatorio_slides (
 
 
 -- 15. AUDITORIA
--- Apenas ações gerais, sem registrar cada alteração de campo.
 
 CREATE TABLE auditoria (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -634,5 +620,28 @@ INSERT INTO permissoes (modulo, acao, descricao) VALUES
 ('RELATORIOS', 'EXCLUIR', 'Excluir relatórios'),
 ('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório');
 
+-- 17. REFRESH TOKENS
+
+CREATE TABLE refresh_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    usuario_id BIGINT UNSIGNED NOT NULL,
+
+    token_hash VARCHAR(64) NOT NULL,
+
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_refresh_tokens_usuario
+        FOREIGN KEY (usuario_id)
+        REFERENCES usuarios(id)
+        ON DELETE RESTRICT,
+
+    UNIQUE KEY uq_refresh_token_hash (token_hash),
+    INDEX idx_refresh_tokens_usuario (usuario_id),
+    INDEX idx_refresh_tokens_expires (expires_at)
+) ENGINE=InnoDB;
 
 -- FIM DO BANCO LOGOS
