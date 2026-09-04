@@ -25,12 +25,14 @@ interface VeiculoSelectorProps {
   value: SelecaoVeiculo;
   onChange: (selecao: SelecaoVeiculo) => void;
   showChanged?: boolean;
+  error?: string;
 }
 
 export default function VeiculoSelector({
   value,
   onChange,
   showChanged = false,
+  error,
 }: VeiculoSelectorProps) {
   const { theme } = useTheme();
   const [sugestoes, setSugestoes] = useState<Veiculo[]>([]);
@@ -85,6 +87,7 @@ export default function VeiculoSelector({
         placeholder="Digite o nome do veículo"
         autoCapitalize="words"
         showChanged={showChanged}
+        error={error}
       />
 
       {value.id !== null ? (
@@ -163,7 +166,7 @@ export default function VeiculoSelector({
                     color={theme.primaria}
                   />
                   <Text style={[styles.helperText, { color: theme.textoSub }]}>
-                    “{termo}” será criado ao salvar o jornalista.
+                    “{termo}” será criado ao salvar o contato.
                   </Text>
                 </View>
               ) : null}

@@ -3,23 +3,25 @@ import { useEffect, useState } from "react";
 import FiltroModalBase from "@/components/ui/Filtros/FiltroModalBase";
 import FiltroStatus from "@/components/ui/Filtros/FiltroStatus";
 
-export interface FiltrosVeiculos {
+export interface FiltrosFuncionarios {
   ativo?: number;
 }
 
-interface VeiculoFilterModalProps {
+interface FuncionarioFilterModalProps {
   visible: boolean;
-  filtros: FiltrosVeiculos;
+  filtros: FiltrosFuncionarios;
   onClose: () => void;
-  onApply: (filtros: FiltrosVeiculos) => void;
+  onApply: (
+    filtros: FiltrosFuncionarios
+  ) => void;
 }
 
-export default function VeiculoFilterModal({
+export default function FuncionarioFilterModal({
   visible,
   filtros,
   onClose,
   onApply,
-}: VeiculoFilterModalProps) {
+}: FuncionarioFilterModalProps) {
   const [ativo, setAtivo] = useState<number | undefined>(
     filtros.ativo
   );
@@ -28,12 +30,12 @@ export default function VeiculoFilterModal({
     if (visible) {
       setAtivo(filtros.ativo);
     }
-  }, [visible, filtros]);
+  }, [visible, filtros.ativo]);
 
   return (
     <FiltroModalBase
       visible={visible}
-      subtitle="Refine os veículos exibidos"
+      subtitle="Refine os funcionários exibidos"
       onClose={onClose}
       onClear={() => setAtivo(undefined)}
       onApply={() => onApply({ ativo })}

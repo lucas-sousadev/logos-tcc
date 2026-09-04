@@ -119,6 +119,7 @@ export default function LoginAssessor() {
           autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
+          clearable
         />
 
         <Input
@@ -127,6 +128,7 @@ export default function LoginAssessor() {
           secureTextEntry
           value={senha}
           onChangeText={setSenha}
+          clearable
         />
 
         {erro ? (

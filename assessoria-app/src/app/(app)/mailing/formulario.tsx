@@ -10,14 +10,18 @@ import { useRouter } from "expo-router";
 import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+
+import {
+  ErrosJornalista,
+  validarFormularioJornalista,
+} from "@/utils/validarMailing";
+
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
 
 import Text from "@/components/ui/Text";
-
 import { useTheme } from "@/contexts/ThemeContext";
-
 import { criarJornalista } from "@/services/api/jornalista";
 
 export default function FormularioJornalista() {
@@ -25,8 +29,7 @@ export default function FormularioJornalista() {
         const router = useRouter();
         const { theme } = useTheme();
 
-        const [erroNome, setErroNome] = useState("");
-        const [erroEmail, setErroEmail] = useState("");
+       const [erros, setErros] = useState<ErrosJornalista>({});
         const [erroGeral, setErroGeral] = useState("");
 
         const [nome, setNome] = useState("");
@@ -46,44 +49,75 @@ export default function FormularioJornalista() {
   const [salvando, setSalvando] =
     useState(false);
 
+    function limparErro(
+      campo: keyof ErrosJornalista
+    ) {
+      setErros((atual) => ({
+        ...atual,
+        [campo]: undefined,
+      }));
+
+      setErroGeral("");
+    }
+
+    function exibirErroDaApi(mensagemOriginal: string) {
+      const mensagem = mensagemOriginal;
+
+      const texto = mensagem.toLocaleLowerCase();
+
+      let campo: keyof ErrosJornalista | null = null;
+
+      if (texto.includes("veículo")) {
+        campo = "veiculo";
+      } else if (
+        texto.includes("e-mail") ||
+        texto.includes("email")
+      ) {
+        campo = "email";
+      } else if (texto.includes("telefone")) {
+        campo = "telefone";
+      } else if (texto.includes("cargo")) {
+        campo = "cargo";
+      } else if (texto.includes("estado")) {
+        campo = "estado";
+      } else if (texto.includes("cidade")) {
+        campo = "cidade";
+      } else if (texto.includes("observações")) {
+        campo = "observacoes";
+      } else if (texto.includes("nome")) {
+        campo = "nome";
+      }
+
+      if (campo) {
+        setErros({ [campo]: mensagem });
+        return;
+      }
+
+      setErroGeral(mensagem);
+    }
+
     async function cadastrar() {
         const nomeFormatado = nome.trim();
         const emailFormatado = email.trim();
 
-        setErroNome("");
-        setErroEmail("");
+        const errosValidacao =
+          validarFormularioJornalista({
+            nome,
+            email,
+            telefone,
+            cargo,
+            estado,
+            cidade,
+            observacoes,
+            veiculoId: veiculo.id,
+            veiculoNome: veiculo.nome,
+          });
+
+        setErros(errosValidacao);
         setErroGeral("");
 
-        let possuiErro = false;
-
-        if (!nomeFormatado) {
-            setErroNome(
-            "Informe o nome do jornalista."
-            );
-            possuiErro = true;
-        }
-
-        if (!emailFormatado) {
-            setErroEmail(
-            "Informe o e-mail do jornalista."
-            );
-            possuiErro = true;
-        } else {
-            const emailValido =
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-                emailFormatado
-            );
-
-            if (!emailValido) {
-            setErroEmail(
-                "Informe um e-mail válido."
-            );
-            possuiErro = true;
-            }
-        }
-
-        if (possuiErro) {
-            return;
+        if (Object.keys(errosValidacao).length > 0) {
+          return;
         }
 
         try {
@@ -112,15 +146,16 @@ export default function FormularioJornalista() {
             router.replace("/mailing");
         } catch (error) {
             console.error(
-            "Erro ao cadastrar jornalista:",
+            "Erro ao cadastrar contato:",
             error
             );
 
-            setErroGeral(
-            error instanceof Error
-                ? error.message 
-                : "Não foi possível cadastrar o jornalista."
-            );
+            const mensagem =
+              error instanceof Error
+                ? error.message
+                : "Não foi possível cadastrar o contato.";
+
+            exibirErroDaApi(mensagem);
         } finally {
             setSalvando(false);
         }
@@ -137,7 +172,7 @@ export default function FormularioJornalista() {
       ]}
     >
       <Header
-        title="Novo jornalista"
+        title="Novo contato"
         showBackButton
         onBackPress={() => router.replace("/mailing")}
       />
@@ -158,7 +193,7 @@ export default function FormularioJornalista() {
             weight="Bold"
             style={styles.introTitle}
           >
-            CADASTRAR JORNALISTA
+            CADASTRAR CONTATO
           </Text>
 
           <Text
@@ -178,7 +213,7 @@ export default function FormularioJornalista() {
           weight="Bold"
           style={styles.sectionTitle}
         >
-          DADOS DO JORNALISTA
+          DADOS DO CONTATO
         </Text>
 
         <Input
@@ -186,11 +221,11 @@ export default function FormularioJornalista() {
             value={nome}
             onChangeText={(texto) => {
                 setNome(texto);
-                if (erroNome) setErroNome("");
+                limparErro("nome");
             }}
-            placeholder="Nome do jornalista"
+            placeholder="Nome do contato"
             autoCapitalize="words"
-            error={erroNome}
+            error={erros.nome}
         />
 
         <Input
@@ -198,60 +233,86 @@ export default function FormularioJornalista() {
             value={email}
             onChangeText={(texto) => {
                 setEmail(texto);
-                if (erroEmail) setErroEmail("");
+                limparErro("email");
             }}
             placeholder="E-mail"
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            error={erroEmail}
+            error={erros.email}
         />
 
         <Input
           label="TELEFONE"
           value={telefone}
-          onChangeText={setTelefone}
+          onChangeText={(texto) => {
+            setTelefone(texto);
+            limparErro("telefone");
+          }}
           placeholder="Ex: (11) 00000-0000"
           keyboardType="phone-pad"
+          error={erros.telefone}
+
         />
 
         <Input
           label="CARGO"
           value={cargo}
-          onChangeText={setCargo}
+          onChangeText={(texto) => {
+            setCargo(texto);
+            limparErro("cargo");
+          }}
           placeholder="Ex.: Repórter"
           autoCapitalize="words"
+          error={erros.cargo}
         />
 
         <Input
           label="ESTADO"
           value={estado}
-          onChangeText={setEstado}
+          onChangeText={(texto) => {
+            setEstado(texto);
+            limparErro("estado");
+          }}
           placeholder="Ex.: São Paulo"
           autoCapitalize="words"
+          error={erros.estado}
+
         />
 
         <Input
           label="CIDADE"
           value={cidade}
-          onChangeText={setCidade}
+          onChangeText={(texto) => {
+            setCidade(texto);
+            limparErro("cidade");
+          }}
           placeholder="Ex.: Campinas"
           autoCapitalize="words"
+          error={erros.cidade}
         />
 
         <Input
           label="OBSERVAÇÕES"
           value={observacoes}
-          onChangeText={setObservacoes}
+          onChangeText={(texto) => {
+            setObservacoes(texto);
+            limparErro("observacoes");
+          }}
           placeholder="Informações adicionais"
           multiline
           textAlignVertical="top"
           style={styles.textArea}
+          error={erros.observacoes}
         />
 
         <VeiculoSelector
           value={veiculo}
-          onChange={setVeiculo}
+          onChange={(selecao) => {
+            setVeiculo(selecao);
+            limparErro("veiculo");
+          }}
+          error={erros.veiculo}
         />
 
         {erroGeral ? (

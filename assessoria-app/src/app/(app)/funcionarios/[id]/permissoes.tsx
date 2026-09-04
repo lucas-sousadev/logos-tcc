@@ -35,13 +35,14 @@ export default function Permissoes() {
       id: string;
     }>();
 
-    const {
+  const {
     usuario,
-    listarFuncionarios,
+    carregando: carregandoAuth,
+    buscarFuncionario,
     listarTodasPermissoes,
     listarPermissoesFuncionario,
     atualizarPermissoesFuncionario,
-    temPermissao
+    temPermissao,
   } = useAuth();
 
   
@@ -86,72 +87,57 @@ export default function Permissoes() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-    carregarDados();
-  }, [id]);
+  if (
+    carregandoAuth ||
+    usuario?.perfil !== "ASSESSOR"
+  ) {
+    return;
+  }
 
+  carregarDados();
+}, [
+  id,
+  carregandoAuth,
+  usuario?.perfil,
+]);
   async function carregarDados() {
-  try {
-    setCarregando(true);
-    setErro("");
+    try {
+      setCarregando(true);
+      setErro("");
 
-    const [
-      funcionarios,
-      todasPermissoes,
-      permissoesAtuais,
-    ] = await Promise.all([
-      listarFuncionarios(),
-      listarTodasPermissoes(),
-      listarPermissoesFuncionario(
-        Number(id)
-      ),
-    ]);
+      const [
+        funcionarioEncontrado,
+        todasPermissoes,
+        permissoesAtuais,
+      ] = await Promise.all([
+        buscarFuncionario(Number(id)),
+        listarTodasPermissoes(),
+        listarPermissoesFuncionario(Number(id)),
+      ]);
 
-    const funcionarioEncontrado =
-      funcionarios.find(
-        (item) =>
-          item.id === Number(id)
-      );
-
-    if (!funcionarioEncontrado) {
-      throw new Error(
-        "Funcionário não encontrado."
-      );
-    }
-
-    const idsAtuais =
-      permissoesAtuais.map(
+      const idsAtuais = permissoesAtuais.map(
         (item) => item.id
       );
 
-    setFuncionario(
-      funcionarioEncontrado
-    );
+      setFuncionario(funcionarioEncontrado);
+      setPermissoes(todasPermissoes);
+      setSelecionadas(idsAtuais);
+      setPermissoesOriginais(idsAtuais);
+    } catch (error) {
+      console.error(
+        "Erro ao carregar permissões:",
+        error
+      );
 
-    setPermissoes(
-      todasPermissoes
-    );
-
-    setSelecionadas(idsAtuais);
-
-    setPermissoesOriginais(
-      idsAtuais
-    );
-
-  } catch (error) {
-    console.error(
-      "Erro ao carregar permissões:",
-      error
-    );
-
-    setErro(
-      error instanceof Error
-        ? error.message
-        : "Não foi possível carregar as permissões."
-    );
-  } finally {
-    setCarregando(false);
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar as permissões."
+      );
+    } finally {
+      setCarregando(false);
+    }
   }
-}
 
   function mesmasPermissoes(
   a: number[],

@@ -32,9 +32,9 @@ export default function FuncionarioDetalhes() {
 
   const {
     usuario,
-    listarFuncionarios,
+    buscarFuncionario,
   } = useAuth();
-
+  
   const [funcionario, setFuncionario] =
     useState<Funcionario | null>(null);
 
@@ -52,22 +52,9 @@ export default function FuncionarioDetalhes() {
       setCarregando(true);
       setErro("");
 
-      const funcionarios =
-        await listarFuncionarios();
+      const dados = await buscarFuncionario(Number(id));
 
-      const encontrado =
-        funcionarios.find(
-          (item) =>
-            item.id === Number(id)
-        );
-
-      if (!encontrado) {
-        throw new Error(
-          "Funcionário não encontrado."
-        );
-      }
-
-      setFuncionario(encontrado);
+      setFuncionario(dados);
     } catch (error) {
       console.error(
         "Erro ao carregar funcionário:",
@@ -367,7 +354,7 @@ export default function FuncionarioDetalhes() {
                 styles.statusBadge,
                 {
                   backgroundColor:
-                    funcionario.ativo
+                    funcionario.ativo === 1
                       ? theme.terciaria
                       : "#EF4444",
                 },
@@ -380,9 +367,9 @@ export default function FuncionarioDetalhes() {
                   fontSize: 12,
                 }}
               >
-                {funcionario.ativo
-                  ? "ATIVO"
-                  : "INATIVO"}
+                {funcionario.ativo === 1
+                ? "ATIVO"
+                : "INATIVO"}
               </Text>
             </View>
           </View>

@@ -119,7 +119,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'ID do jornalista não informado.'
+                    'ID do contato não informado.'
             ]);
 
             return;
@@ -138,7 +138,7 @@ class JornalistaController
                 echo json_encode([
                     'success' => false,
                     'message' =>
-                        'Jornalista não encontrado.'
+                        'Contato não encontrado.'
                 ]);
 
                 return;
@@ -155,7 +155,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'Não foi possível carregar o jornalista.'
+                    'Não foi possível carregar o contato.'
             ]);
         }
     }
@@ -204,7 +204,7 @@ class JornalistaController
             echo json_encode([
                 'success' => true,
                 'message' =>
-                    'Jornalista cadastrado com sucesso.',
+                    'Contato cadastrado com sucesso.',
                 'jornalista_id' => $id,
             ]);
 
@@ -222,7 +222,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'Não foi possível cadastrar o jornalista.'
+                    'Não foi possível cadastrar o contato.'
             ]);
         }
     }
@@ -257,7 +257,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'ID do jornalista não informado.'
+                    'ID do contato não informado.'
             ]);
 
             return;
@@ -289,7 +289,7 @@ class JornalistaController
             echo json_encode([
                 'success' => true,
                 'message' =>
-                    'Jornalista atualizado com sucesso.'
+                    'Contato atualizado com sucesso.'
             ]);
 
         } catch (\InvalidArgumentException $e) {
@@ -306,7 +306,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'Não foi possível atualizar o jornalista.'
+                    'Não foi possível atualizar o contato.'
             ]);
         }
     }
@@ -341,7 +341,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'ID do jornalista não informado.'
+                    'ID do contato não informado.'
             ]);
 
             return;
@@ -356,7 +356,7 @@ class JornalistaController
             echo json_encode([
                 'success' => true,
                 'message' =>
-                    'Jornalista excluído com sucesso.'
+                    'Contato excluído com sucesso.'
             ]);
 
         } catch (\InvalidArgumentException $e) {
@@ -373,7 +373,7 @@ class JornalistaController
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'Não foi possível excluir este jornalista. Ele pode estar vinculado a registros existentes.'
+                    'Não foi possível excluir este contato. Ele pode estar vinculado a registros existentes.'
             ]);
         }
     }

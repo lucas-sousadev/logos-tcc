@@ -25,6 +25,10 @@ import {
   excluirVeiculo,
   Veiculo,
 } from "@/services/api/veiculo";
+import {
+  ErrosVeiculo,
+  validarFormularioVeiculo,
+} from "@/utils/validarVeiculo";
 
 interface Formulario {
   nome: string;
@@ -41,6 +45,8 @@ export default function VeiculoDetalhes() {
   const { id: idParam } = useLocalSearchParams<{ id: string }>();
   const id = Number(idParam);
 
+   const [erros, setErros] = useState<ErrosVeiculo>({});
+  const [erroGeral, setErroGeral] = useState("");
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null);
   const [formulario, setFormulario] = useState<Formulario>({
     nome: "",
@@ -116,6 +122,8 @@ export default function VeiculoDetalhes() {
     const original = dadosFormulario(veiculo);
     setFormulario(original);
     setFormularioOriginal(original);
+    setErros({});
+    setErroGeral("");
     setModoEdicao(false);
   }
 
@@ -137,11 +145,55 @@ export default function VeiculoDetalhes() {
     cancelarEdicao();
   }
 
+  function limparErro(campo: keyof ErrosVeiculo) {
+    setErros((atual) => ({
+      ...atual,
+      [campo]: undefined,
+    }));
+
+    setErroGeral("");
+  }
+
+  function mostrarErroApi(mensagem: string) {
+    const texto = mensagem.toLocaleLowerCase();
+
+    let campo: keyof ErrosVeiculo | null = null;
+
+    if (texto.includes("nome")) {
+      campo = "nome";
+    } else if (texto.includes("descrição")) {
+      campo = "descricao";
+    } else if (texto.includes("alcance")) {
+      campo = "alcance";
+    } else if (
+      texto.includes("logo") ||
+      texto.includes("caminho")
+    ) {
+      campo = "logo_path";
+    }
+
+    if (campo) {
+      setErros({ [campo]: mensagem });
+      return;
+    }
+
+    setErroGeral(mensagem);
+  }
+
   async function salvarAlteracoes() {
     if (!veiculo) return;
 
-    if (!formulario.nome.trim()) {
-      Alert.alert("Atenção", "Informe o nome do veículo.");
+    const errosValidacao = validarFormularioVeiculo({
+      nome: formulario.nome,
+      descricao: formulario.descricao,
+      alcance: formulario.alcance,
+      logo_path: formulario.logo_path,
+    });
+
+    setErros(errosValidacao);
+    setErroGeral("");
+
+    if (Object.keys(errosValidacao).length > 0) {
       return;
     }
 
@@ -162,12 +214,12 @@ export default function VeiculoDetalhes() {
       setModoEdicao(false);
       Alert.alert("Sucesso", "Veículo atualizado com sucesso.");
     } catch (error) {
-      Alert.alert(
-        "Erro",
+      const mensagem =
         error instanceof Error
           ? error.message
-          : "Não foi possível atualizar o veículo."
-      );
+          : "Não foi possível atualizar o veículo.";
+
+      mostrarErroApi(mensagem);
     } finally {
       setSalvando(false);
     }
@@ -305,41 +357,61 @@ export default function VeiculoDetalhes() {
             <Input
               label="NOME"
               value={formulario.nome}
-              onChangeText={(texto) => atualizarCampo("nome", texto)}
+              onChangeText={(texto) => {
+                atualizarCampo("nome", texto);
+                limparErro("nome");
+              }}
+              error={erros.nome}
               placeholder="Nome do veículo"
               autoCapitalize="words"
               showChanged={campoAlterado("nome")}
             />
+
             <Input
               label="DESCRIÇÃO"
               value={formulario.descricao}
-              onChangeText={(texto) => atualizarCampo("descricao", texto)}
+              onChangeText={(texto) => {
+                atualizarCampo("descricao", texto);
+                limparErro("descricao");
+              }}
+              error={erros.descricao}
               placeholder="Descrição do veículo"
               multiline
               textAlignVertical="top"
               style={styles.textArea}
               showChanged={campoAlterado("descricao")}
             />
+
             <Input
               label="ALCANCE"
               value={formulario.alcance}
-              onChangeText={(texto) => atualizarCampo("alcance", texto)}
+              onChangeText={(texto) => {
+                atualizarCampo("alcance", texto);
+                limparErro("alcance");
+              }}
+              error={erros.alcance}
               placeholder="Ex.: Nacional, 250 mil leitores/mês"
               multiline
               textAlignVertical="top"
               style={styles.textArea}
               showChanged={campoAlterado("alcance")}
             />
+
             <Input
               label="URL OU CAMINHO DO LOGO"
               value={formulario.logo_path}
-              onChangeText={(texto) => atualizarCampo("logo_path", texto)}
+              onChangeText={(texto) => {
+                atualizarCampo("logo_path", texto);
+                limparErro("logo_path");
+              }}
+              error={erros.logo_path}
               placeholder="https://exemplo.com/logo.png"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
               showChanged={campoAlterado("logo_path")}
             />
+
             <View
               style={[styles.statusRow, { borderColor: theme.borda }]}
             >
@@ -363,6 +435,14 @@ export default function VeiculoDetalhes() {
                 thumbColor={theme.branco}
               />
             </View>
+            {erroGeral ? (
+              <Text
+                weight="Medium"
+                style={styles.errorGeral}
+              >
+                {erroGeral}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               <Button
                 title="CANCELAR"
@@ -464,9 +544,18 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 40 },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  container: {
+    flex: 1 
+},
+  content: { 
+    padding: 20, 
+    paddingBottom: 40 
+},
+  loading: { 
+    flex: 1, 
+    alignItems: "center", 
+    justifyContent: "center" 
+},
   profile: {
     borderWidth: 1.5,
     borderRadius: 18,
@@ -482,9 +571,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  profileInfo: { flex: 1, marginLeft: 14 },
-  profileName: { fontSize: 19 },
-  profileSubtitle: { fontSize: 12, marginTop: 3 },
+  profileInfo: { 
+    flex: 1, 
+    marginLeft: 14 
+  },
+  profileName: { 
+    fontSize: 19 
+  },
+  profileSubtitle: {
+    fontSize: 12, 
+    marginTop: 3 
+},
   statusBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 9,
@@ -492,7 +589,11 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     marginTop: 8,
   },
-  sectionTitle: { fontSize: 13, marginBottom: 12, marginTop: 4 },
+  sectionTitle: { 
+    fontSize: 13, 
+    marginBottom: 12, 
+    marginTop: 4 
+  },
   infoRow: {
     minHeight: 68,
     borderWidth: 1.5,
@@ -509,10 +610,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  infoContent: { flex: 1, marginLeft: 12 },
-  infoLabel: { fontSize: 10, marginBottom: 3 },
-  infoValue: { fontSize: 14 },
-  textArea: { height: 100, paddingTop: 14 },
+
+  infoContent: { 
+    flex: 1, 
+    marginLeft: 12 
+},
+  infoLabel: { 
+    fontSize: 10, 
+    marginBottom: 3 
+},
+  infoValue: { 
+    fontSize: 14
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 14
+ },
   statusRow: {
     minHeight: 68,
     borderWidth: 1.5,
@@ -523,9 +636,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 22,
   },
-  statusInfo: { flex: 1, marginRight: 10 },
-  statusTitle: { fontSize: 12 },
-  statusDescription: { fontSize: 11, marginTop: 3 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 10 },
-  actionButton: { flex: 1 },
+  statusInfo: { 
+    flex: 1,
+    marginRight: 10 
+  },
+  statusTitle: { 
+    fontSize: 12
+  },
+
+  statusDescription: { 
+    fontSize: 11, 
+    marginTop: 3 
+},
+  actions: { 
+    flexDirection: "row",
+    gap: 10, 
+    marginTop: 10 
+},
+  actionButton: { 
+    flex: 1 
+},
+  errorGeral: {
+  color: "#EF4444",
+  fontSize: 13,
+  textAlign: "center",
+  marginBottom: 10,
+},
 });

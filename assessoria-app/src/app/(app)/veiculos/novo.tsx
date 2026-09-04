@@ -74,7 +74,7 @@ export default function NovoVeiculo() {
             CADASTRAR VEÍCULO
           </Text>
           <Text style={[styles.introText, { color: theme.textoSub }]}>
-            Cadastre o veículo que poderá ser vinculado aos jornalistas
+            Cadastre o veículo que poderá ser vinculado aos contatos
             do mailing. Campos marcados com * são obrigatórios.
           </Text>
         </View>

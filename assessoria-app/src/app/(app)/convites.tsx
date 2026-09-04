@@ -5,8 +5,10 @@ import {
   View,
 } from "react-native";
 import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
-
+import {
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -19,6 +21,24 @@ import Button from "@/components/ui/Button";
 
 export default function Convites() {
   const router = useRouter();
+  
+  const { origem } = useLocalSearchParams<{
+    origem?: string;
+  }>();
+
+  function voltar() {
+    if (origem === "funcionarios") {
+      router.replace("/funcionarios");
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/");
+  }
 
   const { theme } = useTheme();
 
@@ -149,6 +169,7 @@ export default function Convites() {
       <Header
         title="Convites"
         showBackButton
+        onBackPress={voltar}
       />
 
       <View style={styles.restrictedContainer}>
@@ -173,7 +194,7 @@ export default function Convites() {
         <Button
           title="VOLTAR"
           variant="outline"
-          onPress={() => router.back()}
+          onPress={voltar}
         />
       </View>
     </View>
@@ -192,6 +213,7 @@ export default function Convites() {
     <Header
       title="Convites"
       showBackButton
+      onBackPress={voltar}
     />
 
     <ScrollView

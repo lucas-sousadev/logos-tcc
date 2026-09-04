@@ -25,6 +25,9 @@ import {
   Convite,
   ListarConvitesResponse,
   listarFuncionarios as authListarFuncionarios,
+  buscarFuncionario as authBuscarFuncionario,
+  ListarFuncionariosParams,
+  ListarFuncionariosResponse,
   Funcionario,
   listarTodasPermissoes as authListarTodasPermissoes,
   listarPermissoesFuncionario as authListarPermissoesFuncionario,
@@ -69,7 +72,12 @@ interface AuthContextData {
     dados: RegisterFuncionarioData
   ) => Promise<LoginResponse>;
   
-  listarFuncionarios: () => Promise<Funcionario[]>;
+  buscarFuncionario: (
+  usuarioId: number
+) => Promise<Funcionario>;
+  listarFuncionarios: (
+    params?: ListarFuncionariosParams
+  ) => Promise<ListarFuncionariosResponse>;
   listarTodasPermissoes: () => Promise<Permissao[]>;
 
   listarPermissoesFuncionario: (
@@ -254,15 +262,30 @@ async function registerFuncionario(
   return resposta;
 }
 
-async function listarFuncionarios(): Promise<Funcionario[]> {
+async function listarFuncionarios(
+  params: ListarFuncionariosParams = {}
+): Promise<ListarFuncionariosResponse> {
   if (usuario?.perfil !== "ASSESSOR") {
     throw new Error(
       "Apenas assessores podem visualizar funcionários."
     );
   }
 
-  return await authListarFuncionarios();
+  return authListarFuncionarios(params);
 }
+
+async function buscarFuncionario(
+  usuarioId: number
+): Promise<Funcionario> {
+  if (usuario?.perfil !== "ASSESSOR") {
+    throw new Error(
+      "Apenas assessores podem visualizar funcionários."
+    );
+  }
+
+  return authBuscarFuncionario(usuarioId);
+}
+
 async function listarTodasPermissoes(): Promise<Permissao[]> {
   if (usuario?.perfil !== "ASSESSOR") {
     throw new Error(
@@ -344,6 +367,7 @@ async function atualizarPermissoesFuncionario(
         listarConvites,
 
         listarFuncionarios,
+        buscarFuncionario,
         listarTodasPermissoes,
         listarPermissoesFuncionario,
         atualizarPermissoesFuncionario,

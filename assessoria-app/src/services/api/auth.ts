@@ -661,21 +661,63 @@ export interface Funcionario {
   email: string;
   telefone: string | null;
   perfil: "FUNCIONARIO";
-  ativo: boolean;
+  ativo: number;
   email_verificado: boolean;
   ultimo_login: string | null;
   created_at: string;
 }
 
+export interface ListarFuncionariosParams {
+  page?: number;
+  limit?: number;
+  busca?: string;
+  ativo?: number;
+}
+
 export interface ListarFuncionariosResponse {
   success: boolean;
   message?: string;
-  funcionarios?: Funcionario[];
+  funcionarios: Funcionario[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    has_next: boolean;
+  };
 }
 
-export async function listarFuncionarios(): Promise<Funcionario[]> {
+
+export async function listarFuncionarios(
+  params: ListarFuncionariosParams = {}
+): Promise<ListarFuncionariosResponse> {
+  const query = new URLSearchParams();
+
+  query.set(
+    "page",
+    String(params.page ?? 1)
+  );
+
+  query.set(
+    "limit",
+    String(params.limit ?? 50)
+  );
+
+  if (params.busca?.trim()) {
+    query.set(
+      "busca",
+      params.busca.trim()
+    );
+  }
+
+  if (params.ativo !== undefined) {
+    query.set(
+      "ativo",
+      String(params.ativo)
+    );
+  }
+
   const response = await authenticatedFetch(
-    `${API_URL}/api/funcionarios`,
+    `${API_URL}/api/funcionarios?${query.toString()}`,
     {
       method: "GET",
     }
@@ -696,15 +738,56 @@ export async function listarFuncionarios(): Promise<Funcionario[]> {
   if (
     !response.ok ||
     !data.success ||
-    !data.funcionarios
+    !data.funcionarios ||
+    !data.pagination
   ) {
     throw new Error(
       data.message ||
-      "Não foi possível carregar os funcionários."
+        "Não foi possível carregar os funcionários."
     );
   }
 
-  return data.funcionarios;
+  return data;
+}
+
+export async function buscarFuncionario(
+  id: number
+): Promise<Funcionario> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/funcionarios/${id}`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: {
+    success: boolean;
+    funcionario?: Funcionario;
+    message?: string;
+  };
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.funcionario
+  ) {
+    throw new Error(
+      data.message ||
+        "Não foi possível carregar o funcionário."
+    );
+  }
+
+  return data.funcionario;
 }
 
 export interface Permissao {

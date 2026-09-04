@@ -240,7 +240,7 @@
     ) {
       throw new Error(
         data.message ||
-          "Não foi possível carregar o jornalista."
+          "Não foi possível carregar o contato."
       );
     }
 
@@ -281,7 +281,7 @@
     ) {
       throw new Error(
         data.message ||
-          "Não foi possível cadastrar o jornalista."
+          "Não foi possível cadastrar o contato."
       );
     }
 
@@ -323,7 +323,7 @@
     ) {
       throw new Error(
         data.message ||
-          "Não foi possível atualizar o jornalista."
+          "Não foi possível atualizar o contato."
       );
     }
 
@@ -360,7 +360,7 @@
     ) {
       throw new Error(
         data.message ||
-          "Não foi possível excluir o jornalista."
+          "Não foi possível excluir o contato."
       );
     }
 

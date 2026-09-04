@@ -8,8 +8,10 @@ import {
 
 import { useState, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
-import FilterModal from "@/components/ui/Filtros/MailingFilterModal";
-import type { FiltrosMailing } from "@/components/ui/Filtros/MailingFilterModal";
+import MailingFilterModal from "@/components/ui/Filtros/MailingFilterModal";
+import type {
+  FiltrosMailing,
+} from "@/components/ui/Filtros/MailingFilterModal";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -30,6 +32,7 @@ export default function Mailing() {
   const {
     usuario, temPermissao
   } = useAuth();
+
 
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] =
@@ -60,6 +63,7 @@ export default function Mailing() {
     useState(false);
 
   const [total, setTotal] = useState(0);
+  
 
   const carregarJornalistas = useCallback(
   async (reset = false) => {
@@ -122,11 +126,14 @@ export default function Mailing() {
   ]
 ); 
 
-useFocusEffect(
+  useFocusEffect(
     useCallback(() => {
       carregarJornalistas(true);
-    }, [carregarJornalistas])
+    }, [
+      carregarJornalistas,
+    ])
   );
+
   function realizarBusca() {
     setBuscaAplicada(
       busca.trim()
@@ -197,10 +204,11 @@ useFocusEffect(
         <SearchBar
           value={busca}
           onChangeText={setBusca}
-          placeholder="Buscar jornalistas..."
+          placeholder="Buscar contatos, e-mail..."
           onSearch={realizarBusca}
           onFilterPress={abrirFiltros}
           filterActive={filtrosAtivos()}
+          onClear={() => setBuscaAplicada("")}
         />
 
         <View style={styles.topRow}>
@@ -213,7 +221,7 @@ useFocusEffect(
               },
             ]}
           >
-            {total} jornalistas
+            {total} contatos
           </Text>
 
           {temPermissao("MAILING", "CRIAR") && (
@@ -250,7 +258,7 @@ useFocusEffect(
               weight="SemiBold"
               style={styles.emptyTitle}
             >
-              Nenhum jornalista encontrado
+              Nenhum contato encontrado
             </Text>
 
             <Text
@@ -386,7 +394,7 @@ useFocusEffect(
           />
         )}
       </ScrollView>
-      <FilterModal
+      <MailingFilterModal
         visible={filtrosAberto}
         filtros={filtros}
         onClose={() => setFiltrosAberto(false)}

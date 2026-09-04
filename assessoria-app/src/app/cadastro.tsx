@@ -134,6 +134,7 @@ export default function Cadastro() {
           placeholder="Digite o nome da assessoria"
           value={assessoriaNome}
           onChangeText={setAssessoriaNome}
+          clearable
         />
 
         <Input
@@ -143,6 +144,7 @@ export default function Cadastro() {
           autoCapitalize="none"
           value={assessoriaEmail}
           onChangeText={setAssessoriaEmail}
+          clearable
         />
 
         <Input
@@ -151,6 +153,7 @@ export default function Cadastro() {
           keyboardType="numeric"
           value={cnpj}
           onChangeText={setCnpj}
+          clearable
         />
 
         <Input
@@ -159,6 +162,7 @@ export default function Cadastro() {
           keyboardType="phone-pad"
           value={telefone}
           onChangeText={setTelefone}
+          clearable
         />
 
          <View style={styles.sectionContainer}>
@@ -181,6 +185,7 @@ export default function Cadastro() {
           placeholder="Digite o nome do assessor"
           value={assessorNome}
           onChangeText={setAssessorNome}
+          clearable
         />
 
         <Input
@@ -190,6 +195,7 @@ export default function Cadastro() {
           autoCapitalize="none"
           value={assessorEmail}
           onChangeText={setAssessorEmail}
+          clearable
         />
 
         <Input
@@ -198,6 +204,7 @@ export default function Cadastro() {
           secureTextEntry
           value={senha}
           onChangeText={setSenha}
+          clearable
         />
 
         <Input
@@ -206,6 +213,7 @@ export default function Cadastro() {
           keyboardType="phone-pad"
           value={assessorTelefone}
           onChangeText={setAssessorTelefone}
+          clearable
         />
 
         {erro ? (

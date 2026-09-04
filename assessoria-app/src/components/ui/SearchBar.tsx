@@ -1,10 +1,9 @@
-import React from "react";
 import {
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Search, SlidersHorizontal } from "lucide-react-native";
+import { Search, SlidersHorizontal, X } from "lucide-react-native";
 
 import Input from "@/components/ui/Input";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -16,6 +15,7 @@ interface SearchBarProps {
   onFilterPress?: () => void;
   filterActive?: boolean;
   placeholder?: string;
+  onClear?: () => void;
 }
 
 export default function SearchBar({
@@ -23,24 +23,51 @@ export default function SearchBar({
   onChangeText,
   onSearch,
   onFilterPress,
+  onClear,
   filterActive = false,
   placeholder = "Pesquisar...",
 }: SearchBarProps) {
   const { theme } = useTheme();
+  const temTexto = value.trim().length > 0;
 
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
-        <Input
+        <Input  
+          style={[
+            styles.input,
+            temTexto && styles.inputWithClear,
+          ]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           returnKeyType="search"
           onSubmitEditing={onSearch}
           containerStyle={styles.inputContainer}
-          style={styles.input}
         />
 
+        {temTexto && (
+          <TouchableOpacity
+            onPress={() => {
+              onChangeText("");
+              onClear?.();
+            }}
+            style={[
+              styles.clearButton,
+              {
+                backgroundColor: theme.backgroundContainer,
+              },
+            ]}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Limpar busca"
+          >
+            <X
+              size={18}
+              color={theme.textoContainer}
+            />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={onSearch}
           style={[
@@ -95,6 +122,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginBottom: 12,
+  },
+
+  inputWithClear: {
+    paddingRight: 90,
+  },
+
+  clearButton: {
+    position: "absolute",
+    right: 47,
+    top: 7,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   searchContainer: {

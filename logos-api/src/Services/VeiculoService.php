@@ -5,7 +5,12 @@ namespace Logos\AssessoriaApi\Services;
 use Logos\AssessoriaApi\Models\Veiculo;
 
 class VeiculoService
-{
+{   
+    private const MAX_NOME = 150;
+    private const MAX_DESCRICAO = 1000;
+    private const MAX_ALCANCE = 500;
+    private const MAX_LOGO_PATH = 500;
+    
     public static function listar(
         int $assessoriaId,
         array $filtros = []
@@ -70,6 +75,27 @@ class VeiculoService
     ): array {
         $nome = self::nome($dados);
 
+        $descricao = self::campo(
+            $dados,
+            'descricao',
+            self::MAX_DESCRICAO,
+            'A descrição'
+        );
+
+        $logoPath = self::campo(
+            $dados,
+            'logo_path',
+            self::MAX_LOGO_PATH,
+            'O logo ou caminho'
+        );
+
+        $alcance = self::campo(
+            $dados,
+            'alcance',
+            self::MAX_ALCANCE,
+            'O alcance'
+        );
+
         if (Veiculo::buscarPorNome($nome, $assessoriaId)) {
             throw new \RuntimeException(
                 'Este veículo já está cadastrado.'
@@ -80,9 +106,9 @@ class VeiculoService
             $id = Veiculo::criar(
                 $assessoriaId,
                 $nome,
-                self::campo($dados, 'descricao'),
-                self::campo($dados, 'logo_path'),
-                self::campo($dados, 'alcance'),
+                $descricao,
+                $logoPath,
+                $alcance,
                 self::ativo($dados)
             );
         } catch (\PDOException $e) {
@@ -104,6 +130,27 @@ class VeiculoService
         array $dados
     ): array {
         $nome = self::nome($dados);
+
+        $descricao = self::campo(
+            $dados,
+            'descricao',
+            self::MAX_DESCRICAO,
+            'A descrição'
+        );
+
+        $logoPath = self::campo(
+            $dados,
+            'logo_path',
+            self::MAX_LOGO_PATH,
+            'O logo ou caminho'
+        );
+
+        $alcance = self::campo(
+            $dados,
+            'alcance',
+            self::MAX_ALCANCE,
+            'O alcance'
+        );
 
         $veiculo =
             Veiculo::buscarPorId(
@@ -137,9 +184,9 @@ class VeiculoService
                 $id,
                 $assessoriaId,
                 $nome,
-                self::campo($dados, 'descricao'),
-                self::campo($dados, 'logo_path'),
-                self::campo($dados, 'alcance'),
+                $descricao,
+                $logoPath,
+                $alcance,
                 self::ativo($dados)
             );
         } catch (\PDOException $e) {
@@ -189,7 +236,7 @@ class VeiculoService
                 (int) ($e->errorInfo[1] ?? 0) === 1451
             ) {
                 throw new \RuntimeException(
-                    'Este veículo possui jornalistas vinculados e não pode ser excluído.'
+                    'Este veículo possui contatos vinculados e não pode ser excluído.'
                 );
             }
 
@@ -197,9 +244,15 @@ class VeiculoService
         }
     }
 
-    private static function nome(array $dados): string
+    public static function normalizarNome(mixed $valor): string
     {
-        $nome = trim((string) ($dados['nome'] ?? ''));
+        if (!is_scalar($valor)) {
+            throw new \InvalidArgumentException(
+                'O nome do veículo é inválido.'
+            );
+        }
+
+        $nome = trim((string) $valor);
 
         if ($nome === '') {
             throw new \InvalidArgumentException(
@@ -207,20 +260,58 @@ class VeiculoService
             );
         }
 
+        if (self::tamanho($nome) > self::MAX_NOME) {
+            throw new \InvalidArgumentException(
+                'O nome do veículo deve possuir no máximo 150 caracteres.'
+            );
+        }
+
         return $nome;
     }
 
+    private static function nome(array $dados): string
+    {
+        return self::normalizarNome(
+            $dados['nome'] ?? ''
+        );
+}   
+
     private static function campo(
         array $dados,
-        string $campo
+        string $campo,
+        int $maximo,
+        string $rotulo
     ): ?string {
         if (!array_key_exists($campo, $dados) || $dados[$campo] === null) {
             return null;
         }
 
+        if (!is_scalar($dados[$campo])) {
+            throw new \InvalidArgumentException(
+                "{$rotulo} é inválido."
+            );
+        }
+
         $valor = trim((string) $dados[$campo]);
 
-        return $valor === '' ? null : $valor;
+        if ($valor === '') {
+            return null;
+        }
+
+        if (self::tamanho($valor) > $maximo) {
+            throw new \InvalidArgumentException(
+                "{$rotulo} deve possuir no máximo {$maximo} caracteres."
+            );
+        }
+
+        return $valor;
+    }
+
+    private static function tamanho(string $valor): int
+    {
+        return function_exists('mb_strlen')
+            ? mb_strlen($valor, 'UTF-8')
+            : strlen($valor);
     }
 
     private static function ativo(array $dados): bool

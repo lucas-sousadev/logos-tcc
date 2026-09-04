@@ -183,6 +183,7 @@ export default function Veiculos() {
           onSearch={realizarBusca}
           onFilterPress={() => setFiltrosAberto(true)}
           filterActive={filtrosAtivos()}
+          onClear={() => setBuscaAplicada("")}
         />
 
         <View style={styles.topRow}>
@@ -340,15 +341,23 @@ export default function Veiculos() {
                     style={[
                       styles.itemMeta,
                       {
-                        color:
-                          theme.textoSub,
+                        color: theme.textoSub,
                       },
                     ]}
+                    numberOfLines={1}
                   >
-                    {veiculo.ativo === 1
-                      ? "Ativo"
-                      : "Inativo"}
+                    {[
+                      veiculo.descricao
+                        ? veiculo.descricao
+                        : "Sem descrição",
+                      veiculo.ativo === 1
+                        ? "Ativo"
+                        : "Inativo",
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
                   </Text>
+
                 </View>
 
                 <Ionicons

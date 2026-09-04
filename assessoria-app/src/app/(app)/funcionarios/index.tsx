@@ -6,16 +6,26 @@ import {
   View,
 } from "react-native";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  useFocusEffect,
+  useRouter,
+} from "expo-router";
 
 import Header from "@/components/layout/Header";
 import BackButton from "@/components/ui/BackButton";
+import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import SearchBar from "@/components/ui/SearchBar";
+
+import FuncionarioFilterModal, {
+  type FiltrosFuncionarios,
+} from "@/components/ui/Filtros/FuncionariosFilterModal";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Funcionario } from "@/services/api/auth";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function Funcionarios() {
   const router = useRouter();
@@ -26,30 +36,111 @@ export default function Funcionarios() {
     listarFuncionarios,
   } = useAuth();
 
+  const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] =
+    useState("");
+
+  const [filtrosAberto, setFiltrosAberto] =
+    useState(false);
+
+  const [filtros, setFiltros] =
+    useState<FiltrosFuncionarios>({
+      ativo: undefined,
+    });
+
   const [funcionarios, setFuncionarios] =
     useState<Funcionario[]>([]);
 
   const [carregando, setCarregando] =
     useState(true);
 
+  const [carregandoMais, setCarregandoMais] =
+    useState(false);
+
+  const [pagina, setPagina] = useState(1);
+  const [temMais, setTemMais] = useState(false);
+  const [total, setTotal] = useState(0);
+
   const [erro, setErro] = useState("");
 
-  useEffect(() => {
-    carregarFuncionarios();
-  }, []);
+  const carregarPrimeiraPagina = useCallback(
+    async () => {
+      try {
+        setCarregando(true);
+        setErro("");
 
-  async function carregarFuncionarios() {
+        const resposta = await listarFuncionarios({
+          page: 1,
+          limit: 50,
+          busca: buscaAplicada,
+          ativo: filtros.ativo,
+        });
+
+        setFuncionarios(resposta.funcionarios);
+        setPagina(resposta.pagination.page);
+        setTotal(resposta.pagination.total);
+        setTemMais(
+          resposta.pagination.has_next
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao carregar funcionários:",
+          error
+        );
+
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar os funcionários."
+        );
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [
+      buscaAplicada,
+      filtros.ativo,
+      listarFuncionarios,
+    ]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarPrimeiraPagina();
+    }, [carregarPrimeiraPagina])
+  );
+
+  async function carregarMais() {
+    if (carregandoMais || !temMais) {
+      return;
+    }
+
     try {
-      setCarregando(true);
+      setCarregandoMais(true);
       setErro("");
 
-      const dados =
-        await listarFuncionarios();
+      const paginaAtual = pagina + 1;
 
-      setFuncionarios(dados);
+      const resposta = await listarFuncionarios({
+        page: paginaAtual,
+        limit: 50,
+        busca: buscaAplicada,
+        ativo: filtros.ativo,
+      });
+
+      setFuncionarios((atuais) => [
+        ...atuais,
+        ...resposta.funcionarios,
+      ]);
+
+      setPagina(resposta.pagination.page);
+      setTotal(resposta.pagination.total);
+      setTemMais(
+        resposta.pagination.has_next
+      );
     } catch (error) {
       console.error(
-        "Erro ao carregar funcionários:",
+        "Erro ao carregar mais funcionários:",
         error
       );
 
@@ -59,8 +150,19 @@ export default function Funcionarios() {
           : "Não foi possível carregar os funcionários."
       );
     } finally {
-      setCarregando(false);
+      setCarregandoMais(false);
     }
+  }
+
+  function realizarBusca() {
+    setBuscaAplicada(busca.trim());
+  }
+
+  function aplicarFiltros(
+    novosFiltros: FiltrosFuncionarios
+  ) {
+    setFiltros(novosFiltros);
+    setFiltrosAberto(false);
   }
 
   if (usuario?.perfil !== "ASSESSOR") {
@@ -76,7 +178,10 @@ export default function Funcionarios() {
         <BackButton />
 
         <View style={styles.restricted}>
-          <Text weight="Bold" style={styles.restrictedTitle}>
+          <Text
+            weight="Bold"
+            style={styles.restrictedTitle}
+          >
             Acesso restrito
           </Text>
 
@@ -97,17 +202,73 @@ export default function Funcionarios() {
         },
       ]}
     >
-      <Header title="Funcionários" showBackButton/>
+      <Header
+        title="Funcionários"
+        showBackButton
+      />
 
       <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
-        <Text
-          weight="SemiBold"
-          style={styles.subtitle}
-        >
-          Funcionários da sua assessoria
-        </Text>
+        <SearchBar
+          value={busca}
+          onChangeText={setBusca}
+          placeholder="Buscar funcionários..."
+          onSearch={realizarBusca}
+          onFilterPress={() =>
+            setFiltrosAberto(true)
+          }
+          filterActive={
+            filtros.ativo !== undefined
+          }
+          onClear={() => setBuscaAplicada("")}
+        />
+
+        <View style={styles.topRow}>
+          <Text
+            weight="Medium"
+            style={[
+              styles.count,
+              {
+                color: theme.textoSub,
+              },
+            ]}
+          >
+            {total}{" "}
+            {total === 1
+              ? "funcionário"
+              : "funcionários"}
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() =>
+              router.push({
+                pathname: "/convites",
+                params: {
+                  origem: "funcionarios",
+                },
+              })
+            }
+            style={[
+              styles.convitesButton,
+              {
+                backgroundColor:
+                  theme.backgroundContainer,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Gerenciar convites"
+          >
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color={theme.textoContainer}
+            />
+          </TouchableOpacity>
+        </View>
 
         {carregando ? (
           <View style={styles.loading}>
@@ -117,15 +278,32 @@ export default function Funcionarios() {
             />
           </View>
         ) : erro ? (
-          <Text
-            weight="Medium"
+          <View
             style={[
-              styles.error,
-              { color: "#EF4444" },
+              styles.errorBox,
+              {
+                borderColor: theme.borda,
+                backgroundColor:
+                  theme.backgroundContainer,
+              },
             ]}
           >
-            {erro}
-          </Text>
+            <Text
+              weight="Medium"
+              style={[
+                styles.error,
+                { color: "#EF4444" },
+              ]}
+            >
+              {erro}
+            </Text>
+
+            <Button
+              title="TENTAR NOVAMENTE"
+              size="small"
+              onPress={carregarPrimeiraPagina}
+            />
+          </View>
         ) : funcionarios.length === 0 ? (
           <View
             style={[
@@ -140,112 +318,146 @@ export default function Funcionarios() {
               weight="Bold"
               style={styles.emptyTitle}
             >
-              Nenhum funcionário
+              Nenhum funcionário encontrado
             </Text>
 
             <Text style={styles.emptyText}>
-              Crie um convite para adicionar um
-              funcionário à sua assessoria.
+              Tente alterar a busca ou os filtros.
             </Text>
           </View>
         ) : (
-          funcionarios.map((funcionario) => (
-            <TouchableOpacity
-              key={funcionario.id}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push({
+          <>
+            {funcionarios.map((funcionario) => (
+              <TouchableOpacity
+                key={funcionario.id}
+                activeOpacity={0.8}
+                onPress={() =>
+                  router.push({
                     pathname: "/funcionarios/[id]",
                     params: {
-                    id: funcionario.id.toString(),
+                      id: funcionario.id.toString(),
                     },
-                })
+                  })
                 }
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.borda,
-                },
-              ]}
-            >
-              <View
                 style={[
-                  styles.avatar,
+                  styles.card,
                   {
-                    backgroundColor:
-                      theme.backgroundContainer,
+                    backgroundColor: theme.background,
+                    borderColor: theme.borda,
                   },
                 ]}
               >
-                <Text
-                  weight="Bold"
-                  style={{
-                    color: theme.textoContainer,
-                    fontSize: 18,
-                  }}
-                >
-                  {funcionario.nome
-                    .charAt(0)
-                    .toUpperCase()}
-                </Text>
-              </View>
-
-              <View style={styles.cardContent}>
-                <Text
-                  weight="SemiBold"
-                  style={styles.name}
-                >
-                  {funcionario.nome}
-                </Text>
-
-                <Text style={styles.email}>
-                  {funcionario.email}
-                </Text>
-
-                <Text
-                  weight="Medium"
+                <View
                   style={[
-                    styles.status,
+                    styles.avatar,
                     {
-                      color: funcionario.ativo
-                        ? theme.terciaria
-                        : "#EF4444",
+                      backgroundColor:
+                        theme.backgroundContainer,
                     },
                   ]}
                 >
-                  {funcionario.ativo
-                    ? "Ativo"
-                    : "Inativo"}
-                </Text>
-              </View>
+                  <Text
+                    weight="Bold"
+                    style={{
+                      color: theme.textoContainer,
+                      fontSize: 18,
+                    }}
+                  >
+                    {funcionario.nome
+                      .charAt(0)
+                      .toUpperCase()}
+                  </Text>
+                </View>
 
-              <Text
-                weight="Regular"
-                style={styles.arrow}
-              >
-                ›
-              </Text>
-            </TouchableOpacity>
-          ))
+                <View style={styles.cardContent}>
+                  <Text
+                    weight="SemiBold"
+                    style={styles.name}
+                  >
+                    {funcionario.nome}
+                  </Text>
+
+                  <Text style={styles.email}>
+                    {funcionario.email}
+                  </Text>
+
+                  <Text
+                    weight="Medium"
+                    style={[
+                      styles.status,
+                      {
+                        color:
+                          funcionario.ativo === 1
+                            ? theme.terciaria
+                            : "#EF4444",
+                      },
+                    ]}
+                  >
+                    {funcionario.ativo === 1
+                      ? "Ativo"
+                      : "Inativo"}
+                  </Text>
+                </View>
+
+                <Text
+                  weight="Regular"
+                  style={styles.arrow}
+                >
+                  ›
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {temMais && (
+              <Button
+                title="CARREGAR MAIS"
+                variant="outline"
+                loading={carregandoMais}
+                onPress={carregarMais}
+                style={styles.moreButton}
+              />
+            )}
+          </>
         )}
       </ScrollView>
+
+      <FuncionarioFilterModal
+        visible={filtrosAberto}
+        filtros={filtros}
+        onClose={() => setFiltrosAberto(false)}
+        onApply={aplicarFiltros}
+      />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
+  
   content: {
     padding: 20,
     paddingBottom: 30,
   },
 
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 18,
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  count: {
+    fontSize: 13,
+  },
+
+  convitesButton: {
+    width: 50,
+    height: 45,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   loading: {
@@ -307,6 +519,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 19,
     marginBottom: 8,
+    textAlign: "center",
   },
 
   emptyText: {
@@ -315,9 +528,21 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  errorBox: {
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 18,
+    alignItems: "center",
+  },
+
   error: {
     textAlign: "center",
     lineHeight: 20,
+    marginBottom: 12,
+  },
+
+  moreButton: {
+    marginTop: 4,
   },
 
   restricted: {

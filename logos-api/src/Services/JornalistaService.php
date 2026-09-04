@@ -5,10 +5,19 @@ namespace Logos\AssessoriaApi\Services;
 use Logos\AssessoriaApi\Database\Connection;
 use Logos\AssessoriaApi\Models\Jornalista;
 use Logos\AssessoriaApi\Models\Veiculo;
+use Logos\AssessoriaApi\Services\VeiculoService;
 use InvalidArgumentException;
 
 class JornalistaService
-{
+{   
+    private const MAX_NOME = 150;
+    private const MAX_EMAIL = 180;
+    private const MAX_TELEFONE = 30;
+    private const MAX_CARGO = 100;
+    private const MAX_ESTADO = 100;
+    private const MAX_CIDADE = 100;
+    private const MAX_OBSERVACOES = 2000;
+
     public static function listar(
         int $assessoriaId,
         int $page = 1,
@@ -79,33 +88,10 @@ class JornalistaService
         int $assessoriaId,
         array $dados
     ): int {
-        $nome = trim($dados['nome'] ?? '');
-        $email = strtolower(
-            trim($dados['email'] ?? '')
-        );
+        $campos = self::validarDados($dados);
 
-        if ($nome === '') {
-            throw new InvalidArgumentException(
-                'O nome é obrigatório.'
-            );
-        }
-
-        if ($email === '') {
-            throw new InvalidArgumentException(
-                'O e-mail é obrigatório.'
-            );
-        }
-
-        if (
-            !filter_var(
-                $email,
-                FILTER_VALIDATE_EMAIL
-            )
-        ) {
-            throw new InvalidArgumentException(
-                'Informe um e-mail válido.'
-            );
-        }
+        $nome = $campos['nome'];
+        $email = $campos['email'];
 
         if (
             Jornalista::emailExiste(
@@ -114,7 +100,7 @@ class JornalistaService
             )
         ) {
             throw new InvalidArgumentException(
-                'Já existe um jornalista com este e-mail na assessoria.'
+                'Já existe um contato com este e-mail na assessoria.'
             );
         }
 
@@ -123,18 +109,23 @@ class JornalistaService
         try {
             $pdo->beginTransaction();
 
+            $veiculoId = self::veiculoId(
+                $dados,
+                $assessoriaId
+            );
+
+
             $id = Jornalista::criar(
                 $assessoriaId,
                 $nome,
                 $email,
-                self::campo($dados, 'telefone'),
-                self::campo($dados, 'cargo'),
-                self::campo($dados, 'estado'),
-                self::campo($dados, 'cidade'),
-                self::veiculoId($dados, $assessoriaId),
-                self::campo($dados, 'observacoes')
+                $campos['telefone'],
+                $campos['cargo'],
+                $campos['estado'],
+                $campos['cidade'],
+                $veiculoId,
+                $campos['observacoes']
             );
-
             $pdo->commit();
 
             return $id;
@@ -164,27 +155,10 @@ class JornalistaService
             );
         }
 
-        $nome = trim($dados['nome'] ?? '');
-        $email = strtolower(
-            trim($dados['email'] ?? '')
-        );
+        $campos = self::validarDados($dados);
 
-        if ($nome === '') {
-            throw new InvalidArgumentException(
-                'O nome é obrigatório.'
-            );
-        }
-
-        if (
-            !filter_var(
-                $email,
-                FILTER_VALIDATE_EMAIL
-            )
-        ) {
-            throw new InvalidArgumentException(
-                'Informe um e-mail válido.'
-            );
-        }
+        $nome = $campos['nome'];
+        $email = $campos['email'];
 
         if (
             Jornalista::emailExiste(
@@ -194,15 +168,10 @@ class JornalistaService
             )
         ) {
             throw new InvalidArgumentException(
-                'Já existe outro jornalista com este e-mail.'
+                'Já existe um contato com este e-mail na assessoria.'
             );
         }
-
-        $ativo = null;
-
-        if (array_key_exists('ativo', $dados)) {
-            $ativo = (bool) $dados['ativo'];
-        }
+        $ativo = self::ativo($dados);
 
         $pdo = Connection::get();
 
@@ -214,12 +183,12 @@ class JornalistaService
                 $assessoriaId,
                 $nome,
                 $email,
-                self::campo($dados, 'telefone'),
-                self::campo($dados, 'cargo'),
-                self::campo($dados, 'estado'),
-                self::campo($dados, 'cidade'),
+                $campos['telefone'],
+                $campos['cargo'],
+                $campos['estado'],
+                $campos['cidade'],
                 self::veiculoId($dados, $assessoriaId),
-                self::campo($dados, 'observacoes'),
+                $campos['observacoes'],
                 $ativo
             );
 
@@ -245,7 +214,7 @@ class JornalistaService
 
         if (!$existente) {
             throw new InvalidArgumentException(
-                'Jornalista não encontrado.'
+                'Contato não encontrado.'
             );
         }
 
@@ -255,9 +224,121 @@ class JornalistaService
         );
     }
 
+    private static function validarDados(array $dados): array
+    {
+        return [
+            'nome' => self::textoObrigatorio(
+                $dados,
+                'nome',
+                self::MAX_NOME,
+                'O nome do contato'
+            ),
+            'email' => self::email($dados),
+            'telefone' => self::telefone($dados),
+            'cargo' => self::campo(
+                $dados,
+                'cargo',
+                self::MAX_CARGO,
+                'O cargo'
+            ),
+            'estado' => self::campo(
+                $dados,
+                'estado',
+                self::MAX_ESTADO,
+                'O estado'
+            ),
+            'cidade' => self::campo(
+                $dados,
+                'cidade',
+                self::MAX_CIDADE,
+                'A cidade'
+            ),
+            'observacoes' => self::campo(
+                $dados,
+                'observacoes',
+                self::MAX_OBSERVACOES,
+                'As observações'
+            ),
+        ];
+    }
+
+    private static function textoObrigatorio(
+        array $dados,
+        string $campo,
+        int $maximo,
+        string $rotulo
+    ): string {
+        $valor = $dados[$campo] ?? '';
+
+        if (!is_scalar($valor)) {
+            throw new InvalidArgumentException(
+                "{$rotulo} é inválido."
+            );
+        }
+
+        $texto = trim((string) $valor);
+
+        if ($texto === '') {
+            throw new InvalidArgumentException(
+                "{$rotulo} é obrigatório."
+            );
+        }
+
+        if (self::tamanho($texto) > $maximo) {
+            throw new InvalidArgumentException(
+                "{$rotulo} deve possuir no máximo {$maximo} caracteres."
+            );
+        }
+
+        return $texto;
+    }
+
+    private static function email(array $dados): string
+    {
+        $email = strtolower(
+            self::textoObrigatorio(
+                $dados,
+                'email',
+                self::MAX_EMAIL,
+                'O e-mail'
+            )
+        );
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException(
+                'Informe um e-mail válido.'
+            );
+        }
+
+        return $email;
+    }
+
+    private static function telefone(array $dados): ?string
+    {
+        $telefone = self::campo(
+            $dados,
+            'telefone',
+            self::MAX_TELEFONE,
+            'O telefone'
+        );
+
+        if (
+            $telefone !== null &&
+            !TelefoneService::validar($telefone)
+        ) {
+            throw new InvalidArgumentException(
+                'O telefone deve possuir 10 ou 11 dígitos.'
+            );
+        }
+
+        return $telefone;
+    }
+
     private static function campo(
         array $dados,
-        string $campo
+        string $campo,
+        int $maximo,
+        string $rotulo
     ): ?string {
         if (
             !array_key_exists($campo, $dados) ||
@@ -266,9 +347,53 @@ class JornalistaService
             return null;
         }
 
+        if (!is_scalar($dados[$campo])) {
+            throw new InvalidArgumentException(
+                "{$rotulo} é inválido."
+            );
+        }
+
         $valor = trim((string) $dados[$campo]);
 
-        return $valor === '' ? null : $valor;
+        if ($valor === '') {
+            return null;
+        }
+
+        if (self::tamanho($valor) > $maximo) {
+            throw new InvalidArgumentException(
+                "{$rotulo} deve possuir no máximo {$maximo} caracteres."
+            );
+        }
+
+        return $valor;
+    }
+
+    private static function ativo(array $dados): ?bool
+    {
+        if (!array_key_exists('ativo', $dados)) {
+            return null;
+        }
+
+        $ativo = filter_var(
+            $dados['ativo'],
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE
+        );
+
+        if ($ativo === null) {
+            throw new InvalidArgumentException(
+                'Status do contato inválido.'
+            );
+        }
+
+        return $ativo;
+    }
+
+    private static function tamanho(string $valor): int
+    {
+        return function_exists('mb_strlen')
+            ? mb_strlen($valor, 'UTF-8')
+            : strlen($valor);
     }
 
     private static function veiculoId(
@@ -283,11 +408,17 @@ class JornalistaService
             $dados['veiculo_id'] === null ||
             $dados['veiculo_id'] === ''
         ) {
-            $nome = self::campo($dados, 'veiculo_nome');
+            $nome = self::campo(
+                $dados,
+                'veiculo_nome',
+                150,
+                'O nome do veículo'
+            );
 
             if ($nome === null) {
                 return null;
-            }
+            }   
+            $nome = VeiculoService::normalizarNome($nome);
 
             $veiculo = Veiculo::buscarPorNome(
                 $nome,

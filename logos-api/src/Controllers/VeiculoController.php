@@ -135,7 +135,7 @@ class VeiculoController
                 'veiculo' => $veiculo
             ]);
         } catch (\InvalidArgumentException $e) {
-            http_response_code(400);
+            http_response_code(422);
 
             echo json_encode([
                 'success' => false,
@@ -215,7 +215,7 @@ class VeiculoController
                 'veiculo' => $veiculo
             ]);
         } catch (\InvalidArgumentException $e) {
-            http_response_code(400);
+            http_response_code(422);
 
             echo json_encode([
                 'success' => false,

@@ -26,6 +26,11 @@ import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
 
+import {
+  ErrosJornalista,
+  validarFormularioJornalista,
+} from "@/utils/validarMailing";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -53,6 +58,10 @@ export default function JornalistaDetalhes() {
     const router = useRouter();
     const { theme } = useTheme();
     const { temPermissao } = useAuth();
+
+   const [erros, setErros] = useState<ErrosJornalista>({});
+
+  const [erroGeral, setErroGeral] = useState("");
 
     const params = useLocalSearchParams<{
         id: string;
@@ -100,7 +109,7 @@ export default function JornalistaDetalhes() {
         if (!id || Number.isNaN(id)) {
         Alert.alert(
             "Erro",
-            "Jornalista inválido."
+            "Contato inválido."
         );
 
         router.back();
@@ -132,13 +141,13 @@ export default function JornalistaDetalhes() {
             setFormularioOriginal(dadosFormulario);
         } catch (error) {
         console.error(
-            "Erro ao carregar jornalista:",
+            "Erro ao carregar contato:",
             error
         );
 
         Alert.alert(
             "Erro",
-            "Não foi possível carregar os dados do jornalista."
+            "Não foi possível carregar os dados do contato."
         );
 
         router.back();
@@ -155,6 +164,67 @@ export default function JornalistaDetalhes() {
         ...atual,
         [campo]: valor,
         }));
+
+        if (
+          campo === "nome" ||
+          campo === "email" ||
+          campo === "telefone" ||
+          campo === "cargo" ||
+          campo === "estado" ||
+          campo === "cidade" ||
+          campo === "observacoes"
+        ) {
+          limparErro(campo);
+        }
+    }
+
+    function limparErro(
+      campo: keyof ErrosJornalista
+    ) {
+      setErros((atual) => ({
+        ...atual,
+        [campo]: undefined,
+      }));
+
+      setErroGeral("");
+    }
+
+    function exibirErroDaApi(
+      mensagemOriginal: string
+    ) {
+      const mensagem = mensagemOriginal;
+
+      const texto = mensagem.toLocaleLowerCase();
+
+      let campo: keyof ErrosJornalista | null = null;
+
+      if (texto.includes("veículo")) {
+        campo = "veiculo";
+      } else if (
+        texto.includes("e-mail") ||
+        texto.includes("email")
+      ) {
+        campo = "email";
+      } else if (texto.includes("telefone")) {
+        campo = "telefone";
+      } else if (texto.includes("cargo")) {
+        campo = "cargo";
+      } else if (texto.includes("estado")) {
+        campo = "estado";
+      } else if (texto.includes("cidade")) {
+        campo = "cidade";
+      } else if (texto.includes("observações")) {
+        campo = "observacoes";
+      } else if (texto.includes("nome")) {
+        campo = "nome";
+      }
+
+      if (campo) {
+        setErros({ [campo]: mensagem });
+        return;
+      }
+
+      setErroGeral(mensagem);
     }
 
     function cancelarEdicao() {
@@ -176,6 +246,8 @@ export default function JornalistaDetalhes() {
 
         setFormulario(dadosFormulario);
         setFormularioOriginal(dadosFormulario);
+        setErros({});
+        setErroGeral("");
 
         setModoEdicao(false);
     }
@@ -188,6 +260,8 @@ export default function JornalistaDetalhes() {
         veiculo_id: selecao.id,
         veiculo_nome: selecao.nome,
       }));
+
+      limparErro("veiculo");
     }
 
     function camposAlterados(): (keyof Formulario)[] {
@@ -226,23 +300,27 @@ export default function JornalistaDetalhes() {
     }
 
   async function salvarAlteracoes() {
-  if (!jornalista) return;
+    if (!jornalista) return;
 
-  if (!formulario.nome.trim()) {
-    Alert.alert(
-      "Atenção",
-      "Informe o nome do jornalista."
-    );
-    return;
-  }
+    const errosValidacao =
+      validarFormularioJornalista({
+        nome: formulario.nome,
+        email: formulario.email,
+        telefone: formulario.telefone,
+        cargo: formulario.cargo,
+        estado: formulario.estado,
+        cidade: formulario.cidade,
+        observacoes: formulario.observacoes,
+        veiculoId: formulario.veiculo_id,
+        veiculoNome: formulario.veiculo_nome,
+      });
 
-  if (!formulario.email.trim()) {
-    Alert.alert(
-      "Atenção",
-      "Informe o e-mail do jornalista."
-    );
-    return;
-  }
+    setErros(errosValidacao);
+    setErroGeral("");
+
+    if (Object.keys(errosValidacao).length > 0) {
+      return;
+    }
 
   try {
     setSalvando(true);
@@ -298,20 +376,15 @@ export default function JornalistaDetalhes() {
 
     Alert.alert(
       "Sucesso",
-      "Jornalista atualizado com sucesso."
+      "Contato atualizado com sucesso."
     );
   } catch (error) {
-    console.error(
-      "Erro ao atualizar jornalista:",
-      error
-    );
-
-    Alert.alert(
-      "Erro",
+    const mensagem =
       error instanceof Error
         ? error.message
-        : "Não foi possível atualizar o jornalista."
-    );
+        : "Não foi possível atualizar o contato.";
+
+    exibirErroDaApi(mensagem);
   } finally {
     setSalvando(false);
   }
@@ -333,7 +406,7 @@ export default function JornalistaDetalhes() {
     }
 
     Alert.alert(
-        "Excluir jornalista",
+        "Excluir contato",
         `Deseja realmente excluir ${jornalista.nome}?`,
         [
         {
@@ -359,7 +432,7 @@ export default function JornalistaDetalhes() {
 
     if (Platform.OS === "web") {
       window.alert(
-        "Jornalista excluído com sucesso."
+        "Contato excluído com sucesso."
       );
       router.back();
       return;
@@ -367,7 +440,7 @@ export default function JornalistaDetalhes() {
 
     Alert.alert(
       "Sucesso",
-      "Jornalista excluído com sucesso.",
+      "Contato excluído com sucesso.",
       [
         {
           text: "OK",
@@ -377,14 +450,14 @@ export default function JornalistaDetalhes() {
     );
   } catch (error) {
     console.error(
-      "Erro ao excluir jornalista:",
+      "Erro ao excluir contato:",
       error
     );
 
     const mensagem =
       error instanceof Error
         ? error.message
-        : "Não foi possível excluir o jornalista.";
+        : "Não foi possível excluir o contato.";
 
     if (Platform.OS === "web") {
       window.alert(mensagem);
@@ -407,7 +480,7 @@ export default function JornalistaDetalhes() {
         ]}
       >
         <Header
-          title="Jornalista"
+          title="Contato"
           showBackButton
           onBackPress={() =>
             router.back()
@@ -454,8 +527,8 @@ export default function JornalistaDetalhes() {
       <Header
         title={
           modoEdicao
-            ? "Editar jornalista"
-            : "Jornalista"
+            ? "Editar contato"
+            : "Contato"
         }
         showBackButton
         onBackPress={handleBack}
@@ -554,7 +627,7 @@ export default function JornalistaDetalhes() {
               weight="Bold"
               style={styles.sectionTitle}
             >
-              DADOS DO JORNALISTA
+              DADOS DO CONTATO
             </Text>
 
             <Input
@@ -565,6 +638,7 @@ export default function JornalistaDetalhes() {
                 }
                 placeholder="Nome completo"
                 showChanged={campoAlterado("nome")}
+                error={erros.nome}
             />
 
             <Input
@@ -577,6 +651,7 @@ export default function JornalistaDetalhes() {
                 autoCapitalize="none"
                 placeholder="E-mail"
                 showChanged={campoAlterado("email")}
+                error={erros.email}
             />
 
             <Input
@@ -588,6 +663,7 @@ export default function JornalistaDetalhes() {
                 keyboardType="phone-pad"
                 placeholder="Telefone"
                 showChanged={campoAlterado("telefone")}
+                error={erros.telefone}
             />
 
             <Input
@@ -598,6 +674,7 @@ export default function JornalistaDetalhes() {
                 }
                 placeholder="Ex.: Repórter"
                 showChanged={campoAlterado("cargo")}
+                error={erros.cargo}
             />
 
            <Input
@@ -608,7 +685,8 @@ export default function JornalistaDetalhes() {
                 }
                 placeholder="Ex.: São Paulo"
                 showChanged={campoAlterado("estado")}
-                />
+                error={erros.estado}
+              />
 
             <Input
                 label="CIDADE"
@@ -618,6 +696,7 @@ export default function JornalistaDetalhes() {
                 }
                 placeholder="Ex.: Campinas"
                 showChanged={campoAlterado("cidade")}
+                error={erros.cidade}
             />
 
             <Input
@@ -631,6 +710,7 @@ export default function JornalistaDetalhes() {
                 textAlignVertical="top"
                 style={styles.textArea}
                 showChanged={campoAlterado("observacoes")}
+                error={erros.observacoes}
             />
 
 
@@ -672,7 +752,7 @@ export default function JornalistaDetalhes() {
                     },
                   ]}
                 >
-                  Jornalista disponível no mailing
+                  Contato disponível no mailing
                 </Text>
               </View>
 
@@ -699,13 +779,21 @@ export default function JornalistaDetalhes() {
                 id: formulario.veiculo_id,
                 nome: formulario.veiculo_nome,
               }}
-              onChange={atualizarVeiculo}
+              onChange={atualizarVeiculo}           
               showChanged={
                 campoAlterado("veiculo_id") ||
                 campoAlterado("veiculo_nome")
               }
+              error={erros.veiculo}
             />
-
+            {erroGeral ? (
+              <Text
+                weight="Medium"
+                style={styles.errorGeral}
+              >
+                {erroGeral}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               <Button
                 title="CANCELAR"
@@ -731,7 +819,6 @@ export default function JornalistaDetalhes() {
           </>
         ) : (
           <>
-            {/* DETALHES */}
 
             <Text
               weight="Bold"
@@ -1056,4 +1143,11 @@ const styles = StyleSheet.create({
   deleteButton: {
     flex: 1,
   },
+
+  errorGeral: {
+  color: "#EF4444",
+  fontSize: 13,
+  textAlign: "center",
+  marginBottom: 10,
+},
 });

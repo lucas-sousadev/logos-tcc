@@ -64,6 +64,15 @@ $router->get(
         $authMiddleware
     ]
 );
+
+$router->get(
+    "/api/funcionarios/{id}",
+    "UsuarioController:buscarFuncionario",
+    middleware: [
+        $authMiddleware
+    ]
+);
+
 $router->get(
     "/api/permissoes",
     "PermissaoController:listarTodas",
@@ -93,6 +102,8 @@ $router->get(
     "AuthController:minhasPermissoes",
     middleware: [$authMiddleware]
 );
+
+
 
 // mailing
 

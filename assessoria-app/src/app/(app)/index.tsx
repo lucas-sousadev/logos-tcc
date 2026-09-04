@@ -13,6 +13,7 @@ import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 
+import { listarJornalistas } from "@/services/api/jornalista";
 import { Funcionario, getToken } from "@/services/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -22,13 +23,18 @@ export default function Dashboard() {
 
   const { theme } = useTheme();
   
+  const [totalFuncionarios, setTotalFuncionarios] =
+  useState(0);
   const {
     usuario,
     listarFuncionarios,
+    temPermissao,
   } = useAuth();
 
   const [funcionarios, setFuncionarios] =
     useState<Funcionario[]>([]);
+  const [totalContatos, setTotalContatos] =
+    useState(0);
 
   useEffect(() => {
     async function carregarFuncionarios() {
@@ -37,8 +43,14 @@ export default function Dashboard() {
       }
 
       try {
-        const dados = await listarFuncionarios();
-        setFuncionarios(dados);
+        const resposta = await listarFuncionarios({
+          page: 1,
+          limit: 1,
+        });
+
+        setTotalFuncionarios(
+          resposta.pagination.total
+        );
       } catch (error) {
         console.error(
           "Erro ao carregar funcionários:",
@@ -50,6 +62,35 @@ export default function Dashboard() {
     carregarFuncionarios();
   }, [usuario]);
 
+  useEffect(() => {
+    async function carregarTotalContatos() {
+      if (
+          !usuario ||
+          !temPermissao("MAILING", "VISUALIZAR")
+        ) {
+          return;
+        }
+
+      try {
+        const resposta = await listarJornalistas({
+          page: 1,
+          limit: 1,
+          ativo: 1,
+        });
+
+        setTotalContatos(
+          resposta.pagination.total
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao carregar total de contatos:",
+          error
+        );
+      }
+    }
+
+    carregarTotalContatos();
+  }, [usuario]);
   
   useEffect(() => {
     async function mostrarToken() {
@@ -98,11 +139,13 @@ export default function Dashboard() {
         </View>
 
         <View style={styles.cardsRow}>
-          <DashboardCard
-            value="0"
-            label="Mailing"
-            icon="people-outline"
-          />
+          {temPermissao("MAILING", "VISUALIZAR") && (
+            <DashboardCard
+              value={String(totalContatos)}
+              label="Mailing"
+              icon="people-outline"
+            />
+          )}
 
           <DashboardCard
             value="0"
@@ -155,7 +198,7 @@ export default function Dashboard() {
                       },
                     ]}
                   >
-                    {funcionarios.length}
+                    {totalFuncionarios}
                   </Text>
 
                   <Text
@@ -221,42 +264,42 @@ function DashboardCard({
         },
       ]}
     >
-      <View style={styles.cardTop}>
-        <View
-          style={[
-            styles.cardIcon,
-            {
-              backgroundColor:
-                theme.backgroundContainer,
-            },
-          ]}
-        >
-          <Ionicons
-            name={icon}
-            size={21}
-            color={theme.textoContainer}
-          />
-        </View>
-      </View>
-
-      <Text
-        weight="Bold"
+      <View
         style={[
-          styles.cardNumber,
+          styles.cardIcon,
           {
-            color: theme.textoTerciaria,
+            backgroundColor:
+              theme.backgroundContainer,
           },
         ]}
       >
-        {value}
-      </Text>
+        <Ionicons
+          name={icon}
+          size={21}
+          color={theme.textoContainer}
+        />
+      </View>
 
-      <Text
-        weight="Medium"
-        style={styles.cardLabel}
-      >
-        {label}
-      </Text>
+      <View style={styles.cardContent}>
+        <Text
+          weight="Bold"
+          style={[
+            styles.cardNumber,
+            {
+              color: theme.textoTerciaria,
+            },
+          ]}
+        >
+          {value}
+        </Text>
+
+        <Text
+          weight="Medium"
+          style={styles.cardLabel}
+        >
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -284,26 +327,26 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    minHeight: 135,
+    minHeight: 100,
     padding: 18,
-
     borderWidth: 2,
     borderRadius: 16,
-  },
-
-  cardTop: {
-    marginBottom: 8,
-  },
-
-  cardIcon: {
-    width: 38,
-    height: 38,
-
-    borderRadius: 11,
-
-    justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
   },
+
+  cardContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+cardIcon: {
+  width: 50,
+  height: 55,
+  borderRadius: 11,
+  justifyContent: "center",
+  alignItems: "center",
+},
 
   cardNumber: {
     fontSize: 30,
