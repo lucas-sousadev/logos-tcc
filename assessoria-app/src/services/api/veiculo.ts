@@ -8,14 +8,27 @@ export interface Veiculo {
   id: number;
   assessoria_id: number;
   nome: string;
+  descricao: string | null;
+  logo_path: string | null;
+  alcance: string | null;
+  ativo: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface DadosVeiculo {
+  nome: string;
+  descricao?: string;
+  logo_path?: string;
+  alcance?: string;
+  ativo?: boolean;
 }
 
 export interface ListarVeiculosParams {
   page?: number;
   limit?: number;
   busca?: string;
+  ativo?: number;
 }
 
 export interface ListarVeiculosResponse {
@@ -51,6 +64,10 @@ export async function listarVeiculos(
       "busca",
       params.busca.trim()
     );
+  }
+
+  if (params.ativo !== undefined) {
+    query.set("ativo", String(params.ativo));
   }
 
   const response =
@@ -132,7 +149,7 @@ export async function buscarVeiculo(
 }
 
 export async function criarVeiculo(
-  nome: string
+  dados: DadosVeiculo
 ): Promise<Veiculo> {
   const response =
     await authenticatedFetch(
@@ -142,9 +159,7 @@ export async function criarVeiculo(
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          nome,
-        }),
+        body: JSON.stringify(dados),
       }
     );
 
@@ -181,7 +196,7 @@ export async function criarVeiculo(
 
 export async function atualizarVeiculo(
   id: number,
-  nome: string
+  dados: DadosVeiculo
 ): Promise<Veiculo> {
   const response =
     await authenticatedFetch(
@@ -189,12 +204,9 @@ export async function atualizarVeiculo(
       {
         method: "PUT",
         headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
+          "Content-Type": "application/json",
         },
-        body: new URLSearchParams({
-          nome,
-        }).toString(),
+        body: JSON.stringify(dados),
       }
     );
 

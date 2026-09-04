@@ -10,6 +10,9 @@ import { useRouter } from "expo-router";
 import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import VeiculoSelector, {
+  SelecaoVeiculo,
+} from "@/components/forms/VeiculoSelector";
 
 import Text from "@/components/ui/Text";
 
@@ -34,6 +37,11 @@ export default function FormularioJornalista() {
         const [cidade, setCidade] = useState("");
         const [observacoes, setObservacoes] =
             useState("");
+        const [veiculo, setVeiculo] =
+            useState<SelecaoVeiculo>({
+              id: null,
+              nome: "",
+            });
 
   const [salvando, setSalvando] =
     useState(false);
@@ -94,6 +102,11 @@ export default function FormularioJornalista() {
                 cidade.trim() || undefined,
             observacoes:
                 observacoes.trim() || undefined,
+            veiculo_id: veiculo.id ?? undefined,
+            veiculo_nome:
+                veiculo.id === null
+                  ? veiculo.nome.trim() || undefined
+                  : undefined,
             });
 
             router.replace("/mailing");
@@ -236,17 +249,10 @@ export default function FormularioJornalista() {
           style={styles.textArea}
         />
 
-        <Text
-          style={[
-            styles.helperText,
-            {
-              color: theme.textoSub,
-            },
-          ]}
-        >
-          O veículo poderá ser vinculado
-          posteriormente.
-        </Text>
+        <VeiculoSelector
+          value={veiculo}
+          onChange={setVeiculo}
+        />
 
         {erroGeral ? (
         <Text
@@ -316,12 +322,6 @@ const styles = StyleSheet.create({
     height: 110,
     paddingTop: 14,
   },
-  helperText: {
-    fontSize: 11,
-    marginTop: -10,
-    marginBottom: 15,
-  },
-
   actions: {
     flexDirection: "row",
     gap: 10,

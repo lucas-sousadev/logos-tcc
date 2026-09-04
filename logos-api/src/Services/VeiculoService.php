@@ -66,23 +66,11 @@ class VeiculoService
 
     public static function criar(
         int $assessoriaId,
-        string $nome
+        array $dados
     ): array {
-        $nome = trim($nome);
+        $nome = self::nome($dados);
 
-        if ($nome === '') {
-            throw new \InvalidArgumentException(
-                'O nome do veículo é obrigatório.'
-            );
-        }
-
-        $existente =
-            Veiculo::buscarPorNome(
-                $nome,
-                $assessoriaId
-            );
-
-        if ($existente) {
+        if (Veiculo::buscarPorNome($nome, $assessoriaId)) {
             throw new \RuntimeException(
                 'Este veículo já está cadastrado.'
             );
@@ -91,14 +79,14 @@ class VeiculoService
         try {
             $id = Veiculo::criar(
                 $assessoriaId,
-                $nome
+                $nome,
+                self::campo($dados, 'descricao'),
+                self::campo($dados, 'logo_path'),
+                self::campo($dados, 'alcance'),
+                self::ativo($dados)
             );
         } catch (\PDOException $e) {
-            /*
-             * Também protege contra corrida entre
-             * duas criações simultâneas.
-             */
-            if ((int) $e->errorInfo[1] === 1062) {
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
                 throw new \RuntimeException(
                     'Este veículo já está cadastrado.'
                 );
@@ -107,24 +95,15 @@ class VeiculoService
             throw $e;
         }
 
-        return Veiculo::buscarPorId(
-            $id,
-            $assessoriaId
-        );
+        return self::buscarPorId($id, $assessoriaId);
     }
 
     public static function atualizar(
         int $id,
         int $assessoriaId,
-        string $nome
+        array $dados
     ): array {
-        $nome = trim($nome);
-
-        if ($nome === '') {
-            throw new \InvalidArgumentException(
-                'O nome do veículo é obrigatório.'
-            );
-        }
+        $nome = self::nome($dados);
 
         $veiculo =
             Veiculo::buscarPorId(
@@ -157,7 +136,11 @@ class VeiculoService
             Veiculo::atualizar(
                 $id,
                 $assessoriaId,
-                $nome
+                $nome,
+                self::campo($dados, 'descricao'),
+                self::campo($dados, 'logo_path'),
+                self::campo($dados, 'alcance'),
+                self::ativo($dados)
             );
         } catch (\PDOException $e) {
             if ((int) $e->errorInfo[1] === 1062) {
@@ -212,5 +195,52 @@ class VeiculoService
 
             throw $e;
         }
+    }
+
+    private static function nome(array $dados): string
+    {
+        $nome = trim((string) ($dados['nome'] ?? ''));
+
+        if ($nome === '') {
+            throw new \InvalidArgumentException(
+                'O nome do veículo é obrigatório.'
+            );
+        }
+
+        return $nome;
+    }
+
+    private static function campo(
+        array $dados,
+        string $campo
+    ): ?string {
+        if (!array_key_exists($campo, $dados) || $dados[$campo] === null) {
+            return null;
+        }
+
+        $valor = trim((string) $dados[$campo]);
+
+        return $valor === '' ? null : $valor;
+    }
+
+    private static function ativo(array $dados): bool
+    {
+        if (!array_key_exists('ativo', $dados)) {
+            return true;
+        }
+
+        $ativo = filter_var(
+            $dados['ativo'],
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE
+        );
+
+        if ($ativo === null) {
+            throw new \InvalidArgumentException(
+                'Status do veículo inválido.'
+            );
+        }
+
+        return $ativo;
     }
 }

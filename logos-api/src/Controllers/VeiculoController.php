@@ -28,7 +28,9 @@ class VeiculoController
                         'limit' =>
                             $_GET['limit'] ?? 50,
                         'busca' =>
-                            $_GET['busca'] ?? ''
+                            $_GET['busca'] ?? '',
+                        'ativo' =>
+                            $_GET['ativo'] ?? null
                     ]
                 );
 
@@ -106,15 +108,22 @@ class VeiculoController
             true
         );
 
-        $nome = trim(
-            $dados['nome'] ?? ''
-        );
+        if (!is_array($dados)) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'JSON inválido.'
+            ]);
+
+            return;
+        }
 
         try {
             $veiculo =
                 VeiculoService::criar(
                     (int) $usuario->assessoria_id,
-                    $nome
+                    $dados
                 );
 
             http_response_code(201);
@@ -175,16 +184,28 @@ class VeiculoController
             return;
         }
 
-        $nome = trim(
-            $dados['nome'] ?? ''
+        $body = json_decode(
+            file_get_contents('php://input'),
+            true
         );
+
+        if (!is_array($body)) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'JSON inválido.'
+            ]);
+
+            return;
+        }
 
         try {
             $veiculo =
                 VeiculoService::atualizar(
                     $id,
                     (int) $usuario->assessoria_id,
-                    $nome
+                    $body
                 );
 
             echo json_encode([

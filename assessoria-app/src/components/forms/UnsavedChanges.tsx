@@ -5,7 +5,6 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
@@ -26,7 +25,6 @@ export default function UnsavedChanges({
   onDiscard,
 }: UnsavedChangesProps) {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
 
   if (!visible) {
     return null;
@@ -40,7 +38,6 @@ export default function UnsavedChanges({
           backgroundColor: theme.background,
           borderColor: theme.borda,
 
-          bottom: 12 + insets.bottom,
         },
       ]}
     >
@@ -124,17 +121,11 @@ export default function UnsavedChanges({
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-
-    left: 15,
-    right: 15,
-
-    zIndex: 100,
-
     borderWidth: 1.5,
     borderRadius: 16,
-
     padding: 15,
+    marginTop: 16,
+    marginBottom: 5,
 
     shadowColor: "#000",
     shadowOffset: {

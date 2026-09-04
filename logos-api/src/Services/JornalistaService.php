@@ -2,7 +2,9 @@
 
 namespace Logos\AssessoriaApi\Services;
 
+use Logos\AssessoriaApi\Database\Connection;
 use Logos\AssessoriaApi\Models\Jornalista;
+use Logos\AssessoriaApi\Models\Veiculo;
 use InvalidArgumentException;
 
 class JornalistaService
@@ -116,17 +118,33 @@ class JornalistaService
             );
         }
 
-        return Jornalista::criar(
-            $assessoriaId,
-            $nome,
-            $email,
-            self::campo($dados, 'telefone'),
-            self::campo($dados, 'cargo'),
-            self::campo($dados, 'estado'),
-            self::campo($dados, 'cidade'),
-            self::veiculoId($dados),
-            self::campo($dados, 'observacoes')
-        );
+        $pdo = Connection::get();
+
+        try {
+            $pdo->beginTransaction();
+
+            $id = Jornalista::criar(
+                $assessoriaId,
+                $nome,
+                $email,
+                self::campo($dados, 'telefone'),
+                self::campo($dados, 'cargo'),
+                self::campo($dados, 'estado'),
+                self::campo($dados, 'cidade'),
+                self::veiculoId($dados, $assessoriaId),
+                self::campo($dados, 'observacoes')
+            );
+
+            $pdo->commit();
+
+            return $id;
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function atualizar(
@@ -186,19 +204,33 @@ class JornalistaService
             $ativo = (bool) $dados['ativo'];
         }
 
-        Jornalista::atualizar(
-            $id,
-            $assessoriaId,
-            $nome,
-            $email,
-            self::campo($dados, 'telefone'),
-            self::campo($dados, 'cargo'),
-            self::campo($dados, 'estado'),
-            self::campo($dados, 'cidade'),
-            self::veiculoId($dados),
-            self::campo($dados, 'observacoes'),
-            $ativo
-        );
+        $pdo = Connection::get();
+
+        try {
+            $pdo->beginTransaction();
+
+            Jornalista::atualizar(
+                $id,
+                $assessoriaId,
+                $nome,
+                $email,
+                self::campo($dados, 'telefone'),
+                self::campo($dados, 'cargo'),
+                self::campo($dados, 'estado'),
+                self::campo($dados, 'cidade'),
+                self::veiculoId($dados, $assessoriaId),
+                self::campo($dados, 'observacoes'),
+                $ativo
+            );
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function excluir(
@@ -240,7 +272,8 @@ class JornalistaService
     }
 
     private static function veiculoId(
-        array $dados
+        array $dados,
+        int $assessoriaId
     ): ?int {
         if (
             !array_key_exists(
@@ -250,7 +283,46 @@ class JornalistaService
             $dados['veiculo_id'] === null ||
             $dados['veiculo_id'] === ''
         ) {
-            return null;
+            $nome = self::campo($dados, 'veiculo_nome');
+
+            if ($nome === null) {
+                return null;
+            }
+
+            $veiculo = Veiculo::buscarPorNome(
+                $nome,
+                $assessoriaId
+            );
+
+            if ($veiculo) {
+                return (int) $veiculo['id'];
+            }
+
+            try {
+                return Veiculo::criar(
+                    $assessoriaId,
+                    $nome,
+                    null,
+                    null,
+                    null,
+                    true
+                );
+            } catch (\PDOException $e) {
+                if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                    throw $e;
+                }
+
+                $veiculo = Veiculo::buscarPorNome(
+                    $nome,
+                    $assessoriaId
+                );
+
+                if ($veiculo) {
+                    return (int) $veiculo['id'];
+                }
+
+                throw $e;
+            }
         }
 
         $id = filter_var(
@@ -259,6 +331,17 @@ class JornalistaService
         );
 
         if ($id === false || $id <= 0) {
+            throw new InvalidArgumentException(
+                'Veículo inválido.'
+            );
+        }
+
+        $veiculo = Veiculo::buscarPorId(
+            $id,
+            $assessoriaId
+        );
+
+        if (!$veiculo) {
             throw new InvalidArgumentException(
                 'Veículo inválido.'
             );

@@ -21,6 +21,10 @@ import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import VeiculoSelector, {
+  SelecaoVeiculo,
+} from "@/components/forms/VeiculoSelector";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -41,6 +45,8 @@ interface Formulario {
   cidade: string;
   observacoes: string;
   ativo: boolean;
+  veiculo_id: number | null;
+  veiculo_nome: string;
 }
 
 export default function JornalistaDetalhes() {
@@ -67,6 +73,8 @@ export default function JornalistaDetalhes() {
         cidade: "",
         observacoes: "",
         ativo: true,
+        veiculo_id: null,
+        veiculo_nome: "",
         });
 
     const [formularioOriginal, setFormularioOriginal] =
@@ -116,6 +124,8 @@ export default function JornalistaDetalhes() {
             cidade: dados.cidade ?? "",
             observacoes: dados.observacoes ?? "",
             ativo: dados.ativo === 1,
+            veiculo_id: dados.veiculo_id,
+            veiculo_nome: dados.veiculo_nome ?? "",
         };
 
             setFormulario(dadosFormulario);
@@ -160,12 +170,59 @@ export default function JornalistaDetalhes() {
             observacoes:
             jornalista.observacoes ?? "",
             ativo: jornalista.ativo === 1,
+            veiculo_id: jornalista.veiculo_id,
+            veiculo_nome: jornalista.veiculo_nome ?? "",
         };
 
         setFormulario(dadosFormulario);
         setFormularioOriginal(dadosFormulario);
 
         setModoEdicao(false);
+    }
+
+    function atualizarVeiculo(
+      selecao: SelecaoVeiculo
+    ) {
+      setFormulario((atual) => ({
+        ...atual,
+        veiculo_id: selecao.id,
+        veiculo_nome: selecao.nome,
+      }));
+    }
+
+    function camposAlterados(): (keyof Formulario)[] {
+      if (!formularioOriginal) return [];
+
+      return (Object.keys(formulario) as (keyof Formulario)[]).filter(
+        (campo) => formulario[campo] !== formularioOriginal[campo]
+      );
+    }
+
+    function veiculoAlterado(): boolean {
+      return (
+        campoAlterado("veiculo_id") ||
+        campoAlterado("veiculo_nome")
+      );
+    }
+
+    function quantidadeAlteracoes(): number {
+      const alteracoesSemVeiculo = camposAlterados().filter(
+        (campo) =>
+          campo !== "veiculo_id" &&
+          campo !== "veiculo_nome"
+      ).length;
+
+      return alteracoesSemVeiculo + (veiculoAlterado() ? 1 : 0);
+    }
+
+    function handleBack() {
+      if (!modoEdicao) {
+        router.back();
+        return;
+      }
+
+      if (camposAlterados().length > 0) return;
+      cancelarEdicao();
     }
 
   async function salvarAlteracoes() {
@@ -206,27 +263,15 @@ export default function JornalistaDetalhes() {
         observacoes:
           formulario.observacoes.trim() || null,
         ativo: formulario.ativo ? 1 : 0,
-        veiculo_id:
-          jornalista.veiculo_id ?? null,
+        veiculo_id: formulario.veiculo_id,
+        veiculo_nome:
+          formulario.veiculo_id === null
+            ? formulario.veiculo_nome.trim() || null
+            : null,
       }
     );
 
-    const atualizado: Jornalista = {
-      ...jornalista,
-      nome: formulario.nome.trim(),
-      email: formulario.email.trim(),
-      telefone:
-        formulario.telefone.trim() || null,
-      cargo:
-        formulario.cargo.trim() || null,
-      estado:
-        formulario.estado.trim() || null,
-      cidade:
-        formulario.cidade.trim() || null,
-      observacoes:
-        formulario.observacoes.trim() || null,
-      ativo: formulario.ativo ? 1 : 0,
-    };
+    const atualizado = await buscarJornalista(jornalista.id);
 
     const novoFormularioOriginal: Formulario = {
         nome: atualizado.nome ?? "",
@@ -238,6 +283,8 @@ export default function JornalistaDetalhes() {
         observacoes:
             atualizado.observacoes ?? "",
         ativo: atualizado.ativo === 1,
+        veiculo_id: atualizado.veiculo_id,
+        veiculo_nome: atualizado.veiculo_nome ?? "",
         };
 
         setFormulario(novoFormularioOriginal);
@@ -411,11 +458,7 @@ export default function JornalistaDetalhes() {
             : "Jornalista"
         }
         showBackButton
-        onBackPress={() =>
-          modoEdicao
-            ? cancelarEdicao()
-            : router.back()
-        }
+        onBackPress={handleBack}
       />
 
       <ScrollView
@@ -651,51 +694,17 @@ export default function JornalistaDetalhes() {
               />
             </View>
 
-            <Text
-              weight="Bold"
-              style={styles.sectionTitle}
-            >
-              VEÍCULO
-            </Text>
-
-            <View
-              style={[
-                styles.infoBox,
-                {
-                  borderColor:
-                    theme.borda,
-                },
-              ]}
-            >
-              <Ionicons
-                name="newspaper-outline"
-                size={21}
-                color={theme.primaria}
-              />
-
-              <Text
-                weight="Medium"
-                style={styles.infoBoxText}
-              >
-                {jornalista.veiculo_nome ||
-                  "Nenhum veículo vinculado"}
-              </Text>
-            </View>
-
-            <Text
-              style={[
-                styles.helperText,
-                {
-                  color:
-                    theme.textoSub,
-                },
-              ]}
-            >
-              A alteração do veículo será
-              disponibilizada junto ao seletor
-              de veículos.
-            </Text>
-
+            <VeiculoSelector
+              value={{
+                id: formulario.veiculo_id,
+                nome: formulario.veiculo_nome,
+              }}
+              onChange={atualizarVeiculo}
+              showChanged={
+                campoAlterado("veiculo_id") ||
+                campoAlterado("veiculo_nome")
+              }
+            />
 
             <View style={styles.actions}>
               <Button
@@ -712,6 +721,13 @@ export default function JornalistaDetalhes() {
                 style={styles.actionButton}
               />
             </View>
+            <UnsavedChanges
+              visible={camposAlterados().length > 0}
+              saving={salvando}
+              alterations={quantidadeAlteracoes()}
+              onSave={salvarAlteracoes}
+              onDiscard={cancelarEdicao}
+            />
           </>
         ) : (
           <>

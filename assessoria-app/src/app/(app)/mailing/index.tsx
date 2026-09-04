@@ -8,8 +8,8 @@ import {
 
 import { useState, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
-import FilterModal from "@/components/ui/FilterModal";
-import type { FiltrosMailing } from "@/components/ui/FilterModal";
+import FilterModal from "@/components/ui/Filtros/MailingFilterModal";
+import type { FiltrosMailing } from "@/components/ui/Filtros/MailingFilterModal";
 
 import { Ionicons } from "@expo/vector-icons";
 

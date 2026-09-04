@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import UnsavedChanges from "@/components/ui/UnsavedChanges";
+import UnsavedChanges from "@/components/forms/UnsavedChanges";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -694,15 +694,15 @@ export default function Permissoes() {
             loading={salvando}
             style={styles.saveButton}
           />
+          <UnsavedChanges
+            visible={possuiAlteracoes}
+            saving={salvando}
+            alterations={quantidadeAlteracoes}
+            onSave={salvar}
+            onDiscard={descartarAlteracoes}
+          />
         </ScrollView>
       )}
-      <UnsavedChanges
-        visible={possuiAlteracoes}
-        saving={salvando}
-        alterations={quantidadeAlteracoes}
-        onSave={salvar}
-        onDiscard={descartarAlteracoes}
-        />
     </View>
   );
 }

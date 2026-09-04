@@ -49,6 +49,13 @@ class Veiculo
                 '%' . $busca . '%';
         }
 
+        $ativo = self::filtroAtivo($filtros);
+
+        if ($ativo !== null) {
+            $where[] = 'v.ativo = :ativo';
+            $params['ativo'] = $ativo;
+        }
+
         $whereSql = implode(
             ' AND ',
             $where
@@ -59,6 +66,10 @@ class Veiculo
                 v.id,
                 v.assessoria_id,
                 v.nome,
+                v.descricao,
+                v.alcance,
+                v.logo_path,
+                v.ativo,
                 v.created_at,
                 v.updated_at
             FROM veiculos v
@@ -121,6 +132,13 @@ class Veiculo
                 '%' . $busca . '%';
         }
 
+        $ativo = self::filtroAtivo($filtros);
+
+        if ($ativo !== null) {
+            $where[] = 'ativo = :ativo';
+            $params['ativo'] = $ativo;
+        }
+
         $whereSql = implode(
             ' AND ',
             $where
@@ -148,6 +166,10 @@ class Veiculo
                 id,
                 assessoria_id,
                 nome,
+                descricao,
+                alcance,
+                logo_path,
+                ativo,
                 created_at,
                 updated_at
             FROM veiculos
@@ -179,6 +201,10 @@ class Veiculo
                 id,
                 assessoria_id,
                 nome,
+                descricao,
+                alcance,
+                logo_path,
+                ativo,
                 created_at,
                 updated_at
             FROM veiculos
@@ -201,23 +227,39 @@ class Veiculo
 
     public static function criar(
         int $assessoriaId,
-        string $nome
+        string $nome,
+        ?string $descricao,
+        ?string $logoPath,
+        ?string $alcance,
+        bool $ativo
     ): int {
         $pdo = Connection::get();
 
         $stmt = $pdo->prepare("
             INSERT INTO veiculos (
                 assessoria_id,
-                nome
+                nome,
+                descricao,
+                alcance,
+                logo_path,
+                ativo
             ) VALUES (
                 :assessoria_id,
-                :nome
+                :nome,
+                :descricao,
+                :alcance,
+                :logo_path,
+                :ativo
             )
         ");
 
         $stmt->execute([
             'assessoria_id' => $assessoriaId,
-            'nome' => $nome
+            'nome' => $nome,
+            'descricao' => $descricao,
+            'alcance' => $alcance,
+            'logo_path' => $logoPath,
+            'ativo' => $ativo ? 1 : 0,
         ]);
 
         return (int) $pdo->lastInsertId();
@@ -226,13 +268,22 @@ class Veiculo
     public static function atualizar(
         int $id,
         int $assessoriaId,
-        string $nome
+        string $nome,
+        ?string $descricao,
+        ?string $logoPath,
+        ?string $alcance,
+        bool $ativo
     ): void {
         $pdo = Connection::get();
 
         $stmt = $pdo->prepare("
             UPDATE veiculos
-            SET nome = :nome
+            SET
+                nome = :nome,
+                descricao = :descricao,
+                logo_path = :logo_path,
+                alcance = :alcance,
+                ativo = :ativo
             WHERE
                 id = :id
                 AND assessoria_id = :assessoria_id
@@ -241,7 +292,11 @@ class Veiculo
         $stmt->execute([
             'id' => $id,
             'assessoria_id' => $assessoriaId,
-            'nome' => $nome
+            'nome' => $nome,
+            'descricao' => $descricao,
+            'logo_path' => $logoPath,
+            'alcance' => $alcance,
+            'ativo' => $ativo ? 1 : 0,
         ]);
     }
 
@@ -262,5 +317,26 @@ class Veiculo
             'id' => $id,
             'assessoria_id' => $assessoriaId
         ]);
+    }
+
+    private static function filtroAtivo(
+        array $filtros
+    ): ?int {
+        if (
+            !array_key_exists('ativo', $filtros) ||
+            $filtros['ativo'] === null ||
+            $filtros['ativo'] === ''
+        ) {
+            return null;
+        }
+
+        $ativo = filter_var(
+            $filtros['ativo'],
+            FILTER_VALIDATE_INT
+        );
+
+        return $ativo === 0 || $ativo === 1
+            ? $ativo
+            : null;
     }
 }

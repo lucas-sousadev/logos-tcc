@@ -61,6 +61,7 @@
     estado?: string;
     cidade?: string;
     veiculo_id?: number;
+    veiculo_nome?: string;
     observacoes?: string;
   }
 
@@ -80,6 +81,7 @@
     observacoes: string | null;
     ativo: number;
     veiculo_id: number | null;
+    veiculo_nome: string | null;
   }
 
   export interface AtualizarJornalistaResponse {
