@@ -26,7 +26,11 @@ class PermissaoController
         }
 
         try {
-            $permissoes = PermissaoService::listarTodas();
+            $permissoes =
+                PermissaoService::listarConcediveis(
+                    (int) $usuarioToken->sub,
+                    $usuarioToken->perfil
+                );
 
             echo json_encode([
                 'success' => true,
@@ -55,17 +59,6 @@ class PermissaoController
             echo json_encode([
                 'success' => false,
                 'message' => 'Usuário não autenticado.'
-            ]);
-
-            return;
-        }
-
-        if ($usuarioToken->perfil !== 'ASSESSOR') {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Apenas assessores podem gerenciar permissões.'
             ]);
 
             return;
@@ -128,6 +121,26 @@ class PermissaoController
             return;
         }
 
+        if (
+            $usuarioToken->perfil !== 'ASSESSOR' &&
+            !PermissaoService::usuarioTemPermissao(
+                (int) $usuarioToken->sub,
+                $usuarioToken->perfil,
+                'USUARIOS',
+                'GERENCIAR_PERMISSOES'
+            )
+        ) {
+            http_response_code(403);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Você não possui permissão para gerenciar permissões.'
+            ]);
+
+            return;
+        }
+
         try {
             $permissoes = PermissaoService::listarDoUsuario(
                 (int) $usuarioId
@@ -161,17 +174,6 @@ class PermissaoController
             echo json_encode([
                 'success' => false,
                 'message' => 'Usuário não autenticado.'
-            ]);
-
-            return;
-        }
-
-        if ($usuarioToken->perfil !== 'ASSESSOR') {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Apenas assessores podem gerenciar permissões.'
             ]);
 
             return;
@@ -251,7 +253,9 @@ class PermissaoController
         }
 
         try {
-            PermissaoService::substituir(
+            PermissaoService::substituirPorGestor(
+                (int) $usuarioToken->sub,
+                $usuarioToken->perfil,
                 $usuarioId,
                 $permissaoIds
             );
@@ -261,6 +265,13 @@ class PermissaoController
                 'message' => 'Permissões atualizadas com sucesso.'
             ]);
 
+        } catch (\DomainException $e) {
+            http_response_code(403);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         } catch (\InvalidArgumentException $e) {
             http_response_code(400);
 

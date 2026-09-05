@@ -36,22 +36,29 @@ $router->post(
     "AuthController:registerFuncionario"
 );
 // convites 
+
 $router->post(
     "/api/convites",
     "ConviteController:criar",
+    "CONVITES.CRIAR",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
+
 $router->post(
     "/api/convites/validar",
     "ConviteController:validar"
 );
+
 $router->get(
     "/api/convites",
     "ConviteController:listar",
+    "CONVITES.VISUALIZAR",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 
@@ -60,40 +67,50 @@ $router->get(
 $router->get(
     "/api/funcionarios",
     "UsuarioController:listarFuncionarios",
+    "USUARIOS.VISUALIZAR",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 
 $router->get(
     "/api/funcionarios/{id}",
     "UsuarioController:buscarFuncionario",
+    "USUARIOS.VISUALIZAR",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 
 $router->get(
     "/api/permissoes",
     "PermissaoController:listarTodas",
+    "USUARIOS.GERENCIAR_PERMISSOES",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 
 $router->get(
     "/api/funcionarios/permissoes",
     "PermissaoController:listarDoFuncionario",
+    "USUARIOS.GERENCIAR_PERMISSOES",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 
 $router->put(
     "/api/funcionarios/permissoes",
     "PermissaoController:atualizarFuncionario",
+    "USUARIOS.GERENCIAR_PERMISSOES",
     middleware: [
-        $authMiddleware
+        $authMiddleware,
+        $permissionMiddleware
     ]
 );
 

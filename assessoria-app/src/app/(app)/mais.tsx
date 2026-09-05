@@ -25,7 +25,7 @@ export default function Mais() {
   const router = useRouter();
 
   const { theme } = useTheme();
-  const { usuario, temPermissao } = useAuth();
+  const { temPermissao } = useAuth();
 
   return (
     <View
@@ -82,26 +82,22 @@ export default function Mais() {
         />
         )}
 
-        {usuario?.perfil === "ASSESSOR" && (
-          <>
-            <MenuItem
-              title="Funcionários"
-              description="Gerencie funcionários e suas permissões."
-              icon="people-outline"
-              onPress={() =>
-                router.push("/funcionarios")
-              }
-            />
+        {temPermissao("USUARIOS", "VISUALIZAR") && (
+          <MenuItem
+            title="Funcionários"
+            description="Consulte a equipe da assessoria."
+            icon="people-outline"
+            onPress={() => router.push("/funcionarios")}
+          />
+        )}
 
-            <MenuItem
-              title="Convites"
-              description="Crie e acompanhe convites para funcionários."
-              icon="mail-outline"
-              onPress={() =>
-                router.push("/(app)/convites")
-              }
-            />
-          </>
+        {temPermissao("CONVITES", "VISUALIZAR") && (
+          <MenuItem
+            title="Convites"
+            description="Consulte e gerencie convites para funcionários."
+            icon="mail-outline"
+            onPress={() => router.push("/convites")}
+          />
         )}
       </ScrollView>
     </View>

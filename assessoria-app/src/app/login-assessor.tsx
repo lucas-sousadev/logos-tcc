@@ -129,6 +129,7 @@ export default function LoginAssessor() {
           value={senha}
           onChangeText={setSenha}
           clearable
+          showPasswordToggle
         />
 
         {erro ? (

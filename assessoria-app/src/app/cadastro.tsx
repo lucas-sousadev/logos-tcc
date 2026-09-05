@@ -205,6 +205,7 @@ export default function Cadastro() {
           value={senha}
           onChangeText={setSenha}
           clearable
+          showPasswordToggle
         />
 
         <Input

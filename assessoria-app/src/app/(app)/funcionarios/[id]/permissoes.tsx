@@ -36,7 +36,6 @@ export default function Permissoes() {
     }>();
 
   const {
-    usuario,
     carregando: carregandoAuth,
     buscarFuncionario,
     listarTodasPermissoes,
@@ -87,19 +86,22 @@ export default function Permissoes() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-  if (
-    carregandoAuth ||
-    usuario?.perfil !== "ASSESSOR"
-  ) {
-    return;
-  }
+    if (
+      carregandoAuth ||
+      !temPermissao(
+        "USUARIOS",
+        "GERENCIAR_PERMISSOES"
+      )
+    ) {
+      return;
+    }
 
-  carregarDados();
-}, [
-  id,
-  carregandoAuth,
-  usuario?.perfil,
-]);
+    carregarDados();
+  }, [
+    id,
+    carregandoAuth,
+  ]);
+
   async function carregarDados() {
     try {
       setCarregando(true);
@@ -283,7 +285,7 @@ export default function Permissoes() {
   }
 }
 
-  if (usuario?.perfil !== "ASSESSOR") {
+  if (!temPermissao("USUARIOS","GERENCIAR_PERMISSOES"))  {
     return (
       <View
         style={[
@@ -314,7 +316,7 @@ export default function Permissoes() {
               },
             ]}
           >
-            Apenas assessores podem gerenciar permissões.
+            Você não possui permissão para gerenciar permissões.
           </Text>
         </View>
       </View>
@@ -425,35 +427,9 @@ export default function Permissoes() {
             ]}
           >
             Defina quais ações este funcionário poderá
-            realizar no sistema.
+            realizar no sistema. 
+            Ativar "visualizar" permite que outras ações sejam ativadas.
           </Text>
-
-          {erro ? (
-            <View
-              style={[
-                styles.errorContainer,
-                {
-                  borderColor:
-                    theme.borda,
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={20}
-                color="#EF4444"
-              />
-
-              <Text
-                weight="Medium"
-                style={styles.errorText}
-              >
-                {erro}
-              </Text>
-            </View>
-          ) : null}
 
           {Object.entries(
             permissoes.reduce<
@@ -674,6 +650,32 @@ export default function Permissoes() {
             )
           )}
 
+          {erro ? (
+            <View
+              style={[
+                styles.errorContainer,
+                {
+                  borderColor:
+                    theme.borda,
+                  backgroundColor:
+                    theme.background,
+                },
+              ]}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color="#EF4444"
+              />
+
+              <Text
+                weight="Medium"
+                style={styles.errorText}
+              >
+                {erro}
+              </Text>
+            </View>
+          ) : null}
           <Button
             title="SALVAR PERMISSÕES"
             onPress={salvar}
@@ -723,6 +725,15 @@ function obterIconeModulo(modulo: string) {
 
     case "RELATORIOS":
       return "bar-chart-outline";
+
+    case "AUDITORIA":
+      return "shield-checkmark-outline";
+
+    case "USUARIOS":
+      return "people-outline";
+
+    case "CONVITES":
+      return "mail-outline";
 
     default:
       return "apps-outline";

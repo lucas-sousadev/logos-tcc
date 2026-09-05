@@ -32,8 +32,8 @@ export default function Funcionarios() {
   const { theme } = useTheme();
 
   const {
-    usuario,
     listarFuncionarios,
+    temPermissao
   } = useAuth();
 
   const [busca, setBusca] = useState("");
@@ -165,7 +165,7 @@ export default function Funcionarios() {
     setFiltrosAberto(false);
   }
 
-  if (usuario?.perfil !== "ASSESSOR") {
+  if (!temPermissao("USUARIOS", "VISUALIZAR"))  {
     return (
       <View
         style={[
@@ -186,7 +186,7 @@ export default function Funcionarios() {
           </Text>
 
           <Text style={styles.restrictedText}>
-            Apenas assessores podem gerenciar funcionários.
+            Você não tem permissão para visualizar funcionários.
           </Text>
         </View>
       </View>
@@ -242,32 +242,34 @@ export default function Funcionarios() {
               : "funcionários"}
           </Text>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() =>
-              router.push({
-                pathname: "/convites",
-                params: {
-                  origem: "funcionarios",
+          {temPermissao("CONVITES", "VISUALIZAR") && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname: "/convites",
+                  params: {
+                    origem: "funcionarios",
+                  },
+                })
+              }
+              style={[
+                styles.convitesButton,
+                {
+                  backgroundColor:
+                    theme.backgroundContainer,
                 },
-              })
-            }
-            style={[
-              styles.convitesButton,
-              {
-                backgroundColor:
-                  theme.backgroundContainer,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Gerenciar convites"
-          >
-            <Ionicons
-              name="mail-outline"
-              size={20}
-              color={theme.textoContainer}
-            />
-          </TouchableOpacity>
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Gerenciar convites"
+            >
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={theme.textoContainer}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         {carregando ? (
@@ -401,7 +403,7 @@ export default function Funcionarios() {
 
                 <Text
                   weight="Regular"
-                  style={styles.arrow}
+                  style={[styles.arrow, {color: theme.texto}]}
                 >
                   ›
                 </Text>
@@ -505,7 +507,6 @@ const styles = StyleSheet.create({
 
   arrow: {
     fontSize: 30,
-    color: "#808080",
     marginLeft: 8,
   },
 

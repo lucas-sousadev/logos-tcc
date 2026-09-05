@@ -54,7 +54,7 @@ export default function Entrar() {
 
           <Button
             title="CONTINUAR"
-            variant="outline"
+            variant="primary"
             style={styles.buttonInicial}
             onPress={() => setEtapa(2)}
           />

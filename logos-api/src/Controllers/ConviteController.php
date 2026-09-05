@@ -24,20 +24,6 @@ class ConviteController
             return;
         }
 
-        if (
-            !isset($usuarioToken->perfil) ||
-            $usuarioToken->perfil !== 'ASSESSOR'
-        ) {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Apenas assessores podem criar convites.'
-            ]);
-
-            return;
-        }
-
         $dados = json_decode(
             file_get_contents('php://input'),
             true
@@ -96,20 +82,6 @@ class ConviteController
             echo json_encode([
                 'success' => false,
                 'message' => 'Usuário não autenticado.'
-            ]);
-
-            return;
-        }
-
-        if (
-            !isset($usuarioToken->perfil) ||
-            $usuarioToken->perfil !== 'ASSESSOR'
-        ) {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Apenas assessores podem visualizar os convites.'
             ]);
 
             return;

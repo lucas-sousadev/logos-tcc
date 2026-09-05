@@ -12,7 +12,7 @@ import {
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  ConviteHistorico,
+  ConviteHistorico, 
 } from "@/services/api/auth";
 
 import Header from "@/components/layout/Header";
@@ -43,11 +43,20 @@ export default function Convites() {
   const { theme } = useTheme();
 
   const {
-    usuario,
     criarConvite,
     listarConvites,
+    temPermissao
   } = useAuth();
 
+  const podeVisualizarConvites = temPermissao(
+    "CONVITES",
+    "VISUALIZAR"
+  );
+
+  const podeCriarConvites = temPermissao(
+    "CONVITES",
+    "CRIAR"
+  );
   const [historico, setHistorico] = useState<
     ConviteHistorico[]
   >([]);
@@ -67,8 +76,12 @@ export default function Convites() {
   } | null>(null);
 
   useEffect(() => {
+    if (!podeVisualizarConvites) {
+      return;
+    }
+
     carregarHistorico();
-  }, []);
+  }, [podeVisualizarConvites]);
 
   async function carregarHistorico() {
     try {
@@ -156,7 +169,7 @@ export default function Convites() {
     }
   }
 
-  if (usuario?.perfil !== "ASSESSOR") {
+  if (!podeVisualizarConvites) {
   return (
     <View
       style={[
@@ -188,7 +201,7 @@ export default function Convites() {
             },
           ]}
         >
-          Apenas assessores podem criar convites.
+          Você não tem permissão para gerenciar convites.
         </Text>
 
         <Button
@@ -233,12 +246,14 @@ export default function Convites() {
         à sua assessoria.
       </Text>
 
-      <Button
-        title="GERAR CONVITE"
-        loading={carregando}
-        onPress={handleCriarConvite}
-        style={styles.generateButton}
-      />
+      {podeCriarConvites ? (
+        <Button
+          title="GERAR CONVITE"
+          loading={carregando}
+          onPress={handleCriarConvite}
+          style={styles.generateButton}
+        />
+      ) : null}
 
       {erro ? (
         <Text

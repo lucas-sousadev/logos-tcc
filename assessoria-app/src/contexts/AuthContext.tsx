@@ -141,55 +141,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   async function login(
-  email: string,
-  senha: string,
-  perfilEsperado?: Usuario["perfil"]
-): Promise<void> {
-  const resposta = await authLogin(
-    email,
-    senha
-  );
-
-  if (!resposta.usuario) {
-    throw new Error(
-      "A API não retornou o usuário."
+    email: string,
+    senha: string,
+    perfilEsperado?: Usuario["perfil"]
+  ): Promise<void> {
+    const resposta = await authLogin(
+      email,
+      senha
     );
-  }
 
-  if (
-    perfilEsperado &&
-    resposta.usuario.perfil !== perfilEsperado
-  ) {
-    await authLogout();
-
-    throw new Error(
-      "Esta conta não pertence a este tipo de acesso."
-    );
-  }
-
-  try {
-    if (
-      resposta.usuario.perfil ===
-      "FUNCIONARIO"
-    ) {
-      const permissoes =
-        await authListarMinhasPermissoes();
-
-      setPermissoesUsuario(permissoes);
-    } else {
-      setPermissoesUsuario([]);
+    if (!resposta.usuario) {
+      throw new Error(
+        "A API não retornou o usuário."
+      );
     }
 
-    setUsuario(resposta.usuario);
-  } catch (error) {
-    await authLogout();
+    if (
+      perfilEsperado &&
+      resposta.usuario.perfil !== perfilEsperado
+    ) {
+      await authLogout();
 
-    setUsuario(null);
-    setPermissoesUsuario([]);
+      throw new Error(
+        "Esta conta não pertence a este tipo de acesso."
+      );
+    }
 
-    throw error;
+    try {
+      if (
+        resposta.usuario.perfil ===
+        "FUNCIONARIO"
+      ) {
+        const permissoes =
+          await authListarMinhasPermissoes();
+
+        setPermissoesUsuario(permissoes);
+      } else {
+        setPermissoesUsuario([]);
+      }
+
+      setUsuario(resposta.usuario);
+    } catch (error) {
+      await authLogout();
+
+      setUsuario(null);
+      setPermissoesUsuario([]);
+
+      throw error;
+    }
   }
-}
 
   async function registerAssessoria(
     dados: RegisterAssessoriaData
@@ -219,112 +219,123 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 
   async function criarConvite(
-  emailDestino?: string
-): Promise<CriarConviteResponse> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem criar convites."
-    );
-  }
-  return await authCriarConvite(emailDestino);
-}
+    emailDestino?: string
+  ): Promise<CriarConviteResponse> {
+    if (!temPermissao("CONVITES", "CRIAR")) {
+      throw new Error(
+        "Você não possui permissão para criar convites."
+      );
+    }
 
-async function listarConvites(
-  page = 1,
-  limit = 20
-): Promise<ListarConvitesResponse> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem visualizar convites."
-    );
+    return authCriarConvite(emailDestino);
   }
 
-  return await authListarConvites(
-    page,
-    limit
-  );
-}
+  async function listarConvites(
+    page = 1,
+    limit = 20
+  ): Promise<ListarConvitesResponse> {
+    if (!temPermissao("CONVITES", "VISUALIZAR")) {
+      throw new Error(
+        "Você não possui permissão para visualizar convites."
+      );
+    }
 
-async function registerFuncionario(
-  dados: RegisterFuncionarioData
-): Promise<LoginResponse> {
-  const resposta =
-    await authRegisterFuncionario(dados);
-
-  if (!resposta.usuario) {
-    throw new Error(
-      "A API não retornou o usuário."
-    );
+    return authListarConvites(page, limit);
   }
 
-  setUsuario(resposta.usuario);
+  async function registerFuncionario(
+    dados: RegisterFuncionarioData
+  ): Promise<LoginResponse> {
+    const resposta =
+      await authRegisterFuncionario(dados);
 
-  return resposta;
-}
+    if (!resposta.usuario) {
+      throw new Error(
+        "A API não retornou o usuário."
+      );
+    }
 
-async function listarFuncionarios(
-  params: ListarFuncionariosParams = {}
-): Promise<ListarFuncionariosResponse> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem visualizar funcionários."
-    );
+    setUsuario(resposta.usuario);
+
+    return resposta;
   }
 
-  return authListarFuncionarios(params);
-}
+  async function listarFuncionarios(
+    params: ListarFuncionariosParams = {}
+  ): Promise<ListarFuncionariosResponse> {
+    if (!temPermissao("USUARIOS", "VISUALIZAR")) {
+      throw new Error(
+        "Você não possui permissão para visualizar funcionários."
+      );
+    }
 
-async function buscarFuncionario(
-  usuarioId: number
-): Promise<Funcionario> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem visualizar funcionários."
-    );
+    return authListarFuncionarios(params);
   }
 
-  return authBuscarFuncionario(usuarioId);
-}
+  async function buscarFuncionario(
+    usuarioId: number
+  ): Promise<Funcionario> {
+    if (!temPermissao("USUARIOS", "VISUALIZAR")) {
+      throw new Error(
+        "Você não possui permissão para visualizar funcionários."
+      );
+    }
 
-async function listarTodasPermissoes(): Promise<Permissao[]> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem visualizar permissões."
-    );
+    return authBuscarFuncionario(usuarioId);
   }
 
-  return await authListarTodasPermissoes();
-}
+  async function listarTodasPermissoes(): Promise<Permissao[]> {
+    if (
+      !temPermissao(
+        "USUARIOS",
+        "GERENCIAR_PERMISSOES"
+      )
+    ) {
+      throw new Error(
+        "Você não possui permissão para gerenciar permissões."
+      );
+    }
 
-async function listarPermissoesFuncionario(
-  usuarioId: number
-): Promise<Permissao[]> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem visualizar permissões."
-    );
+    return authListarTodasPermissoes();
   }
 
-  return await authListarPermissoesFuncionario(
-    usuarioId
-  );
-}
+  async function listarPermissoesFuncionario(
+    usuarioId: number
+  ): Promise<Permissao[]> {
+    if (
+      !temPermissao(
+        "USUARIOS",
+        "GERENCIAR_PERMISSOES"
+      )
+    ) {
+      throw new Error(
+        "Você não possui permissão para gerenciar permissões."
+      );
+    }
 
-async function atualizarPermissoesFuncionario(
-  usuarioId: number,
-  permissoes: number[]
-): Promise<void> {
-  if (usuario?.perfil !== "ASSESSOR") {
-    throw new Error(
-      "Apenas assessores podem alterar permissões."
-    );
+    return authListarPermissoesFuncionario(usuarioId);
   }
 
-  await authAtualizarPermissoesFuncionario(
-    usuarioId,
-    permissoes
-  );
-}
+  async function atualizarPermissoesFuncionario(
+    usuarioId: number,
+    permissoes: number[]
+  ): Promise<void> {
+    if (
+      !temPermissao(
+        "USUARIOS",
+        "GERENCIAR_PERMISSOES"
+      )
+    ) {
+      throw new Error(
+        "Você não possui permissão para gerenciar permissões."
+      );
+    }
+
+    await authAtualizarPermissoesFuncionario(
+      usuarioId,
+      permissoes
+    );
+  }
 
   const [permissoesUsuario, setPermissoesUsuario] =
   useState<Permissao[]>([]);

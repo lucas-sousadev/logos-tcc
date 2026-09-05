@@ -24,18 +24,6 @@ class UsuarioController
             return;
         }
 
-        if ($usuarioToken->perfil !== 'ASSESSOR') {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' =>
-                    'Apenas assessores podem listar funcionários.',
-            ]);
-
-            return;
-        }
-
         $page = filter_input(
             INPUT_GET,
             'page',
@@ -100,18 +88,6 @@ class UsuarioController
             echo json_encode([
                 'success' => false,
                 'message' => 'Usuário não autenticado.',
-            ]);
-
-            return;
-        }
-
-        if ($usuarioToken->perfil !== 'ASSESSOR') {
-            http_response_code(403);
-
-            echo json_encode([
-                'success' => false,
-                'message' =>
-                    'Apenas assessores podem visualizar funcionários.',
             ]);
 
             return;

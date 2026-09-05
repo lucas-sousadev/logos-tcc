@@ -8,6 +8,7 @@ import {
   ViewStyle,
 } from "react-native";
 
+import { useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
 import { Fonts } from "@/constants/fonts";
@@ -20,6 +21,7 @@ interface InputProps extends TextInputProps {
   clearable?: boolean;
   onClear?: () => void;
   showChanged?: boolean;
+  showPasswordToggle?: boolean;
 }
 
 export default function Input({
@@ -32,10 +34,23 @@ export default function Input({
   onChangeText,
   clearable = false,
   onClear,
+  secureTextEntry,
+  showPasswordToggle = false,
   ...props
 }: InputProps) {
   const { theme } = useTheme();
 
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
+
+  const mostrarLimpar =
+    clearable &&
+    typeof value === "string" &&
+    value.length > 0;
+
+  const mostrarBotaoSenha = Boolean(
+    showPasswordToggle && secureTextEntry
+  );
+  
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
@@ -62,41 +77,70 @@ export default function Input({
           {...props}
           value={value}
           onChangeText={onChangeText}
+          secureTextEntry={
+            mostrarBotaoSenha
+              ? !senhaVisivel
+              : secureTextEntry
+          }
           style={[
             styles.input,
             {
               color: theme.textoInput,
-              backgroundColor: theme.surface,
               borderColor: error
                 ? "#EF4444"
                 : theme.borda,
-              fontFamily: Fonts.MontserratRegular,
+              backgroundColor: theme.surface,
             },
-            clearable &&
-              typeof value === "string" &&
-              value.length > 0 &&
-              styles.inputWithClear,
+            mostrarLimpar && styles.inputWithClear,
+            mostrarBotaoSenha &&
+              styles.inputWithPasswordToggle,
+            mostrarLimpar &&
+              mostrarBotaoSenha &&
+              styles.inputWithTwoButtons,
             style,
           ]}
-          placeholderTextColor={theme.textoSub}
         />
 
-        {clearable &&
-        typeof value === "string" &&
-        value.length > 0 ? (
+        {mostrarLimpar ? (
           <TouchableOpacity
-            activeOpacity={0.8}
             onPress={() => {
               onChangeText?.("");
               onClear?.();
             }}
-            style={styles.clearButton}
-            accessibilityRole="button"
+            style={[
+              styles.clearButton,
+              mostrarBotaoSenha &&
+                styles.clearButtonWithPasswordToggle,
+            ]}
             accessibilityLabel="Limpar campo"
           >
             <Ionicons
               name="close"
               size={18}
+              color={theme.textoSub}
+            />
+          </TouchableOpacity>
+        ) : null}
+
+        {mostrarBotaoSenha ? (
+          <TouchableOpacity
+            onPress={() =>
+              setSenhaVisivel((atual) => !atual)
+            }
+            style={styles.passwordToggle}
+            accessibilityLabel={
+              senhaVisivel
+                ? "Ocultar senha"
+                : "Mostrar senha"
+            }
+          >
+            <Ionicons
+              name={
+                senhaVisivel
+                  ? "eye-off-outline"
+                  : "eye-outline"
+              }
+              size={20}
               color={theme.textoSub}
             />
           </TouchableOpacity>
@@ -139,6 +183,27 @@ const styles = StyleSheet.create({
     paddingRight: 50,
   },
 
+  inputWithPasswordToggle: {
+    paddingRight: 50,
+  },
+
+  inputWithTwoButtons: {
+    paddingRight: 88,
+  },
+
+  clearButtonWithPasswordToggle: {
+    right: 43,
+  },
+
+  passwordToggle: {
+    position: "absolute",
+    width: 36,
+    height: 36,
+    right: 7,
+    top: 7,
+    alignItems: "center",
+    justifyContent: "center",
+},
   clearButton: {
     position: "absolute",
     width: 36,

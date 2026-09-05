@@ -31,8 +31,8 @@ export default function FuncionarioDetalhes() {
     }>();
 
   const {
-    usuario,
     buscarFuncionario,
+    temPermissao
   } = useAuth();
   
   const [funcionario, setFuncionario] =
@@ -71,7 +71,7 @@ export default function FuncionarioDetalhes() {
     }
   }
 
-  if (usuario?.perfil !== "ASSESSOR") {
+  if (!temPermissao("USUARIOS", "VISUALIZAR")) {
     return (
       <View
         style={[
@@ -100,7 +100,7 @@ export default function FuncionarioDetalhes() {
               },
             ]}
           >
-            Apenas assessores podem gerenciar funcionários.
+            Você não tem permissão para visualizar funcionários.
           </Text>
         </View>
       </View>
@@ -374,7 +374,8 @@ export default function FuncionarioDetalhes() {
             </View>
           </View>
         </View>
-
+        
+      {temPermissao("USUARIOS", "GERENCIAR_PERMISSOES") ? (
         <View
           style={[
             styles.card,
@@ -415,7 +416,7 @@ export default function FuncionarioDetalhes() {
               pode fazer no sistema.
             </Text>
           </View>
-
+          
           <Button
             title="GERENCIAR PERMISSÕES"
             onPress={() =>
@@ -429,6 +430,7 @@ export default function FuncionarioDetalhes() {
             }
           />
         </View>
+      ) : null }
       </ScrollView>
     </View>
   );

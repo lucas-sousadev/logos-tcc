@@ -126,6 +126,8 @@ export default function LoginFuncionario() {
           secureTextEntry
           value={senha}
           onChangeText={setSenha}
+          clearable
+          showPasswordToggle
         />
 
         {erro ? (

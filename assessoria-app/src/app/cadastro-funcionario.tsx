@@ -276,6 +276,8 @@ export default function CadastroFuncionario() {
               secureTextEntry
               value={senha}
               onChangeText={setSenha}
+              clearable
+              showPasswordToggle
             />
 
             <Input
@@ -285,6 +287,8 @@ export default function CadastroFuncionario() {
               value={confirmarSenha}
               onChangeText={setConfirmarSenha}
               error={erro}
+              clearable
+              showPasswordToggle
             />
 
             <Button

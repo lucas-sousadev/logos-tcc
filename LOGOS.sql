@@ -578,10 +578,12 @@ CREATE TABLE auditoria (
 INSERT INTO permissoes (modulo, acao, descricao) VALUES
 
 -- MAILING
-('MAILING', 'VISUALIZAR', 'Visualizar jornalistas do mailing'),
-('MAILING', 'CRIAR', 'Cadastrar jornalistas'),
-('MAILING', 'EDITAR', 'Editar jornalistas'),
-('MAILING', 'EXCLUIR', 'Excluir jornalistas'),
+('MAILING', 'VISUALIZAR', 'Visualizar contatos do mailing'),
+('MAILING', 'CRIAR', 'Cadastrar contatos'),
+('MAILING', 'EDITAR', 'Editar contatos'),
+('MAILING', 'EXCLUIR', 'Excluir contatos'),
+('MAILING', 'IMPORTAR', 'Importar contatos para o mailing.'),
+('MAILING','EXPORTAR','Exportar contatos do mailing.'),
 
 -- CLIENTES
 ('CLIENTES', 'VISUALIZAR', 'Visualizar clientes'),
@@ -613,13 +615,28 @@ INSERT INTO permissoes (modulo, acao, descricao) VALUES
 ('CLIPPING', 'CRIAR', 'Criar clippings'),
 ('CLIPPING', 'EDITAR', 'Editar clippings'),
 ('CLIPPING', 'EXCLUIR', 'Excluir clippings'),
+('CLIPPING', 'IMPORTAR', 'Importar clippings em lote.'),
+('CLIPPING', 'EXPORTAR', 'Exportar clippings.'),
 
 -- RELATÓRIOS
 ('RELATORIOS', 'VISUALIZAR', 'Visualizar relatórios'),
 ('RELATORIOS', 'CRIAR', 'Criar relatórios'),
 ('RELATORIOS', 'EDITAR', 'Editar relatórios'),
 ('RELATORIOS', 'EXCLUIR', 'Excluir relatórios'),
-('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório');
+('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório'),
+
+-- AUDITORIA
+('AUDITORIA', 'VISUALIZAR', 'Visualizar o histórico de ações da assessoria.'),
+
+-- USUÁRIOS
+('USUARIOS', 'VISUALIZAR', 'Visualizar funcionários da assessoria.'),
+('USUARIOS', 'EDITAR', 'Editar dados e status de funcionários da assessoria.'),
+('USUARIOS', 'CRIAR', 'Cadastrar funcionários da assessoria.'),
+('USUARIOS', 'GERENCIAR_PERMISSOES', 'Gerenciar permissões de funcionários.'),
+
+-- CONVITES
+('CONVITES', 'VISUALIZAR', 'Visualizar histórico de convites.'),
+('CONVITES', 'CRIAR','Criar convites para funcionários.');
 
 -- 17. REFRESH TOKENS
 

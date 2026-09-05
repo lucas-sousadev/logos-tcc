@@ -26,7 +26,6 @@ export default function Dashboard() {
   const [totalFuncionarios, setTotalFuncionarios] =
   useState(0);
   const {
-    usuario,
     listarFuncionarios,
     temPermissao,
   } = useAuth();
@@ -38,7 +37,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function carregarFuncionarios() {
-      if (usuario?.perfil !== "ASSESSOR") {
+      if (!temPermissao("USUARIOS", "VISUALIZAR")) {
         return;
       }
 
@@ -60,12 +59,11 @@ export default function Dashboard() {
     }
 
     carregarFuncionarios();
-  }, [usuario]);
+  }, []);
 
   useEffect(() => {
     async function carregarTotalContatos() {
       if (
-          !usuario ||
           !temPermissao("MAILING", "VISUALIZAR")
         ) {
           return;
@@ -90,7 +88,7 @@ export default function Dashboard() {
     }
 
     carregarTotalContatos();
-  }, [usuario]);
+  }, []);
   
   useEffect(() => {
     async function mostrarToken() {
@@ -125,36 +123,46 @@ export default function Dashboard() {
         </Text>
 
         <View style={styles.cardsRow}>
+          {temPermissao("RELEASES", "VISUALIZAR") ? (
           <DashboardCard
             value="0"
             label="Releases"
-            icon="newspaper-outline"
+            icon="document-text-outline"
+            onPress={() => router.push("/releases")}
           />
+          ) : null}
 
+          {temPermissao("CLIPPING", "VISUALIZAR") ? (
           <DashboardCard
             value="0"
             label="Clippings"
-            icon="document-outline"
+            icon="newspaper-outline"
+            onPress={() => router.push("/clipping")}
           />
+          ) : null}
         </View>
 
         <View style={styles.cardsRow}>
-          {temPermissao("MAILING", "VISUALIZAR") && (
+          {temPermissao("MAILING", "VISUALIZAR") ? (
             <DashboardCard
               value={String(totalContatos)}
-              label="Mailing"
+              label="Contatos"
               icon="people-outline"
+              onPress={() => router.push("/mailing")}
             />
-          )}
+          ) : null}
 
-          <DashboardCard
-            value="0"
-            label="Clientes"
-            icon="business-outline"
-          />
+          {temPermissao("CLIENTES", "VISUALIZAR") ? (
+            <DashboardCard
+              value="0"
+              label="Clientes"
+              icon="business-outline"
+              onPress={() => router.push("/clientes")}
+            />
+          ) : null}
         </View>
 
-        {usuario?.perfil === "ASSESSOR" && (
+        {temPermissao("USUARIOS", "VISUALIZAR") && (
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() =>
@@ -216,7 +224,7 @@ export default function Dashboard() {
               </View>
 
               <Ionicons
-                name="arrow-forward-outline"
+                name="chevron-forward-outline"
                 size={22}
                 color={theme.texto}
               />
@@ -224,7 +232,7 @@ export default function Dashboard() {
           </TouchableOpacity>
         )}
 
-        {usuario?.perfil === "ASSESSOR" && (
+        {temPermissao("CONVITES", "VISUALIZAR") && (
           <Button
             title="GERENCIAR CONVITES"
             variant="primary"
@@ -245,17 +253,19 @@ interface DashboardCardProps {
   icon: React.ComponentProps<
     typeof Ionicons
   >["name"];
+  onPress?: () => void;
 }
 
 function DashboardCard({
   value,
   label,
   icon,
+  onPress,
 }: DashboardCardProps) {
   const { theme } = useTheme();
 
   return (
-    <View
+    <TouchableOpacity
       style={[
         styles.card,
         {
@@ -263,44 +273,57 @@ function DashboardCard({
           borderColor: theme.borda,
         },
       ]}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.8 : 1}
     >
       <View
         style={[
           styles.cardIcon,
           {
-            backgroundColor:
-              theme.backgroundContainer,
+            backgroundColor: theme.backgroundContainer,
           },
         ]}
       >
         <Ionicons
           name={icon}
-          size={21}
-          color={theme.textoContainer}
+          size={24}
+          color={theme.texto}
         />
       </View>
 
-      <View style={styles.cardContent}>
-        <Text
-          weight="Bold"
-          style={[
-            styles.cardNumber,
-            {
-              color: theme.textoTerciaria,
-            },
-          ]}
-        >
-          {value}
-        </Text>
+     <View style={styles.cardContent}>
+  <View style={styles.cardNumberRow}>
+    <Text
+      weight="Bold"
+      style={[
+        styles.cardNumber,
+        { color: theme.textoTerciaria },
+      ]}
+    >
+      {value}
+    </Text>
 
-        <Text
-          weight="Medium"
-          style={styles.cardLabel}
-        >
-          {label}
-        </Text>
-      </View>
-    </View>
+    {onPress ? (
+      <Ionicons
+        name="chevron-forward-outline"
+        size={18}
+        color={theme.texto}
+      />
+    ) : null}
+  </View>
+
+  <Text
+    style={[
+      styles.cardLabel,
+      { color: theme.texto },
+    ]}
+    numberOfLines={1}
+  >
+    {label}
+  </Text>
+</View>
+    </TouchableOpacity>
   );
 }
 
@@ -325,6 +348,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  cardNumberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
   card: {
     flex: 1,
     minHeight: 100,
@@ -341,8 +370,8 @@ const styles = StyleSheet.create({
   },
 
 cardIcon: {
-  width: 50,
-  height: 55,
+  width: 48,
+  height: 48,
   borderRadius: 11,
   justifyContent: "center",
   alignItems: "center",
