@@ -181,17 +181,22 @@ class PermissaoService
             array_unique($ids)
         );
 
-        $idsExistentes = array_map(
-            'intval',
-            array_column(
-                Permissao::listarTodas(),
-                'id'
-            )
-        );
+        $catalogo = Permissao::listarTodas();
+
+        $permissoesPorId = [];
+
+        foreach ($catalogo as $permissao) {
+            $permissoesPorId[
+                (int) $permissao['id']
+            ] = [
+                'modulo' => $permissao['modulo'],
+                'acao' => $permissao['acao'],
+            ];
+        }
 
         $idsInvalidos = array_diff(
             $ids,
-            $idsExistentes
+            array_keys($permissoesPorId)
         );
 
         if (!empty($idsInvalidos)) {
@@ -200,6 +205,49 @@ class PermissaoService
             );
         }
 
+        self::validarDependencias(
+            $ids,
+            $permissoesPorId
+        );
+
         return $ids;
+    }
+
+    private static function validarDependencias(
+        array $permissaoIds,
+        array $permissoesPorId
+    ): void {
+        $selecionadas = [];
+
+        foreach ($permissaoIds as $id) {
+            $permissao = $permissoesPorId[$id];
+
+            $selecionadas[
+                $permissao['modulo']
+            ][
+                $permissao['acao']
+            ] = true;
+        }
+
+        foreach ($permissaoIds as $id) {
+            $permissao = $permissoesPorId[$id];
+
+            if ($permissao['acao'] === 'VISUALIZAR') {
+                continue;
+            }
+
+            $possuiVisualizar =
+                isset(
+                    $selecionadas[
+                        $permissao['modulo']
+                    ]['VISUALIZAR']
+                );
+
+            if (!$possuiVisualizar) {
+                throw new \InvalidArgumentException(
+                    "A permissão {$permissao['modulo']}.{$permissao['acao']} exige {$permissao['modulo']}.VISUALIZAR."
+                );
+            }
+        }
     }
 }

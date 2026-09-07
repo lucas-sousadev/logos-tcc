@@ -82,89 +82,83 @@ export default function LoginFuncionario() {
             style={styles.backgroundImage}
             resizeMode="cover"
           />
-      
-        <Image
-            source={
-              mode === "light"
-                ? require("@/assets/images/background-logos-white.png")
-                : require("@/assets/images/background-logos-dark.png")
-            }
-            style={styles.backgroundImage}
-            resizeMode="cover"
-          />
-        <Text
-          weight="Medium"
-          style={styles.title}
-        >
-          Login - Funcionário
-        </Text>
 
-        <Text
-          weight="Regular"
-          style={[
-            styles.subtitle,
-            {
-              color: theme.textoTerciaria,
-            },
-          ]}
-        >
-          Entre na sua conta
-        </Text>
-
-        <Input
-          label="E-mail"
-          placeholder="Digite seu e-mail"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <Input
-          label="Senha"
-          placeholder="Digite sua senha"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-          clearable
-          showPasswordToggle
-        />
-
-        {erro ? (
+        <View style={styles.content}>
           <Text
             weight="Medium"
-            style={styles.erro}
+            style={styles.title}
           >
-            {erro}
+            Login - Funcionário
           </Text>
-        ) : null}
 
-        <Button
-          title="ENTRAR"
-          loading={carregando}
-          onPress={handleLogin}
-          style={styles.button}
-        />
-
-        <TouchableOpacity
-          onPress={() =>
-            router.push("/cadastro-funcionario")
-          }
-          activeOpacity={0.7}
-        >
-          <Text style={styles.link}>
-            Ainda não tem conta?{" "}
           <Text
-            weight="SemiBold"
+            weight="Regular"
             style={[
-              styles.link,
+              styles.subtitle,
               {
                 color: theme.textoTerciaria,
               },
             ]}
-          >Criar uma nova conta
-          </Text></Text>
-        </TouchableOpacity>
+          >
+            Entre na sua conta
+          </Text>
+
+          <Input
+            label="E-mail"
+            placeholder="Digite seu e-mail"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+            clearable
+          />
+
+          <Input
+            label="Senha"
+            placeholder="Digite sua senha"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+            clearable
+            showPasswordToggle
+          />
+
+          {erro ? (
+            <Text
+              weight="Medium"
+              style={styles.erro}
+            >
+              {erro}
+            </Text>
+          ) : null}
+
+          <Button
+            title="ENTRAR"
+            loading={carregando}
+            onPress={handleLogin}
+            style={styles.button}
+          />
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push("/cadastro-funcionario")
+            }
+            activeOpacity={0.7}
+          >
+            <Text style={styles.link}>
+              Ainda não tem conta?{" "}
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.link,
+                {
+                  color: theme.textoTerciaria,
+                },
+              ]}
+            >Criar uma nova conta
+            </Text></Text>
+          </TouchableOpacity>
+        </View>
       </View>
   );
 }
@@ -172,9 +166,13 @@ export default function LoginFuncionario() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 25,
   },
 
+  content:{
+    width: "100%",
+    paddingHorizontal: 25
+  },
+  
   header: {
     height: 240,
   },

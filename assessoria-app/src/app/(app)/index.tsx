@@ -288,7 +288,7 @@ function DashboardCard({
         <Ionicons
           name={icon}
           size={24}
-          color={theme.texto}
+          color={theme.textoContainer}
         />
       </View>
 

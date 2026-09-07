@@ -90,80 +90,80 @@ export default function LoginAssessor() {
             style={styles.backgroundImage}
             resizeMode="cover"
           />
-     
-        
-        <Text
-          weight="Medium"
-          style={styles.title}
-        >
-          Login - Assessor
-        </Text>
 
-        <Text
-          weight="Regular"
-          style={[
-            styles.subtitle,
-            {
-              color: theme.textoTerciaria,
-            },
-          ]}
-        >
-          Entre na sua conta!
-        </Text>
-
-        
-        <Input
-          label="E-mail"
-          placeholder="Digite seu e-mail"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          clearable
-        />
-
-        <Input
-          label="Senha"
-          placeholder="Digite sua senha"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-          clearable
-          showPasswordToggle
-        />
-
-        {erro ? (
+        <View style={styles.content}>
           <Text
             weight="Medium"
-            style={styles.erro}
+            style={styles.title}
           >
-            {erro}
+            Login - Assessor
           </Text>
-        ) : null}
 
-        <Button
-          title="ENTRAR"
-          loading={carregando}
-          onPress={handleLogin}
-          style={styles.loginButton}
-        />
-
-        <TouchableOpacity
-          onPress={() => router.push("/cadastro")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.link}>
-            Não possui login?{" "}
-            <Text
-              weight="SemiBold"
-              style={{
+          <Text
+            weight="Regular"
+            style={[
+              styles.subtitle,
+              {
                 color: theme.textoTerciaria,
-              }}
-            >
-              Criar uma nova assessoria
-            </Text>
+              },
+            ]}
+          >
+            Entre na sua conta!
           </Text>
-        </TouchableOpacity>
+
+          <Input
+            label="E-mail"
+            placeholder="Digite seu e-mail"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+            clearable
+          />
+
+          <Input
+            label="Senha"
+            placeholder="Digite sua senha"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+            clearable
+            showPasswordToggle
+          />
+
+          {erro ? (
+            <Text
+              weight="Medium"
+              style={styles.erro}
+            >
+              {erro}
+            </Text>
+          ) : null}
+
+          <Button
+            title="ENTRAR"
+            loading={carregando}
+            onPress={handleLogin}
+            style={styles.loginButton}
+          />
+
+          <TouchableOpacity
+            onPress={() => router.push("/cadastro")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.link}>
+              Não possui login?{" "}
+              <Text
+                weight="SemiBold"
+                style={{
+                  color: theme.textoTerciaria,
+                }}
+              >
+                Criar uma nova assessoria
+              </Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
   );
 }
@@ -171,17 +171,21 @@ export default function LoginAssessor() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 25,
   },
 
+  content:{
+    width: "100%",
+    paddingHorizontal: 25
+  },
+  
   header: {
     height: 240,
   },
   backgroundImage: {
-  ...StyleSheet.absoluteFill,
-  width: "100%",
-  height: "100%",
-},
+    ...StyleSheet.absoluteFill,
+    width: "100%",
+    height: "100%",
+  },
 
   title: {
     fontSize: 28,

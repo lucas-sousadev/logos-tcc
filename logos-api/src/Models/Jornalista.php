@@ -291,18 +291,19 @@ class Jornalista
     public static function criar(
         int $assessoriaId,
         string $nome,
-        string $email,
+        ?string $email,
         ?string $telefone,
         ?string $cargo,
         ?string $estado,
         ?string $cidade,
         ?int $veiculoId,
-        ?string $observacoes
+        ?string $observacoes,
+        bool $ativo = true
     ): int {
         $pdo = Connection::get();
 
         $stmt = $pdo->prepare("
-            INSERT INTO jornalistas (
+           INSERT INTO jornalistas (
                 assessoria_id,
                 nome,
                 email,
@@ -311,7 +312,8 @@ class Jornalista
                 estado,
                 cidade,
                 veiculo_id,
-                observacoes
+                observacoes,
+                ativo
             ) VALUES (
                 :assessoria_id,
                 :nome,
@@ -321,7 +323,8 @@ class Jornalista
                 :estado,
                 :cidade,
                 :veiculo_id,
-                :observacoes
+                :observacoes,
+                :ativo
             )
         ");
 
@@ -335,6 +338,7 @@ class Jornalista
             'cidade' => $cidade,
             'veiculo_id' => $veiculoId,
             'observacoes' => $observacoes,
+            'ativo' => $ativo ? 1 : 0,
         ]);
 
         return (int) $pdo->lastInsertId();
@@ -344,7 +348,7 @@ class Jornalista
         int $id,
         int $assessoriaId,
         string $nome,
-        string $email,
+        ?string $email,
         ?string $telefone,
         ?string $cargo,
         ?string $estado,
@@ -410,17 +414,23 @@ class Jornalista
     }
 
     public static function emailExiste(
-        string $email,
+        ?string $email,
         int $assessoriaId,
         ?int $ignorarId = null
     ): bool {
+        $email = trim((string) $email);
+
+        if ($email === '') {
+            return false;
+        }
+
         $pdo = Connection::get();
 
         $sql = "
             SELECT 1
             FROM jornalistas
             WHERE assessoria_id = :assessoria_id
-              AND email = :email
+            AND email = :email
         ";
 
         $params = [

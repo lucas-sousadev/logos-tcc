@@ -8,7 +8,7 @@
     assessoria_id: number;
 
     nome: string;
-    email: string;
+    email: string | null;
     telefone: string | null;
 
     cargo: string | null;
@@ -55,7 +55,7 @@
 
   export interface CriarJornalistaData {
     nome: string;
-    email: string;
+    email?: string;
     telefone?: string;
     cargo?: string;
     estado?: string;
@@ -73,7 +73,7 @@
 
   export interface AtualizarJornalistaData {
     nome: string;
-    email: string;
+    email: string | null;
     telefone: string | null;
     cargo: string | null;
     estado: string | null;
@@ -366,3 +366,145 @@
 
     return data;
   }
+
+    export async function exportarJornalistas(
+    params: Omit<
+      ListarJornalistasParams,
+      "page" | "limit"
+    > = {}
+  ): Promise<Response> {
+    const query = new URLSearchParams();
+
+    if (params.busca?.trim()) {
+      query.set("busca", params.busca.trim());
+    }
+
+    if (params.estado?.trim()) {
+      query.set("estado", params.estado.trim());
+    }
+
+    if (params.cidade?.trim()) {
+      query.set("cidade", params.cidade.trim());
+    }
+
+    if (params.cargo?.trim()) {
+      query.set("cargo", params.cargo.trim());
+    }
+
+    if (params.veiculo_id !== undefined) {
+      query.set(
+        "veiculo_id",
+        String(params.veiculo_id)
+      );
+    }
+
+    if (params.ativo !== undefined) {
+      query.set("ativo", String(params.ativo));
+    }
+
+    if (params.ordem) {
+      query.set("ordem", params.ordem);
+    }
+
+    if (params.direcao) {
+      query.set("direcao", params.direcao);
+    }
+
+    const sufixo = query.toString();
+
+    const response = await authenticatedFetch(
+      `${API_URL}/api/jornalistas/exportar${
+        sufixo ? `?${sufixo}` : ""
+      }`,
+      {
+        method: "GET",
+      }
+    );
+
+    if (response.ok) {
+      return response;
+    }
+
+    const textoResposta = await response.text();
+
+    let mensagem =
+      "Não foi possível exportar os contatos.";
+
+    try {
+      const dados = JSON.parse(textoResposta);
+
+      mensagem = dados.message || mensagem;
+    } catch {
+
+    }
+
+    throw new Error(mensagem);
+  }
+
+  export interface ResumoImportacaoJornalistas {
+  lidos: number;
+  importados: number;
+  ignorados: number;
+  erros: number;
+}
+
+export interface ErroImportacaoJornalistas {
+  linha: number;
+  mensagem: string;
+}
+
+export interface IgnoradoImportacaoJornalistas {
+  linha: number;
+  nome: string;
+  email: string | null;
+  motivo: string;
+}
+
+export interface ImportarJornalistasResponse {
+  success: boolean;
+  message: string;
+  resumo?: ResumoImportacaoJornalistas;
+  erros?: ErroImportacaoJornalistas[];
+  ignorados?: IgnoradoImportacaoJornalistas[];
+}
+
+export async function importarJornalistas(
+  arquivo: Blob,
+  nomeArquivo: string
+): Promise<ImportarJornalistasResponse> {
+  const formData = new FormData();
+
+  formData.append(
+    "arquivo",
+    arquivo,
+    nomeArquivo
+  );
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/importar`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const textoResposta = await response.text();
+
+  let dados: ImportarJornalistasResponse;
+
+  try {
+    dados = JSON.parse(textoResposta);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (!dados.message) {
+    throw new Error(
+      "Não foi possível importar os contatos."
+    );
+  }
+
+  return dados;
+}

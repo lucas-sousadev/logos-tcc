@@ -15,6 +15,7 @@ export const LightTheme = {
   branco: "#FFFFFF",
 
   backgroundContainer: "#283570",
+  backgroundContainerSecundario: "#5170FF",
   textoContainer: "#FFFAFA"
 };
 
@@ -35,5 +36,7 @@ export const DarkTheme = {
   branco: "#FFFFFF",
 
   backgroundContainer: "#5170FF",
+  backgroundContainerSecundario: "#58a9eb",
   textoContainer: "#ffffff",
+
 };

@@ -63,36 +63,42 @@ export function validarFormularioJornalista(
   }
 
   const email = dados.email.trim();
+  const telefone = dados.telefone.trim();
 
-  if (!email) {
-    erros.email = "Informe o e-mail do contato.";
-  } else if (
-    excede(email, MAX_EMAIL_JORNALISTA)
-  ) {
-    erros.email =
-      `O e-mail deve possuir no máximo ` +
-      `${MAX_EMAIL_JORNALISTA} caracteres.`;
-  } else if (
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  ) {
-    erros.email = "Informe um e-mail válido.";
+  if (email) {
+    if (excede(email, MAX_EMAIL_JORNALISTA)) {
+      erros.email =
+        `O e-mail deve possuir no máximo ` +
+        `${MAX_EMAIL_JORNALISTA} caracteres.`;
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      erros.email = "Informe um e-mail válido.";
+    }
   }
 
-  if (
-    dados.telefone.trim() &&
-    excede(dados.telefone, MAX_TELEFONE_JORNALISTA)
-  ) {
-    erros.telefone =
-      `O telefone deve possuir no máximo ` +
-      `${MAX_TELEFONE_JORNALISTA} caracteres.`;
-  } else if (dados.telefone.trim()) {
-    const telefoneNumerico =
-      dados.telefone.replace(/\D/g, "");
-
-    if (!/^\d{10,11}$/.test(telefoneNumerico)) {
+  if (telefone) {
+    if (excede(telefone, MAX_TELEFONE_JORNALISTA)) {
       erros.telefone =
-        "O telefone deve possuir 10 ou 11 dígitos.";
+        `O telefone deve possuir no máximo ` +
+        `${MAX_TELEFONE_JORNALISTA} caracteres.`;
+    } else {
+      const telefoneNumerico =
+        telefone.replace(/\D/g, "");
+
+      if (!/^\d{10,11}$/.test(telefoneNumerico)) {
+        erros.telefone =
+          "O telefone deve possuir 10 ou 11 dígitos.";
+      }
     }
+  }
+
+  if (!email && !telefone) {
+    const mensagem =
+      "Informe pelo menos e-mail ou telefone.";
+
+    erros.email = mensagem;
+    erros.telefone = mensagem;
   }
 
   const camposComLimite = [

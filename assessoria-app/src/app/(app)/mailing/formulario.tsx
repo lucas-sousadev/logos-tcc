@@ -59,6 +59,16 @@ export default function FormularioJornalista() {
 
       setErroGeral("");
     }
+    
+    function limparErrosDeContato() {
+      setErros((atual) => ({
+        ...atual,
+        email: undefined,
+        telefone: undefined,
+      }));
+
+      setErroGeral("");
+    }
 
     function exibirErroDaApi(mensagemOriginal: string) {
       const mensagem = mensagemOriginal;
@@ -67,6 +77,17 @@ export default function FormularioJornalista() {
 
       let campo: keyof ErrosJornalista | null = null;
 
+      if (
+        texto.includes("e-mail ou telefone") ||
+        texto.includes("email ou telefone")
+      ) {
+        setErros({
+          email: mensagem,
+          telefone: mensagem,
+        });
+
+        return;
+      }
       if (texto.includes("veículo")) {
         campo = "veiculo";
       } else if (
@@ -125,7 +146,7 @@ export default function FormularioJornalista() {
 
             await criarJornalista({
             nome: nomeFormatado,
-            email: emailFormatado,
+            email: emailFormatado || undefined,
             telefone:
                 telefone.trim() || undefined,
             cargo:
@@ -205,7 +226,7 @@ export default function FormularioJornalista() {
             ]}
             >
             Adicione um novo contato ao mailing
-            da assessoria. Campos marcados com * são obrigatórios.
+            da assessoria. Nome e telefone OU e-mail são obrigatórios.
             </Text>
         </View>
 
@@ -229,11 +250,11 @@ export default function FormularioJornalista() {
         />
 
         <Input
-            label="E-MAIL *"
+            label="E-MAIL"
             value={email}
             onChangeText={(texto) => {
                 setEmail(texto);
-                limparErro("email");
+                limparErrosDeContato();
             }}
             placeholder="E-mail"
             keyboardType="email-address"
@@ -247,7 +268,7 @@ export default function FormularioJornalista() {
           value={telefone}
           onChangeText={(texto) => {
             setTelefone(texto);
-            limparErro("telefone");
+            limparErrosDeContato();
           }}
           placeholder="Ex: (11) 00000-0000"
           keyboardType="phone-pad"

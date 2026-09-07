@@ -144,10 +144,30 @@ $router->get(
     ]
 );
 
+$router->get(
+    "/api/jornalistas/exportar",
+    "JornalistaController:exportar",
+    "MAILING.EXPORTAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
 $router->post(
     "/api/jornalistas",
     "JornalistaController:criar",
     "MAILING.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/jornalistas/importar",
+    "JornalistaController:importar",
+    "MAILING.IMPORTAR",
     middleware: [
         $authMiddleware,
         $permissionMiddleware
@@ -167,6 +187,16 @@ $router->put(
 $router->delete(
     "/api/jornalistas/{id}",
     "JornalistaController:excluir",
+    "MAILING.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/jornalistas/excluir-lote",
+    "JornalistaController:excluirEmLote",
     "MAILING.EXCLUIR",
     middleware: [
         $authMiddleware,

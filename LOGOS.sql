@@ -198,7 +198,7 @@ CREATE TABLE jornalistas (
     assessoria_id BIGINT UNSIGNED NOT NULL,
 
     nome VARCHAR(150) NOT NULL,
-    email VARCHAR(180) NOT NULL,
+    email VARCHAR(180) NULL,
     telefone VARCHAR(30) NULL,
     cargo VARCHAR(100) NULL,
     estado VARCHAR(100) NULL,

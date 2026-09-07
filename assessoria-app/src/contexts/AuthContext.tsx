@@ -1,11 +1,16 @@
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-
+import {
+  AppState,
+  AppStateStatus,
+} from "react-native";
 import {
   clearSession,
   getToken,
@@ -93,6 +98,7 @@ interface AuthContextData {
     modulo: string,
     acao: string
   ) => boolean;
+  recarregarPermissoes: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData | undefined>(undefined);
@@ -104,7 +110,12 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
-  
+  const [permissoesUsuario, setPermissoesUsuario] =
+  useState<Permissao[]>([]);
+
+  const estadoAtualDoApp = useRef<AppStateStatus>(
+    AppState.currentState
+  );
   useEffect(() => {
     async function carregarSessao() {
       try {
@@ -139,6 +150,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     carregarSessao();
   }, []);
+
+  const recarregarPermissoes = useCallback(
+    async (): Promise<void> => {
+      if (
+        !usuario ||
+        usuario.perfil !== "FUNCIONARIO"
+      ) {
+        return;
+      }
+
+      const permissoes =
+        await authListarMinhasPermissoes();
+
+      setPermissoesUsuario(permissoes);
+    },
+    [usuario]
+  );
+
+  useEffect(() => {
+    const inscricao = AppState.addEventListener(
+      "change",
+      (proximoEstado) => {
+        const voltouAoApp =
+          estadoAtualDoApp.current !== "active" &&
+          proximoEstado === "active";
+
+        estadoAtualDoApp.current = proximoEstado;
+
+        if (voltouAoApp) {
+          recarregarPermissoes().catch((error) => {
+            console.error(
+              "Erro ao recarregar permissões:",
+              error
+            );
+          });
+        }
+      }
+    );
+
+    return () => {
+      inscricao.remove();
+    };
+  }, [recarregarPermissoes]);
 
   async function login(
     email: string,
@@ -337,9 +391,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     );
   }
 
-  const [permissoesUsuario, setPermissoesUsuario] =
-  useState<Permissao[]>([]);
-
   function temPermissao(
     modulo: string,
     acao: string
@@ -382,6 +433,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         listarTodasPermissoes,
         listarPermissoesFuncionario,
         atualizarPermissoesFuncionario,
+        recarregarPermissoes,
 
         temPermissao,
       }}

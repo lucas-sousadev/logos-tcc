@@ -96,7 +96,7 @@ export default function VeiculoSelector({
             styles.selected,
             {
               borderColor: theme.borda,
-              backgroundColor: theme.surface,
+              backgroundColor: theme.background,
             },
           ]}
         >

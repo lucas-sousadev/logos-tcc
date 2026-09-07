@@ -4,9 +4,10 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  TouchableOpacity,
   View,
+  Linking,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 
 import { useEffect, useState } from "react";
@@ -165,10 +166,10 @@ export default function JornalistaDetalhes() {
         [campo]: valor,
         }));
 
-        if (
+        if (campo === "email" || campo === "telefone") {
+          limparErrosDeContato();
+        } else if (
           campo === "nome" ||
-          campo === "email" ||
-          campo === "telefone" ||
           campo === "cargo" ||
           campo === "estado" ||
           campo === "cidade" ||
@@ -188,6 +189,15 @@ export default function JornalistaDetalhes() {
 
       setErroGeral("");
     }
+    function limparErrosDeContato() {
+      setErros((atual) => ({
+        ...atual,
+        email: undefined,
+        telefone: undefined,
+      }));
+
+      setErroGeral("");
+    }
 
     function exibirErroDaApi(
       mensagemOriginal: string
@@ -197,6 +207,18 @@ export default function JornalistaDetalhes() {
       const texto = mensagem.toLocaleLowerCase();
 
       let campo: keyof ErrosJornalista | null = null;
+
+      if (
+        texto.includes("e-mail ou telefone") ||
+        texto.includes("email ou telefone")
+      ) {
+        setErros({
+          email: mensagem,
+          telefone: mensagem,
+        });
+
+        return;
+      }
 
       if (texto.includes("veículo")) {
         campo = "veiculo";
@@ -329,7 +351,7 @@ export default function JornalistaDetalhes() {
       jornalista.id,
       {
         nome: formulario.nome.trim(),
-        email: formulario.email.trim(),
+        email: formulario.email.trim() || null,
         telefone:
           formulario.telefone.trim() || null,
         cargo:
@@ -514,6 +536,64 @@ export default function JornalistaDetalhes() {
         );
     }
 
+    async function abrirWhatsApp() {
+    if (!jornalista?.telefone) {
+      return;
+    }
+
+    const numeroLimpo = jornalista.telefone.replace(
+      /\D/g,
+      ""
+    );
+
+    if (numeroLimpo.length < 10) {
+      Alert.alert(
+        "Telefone inválido",
+        "Não foi possível abrir o WhatsApp para este contato."
+      );
+
+      return;
+    }
+
+    const numeroWhatsApp =
+      numeroLimpo.startsWith("55") &&
+      (
+        numeroLimpo.length === 12 ||
+        numeroLimpo.length === 13
+      )
+        ? numeroLimpo
+        : `55${numeroLimpo}`;
+
+    try {
+      await Linking.openURL(
+        `https://wa.me/${numeroWhatsApp}`
+      );
+    } catch {
+      Alert.alert(
+        "WhatsApp indisponível",
+        "Não foi possível abrir o WhatsApp."
+      );
+    }
+  }
+
+  async function abrirEmail() {
+    const email = jornalista?.email?.trim();
+
+    if (!email) {
+      return;
+    }
+
+    try {
+      await Linking.openURL(
+        `mailto:${encodeURIComponent(email)}`
+      );
+    } catch {
+      Alert.alert(
+        "E-mail indisponível",
+        "Não foi possível abrir o aplicativo de e-mail."
+      );
+    }
+  }
   return (
     <View
       style={[
@@ -589,7 +669,9 @@ export default function JornalistaDetalhes() {
                 },
               ]}
             >
-              {jornalista.email}
+              {jornalista.email ||
+                jornalista.telefone ||
+                "Sem meio de contato"}
             </Text>
 
             <View
@@ -620,7 +702,6 @@ export default function JornalistaDetalhes() {
             </View>
           </View>
         </View>
-
         {modoEdicao ? (
           <>
             <Text
@@ -773,7 +854,7 @@ export default function JornalistaDetalhes() {
                 }
               />
             </View>
-
+                
             <VeiculoSelector
               value={{
                 id: formulario.veiculo_id,
@@ -830,8 +911,23 @@ export default function JornalistaDetalhes() {
             <InfoRow
               icon="mail-outline"
               label="E-MAIL"
-              value={jornalista.email}
+              value={jornalista.email || "Não informado"}
               theme={theme}
+              actionIcon={
+                jornalista.email
+                  ? "mail-outline"
+                  : undefined
+              }
+              actionLabel={
+                jornalista.email
+                  ? "Enviar e-mail para o contato"
+                  : undefined
+              }
+              onActionPress={
+                jornalista.email
+                  ? abrirEmail
+                  : undefined
+              }
             />
 
             <InfoRow
@@ -842,6 +938,17 @@ export default function JornalistaDetalhes() {
                 "Não informado"
               }
               theme={theme}
+              actionIcon={
+                jornalista.telefone
+                  ? "logo-whatsapp"
+                  : undefined
+              }
+              actionLabel="Abrir conversa no WhatsApp"
+              onActionPress={
+                jornalista.telefone
+                  ? abrirWhatsApp
+                  : undefined
+              }
             />
 
             <InfoRow
@@ -922,6 +1029,9 @@ interface InfoRowProps {
   label: string;
   value: string;
   theme: any;
+  actionIcon?: keyof typeof Ionicons.glyphMap;
+  actionLabel?: string;
+  onActionPress?: () => void;
 }
 
 function InfoRow({
@@ -929,6 +1039,9 @@ function InfoRow({
   label,
   value,
   theme,
+  actionIcon,
+  actionLabel,
+  onActionPress,
 }: InfoRowProps) {
   return (
     <View
@@ -974,6 +1087,26 @@ function InfoRow({
           {value}
         </Text>
       </View>
+      {actionIcon && onActionPress ? (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onActionPress}
+          accessibilityLabel={actionLabel}
+          style={[
+            styles.infoActionButton,
+            {
+              backgroundColor: 
+                theme.textoTerciaria,
+            },
+          ]}
+        >
+          <Ionicons
+            name={actionIcon}
+            size={18}
+            color={theme.textoContainer}
+          />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -1071,6 +1204,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
+  infoActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
   statusRow: {
     minHeight: 68,
     borderWidth: 1.5,
