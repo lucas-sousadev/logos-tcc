@@ -27,7 +27,7 @@ import FeedbackAlert, { type FeedbackAlertVariant,} from "@/components/forms/Fee
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 
-import { Jornalista, listarJornalistas, exportarJornalistas, importarJornalistas } from "@/services/api/jornalista";
+import { Jornalista, listarJornalistas, exportarJornalistas, importarJornalistas, excluirJornalistasEmLote } from "@/services/api/jornalista";
   function nomeArquivoMailing(): string {
     const agora = new Date();
 
@@ -70,6 +70,11 @@ export default function Mailing() {
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
 
+  const [modoSelecao, setModoSelecao] = useState(false);
+
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
+
+  const [excluindoSelecionados, setExcluindoSelecionados] = useState(false);
   const { theme } = useTheme();
   const {
     usuario, temPermissao
@@ -182,12 +187,24 @@ export default function Mailing() {
   useFocusEffect(
     useCallback(() => {
       carregarJornalistas(true);
+
+      return () => {
+        setIdsSelecionados([]);
+        setModoSelecao(false);
+      };
     }, [
-      carregarJornalistas,
+      buscaAplicada,
+      filtros.estado,
+      filtros.cidade,
+      filtros.cargo,
+      filtros.veiculoId,
+      filtros.ativo,
     ])
   );
 
   function realizarBusca() {
+    sairModoSelecao();
+
     setBuscaAplicada(
       busca.trim()
     );
@@ -200,6 +217,8 @@ export default function Mailing() {
   function aplicarFiltros(
     novosFiltros: FiltrosMailing
   ) {
+    sairModoSelecao();
+
     setPagina(1);
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
@@ -215,6 +234,8 @@ export default function Mailing() {
       );
     }
   async function exportarMailing() {
+    sairModoSelecao();
+
     try {
       setExportando(true);
 
@@ -310,6 +331,8 @@ export default function Mailing() {
   }
 
   async function selecionarEImportarArquivo() {
+    sairModoSelecao();
+    
     try {
       const resultadoSeletor =
         await DocumentPicker.getDocumentAsync({
@@ -476,29 +499,141 @@ export default function Mailing() {
   }
 
   function mensagemExportacao(
-  nomeArquivo: string
-): string {
-  const possuiFiltros = Boolean(
-    buscaAplicada ||
-    filtros.estado ||
-    filtros.cidade ||
-    filtros.cargo ||
-    filtros.veiculoId ||
-    filtros.ativo !== 1
-  );
+    nomeArquivo: string
+  ): string {
+    const possuiFiltros = Boolean(
+      buscaAplicada ||
+      filtros.estado ||
+      filtros.cidade ||
+      filtros.cargo ||
+      filtros.veiculoId ||
+      filtros.ativo !== 1
+    );
 
-  return [
-    `Arquivo gerado: ${nomeArquivo}`,
-    "",
-    possuiFiltros
-      ? `${total} contato(s) exportado(s) conforme os filtros aplicados.`
-      : `${total} contato(s) exportado(s) da assessoria.`,
-    possuiFiltros
-      ? "Os filtros atuais foram mantidos no arquivo."
-      : "O arquivo contém todos os contatos disponíveis.",
-  ].join("\n");
-}
+    return [
+      `Arquivo gerado: ${nomeArquivo}`,
+      "",
+      possuiFiltros
+        ? `${total} contato(s) exportado(s) conforme os filtros aplicados.`
+        : `${total} contato(s) exportado(s) da assessoria.`,
+      possuiFiltros
+        ? "Os filtros atuais foram mantidos no arquivo."
+        : "O arquivo contém todos os contatos disponíveis.",
+    ].join("\n");
+  }
 
+  function abrirModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(true);
+  }
+
+  function sairModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(false);
+  }
+
+  function alternarContatoSelecionado(id: number) {
+    setIdsSelecionados((atual) =>
+      atual.includes(id)
+        ? atual.filter((item) => item !== id)
+        : [...atual, id]
+    );
+  }
+
+  function selecionarTodosVisiveis() {
+    const idsVisiveis = jornalistas.map(
+      (contato) => contato.id
+    );
+
+    const todosSelecionados =
+      idsVisiveis.length > 0 &&
+      idsVisiveis.every((id) =>
+        idsSelecionados.includes(id)
+      );
+
+    setIdsSelecionados((atual) => {
+      if (todosSelecionados) {
+        return atual.filter(
+          (id) => !idsVisiveis.includes(id)
+        );
+      }
+
+      return Array.from(
+        new Set([...atual, ...idsVisiveis])
+      );
+    });
+  }
+
+  function confirmarExclusaoSelecionados() {
+    const quantidade = idsSelecionados.length;
+
+    if (quantidade === 0) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Nenhum contato selecionado",
+        message:
+          "Selecione pelo menos um contato para excluir.",
+      });
+
+      return;
+    }
+
+    mostrarFeedback({
+      variant: "warning",
+      title: `Excluir ${quantidade} contato(s)?`,
+      message:
+        "Essa ação não pode ser desfeita. Caso algum contato esteja vinculado a outro registro, nenhum contato será excluído.",
+      primaryLabel: "EXCLUIR",
+      secondaryLabel: "CANCELAR",
+      primaryDanger: true,
+      onPrimary: excluirSelecionados,
+    });
+  }
+
+  async function excluirSelecionados() {
+    const ids = [...idsSelecionados];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    fecharFeedback();
+    setExcluindoSelecionados(true);
+
+    try {
+      const resultado =
+        await excluirJornalistasEmLote(ids);
+
+      sairModoSelecao();
+
+      await carregarJornalistas(true);
+
+      mostrarFeedback({
+        variant: "success",
+        title: "Contatos excluídos",
+        message:
+          `${resultado.excluidos} contato(s) ` +
+          "foram excluídos com sucesso.",
+      });
+    } catch (error) {
+      mostrarFeedback({
+        variant: "error",
+        title: "Não foi possível excluir",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir os contatos.",
+      });
+    } finally {
+      setExcluindoSelecionados(false);
+    }
+  }
+
+  const todosVisiveisSelecionados =
+    jornalistas.length > 0 &&
+    jornalistas.every((contato) =>
+      idsSelecionados.includes(contato.id)
+    );
   if (carregando) {
     return (
       <View
@@ -545,7 +680,11 @@ export default function Mailing() {
           onSearch={realizarBusca}
           onFilterPress={abrirFiltros}
           filterActive={filtrosAtivos()}
-          onClear={() => setBuscaAplicada("")}
+          onClear={() => {
+            sairModoSelecao();
+            setBusca("");
+            setBuscaAplicada("");
+          }}
         />
 
         <View style={styles.topRow}>
@@ -578,9 +717,9 @@ export default function Mailing() {
                     backgroundColor: theme.background,
                     borderColor: theme.borda,
                     opacity:
-                      importando || exportando
-                        ? 0.5
-                        : 1,
+                    exportando || importando
+                      ? 0.5
+                      : 1,
                   },
                 ]}
               >
@@ -644,6 +783,134 @@ export default function Mailing() {
             )}
           </View>
         </View>
+        
+          {temPermissao("MAILING", "EXCLUIR") &&
+          jornalistas.length > 0 ? (
+            modoSelecao ? (
+              <View
+                style={[
+                  styles.selectionToolbar,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.borda,
+                  },
+                ]}
+              >
+                <View style={styles.selectionInfo}>
+                  <Text weight="SemiBold" style={styles.selectionTitle}>
+                    {idsSelecionados.length} selecionado(s)
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.selectionSubtitle,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    Escolha os contatos que deseja excluir.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={selecionarTodosVisiveis}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectAllButton,
+                    { borderColor: theme.borda },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.selectAllText,
+                      { color: theme.texto },
+                    ]}
+                  >
+                    {todosVisiveisSelecionados
+                      ? "LIMPAR"
+                      : "TODOS"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={confirmarExclusaoSelecionados}
+                  disabled={
+                    idsSelecionados.length === 0 ||
+                    excluindoSelecionados
+                  }
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor: "#EF4444",
+                      opacity:
+                        idsSelecionados.length === 0 ||
+                        excluindoSelecionados
+                          ? 0.5
+                          : 1,
+                    },
+                  ]}
+                >
+                  {excluindoSelecionados ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFFFFF"
+                    />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={sairModoSelecao}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor: theme.backgroundContainer,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={theme.textoContainer}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={abrirModoSelecao}
+                style={[
+                  styles.selectionStartButton,
+                  { borderColor: theme.borda },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={19}
+                  color={theme.texto}
+                />
+
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.selectionStartText,
+                    { color: theme.texto },
+                  ]}
+                >
+                  SELECIONAR CONTATOS
+                </Text>
+              </TouchableOpacity>
+            )
+          ) : null}
 
         {jornalistas.length === 0 ? (
           <View
@@ -685,16 +952,19 @@ export default function Mailing() {
             <TouchableOpacity
               key={jornalista.id}
               activeOpacity={0.8}
-              onPress={() =>
+              onPress={() => {
+                if (modoSelecao) {
+                  alternarContatoSelecionado(jornalista.id);
+                  return;
+                }
+
                 router.push({
-                  pathname:
-                    "/mailing/[id]",
+                  pathname: "/mailing/[id]",
                   params: {
-                    id:
-                      jornalista.id.toString(),
+                    id: jornalista.id.toString(),
                   },
-                })
-              }
+                });
+              }}
               style={[
                 styles.item,
                 {
@@ -779,11 +1049,37 @@ export default function Mailing() {
                   </Text>
                 </View>
 
+                {modoSelecao ? (
+                <View
+                  style={[
+                    styles.selectionCheckbox,
+                    {
+                      borderColor:
+                        idsSelecionados.includes(jornalista.id)
+                          ? theme.backgroundContainer
+                          : theme.borda,
+                      backgroundColor:
+                        idsSelecionados.includes(jornalista.id)
+                          ? theme.backgroundContainer
+                          : theme.background,
+                    },
+                  ]}
+                >
+                  {idsSelecionados.includes(jornalista.id) ? (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={theme.textoContainer}
+                    />
+                  ) : null}
+                </View>
+              ) : (
                 <Ionicons
                   name="chevron-forward-outline"
                   size={21}
                   color={theme.texto}
                 />
+              )}
               </View>
             </TouchableOpacity>
           ))
@@ -845,12 +1141,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 10,
     marginBottom: 12,
   },
   topActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
 
   exportButton: { 
@@ -861,10 +1158,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  count: {
+  // botoes de exclusão em lote abaixo
+  selectionStartButton: {
+    minHeight: 42,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  selectionStartText: {
+    fontSize: 12,
+  },
+
+  selectionToolbar: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+
+  selectionInfo: {
+    flex: 1,
+  },
+
+  selectionTitle: {
     fontSize: 13,
   },
 
+  selectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  selectAllButton: {
+    height: 36,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+
+  selectAllText: {
+    fontSize: 11,
+  },
+
+  selectionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  selectionCheckbox: {
+    width: 25,
+    height: 25,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // botoes de exclusao em lote acima
+  
+  count: {
+    flex: 1,
+    flexShrink: 1,
+    fontSize: 13,
+  },
+
+  
   newButton: {
     width: 90,
   },

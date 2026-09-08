@@ -3,6 +3,7 @@
 namespace Logos\AssessoriaApi\Services;
 
 use Logos\AssessoriaApi\Models\Veiculo;
+use Logos\AssessoriaApi\Database\Connection;
 
 class VeiculoService
 {   
@@ -10,7 +11,8 @@ class VeiculoService
     private const MAX_DESCRICAO = 1000;
     private const MAX_ALCANCE = 500;
     private const MAX_LOGO_PATH = 500;
-    
+    private const LIMITE_EXCLUSAO_EM_LOTE = 100;
+
     public static function listar(
         int $assessoriaId,
         array $filtros = []
@@ -203,6 +205,88 @@ class VeiculoService
             $id,
             $assessoriaId
         );
+    }
+
+    public static function excluirEmLote(
+        int $assessoriaId,
+        array $ids
+    ): int {
+        if (
+            !array_is_list($ids) ||
+            count($ids) === 0 ||
+            count($ids) > self::LIMITE_EXCLUSAO_EM_LOTE
+        ) {
+            throw new \InvalidArgumentException(
+                'Selecione entre 1 e ' .
+                self::LIMITE_EXCLUSAO_EM_LOTE .
+                ' veículos.'
+            );
+        }
+
+        $idsValidos = [];
+
+        foreach ($ids as $valor) {
+            if (
+                !is_int($valor) &&
+                !(
+                    is_string($valor) &&
+                    ctype_digit($valor)
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'Há veículos inválidos na seleção.'
+                );
+            }
+
+            $id = (int) $valor;
+
+            if ($id <= 0) {
+                throw new \InvalidArgumentException(
+                    'Há veículos inválidos na seleção.'
+                );
+            }
+
+            $idsValidos[] = $id;
+        }
+
+        if (count($idsValidos) !== count(array_unique($idsValidos))) {
+            throw new \InvalidArgumentException(
+                'Há veículos duplicados na seleção.'
+            );
+        }
+
+        $pdo = Connection::get();
+
+        try {
+            $pdo->beginTransaction();
+
+            foreach ($idsValidos as $id) {
+                $veiculo = Veiculo::buscarPorId(
+                    $id,
+                    $assessoriaId
+                );
+
+                if (!$veiculo) {
+                    throw new \InvalidArgumentException(
+                        'Um dos veículos selecionados não está mais disponível.'
+                    );
+                }
+            }
+
+            foreach ($idsValidos as $id) {
+                self::excluir($id, $assessoriaId);
+            }
+
+            $pdo->commit();
+
+            return count($idsValidos);
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function excluir(

@@ -254,3 +254,13 @@ $router->delete(
         $permissionMiddleware
     ]
 );
+
+$router->delete(
+    '/api/veiculos/excluir-lote',
+    'VeiculoController:excluirEmLote',
+    'VEICULOS.EXCLUIR',
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);

@@ -70,6 +70,13 @@ class Veiculo
                 v.alcance,
                 v.logo_path,
                 v.ativo,
+                (
+                    SELECT COUNT(*)
+                    FROM jornalistas j
+                    WHERE
+                        j.veiculo_id = v.id
+                        AND j.assessoria_id = v.assessoria_id
+                ) AS contatos_vinculados,
                 v.created_at,
                 v.updated_at
             FROM veiculos v
@@ -163,19 +170,26 @@ class Veiculo
 
         $stmt = $pdo->prepare("
             SELECT
-                id,
-                assessoria_id,
-                nome,
-                descricao,
-                alcance,
-                logo_path,
-                ativo,
-                created_at,
-                updated_at
-            FROM veiculos
+                v.id,
+                v.assessoria_id,
+                v.nome,
+                v.descricao,
+                v.alcance,
+                v.logo_path,
+                v.ativo,
+                (
+                    SELECT COUNT(*)
+                    FROM jornalistas j
+                    WHERE
+                        j.veiculo_id = v.id
+                        AND j.assessoria_id = v.assessoria_id
+                ) AS contatos_vinculados,
+                v.created_at,
+                v.updated_at
+            FROM veiculos v
             WHERE
-                id = :id
-                AND assessoria_id = :assessoria_id
+                v.id = :id
+                AND v.assessoria_id = :assessoria_id
             LIMIT 1
         ");
 

@@ -1347,12 +1347,12 @@ class JornalistaService
         $ids = array_values($idsValidos);
 
         foreach ($ids as $id) {
-            if (
-                !Jornalista::buscarPorId(
-                    $id,
-                    $assessoriaId
-                )
-            ) {
+            $contato = Jornalista::buscarPorId(
+                $id,
+                $assessoriaId
+            );
+
+            if (!$contato) {
                 throw new InvalidArgumentException(
                     'Um dos contatos selecionados não foi encontrado.'
                 );
@@ -1365,12 +1365,12 @@ class JornalistaService
             $pdo->beginTransaction();
 
             foreach ($ids as $id) {
-                if (
-                    !Jornalista::excluir(
-                        $id,
-                        $assessoriaId
-                    )
-                ) {
+                $excluido = Jornalista::excluir(
+                    $id,
+                    $assessoriaId
+                );
+
+                if (!$excluido) {
                     throw new \RuntimeException(
                         'Não foi possível excluir um dos contatos.'
                     );

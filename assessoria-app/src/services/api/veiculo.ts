@@ -12,6 +12,7 @@ export interface Veiculo {
   logo_path: string | null;
   alcance: string | null;
   ativo: number;
+  contatos_vinculados: number;
   created_at: string;
   updated_at: string;
 }
@@ -274,4 +275,46 @@ export async function excluirVeiculo(
         "Não foi possível excluir o veículo."
     );
   }
+}
+
+export interface ExcluirVeiculosEmLoteResponse {
+  success: boolean;
+  message: string;
+  excluidos: number;
+}
+
+export async function excluirVeiculosEmLote(
+  ids: number[]
+): Promise<ExcluirVeiculosEmLoteResponse> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/excluir-lote`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids }),
+    }
+  );
+
+  const textoResposta = await response.text();
+
+  let dados: ExcluirVeiculosEmLoteResponse;
+
+  try {
+    dados = JSON.parse(textoResposta);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (!response.ok || !dados.success) {
+    throw new Error(
+      dados.message ||
+        "Não foi possível excluir os veículos."
+    );
+  }
+
+  return dados;
 }

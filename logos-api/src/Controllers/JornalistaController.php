@@ -646,6 +646,78 @@ class JornalistaController
         }
     }
 
+    public function excluirEmLote(): void
+    {
+        header(
+            'Content-Type: application/json; charset=utf-8'
+        );
+
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            http_response_code(401);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Usuário não autenticado.',
+            ]);
+
+            return;
+        }
+
+        $dados = json_decode(
+            file_get_contents('php://input'),
+            true
+        );
+
+        if (
+            !is_array($dados) ||
+            !isset($dados['ids']) ||
+            !is_array($dados['ids'])
+        ) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Selecione os contatos que deseja excluir.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $excluidos =
+                JornalistaService::excluirEmLote(
+                    (int) $usuario->assessoria_id,
+                    $dados['ids']
+                );
+
+            echo json_encode([
+                'success' => true,
+                'message' =>
+                    'Contatos excluídos com sucesso.',
+                'excluidos' => $excluidos,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\Throwable $e) {
+            http_response_code(409);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Não foi possível excluir os contatos. ' .
+                    'Algum deles pode estar vinculado a outros registros.',
+            ]);
+        }
+    }
+
     public function excluir(array $dados): void
     {
         header(
@@ -712,71 +784,4 @@ class JornalistaController
             ]);
         }
     }   
-
-    public function excluirEmLote(): void
-    {
-        header(
-            'Content-Type: application/json; charset=utf-8'
-        );
-
-        $usuario = AuthContext::get();
-
-        if (!$usuario) {
-            http_response_code(401);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Usuário não autenticado.',
-            ]);
-
-            return;
-        }
-
-        $dados = json_decode(
-            file_get_contents('php://input'),
-            true
-        );
-
-        if (!is_array($dados)) {
-            http_response_code(400);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Dados inválidos.',
-            ]);
-
-            return;
-        }
-
-        try {
-            $excluidos =
-                JornalistaService::excluirEmLote(
-                    (int) $usuario->assessoria_id,
-                    $dados['ids'] ?? []
-                );
-
-            echo json_encode([
-                'success' => true,
-                'message' =>
-                    'Contatos excluídos com sucesso.',
-                'excluidos' => $excluidos,
-            ]);
-        } catch (\InvalidArgumentException $e) {
-            http_response_code(422);
-
-            echo json_encode([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        } catch (\Throwable $e) {
-            http_response_code(409);
-
-            echo json_encode([
-                'success' => false,
-                'message' =>
-                    'Não foi possível excluir os contatos. ' .
-                    'Algum deles pode estar vinculado a outros registros.',
-            ]);
-        }
-    }
 }

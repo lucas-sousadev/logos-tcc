@@ -14,9 +14,8 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import VeiculoFilterModal, {
-  FiltrosVeiculos,
-} from "@/components/ui/Filtros/VeiculoFilterModal";
+import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/VeiculoFilterModal";
+import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,7 +23,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   Veiculo,
   listarVeiculos,
+  excluirVeiculosEmLote,
 } from "@/services/api/veiculo";
+
+interface FeedbackState {
+  variant: FeedbackAlertVariant;
+  title: string;
+  message: string;
+  primaryLabel?: string;
+  secondaryLabel?: string;
+  primaryDanger?: boolean;
+  onPrimary?: () => void;
+}
 
 export default function Veiculos() {
   const router = useRouter();
@@ -49,6 +59,22 @@ export default function Veiculos() {
   const [total, setTotal] = useState(0);
 
   const [erro, setErro] = useState("");
+
+  const [modoSelecao, setModoSelecao] = useState(false);
+
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
+
+  const [excluindoSelecionados, setExcluindoSelecionados] = useState(false);
+
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+
+  function mostrarFeedback(dados: FeedbackState) {
+    setFeedback(dados);
+  }
+
+  function fecharFeedback() {
+    setFeedback(null);
+  }
 
   const carregarVeiculos = useCallback(
     async (
@@ -113,14 +139,23 @@ export default function Veiculos() {
   useFocusEffect(
     useCallback(() => {
       carregarVeiculos(true);
+
+      return () => {
+        setIdsSelecionados([]);
+        setModoSelecao(false);
+      };
     }, [buscaAplicada, filtros.ativo])
   );
 
   function realizarBusca() {
+    sairModoSelecao();
     setBuscaAplicada(busca.trim());
   }
 
-  function aplicarFiltros(novosFiltros: FiltrosVeiculos) {
+  function aplicarFiltros(
+    novosFiltros: FiltrosVeiculos
+  ) {
+    sairModoSelecao();
     setPagina(1);
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
@@ -139,6 +174,118 @@ export default function Veiculos() {
     });
   }
 
+  function abrirModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(true);
+  }
+
+  function sairModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(false);
+  }
+
+  function alternarVeiculoSelecionado(id: number) {
+    setIdsSelecionados((atual) =>
+      atual.includes(id)
+        ? atual.filter((item) => item !== id)
+        : [...atual, id]
+    );
+  }
+
+  function selecionarTodosVisiveis() {
+    const idsVisiveis = veiculos.map(
+      (veiculo) => veiculo.id
+    );
+
+    const todosSelecionados =
+      idsVisiveis.length > 0 &&
+      idsVisiveis.every((id) =>
+        idsSelecionados.includes(id)
+      );
+
+    setIdsSelecionados((atual) => {
+      if (todosSelecionados) {
+        return atual.filter(
+          (id) => !idsVisiveis.includes(id)
+        );
+      }
+
+      return Array.from(
+        new Set([...atual, ...idsVisiveis])
+      );
+    });
+  }
+
+  function confirmarExclusaoSelecionados() {
+    const quantidade = idsSelecionados.length;
+
+    if (quantidade === 0) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Nenhum veículo selecionado",
+        message:
+          "Selecione pelo menos um veículo para excluir.",
+      });
+
+      return;
+    }
+
+    mostrarFeedback({
+      variant: "warning",
+      title: `Excluir ${quantidade} veículo(s)?`,
+      message:
+        "Essa ação não pode ser desfeita. Caso algum veículo esteja vinculado a contatos, nenhum veículo será excluído.",
+      primaryLabel: "EXCLUIR",
+      secondaryLabel: "CANCELAR",
+      primaryDanger: true,
+      onPrimary: excluirSelecionados,
+    });
+  }
+
+  async function excluirSelecionados() {
+    const ids = [...idsSelecionados];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    fecharFeedback();
+    setExcluindoSelecionados(true);
+
+    try {
+      const resultado =
+        await excluirVeiculosEmLote(ids);
+
+      sairModoSelecao();
+
+      await carregarVeiculos(true);
+
+      mostrarFeedback({
+        variant: "success",
+        title: "Veículos excluídos",
+        message:
+          `${resultado.excluidos} veículo(s) ` +
+          "foram excluídos com sucesso.",
+      });
+    } catch (error) {
+      mostrarFeedback({
+        variant: "error",
+        title: "Não foi possível excluir",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir os veículos.",
+      });
+    } finally {
+      setExcluindoSelecionados(false);
+    }
+  }
+
+  const todosVeiculosVisiveisSelecionados =
+    veiculos.length > 0 &&
+    veiculos.every((veiculo) =>
+      idsSelecionados.includes(veiculo.id)
+    );
   if (carregando) {
     return (
       <View
@@ -181,9 +328,15 @@ export default function Veiculos() {
           onChangeText={setBusca}
           placeholder="Buscar veículos..."
           onSearch={realizarBusca}
-          onFilterPress={() => setFiltrosAberto(true)}
+          onFilterPress={() => {
+            sairModoSelecao();
+            setFiltrosAberto(true);
+          }}
+          onClear={() => {
+            sairModoSelecao();
+            setBuscaAplicada("");
+          }}
           filterActive={filtrosAtivos()}
-          onClear={() => setBuscaAplicada("")}
         />
 
         <View style={styles.topRow}>
@@ -258,6 +411,138 @@ export default function Veiculos() {
           </View>
         )}
 
+        {temPermissao("VEICULOS", "EXCLUIR") &&
+          veiculos.length > 0 ? (
+            modoSelecao ? (
+              <View
+                style={[
+                  styles.selectionToolbar,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.borda,
+                  },
+                ]}
+              >
+                <View style={styles.selectionInfo}>
+                  <Text
+                    weight="SemiBold"
+                    style={styles.selectionTitle}
+                  >
+                    {idsSelecionados.length} selecionado(s)
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.selectionSubtitle,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    Escolha os veículos que deseja excluir.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={selecionarTodosVisiveis}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectAllButton,
+                    { borderColor: theme.borda },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.selectAllText,
+                      { color: theme.texto },
+                    ]}
+                  >
+                    {todosVeiculosVisiveisSelecionados
+                      ? "LIMPAR"
+                      : "TODOS"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={confirmarExclusaoSelecionados}
+                  disabled={
+                    idsSelecionados.length === 0 ||
+                    excluindoSelecionados
+                  }
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor: "#EF4444",
+                      opacity:
+                        idsSelecionados.length === 0 ||
+                        excluindoSelecionados
+                          ? 0.5
+                          : 1,
+                    },
+                  ]}
+                >
+                  {excluindoSelecionados ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFFFFF"
+                    />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={sairModoSelecao}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor:
+                        theme.backgroundContainer,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={theme.textoContainer}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={abrirModoSelecao}
+                style={[
+                  styles.selectionStartButton,
+                  { borderColor: theme.borda },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={19}
+                  color={theme.texto}
+                />
+
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.selectionStartText,
+                    { color: theme.texto },
+                  ]}
+                >
+                  SELECIONAR VEÍCULOS
+                </Text>
+              </TouchableOpacity>
+            )
+          ) : null}
+
         {erro === "" &&
         veiculos.length === 0 ? (
           <View
@@ -300,9 +585,14 @@ export default function Veiculos() {
               <TouchableOpacity
                 key={veiculo.id}
                 activeOpacity={0.8}
-                onPress={() =>
-                  abrirVeiculo(veiculo.id)
-                }
+                onPress={() => {
+                  if (modoSelecao) {
+                    alternarVeiculoSelecionado(veiculo.id);
+                    return;
+                  }
+
+                  abrirVeiculo(veiculo.id);
+                }}
                 style={[
                   styles.item,
                   {
@@ -357,14 +647,59 @@ export default function Veiculos() {
                       .filter(Boolean)
                       .join(" • ")}
                   </Text>
+                  {veiculo.contatos_vinculados > 0 ? (
+                  <View style={styles.linkedInfo}>
+                    <Ionicons
+                      name="link-outline"
+                      size={13}
+                      color="#F59E0B"
+                    />
 
+                    <Text
+                      weight="Medium"
+                      style={[
+                        styles.linkedText,
+                        { color: "#F59E0B" },
+                      ]}
+                    >
+                      Vinculado a {veiculo.contatos_vinculados}{" "}
+                      {veiculo.contatos_vinculados === 1
+                        ? "contato"
+                        : "contatos"}
+                    </Text>
+                  </View>
+                ) : null}
                 </View>
 
-                <Ionicons
-                  name="chevron-forward-outline"
-                  size={21}
-                  color={theme.texto}
-                />
+                {modoSelecao ? (
+                  <View
+                    style={[
+                      styles.selectionCheckbox,
+                      {
+                        borderColor: idsSelecionados.includes(veiculo.id)
+                          ? theme.backgroundContainer
+                          : theme.borda,
+                        backgroundColor: idsSelecionados.includes(veiculo.id)
+                          ? theme.backgroundContainer
+                          : theme.background,
+                      },
+                    ]}
+                  >
+                    {idsSelecionados.includes(veiculo.id) ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={theme.textoContainer}
+                      />
+                    ) : null}
+                  </View>
+                ) : (
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={21}
+                    color={theme.texto}
+                  />
+                )}
               </TouchableOpacity>
             ))}
 
@@ -388,6 +723,27 @@ export default function Veiculos() {
         onClose={() => setFiltrosAberto(false)}
         onApply={aplicarFiltros}
       />
+
+      <FeedbackAlert
+        visible={feedback !== null}
+        variant={feedback?.variant ?? "info"}
+        title={feedback?.title ?? ""}
+        message={feedback?.message ?? ""}
+        primaryLabel={feedback?.primaryLabel}
+        secondaryLabel={feedback?.secondaryLabel}
+        primaryDanger={feedback?.primaryDanger}
+        loading={excluindoSelecionados}
+        onClose={fecharFeedback}
+        onPrimary={() => {
+          if (feedback?.onPrimary) {
+            void feedback.onPrimary();
+            return;
+          }
+
+          fecharFeedback();
+        }}
+        onSecondary={fecharFeedback}
+      />
     </View>
   );
 }
@@ -406,15 +762,97 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 15,
+    gap: 10,
+    marginBottom: 12,
   },
 
   count: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 13,
   },
 
+  linkedInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 5,
+  },
+
+  linkedText: {
+    fontSize: 11,
+  },
+
+  selectionStartButton: {
+    minHeight: 42,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  selectionStartText: {
+    fontSize: 12,
+  },
+
+  selectionToolbar: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+
+  selectionInfo: {
+    flex: 1,
+  },
+
+  selectionTitle: {
+    fontSize: 13,
+  },
+
+  selectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  selectAllButton: {
+    height: 36,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+
+  selectAllText: {
+    fontSize: 11,
+  },
+
+  selectionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  selectionCheckbox: {
+    width: 25,
+    height: 25,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   newButton: {
-    width: 85,
+    width: 90,
   },
 
   item: {

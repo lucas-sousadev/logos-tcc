@@ -508,3 +508,45 @@ export async function importarJornalistas(
 
   return dados;
 }
+
+export interface ExcluirJornalistasEmLoteResponse {
+  success: boolean;
+  message: string;
+  excluidos: number;
+}
+
+export async function excluirJornalistasEmLote(
+  ids: number[]
+): Promise<ExcluirJornalistasEmLoteResponse> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/excluir-lote`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids }),
+    }
+  );
+
+  const textoResposta = await response.text();
+
+  let dados: ExcluirJornalistasEmLoteResponse;
+
+  try {
+    dados = JSON.parse(textoResposta);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (!response.ok || !dados.success) {
+    throw new Error(
+      dados.message ||
+        "Não foi possível excluir os contatos."
+    );
+  }
+
+  return dados;
+}

@@ -246,6 +246,93 @@ class VeiculoController
         }
     }
 
+    public function excluirEmLote(): void
+    {
+        header(
+            'Content-Type: application/json; charset=utf-8'
+        );
+
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            http_response_code(401);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Usuário não autenticado.',
+            ]);
+
+            return;
+        }
+
+        $dados = json_decode(
+            file_get_contents('php://input'),
+            true
+        );
+
+        if (!is_array($dados)) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'JSON inválido.',
+            ]);
+
+            return;
+        }
+
+        if (
+            !array_key_exists('ids', $dados) ||
+            !is_array($dados['ids'])
+        ) {
+            http_response_code(422);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Informe os veículos que deseja excluir.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $excluidos = VeiculoService::excluirEmLote(
+                (int) $usuario->assessoria_id,
+                $dados['ids']
+            );
+
+            echo json_encode([
+                'success' => true,
+                'message' => $excluidos === 1
+                    ? 'Veículo excluído com sucesso.'
+                    : "{$excluidos} veículos excluídos com sucesso.",
+                'excluidos' => $excluidos,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\RuntimeException $e) {
+            http_response_code(409);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Não foi possível excluir os veículos selecionados.',
+            ]);
+        }
+    }
+
     public function excluir(
         array $dados
     ): void {
