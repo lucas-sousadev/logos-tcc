@@ -245,6 +245,16 @@ $router->put(
     ]
 );
 
+$router->post(
+    "/api/veiculos/{id}/atualizar-com-logo",
+    "VeiculoController:atualizarComLogo",
+    "VEICULOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
 $router->delete(
     "/api/veiculos/{id}",
     "VeiculoController:excluir",
@@ -259,6 +269,68 @@ $router->delete(
     '/api/veiculos/excluir-lote',
     'VeiculoController:excluirEmLote',
     'VEICULOS.EXCLUIR',
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+// clientes
+
+$router->get(
+    "/api/clientes",
+    "ClienteController:listar",
+    "CLIENTES.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->get(
+    "/api/clientes/{id}",
+    "ClienteController:buscar",
+    "CLIENTES.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/clientes",
+    "ClienteController:criar",
+    "CLIENTES.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/clientes/{id}/atualizar-com-logo",
+    "ClienteController:atualizarComLogo",
+    "CLIENTES.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/clientes/{id}",
+    "ClienteController:excluir",
+    "CLIENTES.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/clientes/excluir-lote",
+    "ClienteController:excluirEmLote",
+    "CLIENTES.EXCLUIR",
     middleware: [
         $authMiddleware,
         $permissionMiddleware

@@ -20,9 +20,16 @@ export interface Veiculo {
 export interface DadosVeiculo {
   nome: string;
   descricao?: string;
-  logo_path?: string;
+  logo_path?: string | null;
   alcance?: string;
   ativo?: boolean;
+}
+
+export interface ArquivoLogoVeiculo {
+  uri: string;
+  nome: string;
+  mimeType: string;
+  file?: File;
 }
 
 export interface ListarVeiculosParams {
@@ -150,49 +157,32 @@ export async function buscarVeiculo(
 }
 
 export async function criarVeiculo(
-  dados: DadosVeiculo
+  dados: DadosVeiculo,
+  logo?: ArquivoLogoVeiculo
 ): Promise<Veiculo> {
-  const response =
-    await authenticatedFetch(
-      `${API_URL}/api/veiculos`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(dados),
-      }
-    );
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos`,
+    logo
+      ? {
+          method: "POST",
+          body: criarFormDataVeiculo(
+            dados,
+            logo
+          ),
+        }
+      : {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(dados),
+        }
+  );
 
-  const responseText =
-    await response.text();
-
-  let data: {
-    success: boolean;
-    message?: string;
-    veiculo?: Veiculo;
-  };
-
-  try {
-    data = JSON.parse(responseText);
-  } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
-  }
-
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.veiculo
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível criar o veículo."
-    );
-  }
-
-  return data.veiculo;
+  return lerRespostaVeiculo(
+    response,
+    "Não foi possível criar o veículo."
+  );
 }
 
 export async function atualizarVeiculo(
@@ -240,6 +230,30 @@ export async function atualizarVeiculo(
   }
 
   return data.veiculo;
+}
+
+export async function atualizarVeiculoComLogo(
+  id: number,
+  dados: DadosVeiculo,
+  logo?: ArquivoLogoVeiculo,
+  removerLogo = false
+): Promise<Veiculo> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/${id}/atualizar-com-logo`,
+    {
+      method: "POST",
+      body: criarFormDataVeiculo(
+        dados,
+        logo,
+        removerLogo
+      ),
+    }
+  );
+
+  return lerRespostaVeiculo(
+    response,
+    "Não foi possível atualizar o veículo."
+  );
 }
 
 export async function excluirVeiculo(
@@ -317,4 +331,98 @@ export async function excluirVeiculosEmLote(
   }
 
   return dados;
+}
+
+
+export function obterUrlLogoVeiculo(
+  logoPath?: string | null
+): string | null {
+  const caminho = logoPath?.trim();
+
+  if (!caminho) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(caminho)) {
+    return caminho;
+  }
+
+  return (
+    `${API_URL}/` +
+    caminho.replace(/^\/+/, "")
+  );
+}
+
+function criarFormDataVeiculo(
+  dados: DadosVeiculo,
+  logo?: ArquivoLogoVeiculo,
+  removerLogo = false
+): FormData {
+  const formData = new FormData();
+
+  formData.append("nome", dados.nome);
+  formData.append(
+    "descricao",
+    dados.descricao ?? ""
+  );
+  formData.append(
+    "alcance",
+    dados.alcance ?? ""
+  );
+  formData.append(
+    "ativo",
+    String(dados.ativo ?? true)
+  );
+
+  if (removerLogo) {
+    formData.append("remover_logo", "true");
+  }
+
+  if (logo) {
+    const arquivo = logo.file ?? {
+      uri: logo.uri,
+      name: logo.nome,
+      type: logo.mimeType,
+    };
+
+    formData.append(
+      "logo",
+      arquivo as unknown as Blob
+    );
+  }
+
+  return formData;
+}
+
+async function lerRespostaVeiculo(
+  response: Response,
+  mensagemPadrao: string
+): Promise<Veiculo> {
+  const responseText = await response.text();
+
+  let data: {
+    success: boolean;
+    message?: string;
+    veiculo?: Veiculo;
+  };
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (
+    !response.ok ||
+    !data.success ||
+    !data.veiculo
+  ) {
+    throw new Error(
+      data.message || mensagemPadrao
+    );
+  }
+
+  return data.veiculo;
 }

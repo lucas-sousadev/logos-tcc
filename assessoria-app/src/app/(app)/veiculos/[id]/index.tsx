@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Switch,
   View,
+  Image
 } from "react-native";
 
 import { useEffect, useState } from "react";
@@ -17,13 +18,19 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import LogoPicker from "@/components/forms/LogoPicker";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   atualizarVeiculo,
+  atualizarVeiculoComLogo,
   buscarVeiculo,
   excluirVeiculo,
+  obterUrlLogoVeiculo,
   Veiculo,
+} from "@/services/api/veiculo";
+import type {
+  ArquivoLogoVeiculo,
 } from "@/services/api/veiculo";
 import {
   ErrosVeiculo,
@@ -61,7 +68,9 @@ export default function VeiculoDetalhes() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
+  const [logoRemovido, setLogoRemovido] = useState(false);
   useEffect(() => {
     carregarVeiculo();
   }, [id]);
@@ -99,8 +108,10 @@ export default function VeiculoDetalhes() {
           : "Não foi possível carregar o veículo."
       );
       router.back();
-    } finally {
+    } finally { 
       setCarregando(false);
+      setNovoLogo(null);
+      setLogoRemovido(false); 
     }
   }
 
@@ -112,6 +123,13 @@ export default function VeiculoDetalhes() {
   }
 
   function campoAlterado(campo: keyof Formulario) {
+    if (campo === "logo_path") {
+      return (
+        novoLogo !== null ||
+        logoRemovido
+      );
+    }
+
     return formularioOriginal
       ? formulario[campo] !== formularioOriginal[campo]
       : false;
@@ -124,15 +142,32 @@ export default function VeiculoDetalhes() {
     setFormularioOriginal(original);
     setErros({});
     setErroGeral("");
+    setNovoLogo(null);
+    setLogoRemovido(false);
     setModoEdicao(false);
   }
 
   function camposAlterados(): (keyof Formulario)[] {
-    if (!formularioOriginal) return [];
+    if (!formularioOriginal) {
+      return [];
+    }
 
-    return (Object.keys(formulario) as (keyof Formulario)[]).filter(
-      (campo) => formulario[campo] !== formularioOriginal[campo]
+    const campos = (
+      Object.keys(formulario) as (keyof Formulario)[]
+    ).filter(
+      (campo) =>
+        formulario[campo] !==
+        formularioOriginal[campo]
     );
+
+    if (
+      (novoLogo !== null || logoRemovido) &&
+      !campos.includes("logo_path")
+    ) {
+      campos.push("logo_path");
+    }
+
+    return campos;
   }
 
   function handleBack() {
@@ -167,7 +202,8 @@ export default function VeiculoDetalhes() {
       campo = "alcance";
     } else if (
       texto.includes("logo") ||
-      texto.includes("caminho")
+      texto.includes("caminho") ||
+      texto.includes("imagem")
     ) {
       campo = "logo_path";
     }
@@ -187,7 +223,9 @@ export default function VeiculoDetalhes() {
       nome: formulario.nome,
       descricao: formulario.descricao,
       alcance: formulario.alcance,
-      logo_path: formulario.logo_path,
+      logo_path: logoRemovido
+        ? ""
+        : formulario.logo_path,
     });
 
     setErros(errosValidacao);
@@ -199,20 +237,46 @@ export default function VeiculoDetalhes() {
 
     try {
       setSalvando(true);
-      const atualizado = await atualizarVeiculo(veiculo.id, {
+
+      const dadosAtualizacao = {
         nome: formulario.nome.trim(),
-        descricao: formulario.descricao.trim() || undefined,
-        logo_path: formulario.logo_path.trim() || undefined,
-        alcance: formulario.alcance.trim() || undefined,
+        descricao:
+          formulario.descricao.trim() || undefined,
+        logo_path: logoRemovido
+          ? null
+          : formulario.logo_path.trim() || undefined,
+        alcance:
+          formulario.alcance.trim() || undefined,
         ativo: formulario.ativo,
-      });
-      const novoFormulario = dadosFormulario(atualizado);
+      };
+
+      const atualizado =
+        novoLogo !== null || logoRemovido
+          ? await atualizarVeiculoComLogo(
+              veiculo.id,
+              dadosAtualizacao,
+              novoLogo ?? undefined,
+              logoRemovido
+            )
+          : await atualizarVeiculo(
+              veiculo.id,
+              dadosAtualizacao
+            );
+
+      const novoFormulario =
+        dadosFormulario(atualizado);
 
       setVeiculo(atualizado);
+      setNovoLogo(null);
+      setLogoRemovido(false);
       setFormulario(novoFormulario);
       setFormularioOriginal(novoFormulario);
       setModoEdicao(false);
-      Alert.alert("Sucesso", "Veículo atualizado com sucesso.");
+
+      Alert.alert(
+        "Sucesso",
+        "Veículo atualizado com sucesso."
+      );
     } catch (error) {
       const mensagem =
         error instanceof Error
@@ -286,6 +350,10 @@ export default function VeiculoDetalhes() {
 
   if (!veiculo) return null;
 
+  const logoPerfil = obterUrlLogoVeiculo(
+    veiculo.logo_path
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Header
@@ -305,11 +373,19 @@ export default function VeiculoDetalhes() {
               { backgroundColor: theme.backgroundContainer },
             ]}
           >
-            <Ionicons
-              name="newspaper-outline"
-              size={29}
-              color={theme.textoContainer}
-            />
+            {logoPerfil ? (
+              <Image
+                source={{ uri: logoPerfil }}
+                style={styles.logoProfileImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Ionicons
+                name="newspaper-outline"
+                size={29}
+                color={theme.textoContainer}
+              />
+            )}
           </View>
 
           <View style={styles.profileInfo}>
@@ -397,18 +473,29 @@ export default function VeiculoDetalhes() {
               showChanged={campoAlterado("alcance")}
             />
 
-            <Input
-              label="URL OU CAMINHO DO LOGO"
-              value={formulario.logo_path}
-              onChangeText={(texto) => {
-                atualizarCampo("logo_path", texto);
+            <LogoPicker
+              logoAtualUri={
+                logoRemovido
+                  ? null
+                  : obterUrlLogoVeiculo(
+                      formulario.logo_path
+                    )
+              }
+              logoSelecionado={novoLogo}
+              onSelect={(arquivo) => {
+                setNovoLogo(arquivo);
+                setLogoRemovido(false);
                 limparErro("logo_path");
               }}
+              onRemove={() => {
+                setNovoLogo(null);
+                setLogoRemovido(
+                  Boolean(formulario.logo_path)
+                );
+                limparErro("logo_path");
+              }}
+              disabled={salvando}
               error={erros.logo_path}
-              placeholder="https://exemplo.com/logo.png"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
               showChanged={campoAlterado("logo_path")}
             />
 
@@ -482,8 +569,12 @@ export default function VeiculoDetalhes() {
             />
             <InfoRow
               icon="image-outline"
-              label="URL OU CAMINHO DO LOGO"
-              value={veiculo.logo_path || "Não informado"}
+              label="LOGO"
+              value={
+                veiculo.logo_path
+                  ? "Logo cadastrado"
+                  : "Não informado"
+              }
             />
             <View style={styles.actions}>
               {temPermissao("VEICULOS", "EDITAR") && (
@@ -582,6 +673,11 @@ const styles = StyleSheet.create({
     fontSize: 12, 
     marginTop: 3 
 },
+  logoProfileImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 32,
+  },
   statusBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 9,

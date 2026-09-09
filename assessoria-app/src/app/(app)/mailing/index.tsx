@@ -65,6 +65,8 @@ interface FeedbackState {
   onPrimary?: () => void;
 }
 
+const LIMITE_SELECAO_EM_LOTE = 100;
+
 export default function Mailing() {
   const router = useRouter();
   const [exportando, setExportando] = useState(false);
@@ -533,11 +535,32 @@ export default function Mailing() {
   }
 
   function alternarContatoSelecionado(id: number) {
-    setIdsSelecionados((atual) =>
-      atual.includes(id)
-        ? atual.filter((item) => item !== id)
-        : [...atual, id]
-    );
+    if (idsSelecionados.includes(id)) {
+      setIdsSelecionados((atual) =>
+        atual.filter((item) => item !== id)
+      );
+
+      return;
+    }
+
+    if (
+      idsSelecionados.length >=
+      LIMITE_SELECAO_EM_LOTE
+    ) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Limite de seleção atingido",
+        message:
+          "Você pode selecionar até 100 contatos por vez. Desmarque algum contato antes de selecionar outro.",
+      });
+
+      return;
+    }
+
+    setIdsSelecionados((atual) => [
+      ...atual,
+      id,
+    ]);
   }
 
   function selecionarTodosVisiveis() {
@@ -551,17 +574,43 @@ export default function Mailing() {
         idsSelecionados.includes(id)
       );
 
-    setIdsSelecionados((atual) => {
-      if (todosSelecionados) {
-        return atual.filter(
-          (id) => !idsVisiveis.includes(id)
-        );
-      }
+    if (
+      todosSelecionados ||
+      idsSelecionados.length >=
+        LIMITE_SELECAO_EM_LOTE
+    ) {
+      setIdsSelecionados([]);
+      return;
+    }
 
-      return Array.from(
-        new Set([...atual, ...idsVisiveis])
-      );
-    });
+    const vagasRestantes =
+      LIMITE_SELECAO_EM_LOTE -
+      idsSelecionados.length;
+
+    const idsParaAdicionar = idsVisiveis
+      .filter(
+        (id) => !idsSelecionados.includes(id)
+      )
+      .slice(0, vagasRestantes);
+
+    setIdsSelecionados((atual) => [
+      ...atual,
+      ...idsParaAdicionar,
+    ]);
+
+    const existemMaisVisiveis =
+      idsVisiveis.filter(
+        (id) => !idsSelecionados.includes(id)
+      ).length > idsParaAdicionar.length;
+
+    if (existemMaisVisiveis) {
+      mostrarFeedback({
+        variant: "info",
+        title: "Limite de seleção atingido",
+        message:
+          "Foram selecionados os primeiros contatos disponíveis até o limite de 100 por exclusão.",
+      });
+    }
   }
 
   function confirmarExclusaoSelecionados() {
@@ -798,7 +847,8 @@ export default function Mailing() {
               >
                 <View style={styles.selectionInfo}>
                   <Text weight="SemiBold" style={styles.selectionTitle}>
-                    {idsSelecionados.length} selecionado(s)
+                    {idsSelecionados.length} de{" "}
+                    {LIMITE_SELECAO_EM_LOTE} selecionado(s)
                   </Text>
 
                   <Text
@@ -827,7 +877,9 @@ export default function Mailing() {
                       { color: theme.texto },
                     ]}
                   >
-                    {todosVisiveisSelecionados
+                    {todosVisiveisSelecionados ||
+                    idsSelecionados.length >=
+                      LIMITE_SELECAO_EM_LOTE
                       ? "LIMPAR"
                       : "TODOS"}
                   </Text>

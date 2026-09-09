@@ -4,6 +4,7 @@ namespace Logos\AssessoriaApi\Controllers;
 
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\VeiculoService;
+use Logos\AssessoriaApi\Services\LogoVeiculoService;
 
 class VeiculoController
 {
@@ -103,28 +104,35 @@ class VeiculoController
 
         $usuario = AuthContext::get();
 
-        $dados = json_decode(
-            file_get_contents('php://input'),
-            true
-        );
+        $dados = $this->dadosDaRequisicao();
 
         if (!is_array($dados)) {
             http_response_code(400);
 
             echo json_encode([
                 'success' => false,
-                'message' => 'JSON inválido.'
+                'message' => 'Dados inválidos.',
             ]);
 
             return;
         }
 
+        $logoNovo = null;
+
         try {
-            $veiculo =
-                VeiculoService::criar(
-                    (int) $usuario->assessoria_id,
-                    $dados
+            if (isset($_FILES['logo'])) {
+                $logoNovo = LogoVeiculoService::salvar(
+                    $_FILES['logo'],
+                    (int) $usuario->assessoria_id
                 );
+
+                $dados['logo_path'] = $logoNovo;
+            }
+
+            $veiculo = VeiculoService::criar(
+                (int) $usuario->assessoria_id,
+                $dados
+            );
 
             http_response_code(201);
 
@@ -132,29 +140,43 @@ class VeiculoController
                 'success' => true,
                 'message' =>
                     'Veículo criado com sucesso.',
-                'veiculo' => $veiculo
+                'veiculo' => $veiculo,
             ]);
         } catch (\InvalidArgumentException $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
             http_response_code(422);
 
             echo json_encode([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ]);
         } catch (\RuntimeException $e) {
-            http_response_code(409);
+            LogoVeiculoService::excluir($logoNovo);
+
+            $mensagem = mb_strtolower($e->getMessage());
+
+            $status = str_contains($mensagem, 'cadastrado')
+                ? 409
+                : 500;
+
+            http_response_code($status);
 
             echo json_encode([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $status === 409
+                    ? $e->getMessage()
+                    : 'Não foi possível criar o veículo.',
             ]);
         } catch (\Throwable $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
             http_response_code(500);
 
             echo json_encode([
                 'success' => false,
                 'message' =>
-                    'Não foi possível criar o veículo.'
+                    'Não foi possível criar o veículo.',
             ]);
         }
     }
@@ -242,6 +264,143 @@ class VeiculoController
                 'success' => false,
                 'message' =>
                     'Não foi possível atualizar o veículo.'
+            ]);
+        }
+    }
+    
+    public function atualizarComLogo(
+        array $dadosRota
+    ): void {
+        header(
+            'Content-Type: application/json; charset=utf-8'
+        );
+
+        $usuario = AuthContext::get();
+
+        $id = filter_var(
+            $dadosRota['id'] ?? null,
+            FILTER_VALIDATE_INT
+        );
+
+        if (!$id) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'ID de veículo inválido.',
+            ]);
+
+            return;
+        }
+
+        $dados = $_POST;
+
+        $logoNovo = null;
+
+        try {
+            $anterior = VeiculoService::buscarPorId(
+                $id,
+                (int) $usuario->assessoria_id
+            );
+
+            $removerLogo = filter_var(
+                $dados['remover_logo'] ?? false,
+                FILTER_VALIDATE_BOOLEAN,
+                FILTER_NULL_ON_FAILURE
+            );
+
+            if ($removerLogo === null) {
+                throw new \InvalidArgumentException(
+                    'Opção de remoção do logo inválida.'
+                );
+            }
+
+            if (
+                $removerLogo &&
+                isset($_FILES['logo'])
+            ) {
+                throw new \InvalidArgumentException(
+                    'Escolha entre trocar ou remover o logo.'
+                );
+            }
+
+            if (isset($_FILES['logo'])) {
+                $logoNovo = LogoVeiculoService::salvar(
+                    $_FILES['logo'],
+                    (int) $usuario->assessoria_id
+                );
+
+                $dados['logo_path'] = $logoNovo;
+            } elseif ($removerLogo) {
+                $dados['logo_path'] = null;
+            } else {
+                $dados['logo_path'] =
+                    $anterior['logo_path'] ?? null;
+            }
+
+            $atualizado = VeiculoService::atualizar(
+                $id,
+                (int) $usuario->assessoria_id,
+                $dados
+            );
+
+            if (
+                ($anterior['logo_path'] ?? null) !==
+                ($atualizado['logo_path'] ?? null)
+            ) {
+                LogoVeiculoService::excluir(
+                    $anterior['logo_path'] ?? null
+                );
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' =>
+                    'Veículo atualizado com sucesso.',
+                'veiculo' => $atualizado,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
+            http_response_code(422);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\RuntimeException $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
+            $mensagem = mb_strtolower($e->getMessage());
+
+            $status = str_contains(
+                $mensagem,
+                'não encontrado'
+            )
+                ? 404
+                : (
+                    str_contains($mensagem, 'já existe')
+                        ? 409
+                        : 500
+                );
+
+            http_response_code($status);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $status === 500
+                    ? 'Não foi possível atualizar o veículo.'
+                    : $e->getMessage(),
+            ]);
+        } catch (\Throwable $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
+            http_response_code(500);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Não foi possível atualizar o veículo.',
             ]);
         }
     }
@@ -392,5 +551,25 @@ class VeiculoController
                     'Não foi possível excluir o veículo.'
             ]);
         }
+    }
+
+
+    private function dadosDaRequisicao(): ?array
+    {
+        if (
+            !empty($_POST) ||
+            isset($_FILES['logo'])
+        ) {
+            return $_POST;
+        }
+
+        $dados = json_decode(
+            file_get_contents('php://input'),
+            true
+        );
+
+        return is_array($dados)
+            ? $dados
+            : null;
     }
 }

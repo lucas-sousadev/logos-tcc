@@ -4,6 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Image
 } from "react-native";
 
 import { useCallback, useState } from "react";
@@ -24,6 +25,7 @@ import {
   Veiculo,
   listarVeiculos,
   excluirVeiculosEmLote,
+  obterUrlLogoVeiculo,
 } from "@/services/api/veiculo";
 
 interface FeedbackState {
@@ -35,6 +37,7 @@ interface FeedbackState {
   primaryDanger?: boolean;
   onPrimary?: () => void;
 }
+const LIMITE_SELECAO_EM_LOTE = 100;
 
 export default function Veiculos() {
   const router = useRouter();
@@ -185,11 +188,32 @@ export default function Veiculos() {
   }
 
   function alternarVeiculoSelecionado(id: number) {
-    setIdsSelecionados((atual) =>
-      atual.includes(id)
-        ? atual.filter((item) => item !== id)
-        : [...atual, id]
-    );
+    if (idsSelecionados.includes(id)) {
+      setIdsSelecionados((atual) =>
+        atual.filter((item) => item !== id)
+      );
+
+      return;
+    }
+
+    if (
+      idsSelecionados.length >=
+      LIMITE_SELECAO_EM_LOTE
+    ) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Limite de seleção atingido",
+        message:
+          "Você pode selecionar até 100 veículos por vez. Desmarque algum veículo antes de selecionar outro.",
+      });
+
+      return;
+    }
+
+    setIdsSelecionados((atual) => [
+      ...atual,
+      id,
+    ]);
   }
 
   function selecionarTodosVisiveis() {
@@ -203,17 +227,43 @@ export default function Veiculos() {
         idsSelecionados.includes(id)
       );
 
-    setIdsSelecionados((atual) => {
-      if (todosSelecionados) {
-        return atual.filter(
-          (id) => !idsVisiveis.includes(id)
-        );
-      }
+    if (
+      todosSelecionados ||
+      idsSelecionados.length >=
+        LIMITE_SELECAO_EM_LOTE
+    ) {
+      setIdsSelecionados([]);
+      return;
+    }
 
-      return Array.from(
-        new Set([...atual, ...idsVisiveis])
-      );
-    });
+    const vagasRestantes =
+      LIMITE_SELECAO_EM_LOTE -
+      idsSelecionados.length;
+
+    const idsParaAdicionar = idsVisiveis
+      .filter(
+        (id) => !idsSelecionados.includes(id)
+      )
+      .slice(0, vagasRestantes);
+
+    setIdsSelecionados((atual) => [
+      ...atual,
+      ...idsParaAdicionar,
+    ]);
+
+    const existemMaisVisiveis =
+      idsVisiveis.filter(
+        (id) => !idsSelecionados.includes(id)
+      ).length > idsParaAdicionar.length;
+
+    if (existemMaisVisiveis) {
+      mostrarFeedback({
+        variant: "info",
+        title: "Limite de seleção atingido",
+        message:
+          "Foram selecionados os primeiros veículos disponíveis até o limite de 100 por exclusão.",
+      });
+    }
   }
 
   function confirmarExclusaoSelecionados() {
@@ -428,7 +478,8 @@ export default function Veiculos() {
                     weight="SemiBold"
                     style={styles.selectionTitle}
                   >
-                    {idsSelecionados.length} selecionado(s)
+                    {idsSelecionados.length} de{" "}
+                    {LIMITE_SELECAO_EM_LOTE} selecionado(s)
                   </Text>
 
                   <Text
@@ -457,7 +508,9 @@ export default function Veiculos() {
                       { color: theme.texto },
                     ]}
                   >
-                    {todosVeiculosVisiveisSelecionados
+                    {todosVeiculosVisiveisSelecionados ||
+                    idsSelecionados.length >=
+                      LIMITE_SELECAO_EM_LOTE
                       ? "LIMPAR"
                       : "TODOS"}
                   </Text>
@@ -611,11 +664,24 @@ export default function Veiculos() {
                     },
                   ]}
                 >
-                  <Ionicons
-                    name="newspaper-outline"
-                    size={21}
-                    color={theme.textoContainer}
-                  />
+                  {veiculo.logo_path ? (
+                    <Image
+                      source={{
+                        uri:
+                          obterUrlLogoVeiculo(
+                            veiculo.logo_path
+                          ) ?? "",
+                      }}
+                      style={styles.logoImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Ionicons
+                      name="newspaper-outline"
+                      size={21}
+                      color={theme.textoContainer}
+                    />
+                  )}
                 </View>
 
                 <View style={styles.itemInfo}>
@@ -872,8 +938,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    overflow: "hidden",
   },
-
+  logoImage: {
+    width: "100%",
+    height: "100%",
+  },
   itemInfo: {
     flex: 1,
     marginRight: 10,

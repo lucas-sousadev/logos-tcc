@@ -138,7 +138,15 @@ CREATE TABLE clientes (
     assessoria_id BIGINT UNSIGNED NOT NULL,
 
     nome VARCHAR(150) NOT NULL,
+    email VARCHAR(150) NULL,
+    telefone VARCHAR(30) NULL,
+    CNPJ VARCHAR(18) NULL,
+    site VARCHAR(500) NULL,
+    cidade VARCHAR(100) NULL,
+    estado VARCHAR(100) NULL,
     descricao TEXT NULL,
+    segmento VARCHAR(100) NULL,
+    responsavel VARCHAR(100) NULL,
     logo_path VARCHAR(500) NULL,
 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -153,12 +161,12 @@ CREATE TABLE clientes (
         ON DELETE CASCADE,
         
     UNIQUE KEY uq_cliente_id_assessoria (id, assessoria_id),
+    UNIQUE KEY uq_clientes_assessoria_cnpj (assessoria_id, cnpj),
     
+    INDEX idx_clientes_filtros (assessoria_id, ativo, estado, cidade, segmento);
     INDEX idx_clientes_assessoria (assessoria_id),
     INDEX idx_clientes_nome (nome)
 ) ENGINE=InnoDB;
-
-
 
 -- 7. VEÍCULOS
 

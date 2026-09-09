@@ -314,6 +314,7 @@ function DashboardCard({
   </View>
 
   <Text
+    weight="Medium"
     style={[
       styles.cardLabel,
       { color: theme.texto },
@@ -383,7 +384,7 @@ cardIcon: {
   },
 
   cardLabel: {
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 3,
   },
 
@@ -427,7 +428,7 @@ cardIcon: {
   },
 
   optionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 2,
   },
 

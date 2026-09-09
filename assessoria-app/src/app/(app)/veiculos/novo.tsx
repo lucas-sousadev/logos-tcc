@@ -12,21 +12,23 @@ import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import LogoPicker from "@/components/forms/LogoPicker";
+
+import { ArquivoLogoVeiculo, criarVeiculo } from "@/services/api/veiculo";
 import { useTheme } from "@/contexts/ThemeContext";
-import { criarVeiculo } from "@/services/api/veiculo";
 
 export default function NovoVeiculo() {
   const router = useRouter();
   const { theme } = useTheme();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [logoPath, setLogoPath] = useState("");
   const [alcance, setAlcance] = useState("");
   const [ativo, setAtivo] = useState(true);
   const [erroNome, setErroNome] = useState("");
   const [erroGeral, setErroGeral] = useState("");
   const [salvando, setSalvando] = useState(false);
-
+  const [logo, setLogo] =useState<ArquivoLogoVeiculo | null>(null);
+  
   async function cadastrar() {
     const nomeFormatado = nome.trim();
     setErroNome("");
@@ -42,10 +44,11 @@ export default function NovoVeiculo() {
       await criarVeiculo({
         nome: nomeFormatado,
         descricao: descricao.trim() || undefined,
-        logo_path: logoPath.trim() || undefined,
         alcance: alcance.trim() || undefined,
         ativo,
-      });
+      },
+        logo ?? undefined
+    );
       router.replace("/veiculos");
     } catch (error) {
       setErroGeral(
@@ -111,14 +114,11 @@ export default function NovoVeiculo() {
           textAlignVertical="top"
           style={styles.textArea}
         />
-        <Input
-          label="URL OU CAMINHO DO LOGO"
-          value={logoPath}
-          onChangeText={setLogoPath}
-          placeholder="https://exemplo.com/logo.png"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
+        <LogoPicker
+          logoSelecionado={logo}
+          onSelect={setLogo}
+          onRemove={() => setLogo(null)}
+          disabled={salvando}
         />
 
         <View style={[styles.statusRow, { borderColor: theme.borda }]}>
