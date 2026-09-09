@@ -5,8 +5,8 @@ import {
   View,
 } from "react-native";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
@@ -17,6 +17,7 @@ import { listarJornalistas } from "@/services/api/jornalista";
 import { Funcionario, getToken } from "@/services/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { listarClientes, } from "@/services/api/cliente";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -34,62 +35,105 @@ export default function Dashboard() {
     useState<Funcionario[]>([]);
   const [totalContatos, setTotalContatos] =
     useState(0);
+  const [totalClientes, setTotalClientes] =useState(0); 
 
-  useEffect(() => {
-    async function carregarFuncionarios() {
-      if (!temPermissao("USUARIOS", "VISUALIZAR")) {
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      let cancelado = false;
 
-      try {
-        const resposta = await listarFuncionarios({
-          page: 1,
-          limit: 1,
-        });
-
-        setTotalFuncionarios(
-          resposta.pagination.total
-        );
-      } catch (error) {
-        console.error(
-          "Erro ao carregar funcionários:",
-          error
-        );
-      }
-    }
-
-    carregarFuncionarios();
-  }, []);
-
-  useEffect(() => {
-    async function carregarTotalContatos() {
-      if (
-          !temPermissao("MAILING", "VISUALIZAR")
+      async function carregarTotais() {
+        if (
+          temPermissao(
+            "USUARIOS",
+            "VISUALIZAR"
+          )
         ) {
-          return;
+          try {
+            const resposta =
+              await listarFuncionarios({
+                page: 1,
+                limit: 1,
+              });
+
+            if (!cancelado) {
+              setTotalFuncionarios(
+                resposta.pagination.total
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Erro ao carregar funcionários:",
+              error
+            );
+          }
         }
 
-      try {
-        const resposta = await listarJornalistas({
-          page: 1,
-          limit: 1,
-          ativo: 1,
-        });
+        if (
+          temPermissao(
+            "MAILING",
+            "VISUALIZAR"
+          )
+        ) {
+          try {
+            const resposta =
+              await listarJornalistas({
+                page: 1,
+                limit: 1,
+                ativo: 1,
+              });
 
-        setTotalContatos(
-          resposta.pagination.total
-        );
-      } catch (error) {
-        console.error(
-          "Erro ao carregar total de contatos:",
-          error
-        );
+            if (!cancelado) {
+              setTotalContatos(
+                resposta.pagination.total
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Erro ao carregar total de contatos:",
+              error
+            );
+          }
+        }
+
+        if (
+          temPermissao(
+            "CLIENTES",
+            "VISUALIZAR"
+          )
+        ) {
+          try {
+            const resposta =
+              await listarClientes({
+                page: 1,
+                limit: 1,
+                ativo: 1,
+              });
+
+            if (!cancelado) {
+              setTotalClientes(
+                resposta.pagination.total
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Erro ao carregar total de clientes:",
+              error
+            );
+          }
+        }
       }
-    }
 
-    carregarTotalContatos();
-  }, []);
-  
+      void carregarTotais();
+
+      return () => {
+        cancelado = true;
+      };
+    }, [
+      listarFuncionarios,
+      temPermissao,
+    ])
+  );
+
   useEffect(() => {
     async function mostrarToken() {
       const token = await getToken();
@@ -154,7 +198,7 @@ export default function Dashboard() {
 
           {temPermissao("CLIENTES", "VISUALIZAR") ? (
             <DashboardCard
-              value="0"
+              value={String(totalClientes)}
               label="Clientes"
               icon="business-outline"
               onPress={() => router.push("/clientes")}

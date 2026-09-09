@@ -48,6 +48,10 @@ class ClienteController
                 500,
                 'Não foi possível carregar os clientes.'
             );
+            error_log(
+                'Erro ao listar clientes: ' .
+                $e->getMessage()
+            );
         }
     }
 

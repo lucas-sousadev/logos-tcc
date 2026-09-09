@@ -23,15 +23,28 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-
+import ClienteFilterModal, { FiltrosClientes } from "@/components/ui/Filtros/ClienteFilterModal";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-
+import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
 import {
   Cliente,
   listarClientes,
   obterUrlLogoCliente,
+  excluirClientesEmLote,
 } from "@/services/api/cliente";
+
+interface FeedbackState {
+  variant: FeedbackAlertVariant;
+  title: string;
+  message: string;
+  primaryLabel?: string;
+  secondaryLabel?: string;
+  primaryDanger?: boolean;
+  onPrimary?: () => void;
+}
+
+const LIMITE_SELECAO_EM_LOTE = 100;
 
 export default function Clientes() {
   const router = useRouter();
@@ -41,7 +54,15 @@ export default function Clientes() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] =
     useState("");
-
+  
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
+  const [filtros, setFiltros] =
+  useState<FiltrosClientes>({
+    estado: "",
+    cidade: "",
+    segmento: "",
+    ativo: undefined,
+  });
   const [clientes, setClientes] = useState<
     Cliente[]
   >([]);
@@ -57,6 +78,16 @@ export default function Clientes() {
   const [total, setTotal] = useState(0);
 
   const [erro, setErro] = useState("");
+  const [modoSelecao, setModoSelecao] = useState(false);
+
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
+
+  const [
+    excluindoSelecionados,
+    setExcluindoSelecionados,
+  ] = useState(false);
+
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null); 
 
   const carregarClientes = useCallback(
     async (
@@ -80,6 +111,10 @@ export default function Clientes() {
           page: paginaAtual,
           limit: 50,
           busca: buscaAtual,
+          estado: filtros.estado,
+          cidade: filtros.cidade,
+          segmento: filtros.segmento,
+          ativo: filtros.ativo,
         });
 
         if (reset) {
@@ -115,21 +150,41 @@ export default function Clientes() {
         setCarregandoMais(false);
       }
     },
-    [pagina, buscaAplicada]
+        [
+      pagina,
+      buscaAplicada,
+      filtros.estado,
+      filtros.cidade,
+      filtros.segmento,
+      filtros.ativo,
+    ]
   );
 
   useFocusEffect(
     useCallback(() => {
       void carregarClientes(true);
-    }, [buscaAplicada])
+
+      return () => {
+        setIdsSelecionados([]);
+        setModoSelecao(false);
+      };
+    }, [
+      buscaAplicada,
+      filtros.estado,
+      filtros.cidade,
+      filtros.segmento,
+      filtros.ativo,
+    ])
   );
 
   function realizarBusca() {
+    sairModoSelecao();
     setPagina(1);
     setBuscaAplicada(busca.trim());
   }
 
   function limparBusca() {
+    sairModoSelecao();
     setPagina(1);
     setBuscaAplicada("");
   }
@@ -142,6 +197,195 @@ export default function Clientes() {
       },
     });
   }
+
+  function aplicarFiltros(
+    novosFiltros: FiltrosClientes
+  ) {
+    sairModoSelecao();
+    setPagina(1);
+    setFiltros(novosFiltros);
+    setFiltrosAberto(false);
+  }
+
+  function filtrosAtivos() {
+    return (
+      filtros.ativo !== undefined ||
+      filtros.estado.trim() !== "" ||
+      filtros.cidade.trim() !== "" ||
+      filtros.segmento.trim() !== ""
+    );
+  }
+
+  function mostrarFeedback(
+  dados: FeedbackState
+) {
+  setFeedback(dados);
+}
+
+function fecharFeedback() {
+  setFeedback(null);
+}
+
+function abrirModoSelecao() {
+  setIdsSelecionados([]);
+  setModoSelecao(true);
+}
+
+function sairModoSelecao() {
+  setIdsSelecionados([]);
+  setModoSelecao(false);
+}
+
+function alternarClienteSelecionado(id: number) {
+  if (idsSelecionados.includes(id)) {
+    setIdsSelecionados((atual) =>
+      atual.filter((item) => item !== id)
+    );
+
+    return;
+  }
+
+  if (
+    idsSelecionados.length >=
+    LIMITE_SELECAO_EM_LOTE
+  ) {
+    mostrarFeedback({
+      variant: "warning",
+      title: "Limite de seleção atingido",
+      message:
+        "Você pode selecionar até 100 clientes por vez. Desmarque algum cliente antes de selecionar outro.",
+    });
+
+    return;
+  }
+
+  setIdsSelecionados((atual) => [
+    ...atual,
+    id,
+  ]);
+}
+
+  function selecionarTodosVisiveis() {
+    const idsVisiveis = clientes.map(
+      (cliente) => cliente.id
+    );
+
+    const todosSelecionados =
+      idsVisiveis.length > 0 &&
+      idsVisiveis.every((id) =>
+        idsSelecionados.includes(id)
+      );
+
+    if (
+      todosSelecionados ||
+      idsSelecionados.length >=
+        LIMITE_SELECAO_EM_LOTE
+    ) {
+      setIdsSelecionados([]);
+      return;
+    }
+
+    const vagasRestantes =
+      LIMITE_SELECAO_EM_LOTE -
+      idsSelecionados.length;
+
+    const idsParaAdicionar = idsVisiveis
+      .filter((id) => !idsSelecionados.includes(id))
+      .slice(0, vagasRestantes);
+
+    setIdsSelecionados((atual) => [
+      ...atual,
+      ...idsParaAdicionar,
+    ]);
+
+    const existemMaisVisiveis =
+      idsVisiveis.filter(
+        (id) => !idsSelecionados.includes(id)
+      ).length > idsParaAdicionar.length;
+
+    if (existemMaisVisiveis) {
+      mostrarFeedback({
+        variant: "info",
+        title: "Limite de seleção atingido",
+        message:
+          "Foram selecionados os primeiros clientes disponíveis até o limite de 100 por exclusão.",
+      });
+    }
+  }
+
+  function confirmarExclusaoSelecionados() {
+    const quantidade = idsSelecionados.length;
+
+    if (quantidade === 0) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Nenhum cliente selecionado",
+        message:
+          "Selecione pelo menos um cliente para excluir.",
+      });
+
+      return;
+    }
+
+    mostrarFeedback({
+      variant: "warning",
+      title:
+        quantidade === 1
+          ? "Excluir cliente?"
+          : `Excluir ${quantidade} clientes?`,
+      message:
+        "Essa ação não pode ser desfeita. Caso algum cliente possua registros vinculados, nenhum cliente será excluído.",
+      primaryLabel: "EXCLUIR",
+      secondaryLabel: "CANCELAR",
+      primaryDanger: true,
+      onPrimary: excluirSelecionados,
+    });
+  }
+
+  async function excluirSelecionados() {
+    const ids = [...idsSelecionados];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    fecharFeedback();
+    setExcluindoSelecionados(true);
+
+    try {
+      const resultado =
+        await excluirClientesEmLote(ids);
+
+      sairModoSelecao();
+
+      await carregarClientes(true);
+
+      mostrarFeedback({
+        variant: "success",
+        title: "Clientes excluídos",
+        message:
+          `${resultado.excluidos} cliente(s) ` +
+          "foram excluídos com sucesso.",
+      });
+    } catch (error) {
+      mostrarFeedback({
+        variant: "error",
+        title: "Não foi possível excluir",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir os clientes.",
+      });
+    } finally {
+      setExcluindoSelecionados(false);
+    }
+  }
+
+  const todosClientesVisiveisSelecionados =
+    clientes.length > 0 &&
+    clientes.every((cliente) =>
+      idsSelecionados.includes(cliente.id)
+    );
 
   if (carregando) {
     return (
@@ -186,6 +430,11 @@ export default function Clientes() {
           placeholder="Buscar clientes..."
           onSearch={realizarBusca}
           onClear={limparBusca}
+          onFilterPress={() => {
+            sairModoSelecao();
+            setFiltrosAberto(true);
+          }}
+          filterActive={filtrosAtivos()}
         />
 
         <View style={styles.topRow}>
@@ -257,6 +506,141 @@ export default function Clientes() {
             />
           </View>
         ) : null}
+        
+        {temPermissao("CLIENTES", "EXCLUIR") &&
+          clientes.length > 0 ? (
+            modoSelecao ? (
+              <View
+                style={[
+                  styles.selectionToolbar,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.borda,
+                  },
+                ]}
+              >
+                <View style={styles.selectionInfo}>
+                  <Text
+                    weight="SemiBold"
+                    style={styles.selectionTitle}
+                  >
+                    {idsSelecionados.length} de{" "}
+                    {LIMITE_SELECAO_EM_LOTE} selecionado(s)
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.selectionSubtitle,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    Escolha os clientes que deseja excluir.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={selecionarTodosVisiveis}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectAllButton,
+                    { borderColor: theme.borda },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.selectAllText,
+                      { color: theme.texto },
+                    ]}
+                  >
+                    {todosClientesVisiveisSelecionados ||
+                    idsSelecionados.length >=
+                      LIMITE_SELECAO_EM_LOTE
+                      ? "LIMPAR"
+                      : "TODOS"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={confirmarExclusaoSelecionados}
+                  disabled={
+                    idsSelecionados.length === 0 ||
+                    excluindoSelecionados
+                  }
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor: "#EF4444",
+                      opacity:
+                        idsSelecionados.length === 0 ||
+                        excluindoSelecionados
+                          ? 0.5
+                          : 1,
+                    },
+                  ]}
+                >
+                  {excluindoSelecionados ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFFFFF"
+                    />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={sairModoSelecao}
+                  disabled={excluindoSelecionados}
+                  style={[
+                    styles.selectionIconButton,
+                    {
+                      backgroundColor:
+                        theme.backgroundContainer,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={theme.textoContainer}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={abrirModoSelecao}
+                style={[
+                  styles.selectionStartButton,
+                  { borderColor: theme.borda },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={19}
+                  color={theme.texto}
+                />
+
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.selectionStartText,
+                    { color: theme.texto },
+                  ]}
+                >
+                  SELECIONAR CLIENTES
+                </Text>
+              </TouchableOpacity>
+            )
+          ) : null}
 
         {erro === "" && clientes.length === 0 ? (
           <View
@@ -320,9 +704,14 @@ export default function Clientes() {
               <TouchableOpacity
                 key={cliente.id}
                 activeOpacity={0.8}
-                onPress={() =>
-                  abrirCliente(cliente.id)
-                }
+                onPress={() => {
+                  if (modoSelecao) {
+                    alternarClienteSelecionado(cliente.id);
+                    return;
+                  }
+
+                  abrirCliente(cliente.id);
+                }}
                 style={[
                   styles.item,
                   {
@@ -377,11 +766,37 @@ export default function Clientes() {
                   </Text>
                 </View>
 
-                <Ionicons
-                  name="chevron-forward-outline"
-                  size={21}
-                  color={theme.texto}
-                />
+                {modoSelecao ? (
+                  <View
+                    style={[
+                      styles.selectionCheckbox,
+                      {
+                        borderColor: idsSelecionados.includes(cliente.id)
+                          ? theme.backgroundContainer
+                          : theme.borda,
+                        backgroundColor: idsSelecionados.includes(
+                          cliente.id
+                        )
+                          ? theme.backgroundContainer
+                          : theme.background,
+                      },
+                    ]}
+                  >
+                    {idsSelecionados.includes(cliente.id) ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={theme.textoContainer}
+                      />
+                    ) : null}
+                  </View>
+                ) : (
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={21}
+                    color={theme.texto}
+                  />
+                )}
               </TouchableOpacity>
             );
           })
@@ -399,6 +814,31 @@ export default function Clientes() {
           />
         ) : null}
       </ScrollView>
+      <ClienteFilterModal
+        visible={filtrosAberto}
+        filtros={filtros}
+        onClose={() => setFiltrosAberto(false)}
+        onApply={aplicarFiltros}
+      />
+      <FeedbackAlert
+        visible={feedback !== null}
+        variant={feedback?.variant ?? "info"}
+        title={feedback?.title ?? ""}
+        message={feedback?.message ?? ""}
+        primaryLabel={feedback?.primaryLabel}
+        secondaryLabel={feedback?.secondaryLabel}
+        primaryDanger={feedback?.primaryDanger}
+        onClose={fecharFeedback}
+        onPrimary={() => {
+          if (feedback?.onPrimary) {
+            void feedback.onPrimary();
+            return;
+          }
+
+          fecharFeedback();
+        }}
+        onSecondary={fecharFeedback}
+      />
     </View>
   );
 }
@@ -426,6 +866,73 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
+  selectionStartButton: {
+    minHeight: 42,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  selectionStartText: {
+    fontSize: 12,
+  },
+
+  selectionToolbar: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+
+  selectionInfo: {
+    flex: 1,
+  },
+
+  selectionTitle: {
+    fontSize: 13,
+  },
+
+  selectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  selectAllButton: {
+    height: 36,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+
+  selectAllText: {
+    fontSize: 11,
+  },
+
+  selectionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  selectionCheckbox: {
+    width: 25,
+    height: 25,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   newButton: {
     width: 90,
   },

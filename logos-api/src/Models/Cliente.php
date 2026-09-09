@@ -345,35 +345,49 @@ class Cliente
 
         if ($busca !== '') {
             $where[] = "(
-                c.nome LIKE :busca
-                OR c.email LIKE :busca
-                OR c.telefone LIKE :busca
-                OR c.cnpj LIKE :busca
-                OR c.responsavel LIKE :busca
+                c.nome LIKE :busca_nome
+                OR c.email LIKE :busca_email
+                OR c.telefone LIKE :busca_telefone
+                OR c.cnpj LIKE :busca_cnpj
+                OR c.responsavel LIKE :busca_responsavel
+                OR c.segmento LIKE :busca_segmento
+                OR c.cidade LIKE :busca_cidade
+                OR c.estado LIKE :busca_estado
             )";
 
-            $params[':busca'] = '%' . $busca . '%';
+            $termoBusca = '%' . $busca . '%';
+
+            $params[':busca_nome'] = $termoBusca;
+            $params[':busca_email'] = $termoBusca;
+            $params[':busca_telefone'] = $termoBusca;
+            $params[':busca_cnpj'] = $termoBusca;
+            $params[':busca_responsavel'] = $termoBusca;
+            $params[':busca_segmento'] = $termoBusca;
+            $params[':busca_cidade'] = $termoBusca;
+            $params[':busca_estado'] = $termoBusca;
         }
 
         $estado = trim((string) $estado);
 
+        $estado = trim((string) $estado);
+
         if ($estado !== '') {
-            $where[] = 'c.estado = :estado';
-            $params[':estado'] = $estado;
+            $where[] = 'c.estado LIKE :estado';
+            $params[':estado'] = '%' . $estado . '%';
         }
 
         $cidade = trim((string) $cidade);
 
         if ($cidade !== '') {
-            $where[] = 'c.cidade = :cidade';
-            $params[':cidade'] = $cidade;
+            $where[] = 'c.cidade LIKE :cidade';
+            $params[':cidade'] = '%' . $cidade . '%';
         }
 
         $segmento = trim((string) $segmento);
 
         if ($segmento !== '') {
-            $where[] = 'c.segmento = :segmento';
-            $params[':segmento'] = $segmento;
+            $where[] = 'c.segmento LIKE :segmento';
+            $params[':segmento'] = '%' . $segmento . '%';
         }
 
         if ($ativo !== null) {
