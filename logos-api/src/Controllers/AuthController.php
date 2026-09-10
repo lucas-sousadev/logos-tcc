@@ -8,6 +8,8 @@ use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\JwtService;
 use Logos\AssessoriaApi\Models\Usuario;
 use Logos\AssessoriaApi\Services\AuthService;
+use Logos\AssessoriaApi\Services\AuthRateLimitService;
+use Logos\AssessoriaApi\Exceptions\ConviteInvalidoException;
 use Throwable;
 
 class AuthController
@@ -21,6 +23,17 @@ class AuthController
             true
         );
 
+        if (!is_array($dados)) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Dados inválidos.',
+            ]);
+
+            return;
+        }
+
         $email = trim($dados['email'] ?? '');
         $senha = $dados['senha'] ?? '';
 
@@ -29,8 +42,21 @@ class AuthController
 
             echo json_encode([
                 'success' => false,
-                'message' => 'E-mail e senha são obrigatórios.'
+                'message' => 'E-mail e senha são obrigatórios.',
             ]);
+
+            return;
+        }
+
+        $segundosRestantes =
+            AuthRateLimitService::bloqueioLoginRestante(
+                $email
+            );
+
+        if ($segundosRestantes > 0) {
+            $this->responderMuitasTentativas(
+                $segundosRestantes
+            );
 
             return;
         }
@@ -38,15 +64,28 @@ class AuthController
         $usuario = Usuario::verificarSenha($email, $senha);
 
         if (!$usuario) {
+            $bloqueadoAgora =
+                AuthRateLimitService::registrarFalhaLogin(
+                    $email
+                );
+
+            if ($bloqueadoAgora) {
+                $this->responderMuitasTentativas(900);
+
+                return;
+            }
+
             http_response_code(401);
 
             echo json_encode([
                 'success' => false,
-                'message' => 'E-mail ou senha inválidos.'
+                'message' => 'E-mail ou senha inválidos.',
             ]);
 
             return;
         }
+
+        AuthRateLimitService::limparFalhasLogin($email);
 
         Usuario::atualizarUltimoLogin((int) $usuario['id']);
 
@@ -65,10 +104,11 @@ class AuthController
                 'assessoria_id' => $usuario['assessoria_id'],
                 'nome' => $usuario['nome'],
                 'email' => $usuario['email'],
-                'perfil' => $usuario['perfil']
-            ]
+                'perfil' => $usuario['perfil'],
+            ],
         ]);
     }
+
     public function logout(): void
     {
         header('Content-Type: application/json; charset=utf-8');
@@ -199,17 +239,6 @@ class AuthController
             return;
         }
 
-        if (strlen($senha) < 6) {
-            http_response_code(400);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'A senha deve possuir pelo menos 6 caracteres.'
-            ]);
-
-            return;
-        }
-
         try {
             $resultado = AuthService::registrarAssessoria([
                 'assessoria_nome' => $assessoriaNome,
@@ -278,6 +307,19 @@ class AuthController
 
         $senha = $dados['senha'] ?? '';
 
+        $segundosRestantes =
+            AuthRateLimitService::bloqueioConviteRestante(
+                $codigo
+            );
+
+        if ($segundosRestantes > 0) {
+            $this->responderMuitasTentativas(
+                $segundosRestantes
+            );
+
+            return;
+        }
+
         $telefone = trim(
             $dados['telefone'] ?? ''
         );
@@ -317,6 +359,25 @@ class AuthController
                 'usuario' => $resultado['usuario']
             ]);
 
+        } catch (ConviteInvalidoException $e) {
+            $bloqueadoAgora =
+                AuthRateLimitService::registrarFalhaConvite(
+                    $codigo
+                );
+
+            if ($bloqueadoAgora) {
+                $this->responderMuitasTentativas(900);
+
+                return;
+            }
+
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' =>
+                    'Código de convite inválido, expirado ou já utilizado.',
+            ]); 
         } catch (\InvalidArgumentException $e) {
             http_response_code(400);
 
@@ -434,6 +495,21 @@ class AuthController
                 'message' => 'Não foi possível carregar suas permissões.'
             ]);
         }
+    }
+
+    private function responderMuitasTentativas(
+        int $segundosRestantes
+    ): void {
+        $segundosRestantes = max(1, $segundosRestantes);
+
+        header("Retry-After: {$segundosRestantes}");
+        http_response_code(429);
+
+        echo json_encode([
+            'success' => false,
+            'message' =>
+                'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
+        ]);
     }
 }
 

@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Switch,
   View,
-  Image
+  Image,
 } from "react-native";
 
 import { useEffect, useState } from "react";
@@ -36,6 +36,7 @@ import {
   ErrosVeiculo,
   validarFormularioVeiculo,
 } from "@/utils/validarVeiculo";
+import ContatosVinculados from "@/components/veiculos/ContatosVinculados";
 
 interface Formulario {
   nome: string;
@@ -72,7 +73,8 @@ export default function VeiculoDetalhes() {
 
   const [logoRemovido, setLogoRemovido] = useState(false);
   useEffect(() => {
-    carregarVeiculo();
+    void carregarVeiculo();
+
   }, [id]);
 
   function dadosFormulario(dados: Veiculo): Formulario {
@@ -113,6 +115,16 @@ export default function VeiculoDetalhes() {
       setNovoLogo(null);
       setLogoRemovido(false); 
     }
+  }
+
+  async function atualizarResumoVeiculo() {
+    if (!id || Number.isNaN(id)) {
+      return;
+    }
+
+    const dados = await buscarVeiculo(id);
+
+    setVeiculo(dados);
   }
 
   function atualizarCampo(
@@ -171,11 +183,12 @@ export default function VeiculoDetalhes() {
   }
 
   function handleBack() {
+
     if (!modoEdicao) {
       router.back();
       return;
     }
-
+    
     if (camposAlterados().length > 0) return;
     cancelarEdicao();
   }
@@ -576,6 +589,15 @@ export default function VeiculoDetalhes() {
                   : "Não informado"
               }
             />
+            <InfoRow
+              icon="people-outline"
+              label="CONTATOS VINCULADOS"
+              value={`${veiculo.contatos_vinculados} ${
+                veiculo.contatos_vinculados === 1
+                  ? "contato"
+                  : "contatos"
+              }`}
+            />
             <View style={styles.actions}>
               {temPermissao("VEICULOS", "EDITAR") && (
                 <Button
@@ -594,6 +616,11 @@ export default function VeiculoDetalhes() {
                 />
               )}
             </View>
+            <ContatosVinculados
+              veiculoId={veiculo.id}
+              totalVinculados={veiculo.contatos_vinculados}
+              onContatosAlterados={atualizarResumoVeiculo}
+            />
           </>
         )}
       </ScrollView>

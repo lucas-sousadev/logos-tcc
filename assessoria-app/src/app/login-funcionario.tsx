@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   
   header: {
-    height: 240,
+    height: 210,
   },
   backgroundImage: {
   ...StyleSheet.absoluteFill,

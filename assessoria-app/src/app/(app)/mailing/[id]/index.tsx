@@ -62,10 +62,12 @@ export default function JornalistaDetalhes() {
 
    const [erros, setErros] = useState<ErrosJornalista>({});
 
-  const [erroGeral, setErroGeral] = useState("");
+    const [erroGeral, setErroGeral] = useState("");
 
     const params = useLocalSearchParams<{
-        id: string;
+      id: string;
+      origem?: string;
+      veiculo_id?: string;
     }>();
 
     const id = Number(params.id);
@@ -113,7 +115,7 @@ export default function JornalistaDetalhes() {
             "Contato inválido."
         );
 
-        router.back();
+        voltarParaOrigem();
         return;
         }
 
@@ -151,7 +153,7 @@ export default function JornalistaDetalhes() {
             "Não foi possível carregar os dados do contato."
         );
 
-        router.back();
+        voltarParaOrigem();
         } finally {
         setCarregando(false);
         }
@@ -313,7 +315,7 @@ export default function JornalistaDetalhes() {
 
     function handleBack() {
       if (!modoEdicao) {
-        router.back();
+        voltarParaOrigem();
         return;
       }
 
@@ -456,7 +458,7 @@ export default function JornalistaDetalhes() {
       window.alert(
         "Contato excluído com sucesso."
       );
-      router.back();
+      voltarParaOrigem();
       return;
     }
 
@@ -466,7 +468,7 @@ export default function JornalistaDetalhes() {
       [
         {
           text: "OK",
-          onPress: () => router.back(),
+          onPress: () => voltarParaOrigem(),
         },
       ]
     );
@@ -504,9 +506,7 @@ export default function JornalistaDetalhes() {
         <Header
           title="Contato"
           showBackButton
-          onBackPress={() =>
-            router.back()
-          }
+          onBackPress={voltarParaOrigem}
         />
 
         <View style={styles.loading}>
@@ -594,6 +594,31 @@ export default function JornalistaDetalhes() {
       );
     }
   }
+
+  const veiculoOrigemId = Number(
+    params.veiculo_id
+  );
+
+  const veioDaTelaVeiculo =
+    params.origem === "veiculo" &&
+    Number.isInteger(veiculoOrigemId) &&
+    veiculoOrigemId > 0;
+
+  function voltarParaOrigem() {
+    if (veioDaTelaVeiculo) {
+      router.replace({
+        pathname: "/veiculos/[id]",
+        params: {
+          id: veiculoOrigemId.toString(),
+        },
+      });
+
+      return;
+    }
+
+    router.back();
+  }
+
   return (
     <View
       style={[

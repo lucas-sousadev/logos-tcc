@@ -37,6 +37,10 @@ export interface ListarVeiculosParams {
   limit?: number;
   busca?: string;
   ativo?: number;
+  ordem?: "nome" | "vinculos";
+  direcao?: "ASC" | "DESC";
+  min_contatos?: number;
+  max_contatos?: number;
 }
 
 export interface ListarVeiculosResponse {
@@ -78,6 +82,27 @@ export async function listarVeiculos(
     query.set("ativo", String(params.ativo));
   }
 
+  if (params.ordem) {
+  query.set("ordem", params.ordem);
+}
+
+  if (params.direcao) {
+    query.set("direcao", params.direcao);
+  }
+
+  if (params.min_contatos !== undefined) {
+    query.set(
+      "min_contatos",
+      String(params.min_contatos)
+    );
+  }
+
+  if (params.max_contatos !== undefined) {
+    query.set(
+      "max_contatos",
+      String(params.max_contatos)
+    );
+  }
   const response =
     await authenticatedFetch(
       `${API_URL}/api/veiculos?${query.toString()}`,

@@ -491,23 +491,13 @@ export async function registerFuncionario(
 
 // sistema de convite
 
-export interface Convite {
-  id: number;
-  assessoria_id: number;
-  codigo: string;
-  email_destino: string | null;
-  expira_em: string;
-}
-
 export interface ValidarConviteResponse {
   success: boolean;
   message: string;
-  convite?: Convite;
 }
-
 export async function validarConvite(
   codigo: string
-): Promise<Convite> {
+): Promise<void> {
   const response = await fetch(
     `${API_URL}/api/convites/validar`,
     {
@@ -533,18 +523,12 @@ export async function validarConvite(
     );
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.convite
-  ) {
+  if (!response.ok || !data.success) {
     throw new Error(
       data.message ||
         "Não foi possível validar o convite."
     );
   }
-
-  return data.convite;
 }
 
 export interface CriarConviteResponse {

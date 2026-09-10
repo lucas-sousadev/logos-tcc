@@ -1,4 +1,4 @@
--- banco do LOGOS 
+-- banco de dados do Logos 
 -- MySQL 8+
 
 CREATE DATABASE IF NOT EXISTS logos
@@ -7,7 +7,7 @@ CREATE DATABASE IF NOT EXISTS logos
 
 USE logos;
 
--- 1. ASSESSORIAS
+-- 1. Assessrias
 
 CREATE TABLE assessorias (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -24,7 +24,7 @@ CREATE TABLE assessorias (
 ) ENGINE=InnoDB;
 
 
--- 2. USUÁRIOS
+-- 2. Usuários
 
 CREATE TABLE usuarios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -58,7 +58,7 @@ CREATE TABLE usuarios (
 ) ENGINE=InnoDB;
 
 
--- 3. PERMISSÕES
+-- 3. Permissões
 
 CREATE TABLE permissoes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -73,7 +73,7 @@ CREATE TABLE permissoes (
 ) ENGINE=InnoDB;
 
 
--- 4. PERMISSÕES DOS USUÁRIOS
+-- 4. Permissões para os usuarios em específico
 
 CREATE TABLE usuario_permissoes (
     usuario_id BIGINT UNSIGNED NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE usuario_permissoes (
 ) ENGINE=InnoDB;
 
 
--- 5. CONVITES PARA FUNCIONÁRIOS
+-- 5. Convites
 
 CREATE TABLE convites (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -130,7 +130,7 @@ CREATE TABLE convites (
 ) ENGINE=InnoDB;
 
 
--- 6. CLIENTES
+-- 6. Clientes
 
 CREATE TABLE clientes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -163,12 +163,12 @@ CREATE TABLE clientes (
     UNIQUE KEY uq_cliente_id_assessoria (id, assessoria_id),
     UNIQUE KEY uq_clientes_assessoria_cnpj (assessoria_id, cnpj),
     
-    INDEX idx_clientes_filtros (assessoria_id, ativo, estado, cidade, segmento);
+    INDEX idx_clientes_filtros (assessoria_id, ativo, estado, cidade, segmento),
     INDEX idx_clientes_assessoria (assessoria_id),
     INDEX idx_clientes_nome (nome)
 ) ENGINE=InnoDB;
 
--- 7. VEÍCULOS
+-- 7. Veículos
 
 CREATE TABLE veiculos (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -198,7 +198,7 @@ CREATE TABLE veiculos (
     INDEX idx_veiculos_assessoria (assessoria_id)
 ) ENGINE=InnoDB;
 
--- 8. JORNALISTAS / MAILING
+-- 8. Contatos / mailing
 
 CREATE TABLE jornalistas (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -243,7 +243,7 @@ CREATE TABLE jornalistas (
 ) ENGINE=InnoDB;
 
 
--- 9. TEMPLATES DE RELEASE
+-- 9. Templates 
 
 CREATE TABLE templates (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -277,7 +277,7 @@ CREATE TABLE templates (
 ) ENGINE=InnoDB;
 
 
--- 10. RELEASES
+-- 10. Releases
 
 CREATE TABLE releases (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -341,7 +341,7 @@ CREATE TABLE releases (
 ) ENGINE=InnoDB;
 
 
--- 11. HISTÓRICO DE DESTINATÁRIOS DO RELEASE
+-- 11. Histórico de destinatários do release
 
 CREATE TABLE release_destinatarios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -396,7 +396,7 @@ CREATE TABLE release_destinatarios (
     INDEX idx_release_destinatarios_status (status)
 ) ENGINE=InnoDB;
 
--- 12. CLIPPING
+-- 12. Clippings
 
 CREATE TABLE clippings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -443,9 +443,8 @@ CREATE TABLE clippings (
     INDEX idx_clippings_assessoria_data (assessoria_id,data_publicacao)
 );
 
--- 13. RELATÓRIOS
--- Um relatório pertence a um cliente e pode possuir
--- vários slides.
+-- 13. Relatórios
+-- Um relatório pertence a um cliente e pode possuir vários slides
 
 CREATE TABLE relatorios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -491,7 +490,7 @@ CREATE TABLE relatorios (
 ) ENGINE=InnoDB;
 
 
--- 14. SLIDES DOS RELATÓRIOS
+-- 14. Slides dos relatórios
 --
 -- Cada slide representa uma matéria/clipping.
 -- Os dados existentes são puxados do clipping/veículo,
@@ -542,7 +541,7 @@ CREATE TABLE relatorio_slides (
 ) ENGINE=InnoDB;
 
 
--- 15. AUDITORIA
+-- 15. Auditoria
 
 CREATE TABLE auditoria (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -581,11 +580,11 @@ CREATE TABLE auditoria (
 ) ENGINE=InnoDB;
 
 
--- 16. PERMISSÕES INICIAIS
+-- 16. Permissões Iniciais
 
 INSERT INTO permissoes (modulo, acao, descricao) VALUES
 
--- MAILING
+-- Mailing
 ('MAILING', 'VISUALIZAR', 'Visualizar contatos do mailing'),
 ('MAILING', 'CRIAR', 'Cadastrar contatos'),
 ('MAILING', 'EDITAR', 'Editar contatos'),
@@ -593,32 +592,32 @@ INSERT INTO permissoes (modulo, acao, descricao) VALUES
 ('MAILING', 'IMPORTAR', 'Importar contatos para o mailing.'),
 ('MAILING','EXPORTAR','Exportar contatos do mailing.'),
 
--- CLIENTES
+-- Clientes
 ('CLIENTES', 'VISUALIZAR', 'Visualizar clientes'),
 ('CLIENTES', 'CRIAR', 'Cadastrar clientes'),
 ('CLIENTES', 'EDITAR', 'Editar clientes'),
 ('CLIENTES', 'EXCLUIR', 'Excluir clientes'),
 
--- VEÍCULOS
+-- Veículos
 ('VEICULOS', 'VISUALIZAR', 'Visualizar veículos'),
 ('VEICULOS', 'CRIAR', 'Cadastrar veículos'),
 ('VEICULOS', 'EDITAR', 'Editar veículos'),
 ('VEICULOS', 'EXCLUIR', 'Excluir veículos'),
 
--- RELEASES
+-- Releases
 ('RELEASES', 'VISUALIZAR', 'Visualizar releases'),
 ('RELEASES', 'CRIAR', 'Criar releases'),
 ('RELEASES', 'EDITAR', 'Editar releases'),
 ('RELEASES', 'EXCLUIR', 'Excluir releases'),
 ('RELEASES', 'ENVIAR', 'Enviar releases'),
 
--- TEMPLATES
+-- Templates
 ('TEMPLATES', 'VISUALIZAR', 'Visualizar templates'),
 ('TEMPLATES', 'CRIAR', 'Criar templates'),
 ('TEMPLATES', 'EDITAR', 'Editar templates'),
 ('TEMPLATES', 'EXCLUIR', 'Excluir templates'),
 
--- CLIPPING
+-- Clipping
 ('CLIPPING', 'VISUALIZAR', 'Visualizar clippings'),
 ('CLIPPING', 'CRIAR', 'Criar clippings'),
 ('CLIPPING', 'EDITAR', 'Editar clippings'),
@@ -626,27 +625,27 @@ INSERT INTO permissoes (modulo, acao, descricao) VALUES
 ('CLIPPING', 'IMPORTAR', 'Importar clippings em lote.'),
 ('CLIPPING', 'EXPORTAR', 'Exportar clippings.'),
 
--- RELATÓRIOS
+-- Relatorios
 ('RELATORIOS', 'VISUALIZAR', 'Visualizar relatórios'),
 ('RELATORIOS', 'CRIAR', 'Criar relatórios'),
 ('RELATORIOS', 'EDITAR', 'Editar relatórios'),
 ('RELATORIOS', 'EXCLUIR', 'Excluir relatórios'),
 ('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório'),
 
--- AUDITORIA
+-- Auditoria
 ('AUDITORIA', 'VISUALIZAR', 'Visualizar o histórico de ações da assessoria.'),
 
--- USUÁRIOS
+-- Usuários
 ('USUARIOS', 'VISUALIZAR', 'Visualizar funcionários da assessoria.'),
 ('USUARIOS', 'EDITAR', 'Editar dados e status de funcionários da assessoria.'),
 ('USUARIOS', 'CRIAR', 'Cadastrar funcionários da assessoria.'),
 ('USUARIOS', 'GERENCIAR_PERMISSOES', 'Gerenciar permissões de funcionários.'),
 
--- CONVITES
+-- Convites
 ('CONVITES', 'VISUALIZAR', 'Visualizar histórico de convites.'),
 ('CONVITES', 'CRIAR','Criar convites para funcionários.');
 
--- 17. REFRESH TOKENS
+-- 17. Refresh tokens
 
 CREATE TABLE refresh_tokens (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -670,4 +669,19 @@ CREATE TABLE refresh_tokens (
     INDEX idx_refresh_tokens_expires (expires_at)
 ) ENGINE=InnoDB;
 
--- FIM DO BANCO LOGOS
+-- 18. Validaçao de tentativas
+
+CREATE TABLE tentativas_autenticacao (
+    acao VARCHAR(40) NOT NULL,
+    chave_hash CHAR(64) NOT NULL,
+    tentativas SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    janela_iniciada_em DATETIME NOT NULL,
+    bloqueado_ate DATETIME NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (acao, chave_hash),
+    KEY idx_tentativas_autenticacao_bloqueio (bloqueado_ate)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;

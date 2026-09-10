@@ -8,6 +8,7 @@ use Logos\AssessoriaApi\Services\JwtService;
 use Logos\AssessoriaApi\Services\CnpjService;
 use Logos\AssessoriaApi\Services\TelefoneService;
 use Logos\AssessoriaApi\Database\Connection;
+use Logos\AssessoriaApi\Exceptions\ConviteInvalidoException;
 use PDO;
 use Throwable;
 
@@ -69,12 +70,16 @@ class AuthService
                 );
             }
         }
+
+        $senha = SenhaService::validar(
+            $dados['senha'] ?? null
+        );
+
         try {
             $pdo->beginTransaction();
 
             /*
-             Verifica se já existe um usuário com esse e-mail.
-              a tabela usuarios possui UNIQUE(email).
+             Verifica se já existe um usuário com esse e-mail, a tabela usuarios possui UNIQUE(email)
              */
             $stmt = $pdo->prepare("
                 SELECT id
@@ -123,7 +128,7 @@ class AuthService
              cria o assessor da assessoria
              */
             $senhaHash = password_hash(
-                $dados['senha'],
+                $senha,
                 PASSWORD_DEFAULT
             );
 
@@ -205,10 +210,12 @@ class AuthService
         );
 
         $email = trim(
-            $dados['email'] ?? ''
+            $dados['email'] ?? ''   
         );
 
-        $senha = $dados['senha'] ?? '';
+        $senha = SenhaService::validar(
+            $dados['senha'] ?? null
+        );
 
         $telefone = trim(
             $dados['telefone'] ?? ''
@@ -241,21 +248,11 @@ class AuthService
                 'O e-mail informado é inválido.'
             );
         }
-
-        if (strlen($senha) < 6) {
-            throw new \InvalidArgumentException(
-                'A senha deve possuir pelo menos 6 caracteres.'
-            );
-        }
-
+        
         try {
             $pdo->beginTransaction();
 
-            /*
-            * Bloqueia o convite durante a transação.
-            * Isso evita que duas pessoas utilizem o mesmo
-            * convite simultaneamente.
-            */
+            /* bloqueia o convite durante a transação isso evita que duas pessoas utilizem o mesmo convite simultaneamente.*/
             $stmt = $pdo->prepare("
                 SELECT
                     id,
@@ -276,28 +273,20 @@ class AuthService
             $convite = $stmt->fetch();
 
             if (!$convite) {
-                throw new \RuntimeException(
-                    'Convite não encontrado.'
-                );
+                throw new ConviteInvalidoException();
             }
 
             if ($convite['utilizado_em'] !== null) {
-                throw new \RuntimeException(
-                    'Este convite já foi utilizado.'
-                );
+                throw new ConviteInvalidoException();
             }
 
             if (
                 strtotime($convite['expira_em']) <= time()
             ) {
-                throw new \RuntimeException(
-                    'Este convite expirou.'
-                );
+                throw new ConviteInvalidoException();
             }
 
-            /*
-            * O e-mail precisa ser único no sistema.
-            */
+            /* O e-mail precisa ser único no sistema */
             $stmt = $pdo->prepare("
                 SELECT id
                 FROM usuarios
@@ -320,10 +309,7 @@ class AuthService
                 PASSWORD_DEFAULT
             );
 
-            /*
-            * Cria o funcionário na mesma assessoria
-            * vinculada ao convite.
-            */
+            /* cria o funcionário na mesma assessoria vinculada ao convite */
             $stmt = $pdo->prepare("
                 INSERT INTO usuarios (
                     assessoria_id,
@@ -356,9 +342,7 @@ class AuthService
 
             $usuarioId = (int) $pdo->lastInsertId();
 
-            /*
-            * Permissões iniciais do novo funcionário.
-            */
+            /* Permissões iniciais do novo funcionário*/
             $stmt = $pdo->prepare("
                 INSERT INTO usuario_permissoes (
                     usuario_id,
@@ -379,9 +363,7 @@ class AuthService
                 'usuario_id' => $usuarioId
             ]);
 
-            /*
-            * Marca o convite como utilizado.
-            */
+            /* marcar convite como utilizado */
             $stmt = $pdo->prepare("
                 UPDATE convites
                 SET
@@ -407,10 +389,6 @@ class AuthService
                 'email_verificado' => false
             ];
 
-            /*
-            * A conta já foi criada.
-            * Agora geramos a sessão normalmente.
-            */
             $token = JwtService::gerar($usuario);
 
             $refreshToken = RefreshTokenService::criar(

@@ -27,7 +27,6 @@ import {
   RegisterFuncionarioData,
   Usuario,
   LoginResponse,
-  Convite,
   ListarConvitesResponse,
   listarFuncionarios as authListarFuncionarios,
   buscarFuncionario as authBuscarFuncionario,
@@ -61,7 +60,7 @@ interface AuthContextData {
   //sistema convites 
   validarConvite: (
     codigo: string
-  ) => Promise<Convite>;
+  ) => Promise<void>;
   
   criarConvite: (
   emailDestino?: string
@@ -267,10 +266,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   async function validarConvite(
-  codigo: string
-): Promise<Convite> {
-  return await authValidarConvite(codigo);
-}
+    codigo: string
+  ): Promise<void> {
+    await authValidarConvite(codigo);
+  }
 
   async function criarConvite(
     emailDestino?: string
@@ -309,9 +308,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
       );
     }
 
-    setUsuario(resposta.usuario);
+    try {
+      if (
+        resposta.usuario.perfil ===
+        "FUNCIONARIO"
+      ) {
+        const permissoes =
+          await authListarMinhasPermissoes();
 
-    return resposta;
+        setPermissoesUsuario(permissoes);
+      } else {
+        setPermissoesUsuario([]);
+      }
+
+      setUsuario(resposta.usuario);
+
+      return resposta;
+    } catch (error) {
+      await authLogout();
+
+      setUsuario(null);
+      setPermissoesUsuario([]);
+
+      throw error;
+    }
   }
 
   async function listarFuncionarios(

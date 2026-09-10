@@ -49,6 +49,10 @@ export default function Veiculos() {
   const [filtrosAberto, setFiltrosAberto] = useState(false);
   const [filtros, setFiltros] = useState<FiltrosVeiculos>({
     ativo: undefined,
+    ordem: "nome",
+    direcao: "ASC",
+    minContatos: "",
+    maxContatos: "",
   });
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
@@ -79,6 +83,18 @@ export default function Veiculos() {
     setFeedback(null);
   }
 
+  function quantidadeContatosFiltro(
+    valorOriginal: string
+  ): number | undefined {
+    const valor = valorOriginal.trim();
+
+    if (valor === "" || !/^\d+$/.test(valor)) {
+      return undefined;
+    }
+
+    return Number(valor);
+  }
+
   const carregarVeiculos = useCallback(
     async (
       reset = false,
@@ -102,6 +118,14 @@ export default function Veiculos() {
           limit: 50,
           busca: buscaAtual,
           ativo: filtros.ativo,
+          ordem: filtros.ordem,
+          direcao: filtros.direcao,
+          min_contatos: quantidadeContatosFiltro(
+            filtros.minContatos
+          ),
+          max_contatos: quantidadeContatosFiltro(
+            filtros.maxContatos
+          ),
         });
 
         if (reset) {
@@ -136,7 +160,15 @@ export default function Veiculos() {
         setCarregandoMais(false);
       }
     },
-    [pagina, buscaAplicada, filtros.ativo]
+      [
+        pagina,
+        buscaAplicada, 
+        filtros.ativo,
+        filtros.ordem, 
+        filtros.direcao, 
+        filtros.minContatos,
+        filtros.maxContatos,
+      ]
   );
 
   useFocusEffect(
@@ -147,7 +179,14 @@ export default function Veiculos() {
         setIdsSelecionados([]);
         setModoSelecao(false);
       };
-    }, [buscaAplicada, filtros.ativo])
+    }, [
+        buscaAplicada,
+        filtros.ativo,
+        filtros.ordem,
+        filtros.direcao,
+        filtros.minContatos,
+        filtros.maxContatos,
+      ])
   );
 
   function realizarBusca() {
@@ -165,7 +204,13 @@ export default function Veiculos() {
   }
 
   function filtrosAtivos() {
-    return filtros.ativo !== undefined;
+    return (
+      filtros.ativo !== undefined ||
+      filtros.ordem !== "nome" ||
+      filtros.direcao !== "ASC" ||
+      filtros.minContatos.trim() !== "" ||
+      filtros.maxContatos.trim() !== ""
+    );
   }
 
   function abrirVeiculo(id: number) {

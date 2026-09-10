@@ -33,17 +33,15 @@ class Veiculo
         );
 
         $where = [
-            'v.assessoria_id = :assessoria_id'
+            'v.assessoria_id = :assessoria_id',
         ];
 
         $params = [
-            'assessoria_id' => $assessoriaId
+            'assessoria_id' => $assessoriaId,
         ];
 
         if ($busca !== '') {
-            $where[] = '
-                v.nome LIKE :busca
-            ';
+            $where[] = 'v.nome LIKE :busca';
 
             $params['busca'] =
                 '%' . $busca . '%';
@@ -56,10 +54,41 @@ class Veiculo
             $params['ativo'] = $ativo;
         }
 
-        $whereSql = implode(
-            ' AND ',
-            $where
-        );
+        $contagemVinculos = "
+            (
+                SELECT COUNT(*)
+                FROM jornalistas j
+                WHERE
+                    j.veiculo_id = v.id
+                    AND j.assessoria_id = v.assessoria_id
+            )
+        ";
+
+        $minContatos =
+            self::filtroMinimoContatos($filtros);
+
+        if ($minContatos !== null) {
+            $where[] =
+                "{$contagemVinculos} >= :min_contatos";
+
+            $params['min_contatos'] =
+                $minContatos;
+        }
+
+        $maxContatos =
+            self::filtroMaximoContatos($filtros);
+
+        if ($maxContatos !== null) {
+            $where[] =
+                "{$contagemVinculos} <= :max_contatos";
+
+            $params['max_contatos'] =
+                $maxContatos;
+        }
+
+        $whereSql = implode(' AND ', $where);
+
+        $ordenacao = self::ordenacao($filtros);
 
         $stmt = $pdo->prepare("
             SELECT
@@ -70,18 +99,12 @@ class Veiculo
                 v.alcance,
                 v.logo_path,
                 v.ativo,
-                (
-                    SELECT COUNT(*)
-                    FROM jornalistas j
-                    WHERE
-                        j.veiculo_id = v.id
-                        AND j.assessoria_id = v.assessoria_id
-                ) AS contatos_vinculados,
+                {$contagemVinculos} AS contatos_vinculados,
                 v.created_at,
                 v.updated_at
             FROM veiculos v
             WHERE {$whereSql}
-            ORDER BY v.nome ASC
+            ORDER BY {$ordenacao}
             LIMIT :limit
             OFFSET :offset
         ");
@@ -107,9 +130,7 @@ class Veiculo
 
         $stmt->execute();
 
-        return $stmt->fetchAll(
-            PDO::FETCH_ASSOC
-        );
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function contar(
@@ -123,17 +144,15 @@ class Veiculo
         );
 
         $where = [
-            'assessoria_id = :assessoria_id'
+            'v.assessoria_id = :assessoria_id',
         ];
 
         $params = [
-            'assessoria_id' => $assessoriaId
+            'assessoria_id' => $assessoriaId,
         ];
 
         if ($busca !== '') {
-            $where[] = '
-                nome LIKE :busca
-            ';
+            $where[] = 'v.nome LIKE :busca';
 
             $params['busca'] =
                 '%' . $busca . '%';
@@ -142,18 +161,47 @@ class Veiculo
         $ativo = self::filtroAtivo($filtros);
 
         if ($ativo !== null) {
-            $where[] = 'ativo = :ativo';
+            $where[] = 'v.ativo = :ativo';
             $params['ativo'] = $ativo;
         }
 
-        $whereSql = implode(
-            ' AND ',
-            $where
-        );
+        $contagemVinculos = "
+            (
+                SELECT COUNT(*)
+                FROM jornalistas j
+                WHERE
+                    j.veiculo_id = v.id
+                    AND j.assessoria_id = v.assessoria_id
+            )
+        ";
+
+        $minContatos =
+            self::filtroMinimoContatos($filtros);
+
+        if ($minContatos !== null) {
+            $where[] =
+                "{$contagemVinculos} >= :min_contatos";
+
+            $params['min_contatos'] =
+                $minContatos;
+        }
+
+        $maxContatos =
+            self::filtroMaximoContatos($filtros);
+
+        if ($maxContatos !== null) {
+            $where[] =
+                "{$contagemVinculos} <= :max_contatos";
+
+            $params['max_contatos'] =
+                $maxContatos;
+        }
+        
+        $whereSql = implode(' AND ', $where);
 
         $stmt = $pdo->prepare("
             SELECT COUNT(*)
-            FROM veiculos
+            FROM veiculos v
             WHERE {$whereSql}
         ");
 
@@ -331,6 +379,96 @@ class Veiculo
             'id' => $id,
             'assessoria_id' => $assessoriaId
         ]);
+    }
+
+    private static function filtroMinimoContatos(
+        array $filtros
+    ): ?int {
+        if (
+            !array_key_exists(
+                'min_contatos',
+                $filtros
+            ) ||
+            $filtros['min_contatos'] === null ||
+            $filtros['min_contatos'] === ''
+        ) {
+            return null;
+        }
+
+        if (!is_scalar($filtros['min_contatos'])) {
+            return null;
+        }
+
+        $minimo = filter_var(
+            $filtros['min_contatos'],
+            FILTER_VALIDATE_INT
+        );
+
+        if ($minimo === false || $minimo < 0) {
+            return null;
+        }
+
+        return (int) $minimo;
+    }
+
+    private static function filtroMaximoContatos(
+        array $filtros
+    ): ?int {
+        if (
+            !array_key_exists(
+                'max_contatos',
+                $filtros
+            ) ||
+            $filtros['max_contatos'] === null ||
+            $filtros['max_contatos'] === ''
+        ) {
+            return null;
+        }
+
+        if (!is_scalar($filtros['max_contatos'])) {
+            return null;
+        }
+
+        $maximo = filter_var(
+            $filtros['max_contatos'],
+            FILTER_VALIDATE_INT
+        );
+
+        if ($maximo === false || $maximo < 0) {
+            return null;
+        }
+
+        return (int) $maximo;
+    }
+
+    private static function ordenacao(
+        array $filtros
+    ): string {
+        $ordem = strtolower(
+            trim(
+                (string) (
+                    $filtros['ordem'] ?? 'nome'
+                )
+            )
+        );
+
+        $direcao = strtoupper(
+            trim(
+                (string) (
+                    $filtros['direcao'] ?? ''
+                )
+            )
+        );
+
+        if ($ordem === 'vinculos') {
+            return $direcao === 'ASC'
+                ? 'contatos_vinculados ASC, v.nome ASC'
+                : 'contatos_vinculados DESC, v.nome ASC';
+        }
+
+        return $direcao === 'DESC'
+            ? 'v.nome DESC'
+            : 'v.nome ASC';
     }
 
     private static function filtroAtivo(

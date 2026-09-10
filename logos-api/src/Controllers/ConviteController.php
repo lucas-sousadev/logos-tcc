@@ -4,7 +4,7 @@ namespace Logos\AssessoriaApi\Controllers;
 
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\ConviteService;
-
+use Logos\AssessoriaApi\Services\AuthRateLimitService;
 class ConviteController
 {
     public function criar(): void
@@ -147,35 +147,58 @@ class ConviteController
             true
         );
 
-        $codigo = trim(
-            $dados['codigo'] ?? ''
-        );
+        if (!is_array($dados)) {
+            http_response_code(400);
 
-        try {
-            $convite = ConviteService::validar(
+            echo json_encode([
+                'success' => false,
+                'message' => 'Dados inválidos.',
+            ]);
+
+            return;
+        }
+
+        $codigo = trim($dados['codigo'] ?? '');
+
+        $segundosRestantes =
+            AuthRateLimitService::bloqueioConviteRestante(
                 $codigo
             );
+
+        if ($segundosRestantes > 0) {
+            $this->responderMuitasTentativas(
+                $segundosRestantes
+            );
+
+            return;
+        }
+
+        try {
+            ConviteService::validar($codigo);
 
             echo json_encode([
                 'success' => true,
                 'message' => 'Convite válido.',
-                'convite' => $convite
-            ]);
-
-        } catch (\InvalidArgumentException $e) {
-            http_response_code(400);
-
-            echo json_encode([
-                'success' => false,
-                'message' => $e->getMessage()
             ]);
 
         } catch (\RuntimeException $e) {
+            $bloqueadoAgora =
+                AuthRateLimitService::registrarFalhaConvite(
+                    $codigo
+                );
+
+            if ($bloqueadoAgora) {
+                $this->responderMuitasTentativas(900);
+
+                return;
+            }
+
             http_response_code(400);
 
             echo json_encode([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' =>
+                    'Código de convite inválido, expirado ou já utilizado.',
             ]);
 
         } catch (\Throwable $e) {
@@ -183,8 +206,23 @@ class ConviteController
 
             echo json_encode([
                 'success' => false,
-                'message' => 'Não foi possível validar o convite.'
+                'message' => 'Não foi possível validar o convite.',
             ]);
         }
     }
+    private function responderMuitasTentativas(
+        int $segundosRestantes
+    ): void {
+        $segundosRestantes = max(1, $segundosRestantes);
+
+        header("Retry-After: {$segundosRestantes}");
+        http_response_code(429);
+
+        echo json_encode([
+            'success' => false,
+            'message' =>
+                'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
+        ]);
+    }
+
 }

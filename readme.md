@@ -13,3 +13,4 @@ instruções passo a passo para executar o app em outro pc
 6. npm install
 7. iniciar API (xampp)
 8. iniciar app
+

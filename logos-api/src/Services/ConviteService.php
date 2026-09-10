@@ -168,42 +168,29 @@ class ConviteService
             ]
         ];
     }
-    public static function validar(string $codigo): array
+    public static function validar(string $codigo): void
     {
         $codigo = strtoupper(trim($codigo));
 
-        if ($codigo === '') {
-            throw new \InvalidArgumentException(
-                'O código do convite é obrigatório.'
+        $padrao =
+            '/^LOGOS-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/';
+
+        if (!preg_match($padrao, $codigo)) {
+            throw new RuntimeException(
+                'Código de convite inválido, expirado ou já utilizado.'
             );
         }
 
         $convite = Convite::buscarPorCodigo($codigo);
 
-        if (!$convite) {
+        if (
+            !$convite ||
+            $convite['utilizado_em'] !== null ||
+            strtotime($convite['expira_em']) <= time()
+        ) {
             throw new RuntimeException(
-                'Convite não encontrado.'
+                'Código de convite inválido, expirado ou já utilizado.'
             );
         }
-
-        if ($convite['utilizado_em'] !== null) {
-            throw new RuntimeException(
-                'Este convite já foi utilizado.'
-            );
-        }
-
-        if (strtotime($convite['expira_em']) <= time()) {
-            throw new RuntimeException(
-                'Este convite expirou.'
-            );
-        }
-
-        return [
-            'id' => (int) $convite['id'],
-            'assessoria_id' => (int) $convite['assessoria_id'],
-            'codigo' => $convite['codigo'],
-            'email_destino' => $convite['email_destino'],
-            'expira_em' => $convite['expira_em']
-        ];
     }
 }

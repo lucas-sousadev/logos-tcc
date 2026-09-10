@@ -14,6 +14,22 @@ import Text from "@/components/ui/Text";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import BackButton from "@/components/ui/BackButton";
+import { validarSenha } from "@/utils/validarSenha";
+import { cnpjValido } from "@/utils/validarCliente";
+
+type CampoCadastroAssessoria =
+  | "assessoriaNome"
+  | "assessoriaEmail"
+  | "cnpj"
+  | "telefone"
+  | "assessorNome"
+  | "assessorEmail"
+  | "assessorTelefone"
+  | "senha";
+
+type ErrosCadastroAssessoria = Partial<
+  Record<CampoCadastroAssessoria, string>
+>;
 
 export default function Cadastro() {
   const {theme, mode} = useTheme();
@@ -29,17 +45,142 @@ export default function Cadastro() {
 
   const [senha, setSenha] = useState("");
 
-  const [erro, setErro] = useState("");
+  const [erros, setErros] = useState<ErrosCadastroAssessoria>({});
+  const [erroGeral, setErroGeral] = useState("");
+
   const [carregando, setCarregando] = useState(false);
-  
+
+  function limparErro(
+    campo: CampoCadastroAssessoria
+  ) {
+    setErros((atuais) => ({
+      ...atuais,
+      [campo]: undefined,
+    }));
+  }
+
+  function validarTelefone(
+    valor: string
+  ): string | null {
+    if (!valor.trim()) {
+      return null;
+    }
+
+    const telefoneNumerico =
+      valor.replace(/\D/g, "");
+
+    if (!/^\d{10,11}$/.test(telefoneNumerico)) {
+      return "O telefone deve possuir 10 ou 11 dígitos.";
+    }
+
+    return null;
+  }
+
+  function mostrarErroApi(mensagem: string) {
+    const texto = mensagem.toLowerCase();
+
+    let campo: CampoCadastroAssessoria | null = null;
+
+    if (texto.includes("cnpj")) {
+      campo = "cnpj";
+    } else if (texto.includes("telefone do assessor")) {
+      campo = "assessorTelefone";
+    } else if (texto.includes("telefone")) {
+      campo = "telefone";
+    } else if (texto.includes("e-mail do assessor")) {
+      campo = "assessorEmail";
+    } else if (texto.includes("e-mail da assessoria")) {
+      campo = "assessoriaEmail";
+    } else if (texto.includes("e-mail") && texto.includes("cadastrado")) {
+      campo = "assessorEmail";
+    } else if (texto.includes("senha")) {
+      campo = "senha";
+    }
+
+    if (campo) {
+      setErros({
+        [campo]: mensagem,
+      });
+    } else {
+      setErroGeral(mensagem);
+    }
+  }
+
   async function handleCadastro() {
+    setErroGeral("");
+
+    const novosErros: ErrosCadastroAssessoria = {};
+
+    if (!assessoriaNome.trim()) {
+      novosErros.assessoriaNome =
+        "Informe o nome da assessoria.";
+    }
+
+    const emailAssessoria = assessoriaEmail.trim();
+
     if (
-      !assessoriaNome.trim() ||
-      !assessorNome.trim() ||
-      !assessorEmail.trim() ||
-      !senha
+      emailAssessoria &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        emailAssessoria
+      )
     ) {
-      setErro("Preencha todos os campos obrigatórios (*).");
+      novosErros.assessoriaEmail =
+        "Informe um e-mail válido.";
+    }
+
+    if (cnpj.trim() && !cnpjValido(cnpj)) {
+      novosErros.cnpj =
+        "Informe um CNPJ válido.";
+    }
+
+    const erroTelefoneAssessoria =
+      validarTelefone(telefone);
+
+    if (erroTelefoneAssessoria) {
+      novosErros.telefone =
+        erroTelefoneAssessoria;
+    }
+
+    if (!assessorNome.trim()) {
+      novosErros.assessorNome =
+        "Informe o nome do assessor.";
+    }
+
+    const emailAssessor = assessorEmail.trim();
+
+    if (!emailAssessor) {
+      novosErros.assessorEmail =
+        "Informe o e-mail do assessor.";
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        emailAssessor
+      )
+    ) {
+      novosErros.assessorEmail =
+        "Informe um e-mail válido.";
+    }
+
+    const erroTelefoneAssessor =
+      validarTelefone(assessorTelefone);
+
+    if (erroTelefoneAssessor) {
+      novosErros.assessorTelefone =
+        erroTelefoneAssessor;
+    }
+
+    if (!senha) {
+      novosErros.senha = "Informe uma senha.";
+    } else {
+      const erroSenha = validarSenha(senha);
+
+      if (erroSenha) {
+        novosErros.senha = erroSenha;
+      }
+    }
+
+    setErros(novosErros);
+
+    if (Object.keys(novosErros).length > 0) {
       return;
     }
 
@@ -48,11 +189,11 @@ export default function Cadastro() {
 
       const data = await registerAssessoria({
         assessoria_nome: assessoriaNome.trim(),
-        assessoria_email: assessoriaEmail.trim(),
+        assessoria_email: emailAssessoria,
         cnpj: cnpj.trim(),
         telefone: telefone.trim(),
         assessor_nome: assessorNome.trim(),
-        assessor_email: assessorEmail.trim(),
+        assessor_email: emailAssessor,
         assessor_telefone: assessorTelefone.trim(),
         senha,
       });
@@ -61,23 +202,17 @@ export default function Cadastro() {
       console.log("JWT salvo:", data.token);
       console.log("Usuário:", data.usuario);
 
-      /*
-      o AuthContext ainda não está sendo atualizado por essa
-      função 
-      por isso, nesta etapa vamos apenas voltar para a
-      entrada depois de confirmar o cadastro.
-       */
       Alert.alert(
         "Cadastro realizado com sucesso!",
-        "Entre como assessor para se conectar à sua assessoria.",
+        "Entre como assessor para se conectar à sua assessoria."
       );
     } catch (error) {
-      console.error("Erro no cadastro:", error);
-
-      setErro(error instanceof Error
+      const mensagem =
+        error instanceof Error
           ? error.message
-          : "Não foi possível criar a assessoria."
-      );
+          : "Não foi possível criar a assessoria.";
+
+      mostrarErroApi(mensagem);
     } finally {
       setCarregando(false);
     }
@@ -133,7 +268,11 @@ export default function Cadastro() {
           label="Nome da assessoria *"
           placeholder="Digite o nome da assessoria"
           value={assessoriaNome}
-          onChangeText={setAssessoriaNome}
+          onChangeText={(texto) => {
+            setAssessoriaNome(texto);
+            limparErro("assessoriaNome");
+          }}
+          error={erros.assessoriaNome}
           clearable
         />
 
@@ -141,9 +280,14 @@ export default function Cadastro() {
           label="E-mail da assessoria"
           placeholder="Digite o e-mail da assessoria"
           keyboardType="email-address"
+          autoCorrect={false}
           autoCapitalize="none"
           value={assessoriaEmail}
-          onChangeText={setAssessoriaEmail}
+          onChangeText={(texto) => {
+            setAssessoriaEmail(texto);
+            limparErro("assessoriaEmail");
+          }}
+          error={erros.assessoriaEmail}
           clearable
         />
 
@@ -152,7 +296,11 @@ export default function Cadastro() {
           placeholder="Digite o CNPJ"
           keyboardType="numeric"
           value={cnpj}
-          onChangeText={setCnpj}
+          onChangeText={(texto) => {
+            setCnpj(texto);
+            limparErro("cnpj");
+          }}
+          error={erros.cnpj}
           clearable
         />
 
@@ -161,7 +309,11 @@ export default function Cadastro() {
           placeholder="Digite o telefone"
           keyboardType="phone-pad"
           value={telefone}
-          onChangeText={setTelefone}
+          onChangeText={(texto) => {
+            setTelefone(texto);
+            limparErro("telefone");
+          }}
+          error={erros.telefone}
           clearable
         />
 
@@ -184,7 +336,11 @@ export default function Cadastro() {
           label="Nome do assessor *"
           placeholder="Digite o nome do assessor"
           value={assessorNome}
-          onChangeText={setAssessorNome}
+          onChangeText={(texto) => {
+            setAssessorNome(texto);
+            limparErro("assessorNome");
+          }}
+          error={erros.assessorNome}
           clearable
         />
 
@@ -193,8 +349,13 @@ export default function Cadastro() {
           placeholder="Digite o e-mail do assessor"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           value={assessorEmail}
-          onChangeText={setAssessorEmail}
+          onChangeText={(texto) => {
+            setAssessorEmail(texto);
+            limparErro("assessorEmail");
+          }}
+          error={erros.assessorEmail}
           clearable
         />
 
@@ -203,7 +364,11 @@ export default function Cadastro() {
           placeholder="Digite uma senha"
           secureTextEntry
           value={senha}
-          onChangeText={setSenha}
+          onChangeText={(texto) => {
+            setSenha(texto);
+            limparErro("senha");
+          }}
+          error={erros.senha}
           clearable
           showPasswordToggle
         />
@@ -213,16 +378,20 @@ export default function Cadastro() {
           placeholder="Digite o telefone do assessor"
           keyboardType="phone-pad"
           value={assessorTelefone}
-          onChangeText={setAssessorTelefone}
+          onChangeText={(texto) => {
+            setAssessorTelefone(texto);
+            limparErro("assessorTelefone");
+          }}
+          error={erros.assessorTelefone}
           clearable
         />
 
-        {erro ? (
+        {erroGeral ? (
           <Text
             weight="Medium"
             style={styles.erro}
           >
-            {erro}
+            {erroGeral}
           </Text>
         ) : null}
 

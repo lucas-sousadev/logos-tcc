@@ -14,7 +14,7 @@ import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 
 import { listarJornalistas } from "@/services/api/jornalista";
-import { Funcionario, getToken } from "@/services/api/auth";
+import { Funcionario } from "@/services/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { listarClientes, } from "@/services/api/cliente";
@@ -133,16 +133,6 @@ export default function Dashboard() {
       temPermissao,
     ])
   );
-
-  useEffect(() => {
-    async function mostrarToken() {
-      const token = await getToken();
-      console.log("ACCESS TOKEN ATUAL:", token);
-      localStorage.getItem("logos_token")
-    }
-
-    mostrarToken();
-  }, []);
  
   return (
     <View

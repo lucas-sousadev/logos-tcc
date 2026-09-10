@@ -24,14 +24,14 @@ class VeiculoController
                 VeiculoService::listar(
                     $assessoriaId,
                     [
-                        'page' =>
-                            $_GET['page'] ?? 1,
-                        'limit' =>
-                            $_GET['limit'] ?? 50,
-                        'busca' =>
-                            $_GET['busca'] ?? '',
-                        'ativo' =>
-                            $_GET['ativo'] ?? null
+                        'page' => $_GET['page'] ?? 1,
+                        'limit' => $_GET['limit'] ?? 50,
+                        'busca' => $_GET['busca'] ?? '',
+                        'ativo' => $_GET['ativo'] ?? null,
+                        'ordem' => $_GET['ordem'] ?? 'nome',
+                        'direcao' => $_GET['direcao'] ?? 'ASC',
+                        'min_contatos' => $_GET['min_contatos'] ?? null,
+                        'max_contatos' => $_GET['max_contatos'] ?? null,
                     ]
                 );
 

@@ -9,13 +9,23 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "../contexts/AuthContext";
-import { Convite } from "../services/api/auth";
 import { useTheme } from "@/contexts/ThemeContext";
+type CampoCadastro =
+  | "codigo"
+  | "nome"
+  | "email"
+  | "telefone"
+  | "senha"
+  | "confirmarSenha";
 
+type ErrosCadastro = Partial<
+  Record<CampoCadastro, string>
+>;
 import BackButton from "@/components/ui/BackButton";
 import Text from "@/components/ui/Text";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { validarSenha } from "@/utils/validarSenha";
 
 export default function CadastroFuncionario() {
   const router = useRouter();
@@ -30,8 +40,9 @@ export default function CadastroFuncionario() {
   const [etapa, setEtapa] = useState<1 | 2>(1);
 
   const [codigo, setCodigo] = useState("");
-  const [convite, setConvite] = useState<Convite | null>(null);
-  const [erro, setErro] = useState("");
+  const [erros, setErros] =
+  useState<ErrosCadastro>({});
+  const [erroGeral, setErroGeral] = useState("");
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -41,55 +52,103 @@ export default function CadastroFuncionario() {
 
   const [carregando, setCarregando] = useState(false);
 
-  async function handleValidarConvite() {
-    setErro("");
-
-    if (!codigo.trim()) {
-      setErro("Digite o código do convite.");
-      return;
-    }
-
-    try {
-      setCarregando(true);
-
-      const conviteValidado =
-        await validarConvite(codigo.trim());
-
-      setConvite(conviteValidado);
-      setEtapa(2);
-    } catch (error) {
-      console.error(
-        "Erro ao validar convite:",
-        error
-      );
-
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível validar o convite."
-      );
-    } finally {
-      setCarregando(false);
-    }
+  function limparErro(campo: CampoCadastro) {
+    setErros((atuais) => ({
+      ...atuais,
+      [campo]: undefined,
+    }));
   }
 
-  async function handleCadastro() {
-    setErro("");
+  async function handleValidarConvite() {
+  setErroGeral("");
+  setErros({});
 
-    if (
-      !nome.trim() ||
-      !email.trim() ||
-      !senha ||
-      !confirmarSenha
-    ) {
-      setErro(
-        "Preencha todos os campos obrigatórios (*)."
-      );
-      return;
+  if (!codigo.trim()) {
+    setErros({
+      codigo: "Digite o código do convite.",
+    });
+
+    return;
+  }
+
+  try {
+    setCarregando(true);
+
+    await validarConvite(codigo.trim());
+
+    setEtapa(2);
+  } catch (error) {
+    const mensagem =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível validar o convite.";
+
+    if (mensagem.includes("Muitas tentativas")) {
+      setErroGeral(mensagem);
+    } else {
+      setErros({
+        codigo: mensagem,
+      });
+    }
+  } finally {
+    setCarregando(false);
+  }
+}
+
+  async function handleCadastro() {
+    setErroGeral("");
+
+    const novosErros: ErrosCadastro = {};
+
+    if (!nome.trim()) {
+      novosErros.nome = "Informe seu nome.";
     }
 
-    if (senha !== confirmarSenha) {
-      setErro("As senhas não coincidem.");
+    const emailFormatado = email.trim();
+
+    if (!emailFormatado) {
+      novosErros.email = "Informe seu e-mail.";
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        emailFormatado
+      )
+    ) {
+      novosErros.email = "Informe um e-mail válido.";
+    }
+
+    const telefoneFormatado = telefone.trim();
+
+    if (telefoneFormatado) {
+      const telefoneNumerico =
+        telefoneFormatado.replace(/\D/g, "");
+
+      if (!/^\d{10,11}$/.test(telefoneNumerico)) {
+        novosErros.telefone =
+          "O telefone deve possuir 10 ou 11 dígitos.";
+      }
+    }
+
+    if (!senha) {
+      novosErros.senha = "Informe uma senha.";
+    } else {
+      const erroSenha = validarSenha(senha);
+
+      if (erroSenha) {
+        novosErros.senha = erroSenha;
+      }
+    }
+
+    if (!confirmarSenha) {
+      novosErros.confirmarSenha =
+        "Confirme sua senha.";
+    } else if (senha !== confirmarSenha) {
+      novosErros.confirmarSenha =
+        "As senhas não coincidem.";
+    }
+
+    setErros(novosErros);
+
+    if (Object.keys(novosErros).length > 0) {
       return;
     }
 
@@ -111,7 +170,7 @@ export default function CadastroFuncionario() {
         error
       );
 
-      setErro(
+      setErroGeral(
         error instanceof Error
           ? error.message
           : "Não foi possível criar a conta."
@@ -122,7 +181,7 @@ export default function CadastroFuncionario() {
   }
 
   function voltar() {
-    setErro("");
+    setErroGeral("");
 
     if (etapa === 2) {
       setEtapa(1);
@@ -146,7 +205,7 @@ export default function CadastroFuncionario() {
 
       <BackButton
         onPress={voltar}
-        color={theme.textoContainer}
+        color={theme.texto}
       />
 
       <ScrollView
@@ -187,8 +246,11 @@ export default function CadastroFuncionario() {
               autoCapitalize="characters"
               autoCorrect={false}
               value={codigo}
-              onChangeText={setCodigo}
-              error={erro}
+              onChangeText={(texto) => {
+                setCodigo(texto);
+                limparErro("codigo");
+              }}
+              error={erros.codigo}
             />
 
             <Button
@@ -243,53 +305,82 @@ export default function CadastroFuncionario() {
                 },
               ]}
             >
-              Assessoria: {convite?.assessoria_id}
+              Agora informe seus dados para criar a conta.
             </Text>
 
             <Input
               label="Nome *"
-              placeholder="Seu nome"
+              placeholder="Seu nome *"
               value={nome}
-              onChangeText={setNome}
+              onChangeText={(texto) => {
+                setNome(texto);
+                limparErro("nome");
+              }}
+              error={erros.nome}
             />
 
             <Input
               label="E-mail *"
-              placeholder="Seu e-mail"
+              placeholder="Seu e-mail *"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(texto) => {
+                setEmail(texto);
+                limparErro("email");
+              }}
+              error={erros.email}
             />
 
             <Input
               label="Telefone"
-              placeholder="Seu telefone"
+              placeholder="Ex.: (11) 99999-9999"
               keyboardType="phone-pad"
               value={telefone}
-              onChangeText={setTelefone}
+              onChangeText={(texto) => {
+                setTelefone(texto);
+                limparErro("telefone");
+              }}
+              error={erros.telefone}
             />
 
             <Input
               label="Senha *"
-              placeholder="Sua senha"
+              placeholder="Sua senha *"
               secureTextEntry
-              value={senha}
-              onChangeText={setSenha}
               clearable
               showPasswordToggle
+              value={senha}
+              onChangeText={(texto) => {
+                setSenha(texto);
+                limparErro("senha");
+              }}
+              error={erros.senha}
             />
 
             <Input
               label="Confirmar senha *"
-              placeholder="Confirme sua senha"
+              placeholder="Confirme sua senha *"
               secureTextEntry
-              value={confirmarSenha}
-              onChangeText={setConfirmarSenha}
-              error={erro}
               clearable
               showPasswordToggle
+              value={confirmarSenha}
+              onChangeText={(texto) => {
+                setConfirmarSenha(texto);
+                limparErro("confirmarSenha");
+              }}
+              error={erros.confirmarSenha}
             />
+            
+            {erroGeral ? (
+              <Text
+                weight="Medium"
+                style={styles.erroGeral}
+              >
+                {erroGeral}
+              </Text> 
+            ) : null}
 
             <Button
               title="CRIAR CONTA"
@@ -300,7 +391,8 @@ export default function CadastroFuncionario() {
 
             <TouchableOpacity
               onPress={() => {
-                setErro("");
+                setErroGeral("");
+                setErros({});
                 setEtapa(1);
               }}
               activeOpacity={0.7}
@@ -387,5 +479,12 @@ const styles = StyleSheet.create({
   link: {
     textAlign: "center",
     marginTop: 25,
+  },
+  erroGeral: {
+    color: "#EF4444",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 4,
   },
 });
