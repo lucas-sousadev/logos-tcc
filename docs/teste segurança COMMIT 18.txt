@@ -1,4 +1,3 @@
-A base está boa, mas eu ainda não consideraria o sistema pronto para exposição pública. Não encontrei SQL Injection, XSS armazenado ou quebra evidente de isolamento entre assessorias na revisão estática; porém há cinco riscos que precisam ser tratados antes de produção.
 
 A classificação abaixo usa o [OWASP Top 10:2025](https://owasp.org/Top10/).
 

@@ -800,7 +800,7 @@ export default function ClienteDetalhes() {
           <>
             <Text
               weight="Bold"
-              style={styles.sectionTitle}
+              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
             >
               DADOS PRINCIPAIS
             </Text>
@@ -815,6 +815,7 @@ export default function ClienteDetalhes() {
               autoCapitalize="words"
               error={erros.nome}
               showChanged={campoAlterado("nome")}
+              clearable
             />
 
             <Input
@@ -829,6 +830,7 @@ export default function ClienteDetalhes() {
               showChanged={campoAlterado(
                 "segmento"
               )}
+              clearable              
             />
 
             <Input
@@ -843,6 +845,7 @@ export default function ClienteDetalhes() {
               showChanged={campoAlterado(
                 "responsavel"
               )}
+              clearable
             />
 
             <Input
@@ -856,6 +859,7 @@ export default function ClienteDetalhes() {
               autoCorrect={false}
               error={erros.cnpj}
               showChanged={campoAlterado("cnpj")}
+              clearable
             />
 
             <Input
@@ -872,11 +876,12 @@ export default function ClienteDetalhes() {
               showChanged={campoAlterado(
                 "descricao"
               )}
+              clearable
             />
 
             <Text
               weight="Bold"
-              style={styles.sectionTitle}
+              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
             >
               CONTATO
             </Text>
@@ -893,6 +898,7 @@ export default function ClienteDetalhes() {
               autoCorrect={false}
               error={erros.email}
               showChanged={campoAlterado("email")}
+              clearable
             />
 
             <Input
@@ -907,6 +913,7 @@ export default function ClienteDetalhes() {
               showChanged={campoAlterado(
                 "telefone"
               )}
+              clearable
             />
 
             <Input
@@ -921,11 +928,12 @@ export default function ClienteDetalhes() {
               autoCorrect={false}
               error={erros.site}
               showChanged={campoAlterado("site")}
+              clearable
             />
 
             <Text
               weight="Bold"
-              style={styles.sectionTitle}
+              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
             >
               LOCALIZAÇÃO
             </Text>
@@ -940,6 +948,7 @@ export default function ClienteDetalhes() {
               autoCapitalize="words"
               error={erros.cidade}
               showChanged={campoAlterado("cidade")}
+              clearable
             />
 
             <Input
@@ -952,11 +961,12 @@ export default function ClienteDetalhes() {
               autoCapitalize="words"
               error={erros.estado}
               showChanged={campoAlterado("estado")}
+              clearable
             />
 
             <Text
               weight="Bold"
-              style={styles.sectionTitle}
+              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
             >
               IDENTIDADE VISUAL
             </Text>
@@ -1079,7 +1089,7 @@ export default function ClienteDetalhes() {
           <>
             <Text
               weight="Bold"
-              style={styles.sectionTitle}
+              style={[styles.sectionTitle, {color: theme.texto, borderBottomColor: theme.borda, borderBottomWidth: 0, textAlign: "left"}]}
             >
               INFORMAÇÕES
             </Text>
@@ -1417,8 +1427,10 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 13,
-    marginBottom: 12,
-    marginTop: 4,
+    marginBottom: 14,
+    borderBottomWidth: 1.5,
+    paddingBottom: 2,
+    textAlign: "center"
   },
 
   infoRow: {

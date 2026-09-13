@@ -223,7 +223,7 @@ export default function NovoCliente() {
 
         <Text
           weight="Bold"
-          style={styles.sectionTitle}
+          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
         >
           DADOS PRINCIPAIS
         </Text>
@@ -237,6 +237,7 @@ export default function NovoCliente() {
           placeholder="Nome do cliente"
           autoCapitalize="words"
           error={erros.nome}
+          clearable
         />
 
         <Input
@@ -248,6 +249,7 @@ export default function NovoCliente() {
           placeholder="Ex.: Tecnologia, Saúde, Varejo"
           autoCapitalize="words"
           error={erros.segmento}
+          clearable
         />
 
         <Input
@@ -259,6 +261,7 @@ export default function NovoCliente() {
           placeholder="Nome do responsável pelo cliente"
           autoCapitalize="words"
           error={erros.responsavel}
+          clearable
         />
 
         <Input
@@ -271,6 +274,7 @@ export default function NovoCliente() {
           autoCapitalize="characters"
           autoCorrect={false}
           error={erros.cnpj}
+          clearable
         />
 
         <Input
@@ -284,11 +288,12 @@ export default function NovoCliente() {
           textAlignVertical="top"
           style={styles.textArea}
           error={erros.descricao}
+          clearable
         />
 
         <Text
           weight="Bold"
-          style={styles.sectionTitle}
+          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
         >
           CONTATO
         </Text>
@@ -304,6 +309,7 @@ export default function NovoCliente() {
           autoCapitalize="none"
           autoCorrect={false}
           error={erros.email}
+          clearable
         />
 
         <Input
@@ -315,6 +321,7 @@ export default function NovoCliente() {
           placeholder="Ex.: (11) 99999-9999"
           keyboardType="phone-pad"
           error={erros.telefone}
+          clearable
         />
 
         <Input
@@ -328,11 +335,12 @@ export default function NovoCliente() {
           autoCapitalize="none"
           autoCorrect={false}
           error={erros.site}
+          clearable
         />
 
         <Text
           weight="Bold"
-          style={styles.sectionTitle}
+          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
         >
           LOCALIZAÇÃO
         </Text>
@@ -346,6 +354,7 @@ export default function NovoCliente() {
           placeholder="Ex.: São Paulo"
           autoCapitalize="words"
           error={erros.cidade}
+          clearable
         />
 
         <Input
@@ -357,13 +366,14 @@ export default function NovoCliente() {
           placeholder="Ex.: São Paulo"
           autoCapitalize="words"
           error={erros.estado}
+          clearable
         />
 
         <Text
           weight="Bold"
-          style={styles.sectionTitle}
+          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
         >
-          IDENTIDADE VISUAL
+           IDENTIDADE VISUAL
         </Text>
 
         <LogoPicker
@@ -472,6 +482,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     marginBottom: 14,
+    borderBottomWidth: 1.5,
+    paddingBottom: 2,
+    textAlign: "center"
   },
 
   textArea: {

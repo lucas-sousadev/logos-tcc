@@ -175,7 +175,7 @@ export default function ClippingDetalhes() {
       ]}
     >
       <Header
-        title="Detalhes do clipping"
+        title="Detalhes"
         showBackButton
         onBackPress={() => router.back()}
       />

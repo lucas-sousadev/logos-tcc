@@ -2,7 +2,6 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -12,12 +11,12 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import ClippingCard from "@/components/clipping/ClippingCard";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -129,15 +128,6 @@ export default function ClippingsDoCliente() {
     });
   }
 
-  function formatarData(data: string | null) {
-    if (!data) return "Data pendente";
-
-    const partes = data.split("-");
-    if (partes.length !== 3) return data;
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
   return (
     <View
       style={[
@@ -214,146 +204,19 @@ export default function ClippingsDoCliente() {
             </View>
           ) : null}
 
-          {clippings.map((clipping) => {
-            const estaExpandido =
-              expandido === clipping.id;
-
-            return (
-              <View
-                key={clipping.id}
-                style={[
-                  styles.clippingCard,
-                  {
-                    borderColor: theme.borda,
-                    backgroundColor: theme.background,
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    setExpandido(
-                      estaExpandido ? null : clipping.id
-                    )
-                  }
-                >
-                  <View style={styles.cardTop}>
-                    <View style={styles.dateBadge}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={16}
-                        color={theme.primaria}
-                      />
-
-                      <Text
-                        weight="SemiBold"
-                        style={styles.dateText}
-                      >
-                        {formatarData(
-                          clipping.data_publicacao
-                        )}
-                      </Text>
-                    </View>
-
-                    <Ionicons
-                      name={
-                        estaExpandido
-                          ? "chevron-up"
-                          : "chevron-down"
-                      }
-                      size={20}
-                      color={theme.textoSub}
-                    />
-                  </View>
-
-                  <Text
-                    weight="SemiBold"
-                    style={styles.pauta}
-                    numberOfLines={estaExpandido ? undefined : 2}
-                  >
-                    {clipping.pauta || "Pauta pendente"}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.meta,
-                      { color: theme.textoSub },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {[
-                      clipping.veiculo_nome ||
-                        "Sem veículo",
-                      clipping.categorias.length > 0
-                        ? clipping.categorias.join(", ")
-                        : "Sem categoria",
-                      clipping.total_anexos > 0
-                        ? `${clipping.total_anexos} anexo(s)`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" • ")}
-                  </Text>
-                </TouchableOpacity>
-
-                {estaExpandido ? (
-                  <View style={styles.expanded}>
-                    <Text
-                      style={[
-                        styles.detail,
-                        { color: theme.textoSub },
-                      ]}
-                    >
-                      {clipping.programa_secao ||
-                        "Programa/seção não informado"}
-                    </Text>
-
-                    {clipping.link ? (
-                      <Text
-                        style={[
-                          styles.detail,
-                          { color: theme.textoSub },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {clipping.link}
-                      </Text>
-                    ) : null}
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() =>
-                        abrirDetalhes(clipping)
-                      }
-                      style={[
-                        styles.detailButton,
-                        {
-                          backgroundColor:
-                            theme.backgroundContainer,
-                        },
-                      ]}
-                    >
-                      <Text
-                        weight="SemiBold"
-                        style={{
-                          color: theme.textoContainer,
-                          fontSize: 12,
-                        }}
-                      >
-                        VER DETALHES
-                      </Text>
-
-                      <Ionicons
-                        name="arrow-forward"
-                        size={16}
-                        color={theme.textoContainer}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
+          {clippings.map((clipping) => (
+            <ClippingCard
+              key={clipping.id}
+              clipping={clipping}
+              expandido={expandido === clipping.id}
+              onAlternarExpansao={() =>
+                setExpandido((atual) =>
+                  atual === clipping.id ? null : clipping.id
+                )
+              }
+              onAbrirDetalhes={() => abrirDetalhes(clipping)}
+            />
+          ))}
 
           {clippings.length === 0 ? (
             <View
@@ -388,7 +251,8 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
 
@@ -412,64 +276,6 @@ const styles = StyleSheet.create({
 
   newButton: {
     width: 100,
-  },
-
-  clippingCard: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-  },
-
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 9,
-  },
-
-  dateBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-
-  dateText: {
-    fontSize: 11,
-  },
-
-  pauta: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-  meta: {
-    fontSize: 11,
-    marginTop: 8,
-  },
-
-  expanded: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#D1D5DB",
-    marginTop: 13,
-    paddingTop: 12,
-  },
-
-  detail: {
-    fontSize: 11,
-    lineHeight: 17,
-    marginBottom: 7,
-  },
-
-  detailButton: {
-    minHeight: 40,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
   },
 
   empty: {

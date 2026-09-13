@@ -57,10 +57,16 @@ export default function Clipping() {
           ];
 
       setAnos(
-        [...lista].sort(
-          (a, b) =>
-            b.ano_referencia - a.ano_referencia
-        )
+        [...lista].sort((a, b) => {
+          const aAtual = a.ano_referencia === anoAtual;
+          const bAtual = b.ano_referencia === anoAtual;
+
+          if (aAtual !== bAtual) {
+            return aAtual ? -1 : 1;
+          }
+
+          return b.ano_referencia - a.ano_referencia;
+        })
       );
     } catch (error) {
       setErro(
@@ -173,9 +179,9 @@ export default function Clipping() {
             <TouchableOpacity
               key={item.ano_referencia}
               activeOpacity={0.8}
-              onPress={() =>
-                abrirAno(item.ano_referencia)
-              }
+              accessibilityRole="button"
+              accessibilityHint="Abrir os clientes e publicações deste ano"
+              onPress={() => abrirAno(item.ano_referencia)}
               style={[
                 styles.yearCard,
                 {
@@ -184,46 +190,85 @@ export default function Clipping() {
                 },
               ]}
             >
-              <View
-                style={[
-                  styles.yearIcon,
-                  {
-                    backgroundColor:
-                      theme.backgroundContainer,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="calendar-outline"
-                  size={25}
-                  color={theme.textoContainer}
-                />
-              </View>
-
-              <View style={styles.yearInfo}>
+              <View style={styles.yearHeader}>
                 <Text
                   weight="Bold"
-                  style={styles.yearText}
+                  style={[styles.yearText, {color: theme.textoTerciaria}]}
                 >
-                  Clipping {item.ano_referencia}
+                  {item.ano_referencia}
                 </Text>
 
-                <Text
-                  style={[
-                    styles.yearMeta,
-                    { color: theme.textoSub },
-                  ]}
-                >
-                  {item.total_clippings} publicação(ões) •{" "}
-                  {item.total_clientes} cliente(s)
-                </Text>
+                <View style={styles.yearHeaderRight}>
+                  {item.ano_referencia === anoAtual ? (
+                    <Text
+                      weight="SemiBold"
+                      style={[
+                        styles.yearBadge,
+                        {
+                          color: theme.textoTerciaria,
+                          backgroundColor: theme.borda + "18",
+                        },
+                      ]}
+                    >
+                      Ano atual
+                    </Text>
+                  ) : null}
+
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={theme.textoSub}
+                    accessible={false}
+                  />
+                </View>
               </View>
 
-              <Ionicons
-                name="chevron-forward"
-                size={22}
-                color={theme.textoSub}
-              />
+              <View
+                style={[
+                  styles.yearStats,
+                  { borderTopColor: theme.borda + "40" },
+                ]}
+              >
+                <View style={styles.yearStat}>
+                  <Text
+                    weight="SemiBold"
+                    style={styles.yearStatNumber}
+                  >
+                    {item.total_clippings.toLocaleString("pt-BR")}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.yearStatLabel,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    {item.total_clippings === 1
+                      ? "publicação"
+                      : "publicações"}
+                  </Text>
+                </View>
+
+                <View style={styles.yearStat}>
+                  <Text
+                    weight="SemiBold"
+                    style={styles.yearStatNumber}
+                  >
+                    {item.total_clientes.toLocaleString("pt-BR")}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.yearStatLabel,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    {item.total_clientes === 1
+                      ? "cliente com publicações"
+                      : "clientes com publicações"}
+                  </Text>
+                </View>
+              </View>
             </TouchableOpacity>
           ))}
 
@@ -260,7 +305,8 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 40,
   },
 
@@ -297,35 +343,64 @@ const styles = StyleSheet.create({
   },
 
   yearCard: {
-    minHeight: 82,
+    minHeight: 150,
     borderWidth: 1.5,
     borderRadius: 18,
-    padding: 14,
+    padding: 16,
     marginBottom: 12,
+  },
+
+  yearHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    columnGap: 12,
+    rowGap: 8,
+  },
+
+  yearHeaderRight: {
     flexDirection: "row",
     alignItems: "center",
-  },
-
-  yearIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 13,
-  },
-
-  yearInfo: {
-    flex: 1,
+    gap: 8,
   },
 
   yearText: {
-    fontSize: 15,
+    fontSize: 28,
+    lineHeight: 34,
   },
 
-  yearMeta: {
+  yearBadge: {
     fontSize: 11,
-    marginTop: 5,
+    lineHeight: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  yearStats: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 12,
+    paddingTop: 12,
+  },
+
+  yearStat: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+
+  yearStatNumber: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+
+  yearStatLabel: {
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   empty: {
