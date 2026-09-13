@@ -1,0 +1,40 @@
+A base está boa, mas eu ainda não consideraria o sistema pronto para exposição pública. Não encontrei SQL Injection, XSS armazenado ou quebra evidente de isolamento entre assessorias na revisão estática; porém há cinco riscos que precisam ser tratados antes de produção.
+
+A classificação abaixo usa o [OWASP Top 10:2025](https://owasp.org/Top10/).
+
+| Prioridade | Risco encontrado | OWASP | Correção recomendada |
+|---|---|---|---|
+| Crítica | API configurada com `http://` e IP local. Tokens, senhas e dados de contatos podem ser interceptados ou alterados na rede. | A04 – Cryptographic Failures | Produção deve usar domínio com HTTPS, redirecionamento HTTP→HTTPS e HSTS. Deixar URL da API em variável de ambiente. |
+| Crítica | No web, access token e refresh token ficam no `localStorage`; também existem logs de tokens em telas de teste. | A04 / A07 | Nunca registrar tokens. Em web público, preferir refresh token em cookie `HttpOnly`, `Secure` e `SameSite`; no app nativo, manter `SecureStore`. Rotacionar tokens que tenham sido expostos. |
+| Alta | Login, cadastro, refresh e validação de convite não têm limitação contra tentativas automatizadas. | A07 – Authentication Failures | Rate limit por IP e identificador: login, convite, cadastro e refresh. Após repetidas falhas, aplicar espera progressiva. |
+| Alta | Um access token continua válido por até duas horas após logout, desativação ou alteração de perfil. | A01 / A07 | No middleware autenticado, consultar se o usuário continua ativo e validar uma `token_version` ou `sessao_revogada_em`. Ao desativar/trocar senha, revogar refresh tokens e invalidar tokens ativos. |
+| Alta | Senhas aceitam mínimo de 6 caracteres; não há verificação de e-mail. | A07 | Alterar para mínimo de 8 caracteres agora; idealmente validar força/senhas comuns. Implementar confirmação de e-mail e recuperação antes de abrir o sistema ao público. |
+| Alta em produção | Banco conectado como `root`. | A02 – Security Misconfiguration | Criar usuário exclusivo da API, limitado ao banco e às operações necessárias. Migrações podem usar outra conta. |
+| Média | Validação pública de convite retorna dados além do necessário, como identificadores internos e e-mail de destino. | A01 / A04 | Retornar apenas validade/expiração mínima; melhor ainda, validar o código somente durante o cadastro. |
+| Média | Faltam cabeçalhos de proteção globais e política de CORS de produção. | A02 | Configurar `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, proteção contra iframe e CSP no web. CORS deve aceitar somente o domínio oficial. |
+| Média | Upload de logos está bem validado, mas a proteção depende do `.htaccess`. | A02 / A08 | Replicar a proibição de execução de scripts na configuração do Apache/virtual host, não apenas no `.htaccess`. |
+| Média | Exportações de mailing contêm PII e não vi proteção explícita contra cache. | A04 | Adicionar `Cache-Control: private, no-store` e evitar registrar conteúdo exportado em logs. |
+| Média | Não há trilha estruturada de eventos de segurança. | A09 – Security Logging and Alerting Failures | Registrar login falho, bloqueios, exportações, alterações de permissão, exclusões em lote e tentativas negadas — sem senhas, tokens ou CSVs. |
+| Baixa/Média | Falta rotina de auditoria de dependências. | A03 – Software Supply Chain Failures | Rodar `composer audit` e `npm audit` antes de cada entrega; atualizar dependências vulneráveis. |
+
+Pontos positivos encontrados:
+
+- Consultas usam prepared statements com emulação PDO desativada.
+- Ordenação dinâmica é restringida por lista permitida.
+- Recursos de contatos, veículos e clientes são filtrados por `assessoria_id`.
+- Permissões são verificadas no backend, não apenas na interface.
+- Um funcionário não pode conceder permissão acima da própria permissão.
+- Refresh tokens são armazenados como hash e rotacionados.
+- Senhas usam `password_hash` / `password_verify`.
+- Uploads validam MIME real, dimensão, tamanho, nome aleatório e bloqueiam extensões executáveis.
+
+Plano recomendado, na ordem:
+
+1. HTTPS + remover logs de tokens antes de qualquer distribuição.
+2. Rate limit para autenticação e convites.
+3. Revogação de sessão/desativação imediata.
+4. Senha mínima de 8 caracteres e conta de banco sem `root`.
+5. Cabeçalhos, CORS de produção e cache seguro para exportações.
+6. Verificação de e-mail, recuperação de senha e auditoria.
+
+A ausência de SQL Injection ou XSS nesta revisão não substitui um teste de invasão: foi uma análise estática do código disponível, não um pentest com tentativas reais de exploração.

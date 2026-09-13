@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function AppLayout() {
     const { temPermissao } = useAuth();
     const insets = useSafeAreaInsets();
+    const { theme } = useTheme();
     const [fontsLoaded] = useFonts({
       Montserrat_400Regular,
       Montserrat_500Medium,
@@ -27,7 +28,6 @@ export default function AppLayout() {
     if (!fontsLoaded) {
       return null;
     }
-    const { theme } = useTheme();
 
   return (
 

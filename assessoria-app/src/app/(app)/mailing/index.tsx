@@ -78,9 +78,7 @@ export default function Mailing() {
 
   const [excluindoSelecionados, setExcluindoSelecionados] = useState(false);
   const { theme } = useTheme();
-  const {
-    usuario, temPermissao
-  } = useAuth();
+  const { temPermissao } = useAuth();
 
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 

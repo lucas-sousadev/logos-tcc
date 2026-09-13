@@ -27,9 +27,17 @@ export default function FuncionarioFilterModal({
   );
 
   useEffect(() => {
-    if (visible) {
-      setAtivo(filtros.ativo);
+    if (!visible) {
+      return;
     }
+
+    const timer = setTimeout(() => {
+      setAtivo(filtros.ativo);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [visible, filtros.ativo]);
 
   return (

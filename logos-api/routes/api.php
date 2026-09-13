@@ -336,3 +336,119 @@ $router->delete(
         $permissionMiddleware
     ]
 );
+
+// clipping
+
+$router->get(
+    "/api/clippings/{id}",
+    "ClippingController:buscar",
+    "CLIPPING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->get(
+    "/api/clippings/anos",
+    "ClippingController:anos",
+    "CLIPPING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->get(
+    "/api/clippings/anos/{ano}/clientes",
+    "ClippingController:clientesPorAno",
+    "CLIPPING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->get(
+    "/api/clippings/pautas",
+    "ClippingController:pautas",
+    "CLIPPING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->get(
+    "/api/clippings",
+    "ClippingController:listar",
+    "CLIPPING.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
+    "/api/clippings",
+    "ClippingController:criar",
+    "CLIPPING.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->put(
+    "/api/clippings/{id}",
+    "ClippingController:atualizar",
+    "CLIPPING.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+// anexos dos clippings
+
+$router->get(
+    "/api/clippings/{id}/anexos",
+    "ClippingController:listarAnexos",
+    "CLIPPING.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/clippings/{id}/anexos/{anexo_id}",
+    "ClippingController:buscarAnexo",
+    "CLIPPING.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/clippings/{id}/anexos/{anexo_id}/arquivo",
+    "ClippingController:arquivoAnexo",
+    "CLIPPING.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/clippings/{id}/anexos",
+    "ClippingController:criarAnexo",
+    "CLIPPING.ANEXAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/clippings/{id}/anexos/{anexo_id}",
+    "ClippingController:atualizarAnexo",
+    "CLIPPING.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->delete(
+    "/api/clippings/{id}/anexos/{anexo_id}",
+    "ClippingController:excluirAnexo",
+    "CLIPPING.EXCLUIR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);

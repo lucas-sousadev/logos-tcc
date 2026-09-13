@@ -3,6 +3,7 @@ import {
 } from "@/services/api/auth";
 
 import { API_URL } from "@/constants/api";
+import type { Tier } from "@/constants/tier";
 
 export interface Veiculo {
   id: number;
@@ -11,6 +12,7 @@ export interface Veiculo {
   descricao: string | null;
   logo_path: string | null;
   alcance: string | null;
+  tier: Tier | null;
   ativo: number;
   contatos_vinculados: number;
   created_at: string;
@@ -22,6 +24,7 @@ export interface DadosVeiculo {
   descricao?: string;
   logo_path?: string | null;
   alcance?: string;
+  tier?: Tier | null;
   ativo?: boolean;
 }
 
@@ -401,6 +404,10 @@ function criarFormDataVeiculo(
 
   if (removerLogo) {
     formData.append("remover_logo", "true");
+  }
+
+  if (dados.tier !== undefined) {
+    formData.append("tier", dados.tier === null ? "" : String(dados.tier));
   }
 
   if (logo) {

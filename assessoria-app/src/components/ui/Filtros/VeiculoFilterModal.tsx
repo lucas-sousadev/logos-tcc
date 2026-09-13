@@ -56,11 +56,19 @@ export default function VeiculoFilterModal({
   ] = useState("");
 
   useEffect(() => {
-    if (visible) {
+    if (!visible) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
       setFiltrosTemporarios(filtros);
       setErroMinContatos("");
       setErroMaxContatos("");
-    }
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [visible, filtros]);
 
   function definirOrdenacao(

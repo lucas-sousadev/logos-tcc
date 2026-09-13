@@ -111,7 +111,8 @@ class VeiculoService
                 $descricao,
                 $logoPath,
                 $alcance,
-                self::ativo($dados)
+                self::ativo($dados),
+                self::tier($dados['tier'] ?? null)
             );
         } catch (\PDOException $e) {
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
@@ -189,7 +190,10 @@ class VeiculoService
                 $descricao,
                 $logoPath,
                 $alcance,
-                self::ativo($dados)
+                self::ativo($dados),
+                array_key_exists('tier', $dados)
+                    ? self::tier($dados['tier'])
+                    : self::tier($veiculo['tier'])
             );
         } catch (\PDOException $e) {
             if ((int) $e->errorInfo[1] === 1062) {
@@ -396,6 +400,25 @@ class VeiculoService
         return function_exists('mb_strlen')
             ? mb_strlen($valor, 'UTF-8')
             : strlen($valor);
+    }
+
+    private static function tier(mixed $valor): ?int
+    {
+        if (is_string($valor)) {
+            $valor = trim($valor);
+        }
+
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        if (!in_array($valor, [1, 2, 3, '1', '2', '3'], true)) {
+            throw new \InvalidArgumentException(
+                'O Tier deve ser 1, 2, 3 ou não definido.'
+            );
+        }
+
+        return (int) $valor;
     }
 
     private static function ativo(array $dados): bool

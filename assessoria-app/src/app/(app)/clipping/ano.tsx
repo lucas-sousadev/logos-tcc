@@ -9,82 +9,93 @@ import {
 import { useCallback, useState } from "react";
 import {
   useFocusEffect,
+  useLocalSearchParams,
   useRouter,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  AnoClipping,
-  listarClippingAnos,
+  ClienteClippingAno,
+  listarClientesDoAno,
 } from "@/services/api/clipping";
 
-export default function Clipping() {
+export default function ClientesDoAno() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const [anos, setAnos] = useState<AnoClipping[]>([]);
+  const params = useLocalSearchParams<{
+    ano?: string;
+  }>();
+
+  const ano =
+    Number(params.ano) || new Date().getFullYear();
+
+  const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] =
+    useState("");
+  const [clientes, setClientes] = useState<
+    ClienteClippingAno[]
+  >([]);
+  const [total, setTotal] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
 
-  const anoAtual = new Date().getFullYear();
-
-  const carregarAnos = useCallback(async () => {
+  const carregarClientes = useCallback(async () => {
     try {
       setCarregando(true);
       setErro("");
 
-      const resposta = await listarClippingAnos();
-
-      const possuiAnoAtual = resposta.anos.some(
-        (item) => item.ano_referencia === anoAtual
+      const resposta = await listarClientesDoAno(
+        ano,
+        {
+          busca: buscaAplicada,
+          page: 1,
+          limit: 100,
+        }
       );
 
-      const lista = possuiAnoAtual
-        ? resposta.anos
-        : [
-            {
-              ano_referencia: anoAtual,
-              total_clippings: 0,
-              total_clientes: 0,
-            },
-            ...resposta.anos,
-          ];
-
-      setAnos(
-        [...lista].sort(
-          (a, b) =>
-            b.ano_referencia - a.ano_referencia
-        )
-      );
+      setClientes(resposta.clientes);
+      setTotal(resposta.pagination.total);
     } catch (error) {
       setErro(
         error instanceof Error
           ? error.message
-          : "Não foi possível carregar os anos."
+          : "Não foi possível carregar os clientes."
       );
     } finally {
       setCarregando(false);
     }
-  }, [anoAtual]);
+  }, [ano, buscaAplicada]);
 
   useFocusEffect(
     useCallback(() => {
-      void carregarAnos();
-    }, [carregarAnos])
+      void carregarClientes();
+    }, [carregarClientes])
   );
 
-  function abrirAno(ano: number) {
+  function pesquisar() {
+    setBuscaAplicada(busca.trim());
+  }
+
+  function limparBusca() {
+    setBusca("");
+    setBuscaAplicada("");
+  }
+
+  function abrirCliente(cliente: ClienteClippingAno) {
     router.push({
-      pathname: "/clipping/ano",
-      params: {
-        ano: String(ano),
-      },
+        pathname: "/clipping/cliente/[id]" as never,
+        params: {
+            id: String(cliente.id),
+            ano: String(ano),
+        },
     });
   }
 
@@ -92,7 +103,7 @@ export default function Clipping() {
     router.push({
       pathname: "/clipping/novo",
       params: {
-        ano: String(anoAtual),
+        ano: String(ano),
       },
     });
   }
@@ -104,7 +115,10 @@ export default function Clipping() {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header title="Clipping" />
+      <Header
+        title={`Clientes ${ano}`}
+        showBackButton
+      />
 
       {carregando ? (
         <View style={styles.loading}>
@@ -118,22 +132,27 @@ export default function Clipping() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          <View style={styles.headerRow}>
-            <View style={styles.headerInfo}>
+          <SearchBar
+            value={busca}
+            onChangeText={setBusca}
+            onSearch={pesquisar}
+            onClear={limparBusca}
+            placeholder="Buscar cliente..."
+          />
 
-              <Text
-                style={[
-                  styles.subtitle,
-                  { color: theme.textoSub },
-                ]}
-              >
-                Escolha o ano para acessar os clientes e publicações.
-              </Text>
-            </View>
+          <View style={styles.topRow}>
+            <Text
+              style={[
+                styles.count,
+                { color: theme.textoSub },
+              ]}
+            >
+              {total} cliente(s) disponíveis
+            </Text>
 
             {temPermissao("CLIPPING", "CRIAR") ? (
               <Button
-                title="CLIPPING RÁPIDO"
+                title="NOVO"
                 size="small"
                 onPress={novoClipping}
                 style={styles.newButton}
@@ -145,18 +164,9 @@ export default function Clipping() {
             <View
               style={[
                 styles.errorBox,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
-                },
+                { borderColor: theme.borda },
               ]}
             >
-              <Ionicons
-                name="alert-circle-outline"
-                size={24}
-                color="#EF4444"
-              />
-
               <Text style={styles.errorText}>
                 {erro}
               </Text>
@@ -164,20 +174,18 @@ export default function Clipping() {
               <Button
                 title="TENTAR NOVAMENTE"
                 size="small"
-                onPress={() => void carregarAnos()}
+                onPress={() => void carregarClientes()}
               />
             </View>
           ) : null}
 
-          {anos.map((item) => (
+          {clientes.map((cliente) => (
             <TouchableOpacity
-              key={item.ano_referencia}
+              key={cliente.id}
               activeOpacity={0.8}
-              onPress={() =>
-                abrirAno(item.ano_referencia)
-              }
+              onPress={() => abrirCliente(cliente)}
               style={[
-                styles.yearCard,
+                styles.clientCard,
                 {
                   borderColor: theme.borda,
                   backgroundColor: theme.background,
@@ -186,7 +194,7 @@ export default function Clipping() {
             >
               <View
                 style={[
-                  styles.yearIcon,
+                  styles.clientIcon,
                   {
                     backgroundColor:
                       theme.backgroundContainer,
@@ -194,40 +202,43 @@ export default function Clipping() {
                 ]}
               >
                 <Ionicons
-                  name="calendar-outline"
-                  size={25}
+                  name="briefcase-outline"
+                  size={22}
                   color={theme.textoContainer}
                 />
               </View>
 
-              <View style={styles.yearInfo}>
+              <View style={styles.clientInfo}>
                 <Text
-                  weight="Bold"
-                  style={styles.yearText}
+                  weight="SemiBold"
+                  style={styles.clientName}
+                  numberOfLines={1}
                 >
-                  Clipping {item.ano_referencia}
+                  {cliente.nome}
                 </Text>
 
                 <Text
                   style={[
-                    styles.yearMeta,
+                    styles.clientMeta,
                     { color: theme.textoSub },
                   ]}
                 >
-                  {item.total_clippings} publicação(ões) •{" "}
-                  {item.total_clientes} cliente(s)
+                  {cliente.total_clippings} clipping(s)
+                  {cliente.ativo !== 1
+                    ? " • Cliente inativo"
+                    : ""}
                 </Text>
               </View>
 
               <Ionicons
                 name="chevron-forward"
-                size={22}
+                size={21}
                 color={theme.textoSub}
               />
             </TouchableOpacity>
           ))}
 
-          {anos.length === 0 ? (
+          {clientes.length === 0 ? (
             <View
               style={[
                 styles.empty,
@@ -235,7 +246,7 @@ export default function Clipping() {
               ]}
             >
               <Text weight="SemiBold">
-                Nenhum ano disponível
+                Nenhum cliente encontrado
               </Text>
 
               <Text
@@ -244,7 +255,7 @@ export default function Clipping() {
                   { color: theme.textoSub },
                 ]}
               >
-                Crie o primeiro clipping para iniciar o agrupamento.
+                Tente alterar a busca ou cadastre um novo clipping.
               </Text>
             </View>
           ) : null}
@@ -270,60 +281,50 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  headerRow: {
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 14,
   },
 
-  headerInfo: {
+  count: {
     flex: 1,
-  },
-
-  title: {
-    fontSize: 19,
-  },
-
-  subtitle: {
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
   },
 
   newButton: {
-    width: 120,
-    padding: 10
+    width: 100,
   },
 
-  yearCard: {
-    minHeight: 82,
+  clientCard: {
+    minHeight: 76,
     borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
   },
 
-  yearIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
+  clientIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
+    marginRight: 12,
   },
 
-  yearInfo: {
+  clientInfo: {
     flex: 1,
   },
 
-  yearText: {
-    fontSize: 15,
+  clientName: {
+    fontSize: 14,
   },
 
-  yearMeta: {
+  clientMeta: {
     fontSize: 11,
     marginTop: 5,
   },
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
   empty: {
     borderWidth: 1.5,
     borderRadius: 18,
-    padding: 24,
+    padding: 25,
     alignItems: "center",
   },
 
@@ -352,6 +353,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 12,
     textAlign: "center",
-    marginVertical: 10,
+    marginBottom: 10,
   },
 });

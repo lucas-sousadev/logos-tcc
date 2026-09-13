@@ -4,7 +4,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 header('Access-Control-Allow-Origin: http://localhost:8081');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, Range');
+header('Access-Control-Expose-Headers: Content-Disposition, Content-Length, Content-Range, Accept-Ranges');
 header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {

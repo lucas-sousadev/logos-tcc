@@ -7,9 +7,7 @@ import {
 
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { LinearGradient } from "expo-linear-gradient";
 
-import { Gradients } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 
 import Text from "@/components/ui/Text";
@@ -20,7 +18,7 @@ export default function Entrar() {
   const router = useRouter();
   const [etapa, setEtapa] = useState<1 | 2>(1);
 
-  const { theme, mode, toggleTheme} = useTheme();
+  const { theme, mode } = useTheme();
 
   return (
     <View

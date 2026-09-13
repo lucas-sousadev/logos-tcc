@@ -11,7 +11,6 @@ import {
 import { useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
-import { Fonts } from "@/constants/fonts";
 import { Ionicons } from "@expo/vector-icons";
 
 interface InputProps extends TextInputProps {

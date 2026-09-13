@@ -1,0 +1,16 @@
+mailing
+
+ - Definir duplicidade para contatos sem e-mail. Como e-mail agora é opcional, a importação pode aceitar dois contatos iguais apenas com telefone. Recomendo considerar telefone normalizado como critério de duplicidade quando não houver e-mail.
+ - importar tabelas e nao apenas csv
+ - Adicionar índice composto em jornalistas (assessoria_id, veiculo_id) quando a base crescer.
+
+veiculos:
+- nada ainda
+- trocar a mensagem de "este veículo tem contatos vinculados nao foi possivel excluir" para "alguns veículos possuem contatos vinculados não foi possivel excluir" caso a exclusâo tenha mais de ! veiculo
+clipping:
+ - a tela inicial deveria ter um agrupamento entre anos, depois clientes ao ser clicado.
+
+testes:
+ - testar permissoes mailing e veiculos 
+ - prompt: "Atue como um especialista em segurança de aplicações. Identifique possíveis vulnerabilidades de segurança, brechas de lógica ou falhas do OWASP Top 10 neste código e sugira as correções."
+ - configurar ESlint 

@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
+import { rotuloTier } from "@/constants/tier";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   listarVeiculos,
@@ -48,8 +49,6 @@ export default function VeiculoSelector({
 
   useEffect(() => {
     if (!mostrarSugestoes) {
-      setSugestoes([]);
-      setCarregando(false);
       return;
     }
 
@@ -152,7 +151,7 @@ export default function VeiculoSelector({
                       numberOfLines={1}
                       style={[styles.suggestionMeta, { color: theme.textoSub }]}
                     >
-                      {veiculo.alcance || "Veículo cadastrado"}
+                      {[rotuloTier(veiculo.tier), veiculo.alcance].filter(Boolean).join(" • ")}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -166,7 +165,7 @@ export default function VeiculoSelector({
                     color={theme.primaria}
                   />
                   <Text style={[styles.helperText, { color: theme.textoSub }]}>
-                    “{termo}” será criado ao salvar o contato.
+                    “{termo}” será criado ao salvar.
                   </Text>
                 </View>
               ) : null}

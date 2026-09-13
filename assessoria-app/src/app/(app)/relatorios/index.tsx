@@ -6,7 +6,6 @@ import {
 
 import Header from "@/components/layout/Header";
 import { Colors } from "@/constants/colors";
-import { Fonts } from "@/constants/fonts";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Relatorios() {

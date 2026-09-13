@@ -5,7 +5,7 @@ import {
   View,
 } from "react-native";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -14,7 +14,6 @@ import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 
 import { listarJornalistas } from "@/services/api/jornalista";
-import { Funcionario } from "@/services/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { listarClientes, } from "@/services/api/cliente";
@@ -31,8 +30,6 @@ export default function Dashboard() {
     temPermissao,
   } = useAuth();
 
-  const [funcionarios, setFuncionarios] =
-    useState<Funcionario[]>([]);
   const [totalContatos, setTotalContatos] =
     useState(0);
   const [totalClientes, setTotalClientes] =useState(0); 
@@ -133,7 +130,8 @@ export default function Dashboard() {
       temPermissao,
     ])
   );
- 
+  
+  
   return (
     <View
       style={[

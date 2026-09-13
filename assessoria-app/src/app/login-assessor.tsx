@@ -18,7 +18,7 @@ import Input from "@/components/ui/Input";
 export default function LoginAssessor() {
   const router = useRouter();
 
-  const { theme, mode, toggleTheme } = useTheme();
+  const { theme, mode } = useTheme();
   const { login, logout } = useAuth();
 
   const [email, setEmail] = useState("");

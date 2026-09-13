@@ -21,7 +21,7 @@ export const LightTheme = {
 
 export const DarkTheme = {
   background: "#0F172A",
-  surface: "#e6ecf8",
+  surface: "#e6ecf8f3",
   texto: "#FFFFFF",
   textoSub: '#999999',
   textoInput: "#0F172A",

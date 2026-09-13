@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function Configuracoes() {
   const { theme, mode, toggleTheme } = useTheme();
-  const { usuario, logout } = useAuth();
+  const { logout } = useAuth();
   return (
     <View
       style={[

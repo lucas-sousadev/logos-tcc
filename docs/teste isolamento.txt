@@ -1,0 +1,101 @@
+PS C:\Users\lucas> $OUTRO_CLIENTE_ID = [long](Read-Host "ID de um cliente de outra assessoria")
+>>
+ID de um cliente de outra assessoria: 6
+PS C:\Users\lucas> $OUTRO_VEICULO_ID = [long](Read-Host "ID de um veículo de outra assessoria")
+>>
+ID de um veículo de outra assessoria: 120
+PS C:\Users\lucas> $OUTRO_CLIPPING_ID = [long](Read-Host "ID de um clipping de outra assessoria")
+ID de um clipping de outra assessoria: 3
+PS C:\Users\lucas> # Detalhes de outro clipping: esperado 404
+>> curl.exe -i -sS "$BASE/clippings/$OUTRO_CLIPPING_ID" -H "Authorization: Bearer $TOKEN"
+>>
+>> # Editar outro clipping: esperado 404
+>> @{
+>>     pauta = "Não deve ser gravada"
+>> } | ConvertTo-Json -Compress |
+>>     curl.exe -i -sS -X PUT "$BASE/clippings/$OUTRO_CLIPPING_ID" -H "Authorization: Bearer $TOKEN" --json '@-'
+>>
+>> # Vincular cliente de outra assessoria: esperado 422
+>> @{
+>>     cliente_id = $OUTRO_CLIENTE_ID
+>> } | ConvertTo-Json -Compress |
+>>     curl.exe -i -sS -X PUT "$BASE/clippings/$CLIPPING_ID" -H "Authorization: Bearer $TOKEN" --json '@-'
+>>
+>> # Vincular veículo de outra assessoria: esperado 422
+>> @{
+>>     veiculo_id = $OUTRO_VEICULO_ID
+>> } | ConvertTo-Json -Compress |
+>>     curl.exe -i -sS -X PUT "$BASE/clippings/$CLIPPING_ID" -H "Authorization: Bearer $TOKEN" --json '@-'
+>>
+>> # Sugestões do outro cliente: esperado 404
+>> curl.exe -i -sS "$BASE/clippings/pautas?cliente_id=$OUTRO_CLIENTE_ID" -H "Authorization: Bearer $TOKEN"
+>>
+>> # Filtrar pelo outro cliente: esperado 200, lista vazia e total zero
+>> curl.exe -i -sS "$BASE/clippings?cliente_id=$OUTRO_CLIENTE_ID" -H "Authorization: Bearer $TOKEN"
+HTTP/1.1 404 Not Found
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 55
+Content-Type: application/json; charset=utf-8
+
+{"success":false,"message":"Clipping não encontrado."}HTTP/1.1 404 Not Found
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 55
+Content-Type: application/json; charset=utf-8
+
+{"success":false,"message":"Clipping não encontrado."}HTTP/1.1 422 Unprocessable Entity
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 69
+Content-Type: application/json; charset=utf-8
+
+{"success":false,"message":"Selecione um cliente da sua assessoria."}HTTP/1.1 422 Unprocessable Entity
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 70
+Content-Type: application/json; charset=utf-8
+
+{"success":false,"message":"Selecione um veículo da sua assessoria."}HTTP/1.1 422 Unprocessable Entity
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 86
+Content-Type: application/json; charset=utf-8
+
+{"success":false,"message":"ID do clipping deve estar entre 1 e 9223372036854775807."}HTTP/1.1 200 OK
+Date: Sat, 12 Sep 2026 19:15:45 GMT
+Server: Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+X-Powered-By: PHP/8.2.12
+Access-Control-Allow-Origin: http://localhost:8081
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+Content-Length: 93
+Content-Type: application/json; charset=utf-8
+
+{"success":true,"clippings":[],"pagination":{"page":1,"limit":50,"total":0,"has_next":false}}

@@ -1,6 +1,7 @@
 **/.claude/
 node_modules/
 vendor/
+tests/
 
 
 .expo/

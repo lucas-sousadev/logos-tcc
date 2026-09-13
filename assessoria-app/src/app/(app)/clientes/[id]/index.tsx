@@ -1288,7 +1288,7 @@ function InfoRow({
       <View style={styles.infoContent}>
         <Text
           weight="SemiBold"
-          style={styles.infoLabel}
+          style={[styles.infoLabel, {color: theme.textoTerciaria}]}
         >
           {label}
         </Text>

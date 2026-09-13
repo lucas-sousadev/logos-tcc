@@ -1,5 +1,7 @@
--- banco de dados do Logos 
--- MySQL 8.0.16+ (CHECK aplicado) / MariaDB 10.4+
+-- ============================================================
+-- LOGOS - SISTEMA DE GESTÃO PARA ASSESSORIAS DE IMPRENSA
+-- MySQL 8+
+-- ============================================================
 
 CREATE DATABASE IF NOT EXISTS logos
     CHARACTER SET utf8mb4
@@ -7,7 +9,7 @@ CREATE DATABASE IF NOT EXISTS logos
 
 USE logos;
 
--- 1. Assessrias
+-- 1. ASSESSORIAS
 
 CREATE TABLE assessorias (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -24,7 +26,7 @@ CREATE TABLE assessorias (
 ) ENGINE=InnoDB;
 
 
--- 2. Usuários
+-- 2. USUÁRIOS
 
 CREATE TABLE usuarios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -32,7 +34,6 @@ CREATE TABLE usuarios (
 
     nome VARCHAR(150) NOT NULL,
     email VARCHAR(150) NOT NULL,
-    telefone VARCHAR(30) NULL,
     senha_hash VARCHAR(255) NOT NULL,
 
     perfil ENUM('ASSESSOR', 'FUNCIONARIO')
@@ -58,7 +59,9 @@ CREATE TABLE usuarios (
 ) ENGINE=InnoDB;
 
 
--- 3. Permissões
+-- ============================================================
+-- 3. PERMISSÕES
+-- ============================================================
 
 CREATE TABLE permissoes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -73,7 +76,7 @@ CREATE TABLE permissoes (
 ) ENGINE=InnoDB;
 
 
--- 4. Permissões para os usuarios em específico
+-- 4. PERMISSÕES DOS USUÁRIOS
 
 CREATE TABLE usuario_permissoes (
     usuario_id BIGINT UNSIGNED NOT NULL,
@@ -93,7 +96,7 @@ CREATE TABLE usuario_permissoes (
 ) ENGINE=InnoDB;
 
 
--- 5. Convites
+-- 5. CONVITES PARA FUNCIONÁRIOS
 
 CREATE TABLE convites (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -130,7 +133,7 @@ CREATE TABLE convites (
 ) ENGINE=InnoDB;
 
 
--- 6. Clientes
+-- 6. CLIENTES
 
 CREATE TABLE clientes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -138,15 +141,7 @@ CREATE TABLE clientes (
     assessoria_id BIGINT UNSIGNED NOT NULL,
 
     nome VARCHAR(150) NOT NULL,
-    email VARCHAR(150) NULL,
-    telefone VARCHAR(30) NULL,
-    CNPJ VARCHAR(18) NULL,
-    site VARCHAR(500) NULL,
-    cidade VARCHAR(100) NULL,
-    estado VARCHAR(100) NULL,
     descricao TEXT NULL,
-    segmento VARCHAR(100) NULL,
-    responsavel VARCHAR(100) NULL,
     logo_path VARCHAR(500) NULL,
 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -161,14 +156,16 @@ CREATE TABLE clientes (
         ON DELETE CASCADE,
         
     UNIQUE KEY uq_cliente_id_assessoria (id, assessoria_id),
-    UNIQUE KEY uq_clientes_assessoria_cnpj (assessoria_id, cnpj),
     
-    INDEX idx_clientes_filtros (assessoria_id, ativo, estado, cidade, segmento),
     INDEX idx_clientes_assessoria (assessoria_id),
     INDEX idx_clientes_nome (nome)
 ) ENGINE=InnoDB;
 
--- 7. Veículos
+
+
+-- 7. VEÍCULOS
+-- Reutilizáveis dentro da assessoria.
+-- Não pertencem a clientes.
 
 CREATE TABLE veiculos (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -178,11 +175,11 @@ CREATE TABLE veiculos (
     nome VARCHAR(150) NOT NULL,
     descricao TEXT NULL,
     logo_path VARCHAR(500) NULL,
+
     -- Texto livre para várias redes e diferentes métricas.
     alcance TEXT NULL,
 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    tier TINYINT UNSIGNED NULL,
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -192,16 +189,16 @@ CREATE TABLE veiculos (
         FOREIGN KEY (assessoria_id)
         REFERENCES assessorias(id)
         ON DELETE CASCADE,
-
-    CONSTRAINT chk_veiculos_tier
-        CHECK (tier IS NULL OR tier BETWEEN 1 AND 3),
         
 	UNIQUE KEY uq_veiculo_id_assessoria (id, assessoria_id),
     UNIQUE KEY uq_veiculo_nome_assessoria (assessoria_id, nome),
     INDEX idx_veiculos_assessoria (assessoria_id)
 ) ENGINE=InnoDB;
 
--- 8. Contatos / mailing
+
+
+-- 8. JORNALISTAS / MAILING
+-- Cada assessoria possui seu próprio mailing.
 
 CREATE TABLE jornalistas (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -209,7 +206,7 @@ CREATE TABLE jornalistas (
     assessoria_id BIGINT UNSIGNED NOT NULL,
 
     nome VARCHAR(150) NOT NULL,
-    email VARCHAR(180) NULL,
+    email VARCHAR(180) NOT NULL,
     telefone VARCHAR(30) NULL,
     cargo VARCHAR(100) NULL,
     estado VARCHAR(100) NULL,
@@ -246,7 +243,8 @@ CREATE TABLE jornalistas (
 ) ENGINE=InnoDB;
 
 
--- 9. Templates 
+-- 9. TEMPLATES DE RELEASE
+-- Os blocos são armazenados em JSON.
 
 CREATE TABLE templates (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -280,7 +278,7 @@ CREATE TABLE templates (
 ) ENGINE=InnoDB;
 
 
--- 10. Releases
+-- 10. RELEASES
 
 CREATE TABLE releases (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -344,7 +342,8 @@ CREATE TABLE releases (
 ) ENGINE=InnoDB;
 
 
--- 11. Histórico de destinatários do release
+-- 11. HISTÓRICO DE DESTINATÁRIOS DO RELEASE
+-- Um registro para cada jornalista que recebeu/tentou receber.
 
 CREATE TABLE release_destinatarios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -367,12 +366,12 @@ CREATE TABLE release_destinatarios (
 
     erro_mensagem TEXT NULL,
 
-    -- rastreamento de abertura
+    -- Rastreamento de abertura.
     tracking_token CHAR(64) NULL,
     aberto_em DATETIME NULL,
     aberturas_quantidade INT UNSIGNED NOT NULL DEFAULT 0,
 
-    -- preparação para rastreamento de clique
+    -- Preparação para rastreamento de clique.
     clicado_em DATETIME NULL,
     cliques_quantidade INT UNSIGNED NOT NULL DEFAULT 0,
 
@@ -399,7 +398,9 @@ CREATE TABLE release_destinatarios (
     INDEX idx_release_destinatarios_status (status)
 ) ENGINE=InnoDB;
 
--- 12. Clippings
+
+-- 12. CLIPPING
+
 
 CREATE TABLE clippings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -407,36 +408,26 @@ CREATE TABLE clippings (
     assessoria_id BIGINT UNSIGNED NOT NULL,
     cliente_id BIGINT UNSIGNED NOT NULL,
     veiculo_id BIGINT UNSIGNED NULL,
-    ano_referencia SMALLINT UNSIGNED NOT NULL,
 
-    data_publicacao DATE NULL,
+    data_publicacao DATE NOT NULL,
 
-    -- Valores livres; as sugestões da interface não limitam a lista.
-    -- Ex.: ["Site", "TV", "Canal do produtor"]
+    -- Permite múltiplas categorias.
+    -- Exemplo:
+    -- ["Agronegócio", "Economia"]
     categorias JSON NULL,
+
     programa_secao VARCHAR(150) NULL,
 
     pauta TEXT NULL,
 
-    tier TINYINT UNSIGNED NULL,
+    tier VARCHAR(50) NULL,
 
-    inicio_segundos INT UNSIGNED NULL,
-    fim_segundos INT UNSIGNED NULL,
-    link VARCHAR(2048) NULL,
-    observacoes TEXT NULL,
-
-    criado_por BIGINT UNSIGNED NOT NULL,
-
-    -- Preencher data e responsável juntos ao arquivar; limpar ao restaurar.
-    arquivado_em DATETIME NULL DEFAULT NULL,
-    arquivado_por BIGINT UNSIGNED NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
+    inicio TIME NULL,
+    fim TIME NULL,
 
     -- Duração em segundos.
     -- Será calculada pela aplicação.
-    duracao_segundos INT UNSIGNED NULL,
+    duracao_segundos INT NULL,
 
     CONSTRAINT fk_clippings_assessoria
         FOREIGN KEY (assessoria_id)
@@ -452,138 +443,13 @@ CREATE TABLE clippings (
 		FOREIGN KEY (veiculo_id, assessoria_id)
 		REFERENCES veiculos(id, assessoria_id)
 		ON DELETE RESTRICT,
-
-    CONSTRAINT fk_clippings_criado_por_assessoria
-        FOREIGN KEY (criado_por, assessoria_id)
-        REFERENCES usuarios(id, assessoria_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_clippings_arquivado_por_assessoria
-        FOREIGN KEY (arquivado_por, assessoria_id)
-        REFERENCES usuarios(id, assessoria_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT chk_clippings_tier
-        CHECK (tier IS NULL OR tier BETWEEN 1 AND 3),
-
-    CONSTRAINT chk_clippings_ano_referencia
-        CHECK (ano_referencia BETWEEN 1000 AND 9999),
-
-    CONSTRAINT chk_clippings_data_ano
-        CHECK (
-            data_publicacao IS NULL
-            OR YEAR(data_publicacao) = ano_referencia
-        ),
-
-    -- A API valida também os textos e elimina categorias repetidas.
-    CONSTRAINT chk_clippings_categorias_lista
-        CHECK (categorias IS NULL OR JSON_TYPE(categorias) = 'ARRAY'),
-
-    -- Uma posição isolada pode ficar pendente, com duração nula.
-    -- Com ambas preenchidas, a API deve gravar a diferença correta.
-    CONSTRAINT chk_clippings_duracao
-        CHECK (
-            (
-                (inicio_segundos IS NULL OR fim_segundos IS NULL)
-                AND duracao_segundos IS NULL
-            )
-            OR (
-                inicio_segundos IS NOT NULL
-                AND fim_segundos IS NOT NULL
-                AND fim_segundos > inicio_segundos
-                AND duracao_segundos IS NOT NULL
-                AND duracao_segundos =
-                    CAST(fim_segundos AS SIGNED) - CAST(inicio_segundos AS SIGNED)
-            )
-        ),
         
-	UNIQUE KEY uq_clipping_id_assessoria (id, assessoria_id),
-    INDEX idx_clippings_assessoria_data (assessoria_id, data_publicacao),
-    INDEX idx_clippings_cliente_ano (
-        assessoria_id, cliente_id, ano_referencia, arquivado_em, data_publicacao, id
-    )
-) ENGINE=InnoDB;
+	UNIQUE KEY uq_clipping_id_assessoria (id, assessoria_id)
+);
 
--- 12.1. Materiais e imagens dos clippings
--- Os arquivos ficam no armazenamento; esta tabela guarda suas referências.
-CREATE TABLE clipping_anexos (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-
-    assessoria_id BIGINT UNSIGNED NOT NULL,
-    clipping_id BIGINT UNSIGNED NOT NULL,
-    criado_por BIGINT UNSIGNED NOT NULL,
-
-    -- Original que deu origem ao recorte, página ou quadro de vídeo.
-    -- A API deve impedir ciclos e alterações indevidas nessa relação.
-    anexo_origem_id BIGINT UNSIGNED NULL,
-
-    tipo ENUM('IMAGEM', 'VIDEO', 'AUDIO', 'DOCUMENTO') NOT NULL,
-    origem ENUM(
-        'UPLOAD', 'CAPTURA', 'RECORTE', 'PAGINA_PDF', 'QUADRO_VIDEO'
-    ) NOT NULL DEFAULT 'UPLOAD',
-
-    nome_original VARCHAR(255) NOT NULL,
-    arquivo_path VARCHAR(500) NOT NULL,
-    mime_type VARCHAR(127) NOT NULL,
-    tamanho_bytes BIGINT UNSIGNED NOT NULL,
-    ordem INT UNSIGNED NOT NULL DEFAULT 0,
-
-    -- 1 = selecionado; NULL = não selecionado (não usar 0).
-    -- Os índices únicos permitem vários NULL, mas só um 1 por clipping.
-    -- Uma imagem pode ser simultaneamente principal e imagem do relatório.
-    principal TINYINT UNSIGNED NULL DEFAULT NULL,
-    imagem_relatorio TINYINT UNSIGNED NULL DEFAULT NULL,
-
-    -- Preserva a origem da captura mesmo se o link do clipping mudar.
-    url_origem VARCHAR(2048) NULL,
-    capturado_em DATETIME NULL,
-    -- Ex.: dimensões, coordenadas do recorte, página ou posição do quadro.
-    metadados_json JSON NULL,
-
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
-
-    -- Remover anexos exige tratamento explícito dos arquivos e derivados.
-    -- Relatórios/versionamento deverão preservar ou referenciar esses materiais.
-    CONSTRAINT fk_clipping_anexos_clipping_assessoria
-        FOREIGN KEY (clipping_id, assessoria_id)
-        REFERENCES clippings(id, assessoria_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_clipping_anexos_criado_por_assessoria
-        FOREIGN KEY (criado_por, assessoria_id)
-        REFERENCES usuarios(id, assessoria_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_clipping_anexos_origem
-        FOREIGN KEY (anexo_origem_id, clipping_id, assessoria_id)
-        REFERENCES clipping_anexos(id, clipping_id, assessoria_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT chk_clipping_anexos_tamanho
-        CHECK (tamanho_bytes > 0),
-
-    CONSTRAINT chk_clipping_anexos_principal
-        CHECK (principal IS NULL OR principal = 1),
-
-    CONSTRAINT chk_clipping_anexos_imagem_relatorio
-        CHECK (
-            imagem_relatorio IS NULL
-            OR (imagem_relatorio = 1 AND tipo = 'IMAGEM')
-        ),
-
-    CONSTRAINT chk_clipping_anexos_metadados
-        CHECK (metadados_json IS NULL OR JSON_TYPE(metadados_json) = 'OBJECT'),
-
-    UNIQUE KEY uq_clipping_anexo_contexto (id, clipping_id, assessoria_id),
-    UNIQUE KEY uq_clipping_anexo_principal (assessoria_id, clipping_id, principal),
-    UNIQUE KEY uq_clipping_anexo_imagem (assessoria_id, clipping_id, imagem_relatorio),
-    INDEX idx_clipping_anexos_ordem (assessoria_id, clipping_id, ordem, id)
-) ENGINE=InnoDB;
-
--- 13. Relatórios
--- Um relatório pertence a um cliente e pode possuir vários slides
+-- 13. RELATÓRIOS
+-- Um relatório pertence a um cliente e pode possuir
+-- vários slides.
 
 CREATE TABLE relatorios (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -629,7 +495,7 @@ CREATE TABLE relatorios (
 ) ENGINE=InnoDB;
 
 
--- 14. Slides dos relatórios
+-- 14. SLIDES DOS RELATÓRIOS
 --
 -- Cada slide representa uma matéria/clipping.
 -- Os dados existentes são puxados do clipping/veículo,
@@ -680,7 +546,8 @@ CREATE TABLE relatorio_slides (
 ) ENGINE=InnoDB;
 
 
--- 15. Auditoria
+-- 15. AUDITORIA
+-- Apenas ações gerais, sem registrar cada alteração de campo.
 
 CREATE TABLE auditoria (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -719,109 +586,53 @@ CREATE TABLE auditoria (
 ) ENGINE=InnoDB;
 
 
--- 16. Permissões Iniciais
+-- 16. PERMISSÕES INICIAIS
 
 INSERT INTO permissoes (modulo, acao, descricao) VALUES
 
--- Mailing
-('MAILING', 'VISUALIZAR', 'Visualizar contatos do mailing'),
-('MAILING', 'CRIAR', 'Cadastrar contatos'),
-('MAILING', 'EDITAR', 'Editar contatos'),
-('MAILING', 'EXCLUIR', 'Excluir contatos'),
-('MAILING', 'IMPORTAR', 'Importar contatos para o mailing.'),
-('MAILING','EXPORTAR','Exportar contatos do mailing.'),
+-- MAILING
+('MAILING', 'VISUALIZAR', 'Visualizar jornalistas do mailing'),
+('MAILING', 'CRIAR', 'Cadastrar jornalistas'),
+('MAILING', 'EDITAR', 'Editar jornalistas'),
+('MAILING', 'EXCLUIR', 'Excluir jornalistas'),
 
--- Clientes
+-- CLIENTES
 ('CLIENTES', 'VISUALIZAR', 'Visualizar clientes'),
 ('CLIENTES', 'CRIAR', 'Cadastrar clientes'),
 ('CLIENTES', 'EDITAR', 'Editar clientes'),
 ('CLIENTES', 'EXCLUIR', 'Excluir clientes'),
 
--- Veículos
+-- VEÍCULOS
 ('VEICULOS', 'VISUALIZAR', 'Visualizar veículos'),
 ('VEICULOS', 'CRIAR', 'Cadastrar veículos'),
 ('VEICULOS', 'EDITAR', 'Editar veículos'),
 ('VEICULOS', 'EXCLUIR', 'Excluir veículos'),
 
--- Releases
+-- RELEASES
 ('RELEASES', 'VISUALIZAR', 'Visualizar releases'),
 ('RELEASES', 'CRIAR', 'Criar releases'),
 ('RELEASES', 'EDITAR', 'Editar releases'),
 ('RELEASES', 'EXCLUIR', 'Excluir releases'),
 ('RELEASES', 'ENVIAR', 'Enviar releases'),
 
--- Templates
+-- TEMPLATES
 ('TEMPLATES', 'VISUALIZAR', 'Visualizar templates'),
 ('TEMPLATES', 'CRIAR', 'Criar templates'),
 ('TEMPLATES', 'EDITAR', 'Editar templates'),
 ('TEMPLATES', 'EXCLUIR', 'Excluir templates'),
 
--- Clipping
+-- CLIPPING
 ('CLIPPING', 'VISUALIZAR', 'Visualizar clippings'),
 ('CLIPPING', 'CRIAR', 'Criar clippings'),
 ('CLIPPING', 'EDITAR', 'Editar clippings'),
 ('CLIPPING', 'EXCLUIR', 'Excluir clippings'),
-('CLIPPING', 'ANEXAR', 'Enviar e gerenciar anexos dos clippings.'),
-('CLIPPING', 'IMPORTAR', 'Importar clippings em lote.'),
-('CLIPPING', 'EXPORTAR', 'Exportar clippings.'),
 
--- Relatorios
+-- RELATÓRIOS
 ('RELATORIOS', 'VISUALIZAR', 'Visualizar relatórios'),
 ('RELATORIOS', 'CRIAR', 'Criar relatórios'),
 ('RELATORIOS', 'EDITAR', 'Editar relatórios'),
 ('RELATORIOS', 'EXCLUIR', 'Excluir relatórios'),
-('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório'),
+('RELATORIOS', 'GERAR', 'Gerar arquivo do relatório');
 
--- Auditoria
-('AUDITORIA', 'VISUALIZAR', 'Visualizar o histórico de ações da assessoria.'),
 
--- Usuários
-('USUARIOS', 'VISUALIZAR', 'Visualizar funcionários da assessoria.'),
-('USUARIOS', 'EDITAR', 'Editar dados e status de funcionários da assessoria.'),
-('USUARIOS', 'CRIAR', 'Cadastrar funcionários da assessoria.'),
-('USUARIOS', 'GERENCIAR_PERMISSOES', 'Gerenciar permissões de funcionários.'),
-
--- Convites
-('CONVITES', 'VISUALIZAR', 'Visualizar histórico de convites.'),
-('CONVITES', 'CRIAR','Criar convites para funcionários.');
-
--- 17. Refresh tokens
-
-CREATE TABLE refresh_tokens (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-
-    usuario_id BIGINT UNSIGNED NOT NULL,
-
-    token_hash VARCHAR(64) NOT NULL,
-
-    expires_at DATETIME NOT NULL,
-    revoked_at DATETIME NULL,
-
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_refresh_tokens_usuario
-        FOREIGN KEY (usuario_id)
-        REFERENCES usuarios(id)
-        ON DELETE RESTRICT,
-
-    UNIQUE KEY uq_refresh_token_hash (token_hash),
-    INDEX idx_refresh_tokens_usuario (usuario_id),
-    INDEX idx_refresh_tokens_expires (expires_at)
-) ENGINE=InnoDB;
-
--- 18. Validaçao de tentativas
-
-CREATE TABLE tentativas_autenticacao (
-    acao VARCHAR(40) NOT NULL,
-    chave_hash CHAR(64) NOT NULL,
-    tentativas SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-    janela_iniciada_em DATETIME NOT NULL,
-    bloqueado_ate DATETIME NULL,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (acao, chave_hash),
-    KEY idx_tentativas_autenticacao_bloqueio (bloqueado_ate)
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci;
+-- FIM DO BANCO LOGOS

@@ -1,7 +1,6 @@
 import {
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { useEffect, useState } from "react";

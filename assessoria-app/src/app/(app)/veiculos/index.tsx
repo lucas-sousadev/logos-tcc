@@ -15,6 +15,7 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import { rotuloTier } from "@/constants/tier";
 import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/VeiculoFilterModal";
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
 
@@ -748,6 +749,7 @@ export default function Veiculos() {
                     numberOfLines={1}
                   >
                     {[
+                      rotuloTier(veiculo.tier),
                       veiculo.descricao
                         ? veiculo.descricao
                         : "Sem descrição",

@@ -34,9 +34,17 @@ export default function ClienteFilterModal({
   ] = useState<FiltrosClientes>(filtros);
 
   useEffect(() => {
-    if (visible) {
-      setFiltrosTemporarios(filtros);
+    if (!visible) {
+      return;
     }
+
+    const timer = setTimeout(() => {
+      setFiltrosTemporarios(filtros);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [visible, filtros]);
 
   function atualizarFiltro(

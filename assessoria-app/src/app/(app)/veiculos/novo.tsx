@@ -13,6 +13,8 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import LogoPicker from "@/components/forms/LogoPicker";
+import TierSelector from "@/components/forms/TierSelector";
+import type { Tier } from "@/constants/tier";
 
 import { ArquivoLogoVeiculo, criarVeiculo } from "@/services/api/veiculo";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -23,6 +25,7 @@ export default function NovoVeiculo() {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [alcance, setAlcance] = useState("");
+  const [tier, setTier] = useState<Tier | null>(null);
   const [ativo, setAtivo] = useState(true);
   const [erroNome, setErroNome] = useState("");
   const [erroGeral, setErroGeral] = useState("");
@@ -45,6 +48,7 @@ export default function NovoVeiculo() {
         nome: nomeFormatado,
         descricao: descricao.trim() || undefined,
         alcance: alcance.trim() || undefined,
+        tier,
         ativo,
       },
         logo ?? undefined
@@ -114,6 +118,7 @@ export default function NovoVeiculo() {
           textAlignVertical="top"
           style={styles.textArea}
         />
+        <TierSelector value={tier} onChange={setTier} disabled={salvando} />
         <LogoPicker
           logoSelecionado={logo}
           onSelect={setLogo}

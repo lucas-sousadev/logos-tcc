@@ -57,13 +57,19 @@ export default function MailingFilterModal({
     useState(false);
 
   useEffect(() => {
-    if (visible) {
-      setFiltrosTemporarios(filtros);
-      setBuscaVeiculo(
-        filtros.veiculoNome ?? ""
-      );
-      setSugestoes([]);
+    if (!visible) {
+      return;
     }
+
+    const timer = setTimeout(() => {
+      setFiltrosTemporarios(filtros);
+      setBuscaVeiculo(filtros.veiculoNome ?? "");
+      setSugestoes([]);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [visible, filtros]);
 
   const termoVeiculo = buscaVeiculo.trim();
@@ -74,9 +80,14 @@ export default function MailingFilterModal({
       termoVeiculo.length < 2 ||
       filtrosTemporarios.veiculoId !== undefined
     ) {
-      setSugestoes([]);
-      setCarregandoVeiculos(false);
-      return;
+      const timer = setTimeout(() => {
+        setSugestoes([]);
+        setCarregandoVeiculos(false);
+      }, 0);
+
+      return () => {
+        clearTimeout(timer);
+      };
     }
 
     let cancelado = false;

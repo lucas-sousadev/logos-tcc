@@ -10,6 +10,12 @@ import { useRouter } from "expo-router";
 
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import BackButton from "@/components/ui/BackButton";
+import Text from "@/components/ui/Text";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
+import { validarSenha } from "@/utils/validarSenha";
+
 type CampoCadastro =
   | "codigo"
   | "nome"
@@ -21,11 +27,6 @@ type CampoCadastro =
 type ErrosCadastro = Partial<
   Record<CampoCadastro, string>
 >;
-import BackButton from "@/components/ui/BackButton";
-import Text from "@/components/ui/Text";
-import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
-import { validarSenha } from "@/utils/validarSenha";
 
 export default function CadastroFuncionario() {
   const router = useRouter();

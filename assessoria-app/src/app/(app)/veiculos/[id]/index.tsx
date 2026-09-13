@@ -9,7 +9,7 @@ import {
   Image,
 } from "react-native";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -19,6 +19,8 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import LogoPicker from "@/components/forms/LogoPicker";
+import TierSelector from "@/components/forms/TierSelector";
+import { DESCRICOES_TIER, rotuloTier, Tier } from "@/constants/tier";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -43,9 +45,21 @@ interface Formulario {
   descricao: string;
   logo_path: string;
   alcance: string;
+  tier: Tier | null;
   ativo: boolean;
 }
 
+function dadosFormulario(dados: Veiculo): Formulario {
+    return {
+      nome: dados.nome,
+      descricao: dados.descricao ?? "",
+      logo_path: dados.logo_path ?? "",
+      alcance: dados.alcance ?? "",
+      tier: dados.tier ?? null,
+      ativo: dados.ativo === 1,
+    };
+  }
+  
 export default function VeiculoDetalhes() {
   const router = useRouter();
   const { theme } = useTheme();
@@ -61,6 +75,7 @@ export default function VeiculoDetalhes() {
     descricao: "",
     logo_path: "",
     alcance: "",
+    tier: null,
     ativo: true,
   });
   const [formularioOriginal, setFormularioOriginal] =
@@ -72,50 +87,52 @@ export default function VeiculoDetalhes() {
   const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
   const [logoRemovido, setLogoRemovido] = useState(false);
+
+  const carregarVeiculo = useCallback(
+    async () => {
+      if (!id || Number.isNaN(id)) {
+        Alert.alert("Erro", "Veículo inválido.");
+        router.back();
+        return;
+      }
+
+      try {
+        setCarregando(true);
+
+        const dados = await buscarVeiculo(id);
+        const novoFormulario =
+          dadosFormulario(dados);
+
+        setVeiculo(dados);
+        setFormulario(novoFormulario);
+        setFormularioOriginal(novoFormulario);
+      } catch (error) {
+        Alert.alert(
+          "Erro",
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o veículo."
+        );
+
+        router.back();
+      } finally {
+        setCarregando(false);
+        setNovoLogo(null);
+        setLogoRemovido(false);
+      }
+    },
+    [id, router]
+  );
+
   useEffect(() => {
-    void carregarVeiculo();
+    const timer = setTimeout(() => {
+      void carregarVeiculo();
+    }, 0);
 
-  }, [id]);
-
-  function dadosFormulario(dados: Veiculo): Formulario {
-    return {
-      nome: dados.nome,
-      descricao: dados.descricao ?? "",
-      logo_path: dados.logo_path ?? "",
-      alcance: dados.alcance ?? "",
-      ativo: dados.ativo === 1,
+    return () => {
+      clearTimeout(timer);
     };
-  }
-
-  async function carregarVeiculo() {
-    if (!id || Number.isNaN(id)) {
-      Alert.alert("Erro", "Veículo inválido.");
-      router.back();
-      return;
-    }
-
-    try {
-      setCarregando(true);
-      const dados = await buscarVeiculo(id);
-      const novoFormulario = dadosFormulario(dados);
-
-      setVeiculo(dados);
-      setFormulario(novoFormulario);
-      setFormularioOriginal(novoFormulario);
-    } catch (error) {
-      Alert.alert(
-        "Erro",
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar o veículo."
-      );
-      router.back();
-    } finally { 
-      setCarregando(false);
-      setNovoLogo(null);
-      setLogoRemovido(false); 
-    }
-  }
+  }, [carregarVeiculo]);
 
   async function atualizarResumoVeiculo() {
     if (!id || Number.isNaN(id)) {
@@ -127,9 +144,9 @@ export default function VeiculoDetalhes() {
     setVeiculo(dados);
   }
 
-  function atualizarCampo(
-    campo: keyof Formulario,
-    valor: string | boolean
+  function atualizarCampo<Campo extends keyof Formulario>(
+    campo: Campo,
+    valor: Formulario[Campo]
   ) {
     setFormulario((atual) => ({ ...atual, [campo]: valor }));
   }
@@ -261,6 +278,7 @@ export default function VeiculoDetalhes() {
         alcance:
           formulario.alcance.trim() || undefined,
         ativo: formulario.ativo,
+        tier: formulario.tier,
       };
 
       const atualizado =
@@ -486,6 +504,15 @@ export default function VeiculoDetalhes() {
               showChanged={campoAlterado("alcance")}
             />
 
+            <TierSelector
+              value={formulario.tier}
+              onChange={(valor) => {
+                atualizarCampo("tier", valor);
+                setErroGeral("");
+              }}
+              disabled={salvando}
+              showChanged={campoAlterado("tier")}
+            />
             <LogoPicker
               logoAtualUri={
                 logoRemovido
@@ -581,6 +608,13 @@ export default function VeiculoDetalhes() {
               value={veiculo.alcance || "Não informado"}
             />
             <InfoRow
+              icon="ribbon-outline"
+              label="TIER"
+              value={veiculo.tier == null
+                ? "Não definido"
+                : `${rotuloTier(veiculo.tier)} · ${DESCRICOES_TIER[veiculo.tier]}`}
+            />
+            <InfoRow
               icon="image-outline"
               label="LOGO"
               value={
@@ -650,7 +684,7 @@ function InfoRow({
         <Ionicons name={icon} size={19} color={theme.textoContainer} />
       </View>
       <View style={styles.infoContent}>
-        <Text weight="SemiBold" style={styles.infoLabel}>
+        <Text weight="SemiBold" style={[styles.infoLabel, {color: theme.textoTerciaria}]}>
           {label}
         </Text>
         <Text style={[styles.infoValue, { color: theme.texto }]}>

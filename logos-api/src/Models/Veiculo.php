@@ -99,6 +99,7 @@ class Veiculo
                 v.alcance,
                 v.logo_path,
                 v.ativo,
+                v.tier,
                 {$contagemVinculos} AS contatos_vinculados,
                 v.created_at,
                 v.updated_at
@@ -225,6 +226,7 @@ class Veiculo
                 v.alcance,
                 v.logo_path,
                 v.ativo,
+                v.tier,
                 (
                     SELECT COUNT(*)
                     FROM jornalistas j
@@ -267,6 +269,7 @@ class Veiculo
                 alcance,
                 logo_path,
                 ativo,
+                tier,
                 created_at,
                 updated_at
             FROM veiculos
@@ -293,7 +296,8 @@ class Veiculo
         ?string $descricao,
         ?string $logoPath,
         ?string $alcance,
-        bool $ativo
+        bool $ativo,
+        ?int $tier = null
     ): int {
         $pdo = Connection::get();
 
@@ -304,14 +308,16 @@ class Veiculo
                 descricao,
                 alcance,
                 logo_path,
-                ativo
+                ativo,
+                tier
             ) VALUES (
                 :assessoria_id,
                 :nome,
                 :descricao,
                 :alcance,
                 :logo_path,
-                :ativo
+                :ativo,
+                :tier
             )
         ");
 
@@ -322,6 +328,7 @@ class Veiculo
             'alcance' => $alcance,
             'logo_path' => $logoPath,
             'ativo' => $ativo ? 1 : 0,
+            'tier' => $tier,
         ]);
 
         return (int) $pdo->lastInsertId();
@@ -334,7 +341,8 @@ class Veiculo
         ?string $descricao,
         ?string $logoPath,
         ?string $alcance,
-        bool $ativo
+        bool $ativo,
+        ?int $tier
     ): void {
         $pdo = Connection::get();
 
@@ -345,7 +353,8 @@ class Veiculo
                 descricao = :descricao,
                 logo_path = :logo_path,
                 alcance = :alcance,
-                ativo = :ativo
+                ativo = :ativo,
+                tier = :tier
             WHERE
                 id = :id
                 AND assessoria_id = :assessoria_id
@@ -359,6 +368,7 @@ class Veiculo
             'logo_path' => $logoPath,
             'alcance' => $alcance,
             'ativo' => $ativo ? 1 : 0,
+            'tier' => $tier,
         ]);
     }
 

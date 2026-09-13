@@ -6,7 +6,7 @@ import {
   View,
 } from "react-native";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   useLocalSearchParams,
   useRouter,
@@ -85,6 +85,55 @@ export default function Permissoes() {
 
   const [erro, setErro] = useState("");
 
+  const carregarDados = useCallback(
+    async () => {
+      try {
+        setCarregando(true);
+        setErro("");
+
+        const [
+          funcionarioEncontrado,
+          todasPermissoes,
+          permissoesAtuais,
+        ] = await Promise.all([
+          buscarFuncionario(Number(id)),
+          listarTodasPermissoes(),
+          listarPermissoesFuncionario(Number(id)),
+        ]);
+
+        const idsAtuais =
+          permissoesAtuais.map(
+            (item) => item.id
+          );
+
+        setFuncionario(funcionarioEncontrado);
+        setPermissoes(todasPermissoes);
+        setSelecionadas(idsAtuais);
+        setPermissoesOriginais(idsAtuais);
+      } catch (error) {
+        console.error(
+          "Erro ao carregar permissões:",
+          error
+        );
+
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar as permissões."
+        );
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [
+      id,
+      buscarFuncionario,
+      listarTodasPermissoes,
+      listarPermissoesFuncionario,
+      setErro
+    ]
+  );
+
   useEffect(() => {
     if (
       carregandoAuth ||
@@ -96,50 +145,18 @@ export default function Permissoes() {
       return;
     }
 
-    carregarDados();
+    const timer = setTimeout(() => {
+      void carregarDados();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [
-    id,
     carregandoAuth,
+    temPermissao,
+    carregarDados,
   ]);
-
-  async function carregarDados() {
-    try {
-      setCarregando(true);
-      setErro("");
-
-      const [
-        funcionarioEncontrado,
-        todasPermissoes,
-        permissoesAtuais,
-      ] = await Promise.all([
-        buscarFuncionario(Number(id)),
-        listarTodasPermissoes(),
-        listarPermissoesFuncionario(Number(id)),
-      ]);
-
-      const idsAtuais = permissoesAtuais.map(
-        (item) => item.id
-      );
-
-      setFuncionario(funcionarioEncontrado);
-      setPermissoes(todasPermissoes);
-      setSelecionadas(idsAtuais);
-      setPermissoesOriginais(idsAtuais);
-    } catch (error) {
-      console.error(
-        "Erro ao carregar permissões:",
-        error
-      );
-
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar as permissões."
-      );
-    } finally {
-      setCarregando(false);
-    }
-  }
 
   function mesmasPermissoes(
   a: number[],
@@ -428,7 +445,7 @@ export default function Permissoes() {
           >
             Defina quais ações este funcionário poderá
             realizar no sistema. 
-            Ativar "visualizar" permite que outras ações sejam ativadas.
+            Ativar &quot;visualizar&quot; permite que outras ações sejam ativadas.          
           </Text>
 
           {Object.entries(

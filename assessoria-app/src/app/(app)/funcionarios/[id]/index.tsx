@@ -2,15 +2,11 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import { useEffect, useState } from "react";
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter,} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
@@ -43,33 +39,52 @@ export default function FuncionarioDetalhes() {
 
   const [erro, setErro] = useState("");
 
+  const carregarFuncionario = useCallback(
+    async () => {
+      if (
+        !temPermissao(
+          "USUARIOS",
+          "VISUALIZAR"
+        )
+      ) {
+        return;
+      }
+
+      try {
+        setCarregando(true);
+        setErro("");
+
+        const dados =
+          await buscarFuncionario(Number(id));
+
+        setFuncionario(dados);
+      } catch (error) {
+        console.error(
+          "Erro ao carregar funcionário:",
+          error
+        );
+
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o funcionário."
+        );
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [id, buscarFuncionario, temPermissao]
+  );
+
   useEffect(() => {
-    carregarFuncionario();
-  }, [id]);
+    const timer = setTimeout(() => {
+      void carregarFuncionario();
+    }, 0);
 
-  async function carregarFuncionario() {
-    try {
-      setCarregando(true);
-      setErro("");
-
-      const dados = await buscarFuncionario(Number(id));
-
-      setFuncionario(dados);
-    } catch (error) {
-      console.error(
-        "Erro ao carregar funcionário:",
-        error
-      );
-
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar o funcionário."
-      );
-    } finally {
-      setCarregando(false);
-    }
-  }
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [carregarFuncionario]);
 
   if (!temPermissao("USUARIOS", "VISUALIZAR")) {
     return (
