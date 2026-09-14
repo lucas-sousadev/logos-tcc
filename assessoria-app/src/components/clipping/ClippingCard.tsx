@@ -86,7 +86,7 @@ export default function ClippingCard({
   };
 
   const veiculo =
-    clipping.veiculo_nome?.trim() || "Não informado";
+    clipping.veiculo_nome?.trim() || "Sem veículo";
 
   const pauta =
     clipping.pauta?.trim() ||
@@ -232,7 +232,7 @@ export default function ClippingCard({
               },
             ]}
             >
-              {veiculo}
+              {veiculo || "Não informado"}
             </Text>
           )}
 
@@ -271,7 +271,7 @@ export default function ClippingCard({
               },
             ]}
           >
-            {veiculo}
+            {veiculo || "Não informado"}
           </Text>
         ) : null}
 
