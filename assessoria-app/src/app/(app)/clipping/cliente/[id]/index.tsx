@@ -33,12 +33,23 @@ export default function ClippingsDoCliente() {
   const params = useLocalSearchParams<{
     id?: string;
     ano?: string;
+    clienteNome?: string;
   }>();
 
   const ano = Number(params.ano);
   const clienteId = Number(params.id);
 
-  const [clienteNome, setClienteNome] = useState("Cliente");
+ const nomeNaRota = params.clienteNome?.trim() || "";
+
+  const [clienteCarregado, setClienteCarregado] = useState<{
+    id: number;
+    nome: string;
+  } | null>(null);
+
+  const clienteNome =
+    clienteCarregado?.id === clienteId
+      ? clienteCarregado.nome
+      : nomeNaRota || `Cliente #${clienteId}`;
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [clippings, setClippings] = useState<Clipping[]>(
@@ -50,20 +61,32 @@ export default function ClippingsDoCliente() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-    async function carregarCliente() {
-      if (!clienteId || Number.isNaN(clienteId)) {
-        return;
-      }
+    let ativo = true;
 
+    if (!Number.isSafeInteger(clienteId) || clienteId <= 0) {
+      return;
+    }
+
+    async function carregarCliente() {
       try {
         const cliente = await buscarCliente(clienteId);
-        setClienteNome(cliente.nome);
+
+        if (ativo) {
+          setClienteCarregado({
+            id: clienteId,
+            nome: cliente.nome,
+          });
+        }
       } catch {
-        setClienteNome("Cliente");
+        // Mantém o nome recebido pela navegação ou a identificação por ID.
       }
     }
 
     void carregarCliente();
+
+    return () => {
+      ativo = false;
+    };
   }, [clienteId]);
 
   const carregarClippings = useCallback(async () => {
@@ -115,6 +138,7 @@ export default function ClippingsDoCliente() {
       params: {
         ano: String(ano),
         clienteId: String(clienteId),
+        clienteNome,
       },
     });
   }

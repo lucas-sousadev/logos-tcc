@@ -24,7 +24,7 @@ function formatarData(
   data: string | null,
   completa = false
 ): string {
-  if (!data) return "Sem data";
+  if (!data) return "Não informada";
 
   const partes = data.split("-");
   if (partes.length !== 3) return data;
@@ -61,22 +61,39 @@ export default function ClippingCard({
   onAlternarExpansao,
   onAbrirDetalhes,
 }: ClippingCardProps) {
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
   const { fontScale } = useWindowDimensions();
 
   const [erroLink, setErroLink] = useState("");
 
   const fonteAmpliada = fontScale > 1.2;
 
+  const corPendente =
+  mode === "dark" ? "#E79A9A" : "#B45353";
+
+  const pendencias = {
+    data: !clipping.data_publicacao,
+    veiculo: !clipping.veiculo_nome?.trim(),
+    pauta: !clipping.pauta?.trim(),
+    categorias: clipping.categorias.length === 0,
+    tier: clipping.tier === null,
+    arquivos: clipping.total_anexos === 0,
+    trecho:
+      clipping.inicio_segundos === null ||
+      clipping.fim_segundos === null ||
+      clipping.duracao_segundos === null,
+    link: !clipping.link?.trim(),
+  };
+
   const veiculo =
-    clipping.veiculo_nome?.trim() || "Sem veículo";
+    clipping.veiculo_nome?.trim() || "Não informado";
 
   const pauta =
     clipping.pauta?.trim() ||
     "Clipping #" + clipping.id + " — pauta pendente";
 
   const categorias = clipping.categorias;
-  const resumoCategorias = categorias.slice(0, 2).join(" · ");
+  const resumoCategorias = categorias.slice(0, 2).join(", ");
   const categoriasExtras = Math.max(0, categorias.length - 2);
   const programaSecao = clipping.programa_secao?.trim() || "";
   const temDuracao = clipping.duracao_segundos !== null;
@@ -89,22 +106,26 @@ export default function ClippingCard({
     {
       rotulo: "Publicação",
       valor: formatarData(clipping.data_publicacao, true),
+      pendente: pendencias.data,
+    },
+        {
+      rotulo: "Categorias",
+      valor: categorias.join(", ") || "Não informadas",
+      pendente: pendencias.categorias,
     },
     {
       rotulo: "Veículo",
       valor: veiculo,
-    },
-    {
-      rotulo: "Tier",
-      valor: rotuloTier(clipping.tier),
-    },
-    {
-      rotulo: "Categorias",
-      valor: categorias.join(" · ") || "Não informadas",
+      pendente: pendencias.veiculo,
     },
     {
       rotulo: "Programa/seção",
       valor: clipping.programa_secao,
+    },
+    {
+      rotulo: "Tier",
+      valor: rotuloTier(clipping.tier),
+      pendente: pendencias.tier,
     },
     {
       rotulo: "Trecho",
@@ -115,14 +136,7 @@ export default function ClippingCard({
           formatarTempo(clipping.fim_segundos) +
           " (" + formatarTempo(clipping.duracao_segundos) + ")"
         : null,
-    },
-    {
-      rotulo: "Descrição do veículo",
-      valor: clipping.veiculo_descricao,
-    },
-    {
-      rotulo: "Alcance do veículo",
-      valor: clipping.veiculo_alcance,
+        pendente: pendencias.trecho,
     },
     {
       rotulo: "Observações",
@@ -130,7 +144,8 @@ export default function ClippingCard({
     },
     {
       rotulo: "Link",
-      valor: clipping.link,
+      valor: clipping.link?.trim() || "Não informado",
+      pendente: pendencias.link,
     },
     {
       rotulo: "Arquivos",
@@ -141,6 +156,7 @@ export default function ClippingCard({
               ? " arquivo nos detalhes"
               : " arquivos nos detalhes")
           : "Nenhum arquivo anexado",
+        pendente: pendencias.arquivos,
     },
   ];
 
@@ -189,7 +205,9 @@ export default function ClippingCard({
             style={[
                 styles.data,
                 {
-                color: theme.textoTerciaria,
+                color: pendencias.data
+                ? corPendente
+                : theme.textoTerciaria,
                 backgroundColor: theme.borda + "18",
                 },
             ]}
@@ -205,9 +223,14 @@ export default function ClippingCard({
               numberOfLines={1}
               ellipsizeMode="tail"
               style={[
-                styles.veiculo,
-                styles.veiculoNaLinha,
-              ]}
+              styles.veiculo,
+              styles.veiculoNaLinha,
+              {
+                color: pendencias.veiculo
+                  ? corPendente
+                  : theme.texto,
+              },
+            ]}
             >
               {veiculo}
             </Text>
@@ -219,10 +242,9 @@ export default function ClippingCard({
             style={[
               styles.tier,
               {
-                color:
-                  clipping.tier === null
-                    ? theme.textoSub
-                    : theme.textoContainer,
+                color: pendencias.tier
+                  ? corPendente
+                  : theme.textoContainer,
                 backgroundColor:
                   clipping.tier === null
                     ? theme.background
@@ -240,7 +262,14 @@ export default function ClippingCard({
         {fonteAmpliada ? (
           <Text
             weight="SemiBold"
-            style={styles.veiculo}
+            style={[
+              styles.veiculo,
+              {
+                color: pendencias.veiculo
+                  ? corPendente
+                  : theme.texto,
+              },
+            ]}
           >
             {veiculo}
           </Text>
@@ -250,7 +279,14 @@ export default function ClippingCard({
             weight="SemiBold"
             numberOfLines={expandido ? undefined : 2}
             ellipsizeMode="tail"
-            style={styles.pauta}
+            style={[
+              styles.pauta,
+              {
+                color: pendencias.pauta
+                  ? corPendente
+                  : theme.texto,
+              },
+            ]}
             >
             {pauta}
         </Text>
@@ -269,8 +305,12 @@ export default function ClippingCard({
                 numberOfLines={1}
                 ellipsizeMode="tail"
                 style={[
-                    styles.categoriaTexto,
-                    { color: theme.textoSub },
+                  styles.categoriaTexto,
+                  {
+                    color: pendencias.categorias
+                      ? corPendente
+                      : theme.textoSub,
+                  },
                 ]}
                 >
                 {resumoCategorias || "Sem categoria"}
@@ -324,7 +364,7 @@ export default function ClippingCard({
                   { color: theme.texto },
                 ]}
               >
-                Trecho{" "}
+                Trecho:{" "}
                 {formatarTempo(clipping.duracao_segundos)}
               </Text>
             ) : null}
@@ -350,7 +390,7 @@ export default function ClippingCard({
             { borderTopColor: theme.borda + "66" },
           ]}
         >
-          {detalhes.map(({ rotulo, valor }) =>
+          {detalhes.map(({ rotulo, valor, pendente }) =>
             valor?.trim() ? (
               <Text
                 key={rotulo}
@@ -360,7 +400,16 @@ export default function ClippingCard({
                 <Text weight="SemiBold">
                   {rotulo}:{" "}
                 </Text>
-                {valor}
+
+                <Text
+                  style={{
+                    color: pendente
+                      ? corPendente
+                      : theme.texto,
+                  }}
+                >
+                  {valor}
+                </Text>
               </Text>
             ) : null
           )}

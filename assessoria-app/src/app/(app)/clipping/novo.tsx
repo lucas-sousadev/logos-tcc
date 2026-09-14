@@ -1,5 +1,4 @@
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -13,18 +12,15 @@ import {
   useRouter,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  ErrosClipping,
-  validarFormularioClipping,
-} from "@/utils/validarClipping";
+import { type ErrosClipping, obterAnoDaPublicacao, validarFormularioClipping,} from "@/utils/validarClipping";
 import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import SearchBar from "@/components/ui/SearchBar";
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
+import ClippingContexto from "@/components/clipping/ClippingContexto";
 import TierSelector from "@/components/forms/TierSelector";
 
 import { useTheme } from "@/contexts/ThemeContext";
@@ -32,12 +28,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { Tier } from "@/constants/tier";
 
 import {
-  ClienteClippingAno,
-  DadosClipping,
+  type DadosClipping,
   criarClipping,
-  listarClientesDoAno,
   listarPautas,
-} from "@/services/api/clipping";
+} from "@/services/api/clipping"; 
 
 const CATEGORIAS_SUGERIDAS = [
   "Site",
@@ -49,33 +43,73 @@ const CATEGORIAS_SUGERIDAS = [
   "Redes sociais",
 ];
 
+function primeiroParametro(
+  valor: string | string[] | undefined
+): string {
+  return Array.isArray(valor)
+    ? valor[0] ?? ""
+    : valor ?? "";
+}
+
 export default function NovoClipping() {
+  const params = useLocalSearchParams<{
+    ano?: string | string[];
+    clienteId?: string | string[];
+    clienteNome?: string | string[];
+  }>();
+
+  const anoParametro = primeiroParametro(params.ano);
+  const clienteParametro = primeiroParametro(params.clienteId);
+  const nomeParametro = primeiroParametro(params.clienteNome);
+
+  const numeroCliente = Number(clienteParametro);
+
+  const clienteInicial =
+    Number.isSafeInteger(numeroCliente) && numeroCliente > 0
+      ? numeroCliente
+      : null;
+
+  const anoInicial = anoParametro
+    ? Number(anoParametro)
+    : new Date().getFullYear();
+
+  return (
+    <FormularioNovoClipping
+      key={JSON.stringify([anoParametro, clienteParametro])}
+      anoInicial={anoInicial}
+      clienteInicial={clienteInicial}
+      nomeClienteInicial={nomeParametro.trim()}
+    />
+  );
+}
+
+function FormularioNovoClipping({
+  anoInicial,
+  clienteInicial,
+  nomeClienteInicial,
+}: {
+  anoInicial: number;
+  clienteInicial: number | null;
+  nomeClienteInicial: string;
+}) {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const params = useLocalSearchParams<{
-    ano?: string;
-    clienteId?: string;
-    clienteNome?: string;
-  }>();
+  const [anoReferencia, setAnoReferencia] = useState(anoInicial);
 
-  const ano = Number(params.ano) || new Date().getFullYear();
-  const clienteInicial = Number(params.clienteId);
-  const [clientes, setClientes] = useState<ClienteClippingAno[]>([]);
-  const [clientesCarregando, setClientesCarregando] = useState(true);
   const [clienteId, setClienteId] = useState<number | null>(
-    Number.isFinite(clienteInicial) && clienteInicial > 0
-      ? clienteInicial
-      : null
+    clienteInicial
   );
 
   const [clienteNome, setClienteNome] = useState(
-    params.clienteNome || ""
+    clienteInicial !== null ? nomeClienteInicial : ""
   );
 
-  const [buscaCliente, setBuscaCliente] = useState("");
   const [dataPublicacao, setDataPublicacao] = useState("");
+
+  const anoDaData = obterAnoDaPublicacao(dataPublicacao);
+  const ano = anoDaData ?? anoReferencia;
   const [pauta, setPauta] = useState("");
   const [programaSecao, setProgramaSecao] = useState("");
   const [categoriasTexto, setCategoriasTexto] = useState("");
@@ -99,55 +133,6 @@ export default function NovoClipping() {
   const [erros, setErros] = useState<ErrosClipping>({});
   const [erroGeral, setErroGeral] = useState("");
 
-  useEffect(() => {
-    let ativo = true;
-
-    async function carregarClientes() {
-      try {
-        setClientesCarregando(true);
-
-        const resposta = await listarClientesDoAno(
-          ano,
-          {
-            page: 1,
-            limit: 100,
-          }
-        );
-
-        if (!ativo) return;
-
-        setClientes(resposta.clientes);
-
-        const clienteEncontrado =
-          resposta.clientes.find(
-            (cliente) => cliente.id === clienteId
-          );
-
-        if (clienteEncontrado) {
-          setClienteNome(clienteEncontrado.nome);
-        }
-      } catch (error) {
-        if (ativo) {
-          Alert.alert(
-            "Erro",
-            error instanceof Error
-              ? error.message
-              : "Não foi possível carregar os clientes."
-          );
-        }
-      } finally {
-        if (ativo) {
-          setClientesCarregando(false);
-        }
-      }
-    }
-
-    void carregarClientes();
-
-    return () => {
-      ativo = false;
-    };
-  }, [ano, clienteId]);
 
   useEffect(() => {
     if (!clienteId || pauta.trim().length < 2) {
@@ -178,13 +163,6 @@ export default function NovoClipping() {
         clearTimeout(atraso);
     };
     }, [clienteId, pauta]);
-
-  const clientesFiltrados = clientes.filter(
-    (cliente) =>
-      cliente.nome
-        .toLocaleLowerCase()
-        .includes(buscaCliente.trim().toLocaleLowerCase())
-  );
 
   function adicionarCategoria(categoria: string) {
     const atual = categoriasTexto.trim();
@@ -251,6 +229,12 @@ export default function NovoClipping() {
 
     if (texto.includes("cliente")) {
       campo = "cliente";
+    } else if (
+      texto.includes("ano de referência") ||
+      texto.includes("ano de referencia") ||
+      texto.startsWith("ano ")
+    ) {
+      campo = "anoReferencia";
     } else if (texto.includes("data")) {
       campo = "dataPublicacao";
     } else if (texto.includes("categoria")) {
@@ -371,6 +355,9 @@ export default function NovoClipping() {
       setSalvando(true);
 
       const clipping = await criarClipping(dados);
+      
+      setAnoReferencia(clipping.ano_referencia);
+      setClienteNome(clipping.cliente_nome);
 
       if (adicionarOutro) {
         limparCamposParaOutro();
@@ -456,125 +443,30 @@ export default function NovoClipping() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        <View
-          style={[
-            styles.intro,
-            { borderColor: theme.borda },
-          ]}
-        >
-          <Text weight="Bold" style={styles.introTitle}>
-            NOVA PUBLICAÇÃO
-          </Text>
+        <ClippingContexto
+          clienteId={clienteId}
+          clienteNome={clienteNome}
+          ano={ano}
+          anoPelaData={anoDaData !== null}
+          erroCliente={erros.cliente}
+          erroAno={erros.anoReferencia}
+          disabled={salvando}
+          onCliente={(cliente) => {
+            if (cliente.id !== clienteId) {
+              setPautasSugeridas([]);
+            }
 
-          <Text
-            style={[
-              styles.introText,
-              { color: theme.textoSub },
-            ]}
-          >
-            Ano de referência: {ano}. A data pode ser preenchida
-            posteriormente.
-          </Text>
-        </View>
-
-        <Text weight="Bold" style={styles.sectionTitle}>
-          CLIENTE
-        </Text>
-
-        <SearchBar
-          value={buscaCliente}
-          onChangeText={setBuscaCliente}
-          placeholder="Buscar cliente..."
-          onClear={() => setBuscaCliente("")}
+            setClienteId(cliente.id);
+            setClienteNome(cliente.nome);
+            limparErro("cliente");
+          }}
+          onAno={(novoAno) => {
+            setAnoReferencia(novoAno);
+            limparErro("anoReferencia");
+          }}
         />
-
-        {clientesCarregando ? (
-          <ActivityIndicator
-            color={theme.primaria}
-            style={styles.clientLoading}
-          />
-        ) : (
-          <View style={styles.clientsList}>
-            {clientesFiltrados.map((cliente) => {
-              const selecionado =
-                cliente.id === clienteId;
-
-              return (
-                <TouchableOpacity
-                  key={cliente.id}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setClienteId(cliente.id);
-                    setClienteNome(cliente.nome);
-                    limparErro("cliente");
-                    setPautasSugeridas([]);
-                  }}
-                  style={[
-                    styles.clientOption,
-                    {
-                      borderColor: selecionado
-                        ? theme.primaria
-                        : theme.borda,
-                      backgroundColor: selecionado
-                        ? theme.backgroundContainer
-                        : theme.background,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      selecionado
-                        ? "checkmark-circle"
-                        : "ellipse-outline"
-                    }
-                    size={20}
-                    color={
-                      selecionado
-                        ? theme.textoContainer
-                        : theme.textoSub
-                    }
-                  />
-
-                  <Text
-                    weight={
-                      selecionado
-                        ? "SemiBold"
-                        : "Regular"
-                    }
-                    style={{
-                      color: selecionado
-                        ? theme.textoContainer
-                        : theme.texto,
-                      flex: 1,
-                      marginLeft: 9,
-                      fontSize: 13,
-                    }}
-                  >
-                    {cliente.nome}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {clienteId ? (
-          <Text
-            style={[
-              styles.selectedHint,
-              { color: theme.textoSub },
-            ]}
-          >
-            Cliente selecionado: {clienteNome}
-          </Text>
-        ) : null}
-
-        {erros.cliente ? (
-          <Text style={styles.fieldError}>
-            {erros.cliente}
-          </Text>
-        ) : null}
 
         <Text weight="Bold" style={styles.sectionTitle}>
           DADOS DA PUBLICAÇÃO
@@ -585,8 +477,17 @@ export default function NovoClipping() {
           value={dataPublicacao}
           onChangeText={(texto) => {
             setDataPublicacao(texto);
+
+            const novoAno = obterAnoDaPublicacao(texto);
+
+            if (novoAno !== null) {
+              setAnoReferencia(novoAno);
+              limparErro("anoReferencia");
+            }
+
             limparErro("dataPublicacao");
           }}
+          editable={!salvando}
           placeholder="AAAA-MM-DD"
           keyboardType="numbers-and-punctuation"
           error={erros.dataPublicacao}
@@ -655,11 +556,10 @@ export default function NovoClipping() {
           error={erros.programaSecao}
         />
 
-        <Text weight="Medium" style={styles.fieldLabel}>
-          CATEGORIAS
-        </Text>
+
 
         <Input
+          label="CATEGORIAS"
           value={categoriasTexto}
           onChangeText={(texto) => {
             setCategoriasTexto(texto);
@@ -811,23 +711,6 @@ const styles = StyleSheet.create({
     paddingBottom: 45,
   },
 
-  intro: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 24,
-  },
-
-  introTitle: {
-    fontSize: 16,
-  },
-
-  introText: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 6,
-  },
-
   sectionTitle: {
     fontSize: 13,
     marginBottom: 13,
@@ -837,29 +720,6 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     marginBottom: 8,
-  },
-
-  clientLoading: {
-    marginVertical: 18,
-  },
-
-  clientsList: {
-    gap: 8,
-    marginBottom: 8,
-  },
-
-  clientOption: {
-    minHeight: 48,
-    borderWidth: 1.5,
-    borderRadius: 13,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  selectedHint: {
-    fontSize: 11,
-    marginBottom: 20,
   },
 
   suggestions: {

@@ -51,7 +51,7 @@ export default function ClientesDoAno() {
     try {
       setCarregando(true);
       setErro("");
-
+      
       const resposta = await listarClientesDoAno(
         ano,
         {
@@ -91,11 +91,12 @@ export default function ClientesDoAno() {
 
   function abrirCliente(cliente: ClienteClippingAno) {
     router.push({
-        pathname: "/clipping/cliente/[id]" as never,
-        params: {
-            id: String(cliente.id),
-            ano: String(ano),
-        },
+      pathname: "/clipping/cliente/[id]" as never,
+      params: {
+        id: String(cliente.id),
+        ano: String(ano),
+        clienteNome: cliente.nome,
+      },
     });
   }
 
@@ -149,15 +150,6 @@ export default function ClientesDoAno() {
             >
               {total} cliente(s) disponíveis
             </Text>
-
-            {temPermissao("CLIPPING", "CRIAR") ? (
-              <Button
-                title="NOVO"
-                size="small"
-                onPress={novoClipping}
-                style={styles.newButton}
-              />
-            ) : null}
           </View>
 
           {erro ? (

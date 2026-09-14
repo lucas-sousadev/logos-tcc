@@ -10,6 +10,7 @@ export const MAX_VEICULO = 150;
 
 export type CampoClipping =
   | "cliente"
+  | "anoReferencia"
   | "dataPublicacao"
   | "categorias"
   | "programaSecao"
@@ -62,10 +63,22 @@ function dataValida(valor: string): boolean {
   );
 
   return (
+    ano >= 1000 &&
+    ano <= 9999 &&
     data.getUTCFullYear() === ano &&
     data.getUTCMonth() === mes - 1 &&
     data.getUTCDate() === dia
   );
+}
+
+export function obterAnoDaPublicacao(
+  valor: string
+): number | null {
+  const data = valor.trim();
+
+  return dataValida(data)
+    ? Number(data.slice(0, 4))
+    : null;
 }
 
 function segundosValidos(valor: string): boolean {
@@ -85,12 +98,12 @@ export function validarFormularioClipping(
     erros.cliente = "Selecione o cliente do clipping.";
   }
 
-  if (
-    !Number.isInteger(dados.anoReferencia) ||
-    dados.anoReferencia < 1
+  if (!Number.isInteger(dados.anoReferencia) ||
+      dados.anoReferencia < 1000 ||
+      dados.anoReferencia > 9999
   ) {
-    erros.dataPublicacao =
-      "O ano de referência é inválido.";
+    erros.anoReferencia =
+      "Informe um ano de referência entre 1000 e 9999.";
   }
 
   const data = dados.dataPublicacao.trim();
