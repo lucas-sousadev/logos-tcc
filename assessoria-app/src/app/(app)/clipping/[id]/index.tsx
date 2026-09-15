@@ -5,27 +5,32 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  RefreshControl
 } from "react-native";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   useLocalSearchParams,
   useRouter,
+  useIsFocused
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import { useConsultaClipping } from "@/hooks/useConsultaClipping";
 import { useTheme } from "@/contexts/ThemeContext";
-import {
-  buscarClipping,
-  Clipping,
-} from "@/services/api/clipping";
+import { buscarClipping} from "@/services/api/clipping";
 import ClippingAnexos from "@/components/clipping/ClippingAnexos";
+import { segundosParaTempo,} from "@/utils/clippingFormatacao";
+import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 
 export default function ClippingDetalhes() {
   const router = useRouter();
   const { theme } = useTheme();
+  const focado = useIsFocused();
+  const { marcarVisualizado } = useClippingNovos();
 
   const params = useLocalSearchParams<{
     id: string;
@@ -33,38 +38,53 @@ export default function ClippingDetalhes() {
 
   const id = Number(params.id);
 
-  const [clipping, setClipping] =
-    useState<Clipping | null>(null);
+  const [erroLink, setErroLink] = useState("");
 
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [erro, setErro] = useState("");
-
-  useEffect(() => {
-    async function carregar() {
-      if (!id || Number.isNaN(id)) {
-        setErro("Clipping inválido.");
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const dados = await buscarClipping(id);
-        setClipping(dados);
-      } catch (error) {
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar o clipping."
-        );
-      } finally {
-        setCarregando(false);
-      }
+  const consultarClipping = useCallback(async () => {
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new Error("Clipping inválido.");
     }
 
-    void carregar();
+    return buscarClipping(id);
   }, [id]);
+
+  const {
+    dados: clipping,
+    carregando,
+    atualizando,
+    erro,
+    recarregar,
+  } = useConsultaClipping(
+    consultarClipping,
+    String(id)
+  );
+
+  useEffect(() => {
+    if (focado && clipping) {
+      marcarVisualizado(clipping.id);
+    }
+  }, [focado, clipping, marcarVisualizado]);
+
+  function voltar() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    if (clipping) {
+      router.replace({
+        pathname: "/clipping/cliente/[id]",
+        params: {
+          id: String(clipping.cliente_id),
+          ano: String(clipping.ano_referencia),
+          clienteNome: clipping.cliente_nome,
+        },
+      });
+      return;
+    }
+
+    router.replace("/clipping");
+  }
 
   function formatarData(data: string | null) {
     if (!data) return "Data pendente";
@@ -78,32 +98,15 @@ export default function ClippingDetalhes() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   }
 
-  function formatarDuracao(
-    segundos: number | null
-  ) {
-    if (segundos === null) {
-      return "Não informada";
-    }
-
-    const minutos = Math.floor(segundos / 60);
-    const restante = segundos % 60;
-
-    if (minutos === 0) {
-      return `${restante}s`;
-    }
-
-    return `${minutos}min ${restante}s`;
-  }
-
   async function abrirLink() {
-    if (!clipping?.link) {
-      return;
-    }
+    if (!clipping?.link) return;
+
+    setErroLink("");
 
     try {
       await Linking.openURL(clipping.link);
     } catch {
-      setErro("Não foi possível abrir o link.");
+      setErroLink("Não foi possível abrir o link.");
     }
   }
 
@@ -118,6 +121,7 @@ export default function ClippingDetalhes() {
         <Header
           title="Clipping"
           showBackButton
+          onBackPress={voltar}
         />
 
         <View style={styles.loading}>
@@ -141,6 +145,7 @@ export default function ClippingDetalhes() {
         <Header
           title="Clipping"
           showBackButton
+          onBackPress={voltar}
         />
 
         <View style={styles.errorBox}>
@@ -162,6 +167,12 @@ export default function ClippingDetalhes() {
           >
             {erro || "Clipping não encontrado."}
           </Text>
+          <Button
+            title="TENTAR NOVAMENTE"
+            size="small"
+            onPress={() => void recarregar()}
+            style={{ marginTop: 12 }}
+          />
         </View>
       </View>
     );
@@ -177,13 +188,37 @@ export default function ClippingDetalhes() {
       <Header
         title="Detalhes"
         showBackButton
-        onBackPress={() => router.back()}
+        onBackPress={voltar}
       />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={atualizando}
+            onRefresh={() => void recarregar()}
+            tintColor={theme.primaria}
+            colors={[theme.primaria]}
+          />
+        }
       >
+        {erro || erroLink ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>
+              {erro || erroLink}
+            </Text>
+
+            {erro ? (
+              <Button
+                title="TENTAR NOVAMENTE"
+                size="small"
+                onPress={() => void recarregar()}
+                style={{ marginTop: 12 }}
+              />
+            ) : null}
+          </View>
+        ) : null}
         <View
           style={[
             styles.summary,
@@ -269,9 +304,15 @@ export default function ClippingDetalhes() {
           icon="time-outline"
           label="TRECHO"
           value={
-            clipping.inicio_segundos !== null &&
+            clipping.inicio_segundos !== null ||
             clipping.fim_segundos !== null
-              ? `${clipping.inicio_segundos}s até ${clipping.fim_segundos}s`
+              ? `Início ${
+                  segundosParaTempo(clipping.inicio_segundos) ||
+                  "pendente"
+                } · Fim ${
+                  segundosParaTempo(clipping.fim_segundos) ||
+                  "pendente"
+                }`
               : "Não informado"
           }
           theme={theme}
@@ -280,9 +321,10 @@ export default function ClippingDetalhes() {
         <InfoRow
           icon="timer-outline"
           label="DURAÇÃO"
-          value={formatarDuracao(
-            clipping.duracao_segundos
-          )}
+          value={
+            segundosParaTempo(clipping.duracao_segundos) ||
+            "Não informada"
+          }
           theme={theme}
         />
 

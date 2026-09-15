@@ -4,14 +4,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  RefreshControl
 } from "react-native";
 
 import { useCallback, useState } from "react";
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import {useLocalSearchParams, useRouter} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
@@ -24,6 +21,7 @@ import {
   ClienteClippingAno,
   listarClientesDoAno,
 } from "@/services/api/clipping";
+import { useConsultaClipping } from "@/hooks/useConsultaClipping";
 
 export default function ClientesDoAno() {
   const router = useRouter();
@@ -35,50 +33,52 @@ export default function ClientesDoAno() {
   }>();
 
   const ano =
-    Number(params.ano) || new Date().getFullYear();
+  params.ano === undefined
+    ? new Date().getFullYear()
+    : Number(params.ano);
 
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] =
     useState("");
-  const [clientes, setClientes] = useState<
-    ClienteClippingAno[]
-  >([]);
-  const [total, setTotal] = useState(0);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
 
-  const carregarClientes = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setErro("");
-      
-      const resposta = await listarClientesDoAno(
-        ano,
-        {
-          busca: buscaAplicada,
-          page: 1,
-          limit: 100,
-        }
-      );
-
-      setClientes(resposta.clientes);
-      setTotal(resposta.pagination.total);
-    } catch (error) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os clientes."
-      );
-    } finally {
-      setCarregando(false);
+  const consultarClientes = useCallback(async () => {
+    if (
+      !Number.isInteger(ano) ||
+      ano < 1000 ||
+      ano > 9999
+    ) {
+      throw new Error("Ano de referência inválido.");
     }
+
+    return listarClientesDoAno(ano, {
+      busca: buscaAplicada,
+      page: 1,
+      limit: 100,
+    });
   }, [ano, buscaAplicada]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void carregarClientes();
-    }, [carregarClientes])
+  const {
+    dados,
+    carregando,
+    atualizando,
+    erro,
+    recarregar: carregarClientes,
+  } = useConsultaClipping(
+    consultarClientes,
+    JSON.stringify([ano, buscaAplicada])
   );
+
+  const clientes = dados?.clientes ?? [];
+  const total = dados?.pagination.total ?? 0;
+
+  function voltar() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/clipping");
+  }
 
   function pesquisar() {
     setBuscaAplicada(busca.trim());
@@ -119,6 +119,7 @@ export default function ClientesDoAno() {
       <Header
         title={`Clientes ${ano}`}
         showBackButton
+        onBackPress={voltar}
       />
 
       {carregando ? (
@@ -132,6 +133,14 @@ export default function ClientesDoAno() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
+          refreshControl={
+              <RefreshControl
+                refreshing={atualizando}
+                onRefresh={() => void carregarClientes()}
+                tintColor={theme.primaria}
+                colors={[theme.primaria]}
+              />
+            }
         >
           <SearchBar
             value={busca}
@@ -230,7 +239,7 @@ export default function ClientesDoAno() {
             </TouchableOpacity>
           ))}
 
-          {clientes.length === 0 ? (
+          {!erro && clientes.length === 0 ? (
             <View
               style={[
                 styles.empty,

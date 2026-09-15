@@ -720,7 +720,7 @@ class ClippingService
             'pauta' => self::texto(
                 $base['pauta'],
                 'Pauta',
-                5000
+                250
             ),
 
             'tier' => self::inteiro(
@@ -744,7 +744,7 @@ class ClippingService
             'observacoes' => self::texto(
                 $base['observacoes'],
                 'Observações',
-                5000
+                1500
             ),
         ];
     }

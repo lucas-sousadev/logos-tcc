@@ -16,6 +16,7 @@ import type { Clipping } from "@/services/api/clipping";
 interface ClippingCardProps {
   clipping: Clipping;
   expandido: boolean;
+  novo?: boolean;
   onAlternarExpansao: () => void;
   onAbrirDetalhes: () => void;
 }
@@ -58,6 +59,7 @@ function formatarTempo(segundos: number | null): string {
 export default function ClippingCard({
   clipping,
   expandido,
+  novo = false,
   onAlternarExpansao,
   onAbrirDetalhes,
 }: ClippingCardProps) {
@@ -180,7 +182,7 @@ export default function ClippingCard({
         styles.card,
         {
           backgroundColor: theme.background,
-          borderColor: theme.borda
+          borderColor: theme.borda,
         },
       ]}
     >
@@ -288,6 +290,17 @@ export default function ClippingCard({
               },
             ]}
             >
+            {novo ? (
+              <Text
+                weight="Bold"
+                style={{
+                  fontSize: 10,
+                  color: mode === "dark" ? "#86EFAC" : "#15803D",
+                }}
+              >
+                NOVO{" • "}
+              </Text>
+            ) : null}
             {pauta}
         </Text>
 

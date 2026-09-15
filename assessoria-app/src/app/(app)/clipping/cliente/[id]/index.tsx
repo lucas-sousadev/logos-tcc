@@ -3,15 +3,16 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  RefreshControl
 } from "react-native";
 
 import { useCallback, useState, useEffect } from "react";
 import {
-  useFocusEffect,
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-
+import { useConsultaClipping } from "@/hooks/useConsultaClipping";
+import AvisoClippingSalvo from "@/components/clipping/avisoClippingSalvo";
 import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
@@ -24,20 +25,27 @@ import {
   listarClippings,
 } from "@/services/api/clipping";
 import { buscarCliente } from "@/services/api/cliente";
+import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 
 export default function ClippingsDoCliente() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
+  const { novos } = useClippingNovos();
 
   const params = useLocalSearchParams<{
     id?: string;
     ano?: string;
     clienteNome?: string;
+    criadoId?: string;
   }>();
 
   const ano = Number(params.ano);
   const clienteId = Number(params.id);
+  const criadoId = Number(params.criadoId);
+
+  const mostrarAviso =
+    Number.isSafeInteger(criadoId) && criadoId > 0;
 
  const nomeNaRota = params.clienteNome?.trim() || "";
 
@@ -52,13 +60,7 @@ export default function ClippingsDoCliente() {
       : nomeNaRota || `Cliente #${clienteId}`;
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
-  const [clippings, setClippings] = useState<Clipping[]>(
-    []
-  );
-  const [total, setTotal] = useState(0);
   const [expandido, setExpandido] = useState<number | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
 
   useEffect(() => {
     let ativo = true;
@@ -89,48 +91,75 @@ export default function ClippingsDoCliente() {
     };
   }, [clienteId]);
 
-  const carregarClippings = useCallback(async () => {
+  const consultarClippings = useCallback(async () => {
     if (
-      !ano ||
-      Number.isNaN(ano) ||
-      !clienteId ||
-      Number.isNaN(clienteId)
+      !Number.isSafeInteger(clienteId) ||
+      clienteId <= 0 ||
+      !Number.isInteger(ano) ||
+      ano < 1000 ||
+      ano > 9999
     ) {
-      setErro("Cliente ou ano inválido.");
-      setCarregando(false);
+      throw new Error("Cliente ou ano inválido.");
+    }
+
+    return listarClippings({
+      cliente_id: clienteId,
+      ano_referencia: ano,
+      busca: buscaAplicada,
+      page: 1,
+      limit: 50,
+    });
+  }, [ano, clienteId, buscaAplicada]);
+
+  const {
+    dados,
+    carregando,
+    atualizando,
+    erro,
+    recarregar: carregarClippings,
+  } = useConsultaClipping(
+    consultarClippings,
+    JSON.stringify([clienteId, ano, buscaAplicada])
+  );
+
+  const clippings = dados?.clippings ?? [];
+  const total = dados?.pagination.total ?? 0;
+
+  function fecharAviso() {
+    router.setParams({
+      criadoId: "",
+    });
+  }
+
+  function visualizarCriado() {
+    if (!mostrarAviso) return;
+
+    router.push({
+      pathname: "/clipping/[id]",
+      params: {
+        id: String(criadoId),
+      },
+    });
+  }
+
+  function voltar() {
+    if (router.canGoBack()) {
+      router.back();
       return;
     }
 
-    try {
-      setCarregando(true);
-      setErro("");
-
-      const resposta = await listarClippings({
-        cliente_id: clienteId,
-        ano_referencia: ano,
-        busca: buscaAplicada,
-        page: 1,
-        limit: 50,
+    if (Number.isInteger(ano) && ano >= 1000 && ano <= 9999) {
+      router.replace({
+        pathname: "/clipping/ano",
+        params: {
+          ano: String(ano),
+        },
       });
-
-      setClippings(resposta.clippings);
-      setTotal(resposta.pagination.total);
-    } catch (error) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os clippings."
-      );
-    } finally {
-      setCarregando(false);
+      return;
     }
-  }, [ano, clienteId, buscaAplicada]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void carregarClippings();
-    }, [carregarClippings])
-  );
+    router.replace("/clipping");
+  }
 
   function abrirNovo() {
     router.push({
@@ -162,7 +191,23 @@ export default function ClippingsDoCliente() {
       <Header
         title={clienteNome}
         showBackButton
+        onBackPress={voltar}
       />
+
+      {mostrarAviso ? (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+          }}
+        >
+          <AvisoClippingSalvo
+            mensagem={`Novo clipping cadastrado em ${ano}. Clique em ver para abrir os detalhes.`}
+            onVisualizar={visualizarCriado}
+            onFechar={fecharAviso}
+          />
+        </View>
+      ) : null}
 
       {carregando ? (
         <View style={styles.loading}>
@@ -175,6 +220,14 @@ export default function ClippingsDoCliente() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={atualizando}
+              onRefresh={() => void carregarClippings()}
+              tintColor={theme.primaria}
+              colors={[theme.primaria]}
+            />
+          }
         >
           <SearchBar
             value={busca}
@@ -239,10 +292,11 @@ export default function ClippingsDoCliente() {
                 )
               }
               onAbrirDetalhes={() => abrirDetalhes(clipping)}
+              novo={novos.has(clipping.id)}
             />
           ))}
 
-          {clippings.length === 0 ? (
+          {!erro && clippings.length === 0 ? (
             <View
               style={[
                 styles.empty,
@@ -259,7 +313,9 @@ export default function ClippingsDoCliente() {
                   { color: theme.textoSub },
                 ]}
               >
-                Cadastre a primeira publicação deste cliente.
+                {buscaAplicada
+                  ? "Nenhum registro corresponde à busca aplicada."
+                  : "Cadastre uma publicação para este cliente e ano."}
               </Text>
             </View>
           ) : null}

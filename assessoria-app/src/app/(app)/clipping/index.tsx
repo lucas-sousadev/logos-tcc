@@ -4,86 +4,69 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  RefreshControl
 } from "react-native";
 
-import { useCallback, useState } from "react";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useCallback, } from "react";
+import { useRouter,} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  AnoClipping,
-  listarClippingAnos,
-} from "@/services/api/clipping";
+import { listarClippingAnos } from "@/services/api/clipping";
+import { useConsultaClipping } from "@/hooks/useConsultaClipping";
 
 export default function Clipping() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const [anos, setAnos] = useState<AnoClipping[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
-
   const anoAtual = new Date().getFullYear();
+ 
+  const consultarAnos = useCallback(async () => {
+    const resposta = await listarClippingAnos();
 
-  const carregarAnos = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setErro("");
+    const possuiAnoAtual = resposta.anos.some(
+      (item) => item.ano_referencia === anoAtual
+    );
 
-      const resposta = await listarClippingAnos();
+    const lista = possuiAnoAtual
+      ? resposta.anos
+      : [
+          {
+            ano_referencia: anoAtual,
+            total_clippings: 0,
+            total_clientes: 0,
+          },
+          ...resposta.anos,
+        ];
 
-      const possuiAnoAtual = resposta.anos.some(
-        (item) => item.ano_referencia === anoAtual
-      );
+    return [...lista].sort((a, b) => {
+      const aAtual = a.ano_referencia === anoAtual;
+      const bAtual = b.ano_referencia === anoAtual;
 
-      const lista = possuiAnoAtual
-        ? resposta.anos
-        : [
-            {
-              ano_referencia: anoAtual,
-              total_clippings: 0,
-              total_clientes: 0,
-            },
-            ...resposta.anos,
-          ];
+      if (aAtual !== bAtual) {
+        return aAtual ? -1 : 1;
+      }
 
-      setAnos(
-        [...lista].sort((a, b) => {
-          const aAtual = a.ano_referencia === anoAtual;
-          const bAtual = b.ano_referencia === anoAtual;
-
-          if (aAtual !== bAtual) {
-            return aAtual ? -1 : 1;
-          }
-
-          return b.ano_referencia - a.ano_referencia;
-        })
-      );
-    } catch (error) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os anos."
-      );
-    } finally {
-      setCarregando(false);
-    }
+      return b.ano_referencia - a.ano_referencia;
+    });
   }, [anoAtual]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void carregarAnos();
-    }, [carregarAnos])
+  const {
+    dados,
+    carregando,
+    atualizando,
+    erro,
+    recarregar: carregarAnos,
+  } = useConsultaClipping(
+    consultarAnos,
+    String(anoAtual)
   );
+
+  const anos = dados ?? [];
 
   function abrirAno(ano: number) {
     router.push({
@@ -123,6 +106,14 @@ export default function Clipping() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
+          refreshControl={
+          <RefreshControl
+            refreshing={atualizando}
+            onRefresh={() => void carregarAnos()}
+            tintColor={theme.primaria}
+            colors={[theme.primaria]}
+          />
+        }
         >
           <View style={styles.headerRow}>
             <View style={styles.headerInfo}>
@@ -272,7 +263,7 @@ export default function Clipping() {
             </TouchableOpacity>
           ))}
 
-          {anos.length === 0 ? (
+          {!erro && anos.length === 0 ? (
             <View
               style={[
                 styles.empty,

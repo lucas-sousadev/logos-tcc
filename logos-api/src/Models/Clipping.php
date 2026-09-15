@@ -303,21 +303,28 @@ class Clipping
         if ($f['busca'] !== null) {
             $where[] = "
                 (
-                    CONCAT_WS(
-                        ' ',
-                        c.pauta,
-                        v.nome,
-                        c.programa_secao,
-                        c.categorias,
-                        CONCAT('Tier ', c.tier),
-                        c.link,
-                        c.observacoes,
-                        c.data_publicacao,
-                        DATE_FORMAT(
+                    CONVERT(
+                        CONCAT_WS(
+                            ' ',
+                            c.pauta,
+                            v.nome,
+                            c.programa_secao,
+                            c.categorias,
+                            CONCAT('Tier ', c.tier),
+                            c.link,
+                            c.observacoes,
                             c.data_publicacao,
-                            '%d/%m/%Y'
+                            DATE_FORMAT(
+                                c.data_publicacao,
+                                '%d/%m/%Y'
+                            )
                         )
-                    ) LIKE :busca ESCAPE '!'
+                        USING utf8mb4
+                    ) COLLATE utf8mb4_unicode_ci
+                        LIKE
+                    CONVERT(:busca USING utf8mb4)
+                        COLLATE utf8mb4_unicode_ci
+                        ESCAPE '!'
 
                     OR EXISTS (
                         SELECT 1
@@ -325,8 +332,13 @@ class Clipping
                         WHERE
                             a.clipping_id = c.id
                             AND a.assessoria_id = c.assessoria_id
-                            AND a.nome_original
-                                LIKE :busca_anexo ESCAPE '!'
+                            AND CONVERT(
+                                a.nome_original USING utf8mb4
+                            ) COLLATE utf8mb4_unicode_ci
+                                LIKE
+                            CONVERT(:busca_anexo USING utf8mb4)
+                                COLLATE utf8mb4_unicode_ci
+                                ESCAPE '!'
                     )
                 )
             ";
@@ -516,7 +528,12 @@ class Clipping
 
         if ($busca !== null) {
             $sql .= "
-                AND pauta LIKE :busca ESCAPE '!'
+                AND CONVERT(pauta USING utf8mb4)
+                    COLLATE utf8mb4_unicode_ci
+                    LIKE
+                CONVERT(:busca USING utf8mb4)
+                    COLLATE utf8mb4_unicode_ci
+                    ESCAPE '!'
             ";
 
             $params['busca'] =

@@ -10,6 +10,16 @@ interface ApiEnvelope {
   message?: string;
 }
 
+export class ErroApiClipping extends Error {
+  constructor(
+    mensagem: string,
+    public readonly status: number
+  ) {
+    super(mensagem);
+    this.name = "ErroApiClipping";
+  }
+}
+
 async function lerResposta<T>(
   response: Response,
   mensagemPadrao: string
@@ -25,7 +35,10 @@ async function lerResposta<T>(
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(dados.message || mensagemPadrao);
+    throw new ErroApiClipping(
+      dados.message || mensagemPadrao,
+      response.status
+    );
   }
 
   return dados as T;
