@@ -181,7 +181,7 @@ export default function ClippingCard({
       style={[
         styles.card,
         {
-          backgroundColor: theme.background,
+          backgroundColor: theme.backgroundSecundario,
           borderColor: theme.borda,
         },
       ]}
@@ -506,7 +506,7 @@ export default function ClippingCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1.5,
+    borderTopWidth: 2,
     borderRadius: 16,
     marginBottom: 8,
     },

@@ -231,6 +231,16 @@ class ClippingController
             )
         );
     }
+    
+    public function excluir(array $rota): void
+    {
+        $this->executar(
+            fn(int $a, int $u) => ClippingService::excluir(
+                $rota['id'] ?? null,
+                $a
+            )
+        );
+    }
 
     public function buscarAnexo(array $rota): void
     {

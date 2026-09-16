@@ -49,14 +49,18 @@ interface ClippingDataInputProps {
   onChangeText: (valor: string) => void;
   error?: string;
   disabled?: boolean;
+  showChanged?: boolean;
+  label?: string;
 }
 
 export default function ClippingDataInput({
   value,
   anoReferencia,
   onChangeText,
+  showChanged = false,
   error,
   disabled = false,
+  label = "DATA DE PUBLICAÇÃO",
 }: ClippingDataInputProps) {
   const { theme, mode } = useTheme();
   const insets = useSafeAreaInsets();
@@ -120,13 +124,34 @@ export default function ClippingDataInput({
 
   return (
     <View style={styles.container}>
-      <Text weight="Medium" style={styles.label}>
-        DATA DE PUBLICAÇÃO
-      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 8,
+        }}
+      >
+        <Text
+          weight="Medium"
+          style={[styles.label, { marginBottom: 0 }]}
+        >
+          {label}
+        </Text>
+
+        {showChanged ? (
+          <Ionicons
+            name="create-outline"
+            size={15}
+            color={theme.primaria}
+            accessibilityLabel="Data alterada"
+          />
+        ) : null}
+      </View>
 
       <View style={styles.linha}>
         <Input
-          accessibilityLabel="Data de publicação"
+          accessibilityLabel={label}
           value={value}
           onChangeText={(texto) => {
             if (!disabled) {

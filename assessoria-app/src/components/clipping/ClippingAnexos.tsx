@@ -1,20 +1,20 @@
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 
 import * as DocumentPicker from "expo-document-picker";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useFocusEffect,
 } from "expo-router";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import ClippingImagemPreview from "@/components/clipping/ClippingImagePreview";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -23,16 +23,18 @@ import {
   enviarAnexo,
   excluirAnexo,
   listarAnexos,
-  obterTokenParaArquivo,
-  obterUrlArquivoAnexo,
 } from "@/services/api/clipping";
 
 interface ClippingAnexosProps {
   clippingId: number;
+  disabled?: boolean;
+  onOcupadoChange?: (ocupado: boolean) => void;
 }
 
 export default function ClippingAnexos({
   clippingId,
+  disabled = false,
+  onOcupadoChange,
 }: ClippingAnexosProps) {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
@@ -45,9 +47,28 @@ export default function ClippingAnexos({
   const [enviando, setEnviando] = useState(false);
   const [processandoId, setProcessandoId] =
     useState<number | null>(null);
-  const [token, setToken] = useState<string | null>(
-    null
-  );
+
+  const travaAcao = useRef(false);
+
+  const [anexoParaExcluir, setAnexoParaExcluir] =
+    useState<AnexoClipping | null>(null);
+
+  const [feedback, setFeedback] = useState<{
+    titulo: string;
+    mensagem: string;
+    aviso?: boolean;
+  } | null>(null);
+
+  const ocupado =
+    disabled ||
+    carregando ||
+    enviando ||
+    processandoId !== null;
+
+  useEffect(() => {
+    onOcupadoChange?.(enviando || processandoId !== null);
+  }, [enviando, processandoId, onOcupadoChange]);
+
   const [erro, setErro] = useState("");
 
   const podeAnexar = temPermissao(
@@ -102,181 +123,190 @@ export default function ClippingAnexos({
     }, [carregarAnexos])
     );
 
-    useEffect(() => {
-    let ativo = true;
+  function informarFalha(
+  titulo: string,
+  error: unknown,
+  mensagemPadrao: string
+) {
+  setFeedback({
+    titulo,
+    mensagem:
+      error instanceof Error
+        ? error.message
+        : mensagemPadrao,
+  });
+}
 
-    obterTokenParaArquivo()
-        .then((valor) => {
-        if (ativo) {
-            setToken(valor);
-        }
-        })
-        .catch(() => {
-        if (ativo) {
-            setToken(null);
-        }
-        });
+async function selecionarArquivo() {
+  if (ocupado || travaAcao.current || !podeAnexar) return;
 
-    return () => {
-        ativo = false;
-    };
-    }, []);
+  travaAcao.current = true;
+  setEnviando(true);
 
-  async function selecionarArquivo() {
-    try {
-      const resultado =
-        await DocumentPicker.getDocumentAsync({
-          type: [
-            "image/*",
-            "video/*",
-            "audio/*",
-            "application/pdf",
-          ],
-          multiple: false,
-          copyToCacheDirectory: true,
-        });
+  try {
+    const resultado = await DocumentPicker.getDocumentAsync({
+      type: [
+        "image/*",
+        "video/*",
+        "audio/*",
+        "application/pdf",
+      ],
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
 
-      if (resultado.canceled) {
-        return;
-      }
+    if (resultado.canceled) return;
 
-      const arquivo = resultado.assets[0];
+    const arquivo = resultado.assets[0];
 
-      setEnviando(true);
-
-      await enviarAnexo(clippingId, {
-        uri: arquivo.uri,
-        nome: arquivo.name,
-        mimeType:
-          arquivo.mimeType ||
-          "application/octet-stream",
-        file: arquivo.file,
-      });
-
-      await carregarAnexos();
-    } catch (error) {
-      Alert.alert(
-        "Não foi possível enviar",
-        error instanceof Error
-          ? error.message
-          : "Verifique o arquivo selecionado."
-      );
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  async function marcarPrincipal(
-    anexo: AnexoClipping
-  ) {
-    if (!podeEditar) return;
-
-    try {
-      setProcessandoId(anexo.id);
-
-      await atualizarAnexo(
-        clippingId,
-        anexo.id,
-        {
-          principal:
-            anexo.principal === 1
-              ? null
-              : true,
-        }
-      );
-
-      await carregarAnexos();
-    } catch (error) {
-      Alert.alert(
-        "Erro",
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar o anexo."
-      );
-    } finally {
-      setProcessandoId(null);
-    }
-  }
-
-  async function marcarImagemRelatorio(
-    anexo: AnexoClipping
-  ) {
-    if (!podeEditar || anexo.tipo !== "IMAGEM") {
-      return;
+    if (!arquivo) {
+      throw new Error("Nenhum arquivo foi selecionado.");
     }
 
-    try {
-      setProcessandoId(anexo.id);
+    const criado = await enviarAnexo(clippingId, {
+      uri: arquivo.uri,
+      nome: arquivo.name,
+      mimeType:
+        arquivo.mimeType || "application/octet-stream",
+      file: arquivo.file,
+    });
 
-      await atualizarAnexo(
-        clippingId,
-        anexo.id,
-        {
-          imagem_relatorio:
-            anexo.imagem_relatorio === 1
-              ? null
-              : true,
-        }
-      );
+    // Mantém o envio confirmado visível mesmo se a consulta seguinte falhar.
+    setAnexos((atuais) => [
+      ...atuais.filter((anexo) => anexo.id !== criado.id),
+      criado,
+    ]);
 
-      await carregarAnexos();
-    } catch (error) {
-      Alert.alert(
-        "Erro",
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar o anexo."
-      );
-    } finally {
-      setProcessandoId(null);
-    }
-  }
-
-  function confirmarExclusao(
-    anexo: AnexoClipping
-  ) {
-    if (!podeExcluir) return;
-
-    Alert.alert(
-      "Excluir anexo?",
-      `O arquivo "${anexo.nome_original}" será removido.`,
-      [
-        {
-          text: "CANCELAR",
-          style: "cancel",
-        },
-        {
-          text: "EXCLUIR",
-          style: "destructive",
-          onPress: () => void removerAnexo(anexo),
-        },
-      ]
+    await carregarAnexos();
+  } catch (error) {
+    informarFalha(
+      "Não foi possível enviar",
+      error,
+      "Verifique o arquivo selecionado."
     );
+  } finally {
+    travaAcao.current = false;
+    setEnviando(false);
   }
+}
 
-  async function removerAnexo(
-    anexo: AnexoClipping
+async function alterarMarcador(
+  anexo: AnexoClipping,
+  campo: "principal" | "imagem_relatorio"
+) {
+  if (
+    ocupado ||
+    travaAcao.current ||
+    !podeEditar ||
+    (campo === "imagem_relatorio" && anexo.tipo !== "IMAGEM")
   ) {
-    try {
-      setProcessandoId(anexo.id);
-
-      await excluirAnexo(
-        clippingId,
-        anexo.id
-      );
-
-      await carregarAnexos();
-    } catch (error) {
-      Alert.alert(
-        "Erro",
-        error instanceof Error
-          ? error.message
-          : "Não foi possível excluir o anexo."
-      );
-    } finally {
-      setProcessandoId(null);
-    }
+    return;
   }
+
+  travaAcao.current = true;
+  setProcessandoId(anexo.id);
+
+  try {
+    const atualizado = await atualizarAnexo(
+      clippingId,
+      anexo.id,
+      {
+        [campo]: anexo[campo] === 1 ? null : true,
+      }
+    );
+
+    setAnexos((atuais) =>
+      atuais.map((item) => {
+        if (item.id === atualizado.id) return atualizado;
+
+        // O servidor permite apenas um principal e uma imagem de relatório.
+        if (atualizado[campo] === 1) {
+          return {
+            ...item,
+            [campo]: null,
+          };
+        }
+
+        return item;
+      })
+    );
+
+    await carregarAnexos();
+  } catch (error) {
+    informarFalha(
+      "Não foi possível atualizar",
+      error,
+      "Tente novamente."
+    );
+  } finally {
+    travaAcao.current = false;
+    setProcessandoId(null);
+  }
+}
+
+function marcarPrincipal(anexo: AnexoClipping) {
+  return alterarMarcador(anexo, "principal");
+}
+
+function marcarImagemRelatorio(anexo: AnexoClipping) {
+  return alterarMarcador(anexo, "imagem_relatorio");
+}
+
+function confirmarExclusao(anexo: AnexoClipping) {
+  if (ocupado || travaAcao.current || !podeExcluir) return;
+
+  setAnexoParaExcluir(anexo);
+}
+
+async function removerAnexo() {
+  if (
+    !anexoParaExcluir ||
+    ocupado ||
+    travaAcao.current ||
+    !podeExcluir
+  ) {
+    return;
+  }
+
+  const anexo = anexoParaExcluir;
+
+  travaAcao.current = true;
+  setProcessandoId(anexo.id);
+
+  try {
+    const resultado = await excluirAnexo(
+      clippingId,
+      anexo.id
+    );
+
+    setAnexos((atuais) =>
+      atuais.filter((item) => item.id !== anexo.id)
+    );
+
+    setAnexoParaExcluir(null);
+
+    await carregarAnexos();
+
+    if (resultado.limpeza_pendente) {
+      setFeedback({
+        titulo: "Anexo removido",
+        mensagem: resultado.message,
+        aviso: true,
+      });
+    }
+  } catch (error) {
+    setAnexoParaExcluir(null);
+
+    informarFalha(
+      "Não foi possível excluir",
+      error,
+      "Tente novamente."
+    );
+  } finally {
+    travaAcao.current = false;
+    setProcessandoId(null);
+  }
+}
 
   function tamanhoArquivo(bytes: number) {
     if (bytes < 1024) {
@@ -315,6 +345,7 @@ export default function ClippingAnexos({
             loading={enviando}
             onPress={() => void selecionarArquivo()}
             style={styles.uploadButton}
+            disabled={ocupado}
           />
         ) : null}
       </View>
@@ -332,7 +363,7 @@ export default function ClippingAnexos({
         </Text>
       ) : null}
 
-      {!carregando && anexos.length === 0 ? (
+      {!carregando && !erro && anexos.length === 0 ? (
         <View
           style={[
             styles.empty,
@@ -357,9 +388,7 @@ export default function ClippingAnexos({
       ) : null}
 
       {anexos.map((anexo) => {
-        const imagem =
-          anexo.tipo === "IMAGEM" &&
-          token !== null;
+        const imagem = anexo.tipo === "IMAGEM";
 
         const processando =
           processandoId === anexo.id;
@@ -376,17 +405,9 @@ export default function ClippingAnexos({
             ]}
           >
             {imagem ? (
-              <Image
-                source={{
-                  uri: obterUrlArquivoAnexo(
-                    anexo.arquivo_endpoint
-                  ),
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                }}
-                style={styles.preview}
-                resizeMode="cover"
+              <ClippingImagemPreview
+                endpoint={anexo.arquivo_endpoint}
+                nome={anexo.nome_original}
               />
             ) : (
               <View
@@ -474,6 +495,13 @@ export default function ClippingAnexos({
                     styles.actionButton,
                     { borderColor: theme.borda },
                   ]}
+                  disabled={ocupado}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    anexo.imagem_relatorio === 1
+                      ? "Remover seleção para relatório"
+                      : "Selecionar imagem para relatório"
+                  }
                 >
                   <Ionicons
                     name={
@@ -496,6 +524,13 @@ export default function ClippingAnexos({
                       styles.actionButton,
                       { borderColor: theme.borda },
                     ]}
+                    disabled={ocupado}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      anexo.imagem_relatorio === 1
+                        ? "Remover seleção para relatório"
+                        : "Selecionar imagem para relatório"
+                    }
                   >
                     <Ionicons
                       name={
@@ -521,6 +556,9 @@ export default function ClippingAnexos({
                   styles.deleteButton,
                   { borderColor: "#EF4444" },
                 ]}
+                disabled={ocupado}
+                accessibilityRole="button"
+                accessibilityLabel={`Excluir ${anexo.nome_original}`}
               >
                 <Ionicons
                   name="trash-outline"
@@ -532,6 +570,30 @@ export default function ClippingAnexos({
           </View>
         );
       })}
+      <FeedbackAlert
+        visible={anexoParaExcluir !== null}
+        variant="warning"
+        title="Excluir anexo?"
+        message={
+          `O arquivo "${anexoParaExcluir?.nome_original ?? ""}" ` +
+          "será removido deste clipping. Esta ação não pode ser desfeita."
+        }
+        primaryLabel="EXCLUIR"
+        secondaryLabel="CANCELAR"
+        primaryDanger
+        loading={processandoId !== null}
+        onPrimary={() => void removerAnexo()}
+        onSecondary={() => setAnexoParaExcluir(null)}
+        onClose={() => setAnexoParaExcluir(null)}
+      />
+
+      <FeedbackAlert
+        visible={feedback !== null}
+        variant={feedback?.aviso ? "warning" : "error"}
+        title={feedback?.titulo ?? ""}
+        message={feedback?.mensagem ?? ""}
+        onClose={() => setFeedback(null)}
+      />
     </View>
   );
 }
@@ -648,19 +710,19 @@ const styles = StyleSheet.create({
   },
 
   actionButton: {
-    width: 32,
-    height: 32,
-    borderWidth: 1.5,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
 
   deleteButton: {
-    width: 32,
-    height: 32,
-    borderWidth: 1.5,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },

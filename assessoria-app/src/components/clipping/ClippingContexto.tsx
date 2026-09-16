@@ -34,6 +34,8 @@ interface ClippingContextoProps {
   disabled?: boolean;
   onCliente: (cliente: ClienteClippingAno) => void;
   onAno: (ano: number) => void;
+  clienteAlterado?: boolean;
+  anoAlterado?: boolean;
 }
 
 export default function ClippingContexto({
@@ -42,6 +44,8 @@ export default function ClippingContexto({
   ano,
   anoPelaData,
   erroCliente,
+  clienteAlterado = false,
+  anoAlterado = false,
   erroAno,
   disabled = false,
   onCliente,
@@ -79,6 +83,7 @@ export default function ClippingContexto({
         disabled={disabled || !anoValido}
         error={erroCliente}
         onPress={() => abrir("cliente")}
+        showChanged={clienteAlterado}
       />
 
       <CampoContexto
@@ -88,6 +93,7 @@ export default function ClippingContexto({
         disabled={disabled || anoPelaData}
         error={erroAno}
         onPress={() => abrir("ano")}
+        showChanged={anoAlterado}
       />
 
       <Text style={[styles.ajuda, { color: theme.textoSub }]}>
@@ -132,6 +138,7 @@ function CampoContexto({
   disabled,
   error,
   onPress,
+  showChanged = false,
 }: {
   label: string;
   value: string;
@@ -139,6 +146,7 @@ function CampoContexto({
   disabled: boolean;
   error?: string;
   onPress: () => void;
+  showChanged?: boolean;
 }) {
   const { theme } = useTheme();
 
@@ -159,9 +167,35 @@ function CampoContexto({
         ]}
       >
         <View style={styles.campoInfo}>
-          <Text style={[styles.label, { color: theme.textoSub }]}>
-            {label}
-          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 4,
+            }}
+          >
+            <Text
+              style={[
+                styles.label,
+                {
+                  color: theme.textoSub,
+                  marginBottom: 0,
+                },
+              ]}
+            >
+              {label}
+            </Text>
+
+            {showChanged ? (
+              <Ionicons
+                name="create-outline"
+                size={15}
+                color={theme.primaria}
+                accessibilityLabel={`${label}: valor alterado`}
+              />
+            ) : null}
+          </View>
 
           <Text weight="SemiBold" style={styles.valor}>
             {value}

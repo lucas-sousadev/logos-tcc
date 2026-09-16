@@ -88,6 +88,20 @@ export function useConsultaClipping<T>(
   const atual = estado.chave === chave ? estado : null;
   const dados = atual?.dados ?? null;
   const emCarregamento = atual?.carregando ?? true;
+  const atualizarDados = useCallback(
+    (dados: T) => {
+      // Impede uma consulta anterior de sobrescrever os dados recém-salvos.
+      requisicao.current += 1;
+
+      setEstado({
+        chave,
+        dados,
+        carregando: false,
+        erro: "",
+      });
+    },
+    [chave]
+  );
 
   return {
     dados,
@@ -95,5 +109,6 @@ export function useConsultaClipping<T>(
     carregando: emCarregamento && dados === null,
     atualizando: emCarregamento && dados !== null,
     recarregar,
+    atualizarDados,
   };
 }

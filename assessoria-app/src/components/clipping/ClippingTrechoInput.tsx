@@ -23,6 +23,8 @@ interface ClippingTrechoInputProps {
   erroInicio?: string;
   erroFim?: string;
   disabled?: boolean;
+  showInicioChanged?: boolean;
+  showFimChanged?: boolean;
 }
 
 export default function ClippingTrechoInput({
@@ -30,6 +32,8 @@ export default function ClippingTrechoInput({
   fim,
   onInicioChange,
   onFimChange,
+  showFimChanged = false,
+  showInicioChanged = false,
   erroInicio,
   erroFim,
   disabled = false,
@@ -106,6 +110,7 @@ export default function ClippingTrechoInput({
             clearable={!disabled}
             error={erroInicioExibido}
             containerStyle={styles.input}
+            showChanged={showInicioChanged}
           />
         </View>
 
@@ -137,6 +142,7 @@ export default function ClippingTrechoInput({
             clearable={!disabled}
             error={erroFimExibido}
             containerStyle={styles.input}
+            showChanged={showFimChanged}
           />
         </View>
       </View>

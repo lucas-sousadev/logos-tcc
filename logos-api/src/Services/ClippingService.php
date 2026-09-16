@@ -347,6 +347,49 @@ class ClippingService
             );
         }
 
+        $f['veiculo_nome'] = self::texto(
+            $dados['veiculo_nome'] ?? null,
+            'Nome do veículo',
+            150
+        );
+
+        $f['programa_secao'] = self::texto(
+            $dados['programa_secao'] ?? null,
+            'Programa/seção',
+            150
+        );
+
+        $f['sem_tier'] = self::booleano(
+            $dados['sem_tier'] ?? null,
+            'Sem Tier'
+        );
+
+        if ($f['sem_tier'] && $f['tier'] !== null) {
+            throw new InvalidArgumentException(
+                'Selecione um Tier ou Sem Tier, não ambos.'
+            );
+        }
+
+        foreach (['duracao_min', 'duracao_max'] as $campo) {
+            $f[$campo] = self::inteiro(
+                $dados[$campo] ?? null,
+                'Duração',
+                0,
+                4294967295,
+                true
+            );
+        }
+
+        if (
+            $f['duracao_min'] !== null
+            && $f['duracao_max'] !== null
+            && $f['duracao_min'] > $f['duracao_max']
+        ) {
+            throw new InvalidArgumentException(
+                'A duração mínima não pode superar a máxima.'
+            );
+        } 
+
         $f['ordem'] = self::texto(
             $dados['ordem'] ?? 'data',
             'Ordenação',
@@ -468,6 +511,18 @@ class ClippingService
             200
         );
 
+        foreach (['estado', 'cidade', 'segmento'] as $campo) {
+            $f[$campo] = self::texto(
+                $dados[$campo] ?? null,
+                $campo,
+                150
+            );
+        }
+
+        $f['ativo'] = self::booleano(
+            $dados['ativo'] ?? null,
+            'Status do cliente'
+        );
         return [
             'ano_referencia' => $ano,
 
@@ -865,5 +920,57 @@ class ClippingService
                 );
             }
         );
+    }
+
+    public static function excluir(
+        mixed $id,
+        int $assessoriaId
+    ): array {
+        $id = self::inteiro($id, 'ID do clipping');
+
+        $pdo = Connection::get();
+        $pdo->beginTransaction();
+
+        try {
+            $anexos = Clipping::excluirComAnexos(
+                $id,
+                $assessoriaId
+            );
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            if (
+                $e instanceof \PDOException
+                && (int) ($e->errorInfo[1] ?? 0) === 1451
+            ) {
+                throw new \DomainException(
+                    'Este clipping ou seus anexos possuem vínculos que impedem a exclusão.',
+                    0,
+                    $e
+                );
+            }
+
+            throw $e;
+        }
+
+        $limpezaPendente = false;
+
+        foreach ($anexos as $anexo) {
+            if (!ArquivoClippingService::remover($anexo)) {
+                $limpezaPendente = true;
+            }
+        }
+
+        return [
+            'message' => $limpezaPendente
+                ? 'Clipping excluído. A limpeza de alguns arquivos ficou pendente no servidor.'
+                : 'Clipping excluído com sucesso.',
+
+            'limpeza_pendente' => $limpezaPendente,
+        ];
     }
 }

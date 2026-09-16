@@ -39,6 +39,7 @@ interface VeiculoSelectorProps {
   mostrarResumo?: boolean;
   criacaoAoSalvar?: boolean;
   onCadastrar?: (nome: string) => void;
+  modoFiltro?: boolean;
 }
 
 interface ResultadoBusca {
@@ -57,6 +58,7 @@ export default function VeiculoSelector({
   mostrarResumo = false,
   criacaoAoSalvar = true,
   onCadastrar,
+  modoFiltro = false,
 }: VeiculoSelectorProps) {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
@@ -103,6 +105,7 @@ export default function VeiculoSelector({
     !disabled &&
     !criacaoAoSalvar &&
     podeCriar &&
+    !modoFiltro &&
     Boolean(onCadastrar) &&
     (
       !podeConsultar ||
@@ -443,11 +446,13 @@ export default function VeiculoSelector({
 
       {semSelecao && temTermo && !erroNome ? (
         <Text style={[styles.ajuda, { color: theme.textoSub }]}>
-          {criacaoAoSalvar
-            ? "O nome digitado será usado ao salvar."
-            : podeCriar
-              ? "Selecione um resultado ou cadastre o veículo antes de salvar o clipping."
-              : "Selecione um resultado. Para deixar o veículo pendente, limpe este campo."}
+          {modoFiltro
+            ? "Selecione um veículo específico ou mantenha o texto para pesquisar parte do nome."
+            : criacaoAoSalvar
+              ? "O nome digitado será usado ao salvar."
+              : podeCriar
+                ? "Selecione um resultado ou cadastre o veículo antes de salvar o clipping."
+                : "Selecione um resultado. Para deixar o veículo pendente, limpe este campo."}
         </Text>
       ) : null}
     </View>

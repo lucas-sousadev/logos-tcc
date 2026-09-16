@@ -268,12 +268,18 @@ class Clipping
         }
 
         if ($f['categoria'] !== null) {
-            $where[] =
-                'JSON_CONTAINS(c.categorias, :categoria) = 1';
+            $where[] = "
+                JSON_SEARCH(
+                    LOWER(c.categorias),
+                    'one',
+                    :categoria,
+                    '!'
+                ) IS NOT NULL
+            ";
 
-            $params['categoria'] = json_encode(
-                $f['categoria'],
-                JSON_THROW_ON_ERROR
+            $params['categoria'] = mb_strtolower(
+                self::termoBusca($f['categoria']),
+                'UTF-8'
             );
         }
 
@@ -347,6 +353,44 @@ class Clipping
                 self::termoBusca($f['busca']);
 
             $params['busca_anexo'] = $params['busca'];
+        }
+
+        foreach (
+            [
+                'veiculo_nome' => 'v.nome',
+                'programa_secao' => 'c.programa_secao',
+            ] as $campo => $coluna
+        ) {
+            if ($f[$campo] !== null) {
+                $where[] = "
+                    CONVERT({$coluna} USING utf8mb4)
+                        COLLATE utf8mb4_unicode_ci
+                    LIKE
+                    CONVERT(:{$campo} USING utf8mb4)
+                        COLLATE utf8mb4_unicode_ci
+                    ESCAPE '!'
+                ";
+
+                $params[$campo] = self::termoBusca($f[$campo]);
+            }
+        }
+
+        if ($f['sem_tier']) {
+            $where[] = 'c.tier IS NULL';
+        }
+
+        if ($f['duracao_min'] !== null) {
+            // Somente mínimo: maior que.
+            // Com os dois limites: intervalo inclusivo.
+            $operador = $f['duracao_max'] === null ? '>' : '>=';
+
+            $where[] = "c.duracao_segundos {$operador} :duracao_min";
+            $params['duracao_min'] = $f['duracao_min'];
+        }
+
+        if ($f['duracao_max'] !== null) {
+            $where[] = 'c.duracao_segundos <= :duracao_max';
+            $params['duracao_max'] = $f['duracao_max'];
         }
 
         $whereSql =
@@ -447,10 +491,6 @@ class Clipping
 
             WHERE
                 cl.assessoria_id = :assessoria_clientes
-                AND (
-                    cl.ativo = 1
-                    OR resumo.total_clippings > 0
-                )
         ";
 
         $params = [
@@ -466,6 +506,25 @@ class Clipping
 
             $params['busca'] =
                 self::termoBusca($f['busca']);
+        }
+
+        if ($f['ativo'] !== null) {
+            $from .= ' AND cl.ativo = :ativo';
+            $params['ativo'] = $f['ativo'] ? 1 : 0;
+        }
+
+        foreach (['estado', 'cidade', 'segmento'] as $campo) {
+            if ($f[$campo] !== null) {
+                $from .= "
+                    AND CONVERT(cl.{$campo} USING utf8mb4)
+                        COLLATE utf8mb4_unicode_ci
+                    LIKE CONVERT(:{$campo} USING utf8mb4)
+                        COLLATE utf8mb4_unicode_ci
+                    ESCAPE '!'
+                ";
+
+                $params[$campo] = self::termoBusca($f[$campo]);
+            }
         }
 
         $total = (int) self::consultar(
@@ -547,5 +606,128 @@ class Clipping
             ",
             $params
         )->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    public static function excluirComAnexos(
+        int $id,
+        int $assessoriaId
+    ): array {
+        $params = [
+            'id' => $id,
+            'assessoria_id' => $assessoriaId,
+        ];
+
+        $clipping = self::consultar(
+            'SELECT id
+            FROM clippings
+            WHERE id = :id
+            AND assessoria_id = :assessoria_id
+            FOR UPDATE',
+            $params
+        )->fetch();
+
+        if (!$clipping) {
+            throw new \OutOfBoundsException(
+                'Clipping não encontrado.'
+            );
+        }
+
+        $relatorio = self::consultar(
+            'SELECT id
+            FROM relatorio_slides
+            WHERE clipping_id = :id
+            AND assessoria_id = :assessoria_id
+            LIMIT 1
+            FOR UPDATE',
+            $params
+        )->fetchColumn();
+
+        if ($relatorio !== false) {
+            throw new \DomainException(
+                'Este clipping está vinculado a um relatório e não pode ser excluído.'
+            );
+        }
+
+        $anexos = self::consultar(
+            'SELECT *
+            FROM clipping_anexos
+            WHERE clipping_id = :id
+            AND assessoria_id = :assessoria_id
+            FOR UPDATE',
+            $params
+        )->fetchAll();
+
+        // Todos os anexos deste clipping serão removidos.
+        // Desfaz apenas os vínculos internos entre eles.
+        self::consultar(
+            'UPDATE clipping_anexos
+            SET anexo_origem_id = NULL
+            WHERE clipping_id = :id
+            AND assessoria_id = :assessoria_id',
+            $params
+        );
+
+        self::consultar(
+            'DELETE FROM clipping_anexos
+            WHERE clipping_id = :id
+            AND assessoria_id = :assessoria_id',
+            $params
+        );
+
+        self::consultar(
+            'DELETE FROM clippings
+            WHERE id = :id
+            AND assessoria_id = :assessoria_id',
+            $params
+        );
+
+        return $anexos;
+    }
+
+    public static function contarPorClientesNoAno(
+        int $assessoriaId,
+        int $ano,
+        array $clienteIds
+    ): array {
+        $clienteIds = array_values(
+            array_unique(array_map('intval', $clienteIds))
+        );
+
+        if (!$clienteIds) {
+            return [];
+        }
+
+        $params = [
+            'assessoria_id' => $assessoriaId,
+            'ano' => $ano,
+        ];
+
+        $marcadores = [];
+
+        foreach ($clienteIds as $indice => $clienteId) {
+            $nome = 'cliente_' . $indice;
+            $marcadores[] = ':' . $nome;
+            $params[$nome] = $clienteId;
+        }
+
+        $registros = self::consultar(
+            'SELECT cliente_id, COUNT(*) AS total
+            FROM clippings
+            WHERE assessoria_id = :assessoria_id
+            AND ano_referencia = :ano
+            AND arquivado_em IS NULL
+            AND cliente_id IN (' . implode(', ', $marcadores) . ')
+            GROUP BY cliente_id',
+            $params
+        )->fetchAll();
+
+        $contagens = [];
+
+        foreach ($registros as $registro) {
+            $contagens[(int) $registro['cliente_id']] =
+                (int) $registro['total'];
+        }
+
+        return $contagens;
     }
 }

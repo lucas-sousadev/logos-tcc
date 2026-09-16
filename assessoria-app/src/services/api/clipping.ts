@@ -162,30 +162,23 @@ export async function listarClippingAnos(): Promise<{
 
 export async function listarClientesDoAno(
   ano: number,
-  params: {
-    busca?: string;
-    page?: number;
-    limit?: number;
-  } = {}
+  params: ListarClientesAnoParams = {}
 ): Promise<{
   ano_referencia: number;
   clientes: ClienteClippingAno[];
   pagination: Paginacao;
 }> {
-  const query = new URLSearchParams();
-
-  query.set("page", String(params.page ?? 1));
-  query.set("limit", String(params.limit ?? 100));
-
-  if (params.busca?.trim()) {
-    query.set("busca", params.busca.trim());
-  }
+  const query = montarQueryClipping({
+    ...params,
+    page: params.page ?? 1,
+    limit: params.limit ?? 50,
+  });
 
   const response = await authenticatedFetch(
     `${API_URL}/api/clippings/anos/${ano}/clientes?${query.toString()}`
   );
 
-  const dados = await lerResposta<{
+  return lerResposta<{
     ano_referencia: number;
     clientes: ClienteClippingAno[];
     pagination: Paginacao;
@@ -193,12 +186,6 @@ export async function listarClientesDoAno(
     response,
     "Não foi possível carregar os clientes do ano."
   );
-
-  return {
-    ano_referencia: dados.ano_referencia,
-    clientes: dados.clientes,
-    pagination: dados.pagination,
-  };
 }
 
 export async function listarPautas(
@@ -229,43 +216,29 @@ export async function listarPautas(
   };
 }
 
-export async function listarClippings(params: {
-  cliente_id: number;
-  ano_referencia: number;
-  busca?: string;
-  page?: number;
-  limit?: number;
-}): Promise<{
+export async function listarClippings(
+  params: ListarClippingsParams
+): Promise<{
   clippings: Clipping[];
   pagination: Paginacao;
 }> {
-  const query = new URLSearchParams();
-
-  query.set("cliente_id", String(params.cliente_id));
-  query.set("ano_referencia", String(params.ano_referencia));
-  query.set("page", String(params.page ?? 1));
-  query.set("limit", String(params.limit ?? 50));
-
-  if (params.busca?.trim()) {
-    query.set("busca", params.busca.trim());
-  }
+  const query = montarQueryClipping({
+    ...params,
+    page: params.page ?? 1,
+    limit: params.limit ?? 50,
+  });
 
   const response = await authenticatedFetch(
     `${API_URL}/api/clippings?${query.toString()}`
   );
 
-  const dados = await lerResposta<{
+  return lerResposta<{
     clippings: Clipping[];
     pagination: Paginacao;
   }>(
     response,
     "Não foi possível carregar os clippings."
   );
-
-  return {
-    clippings: dados.clippings,
-    pagination: dados.pagination,
-  };
 }
 
 export async function buscarClipping(
@@ -465,7 +438,7 @@ export async function atualizarAnexo(
 export async function excluirAnexo(
   clippingId: number,
   anexoId: number
-): Promise<void> {
+): Promise<ResultadoExclusaoClipping> {
   const response = await authenticatedFetch(
     `${API_URL}/api/clippings/${clippingId}/anexos/${anexoId}`,
     {
@@ -473,7 +446,7 @@ export async function excluirAnexo(
     }
   );
 
-  await lerResposta(
+  return lerResposta<ResultadoExclusaoClipping>(
     response,
     "Não foi possível excluir o anexo."
   );
@@ -497,4 +470,81 @@ export async function obterTokenParaArquivo(): Promise<
   string | null
 > {
   return getToken();
+}
+
+export interface ResultadoExclusaoClipping {
+  message: string;
+  limpeza_pendente: boolean;
+}
+
+export async function excluirClipping(
+  id: number
+): Promise<ResultadoExclusaoClipping> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/clippings/${id}`,
+    {
+      method: "DELETE",
+    }
+  );
+
+  return lerResposta<ResultadoExclusaoClipping>(
+    response,
+    "Não foi possível excluir o clipping."
+  );
+}
+
+export interface FiltrosConsultaClipping {
+  veiculo_id?: number;
+  veiculo_nome?: string;
+  programa_secao?: string;
+  categoria?: string;
+  tier?: Tier;
+  sem_tier?: boolean;
+  data_inicio?: string;
+  data_fim?: string;
+  sem_data?: boolean;
+  duracao_min?: number;
+  duracao_max?: number;
+  tem_link?: boolean;
+  tem_imagem_relatorio?: boolean;
+  ordem?: "data" | "veiculo" | "tier";
+  direcao?: "ASC" | "DESC";
+}
+
+export interface ListarClippingsParams
+  extends FiltrosConsultaClipping {
+  cliente_id: number;
+  ano_referencia: number;
+  busca?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListarClientesAnoParams {
+  busca?: string;
+  page?: number;
+  limit?: number;
+  estado?: string;
+  cidade?: string;
+  segmento?: string;
+  ativo?: number;
+}
+
+function montarQueryClipping(params: object) {
+  const query = new URLSearchParams();
+
+  for (const [campo, valor] of Object.entries(params)) {
+    if (valor === undefined || valor === null) continue;
+
+    if (typeof valor === "string") {
+      const texto = valor.trim();
+      if (texto) query.set(campo, texto);
+    } else if (typeof valor === "boolean") {
+      query.set(campo, valor ? "1" : "0");
+    } else if (typeof valor === "number") {
+      query.set(campo, String(valor));
+    }
+  }
+
+  return query;
 }

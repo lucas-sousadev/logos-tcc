@@ -7,7 +7,7 @@ import {
   RefreshControl
 } from "react-native";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {useLocalSearchParams, useRouter} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -15,6 +15,9 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import ClienteFilterModal, { type FiltrosClientes,} from "@/components/ui/Filtros/ClienteFilterModal";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -22,6 +25,15 @@ import {
   listarClientesDoAno,
 } from "@/services/api/clipping";
 import { useConsultaClipping } from "@/hooks/useConsultaClipping";
+
+function filtrosClientesIniciais(): FiltrosClientes {
+  return {
+    estado: "",
+    cidade: "",
+    segmento: "",
+    ativo: undefined,
+  };
+}
 
 export default function ClientesDoAno() {
   const router = useRouter();
@@ -41,6 +53,26 @@ export default function ClientesDoAno() {
   const [buscaAplicada, setBuscaAplicada] =
     useState("");
 
+  const [pagina, setPagina] = useState(1);
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
+
+  const [filtros, setFiltros] =
+    useState<FiltrosClientes>(filtrosClientesIniciais);
+
+  const filtrosAtivos =
+    filtros.ativo !== undefined ||
+    Boolean(filtros.estado.trim()) ||
+    Boolean(filtros.cidade.trim()) ||
+    Boolean(filtros.segmento.trim());
+
+  useEffect(() => {
+    setPagina(1);
+    setBusca("");
+    setBuscaAplicada("");
+    setFiltros(filtrosClientesIniciais());
+    setFiltrosAberto(false);
+  }, [ano]);
+
   const consultarClientes = useCallback(async () => {
     if (
       !Number.isInteger(ano) ||
@@ -51,11 +83,12 @@ export default function ClientesDoAno() {
     }
 
     return listarClientesDoAno(ano, {
+      ...filtros,
       busca: buscaAplicada,
-      page: 1,
-      limit: 100,
+      page: pagina,
+      limit: 50,
     });
-  }, [ano, buscaAplicada]);
+  }, [ano, buscaAplicada, filtros, pagina]);
 
   const {
     dados,
@@ -65,11 +98,24 @@ export default function ClientesDoAno() {
     recarregar: carregarClientes,
   } = useConsultaClipping(
     consultarClientes,
-    JSON.stringify([ano, buscaAplicada])
+    JSON.stringify([ano, buscaAplicada, filtros, pagina])
   );
 
   const clientes = dados?.clientes ?? [];
   const total = dados?.pagination.total ?? 0;
+
+  useEffect(() => {
+    if (!dados || erro) return;
+
+    const ultima = Math.max(
+      1,
+      Math.ceil(dados.pagination.total / 50)
+    );
+
+    if (pagina > ultima) {
+      setPagina(ultima);
+    }
+  }, [dados, erro, pagina]);
 
   function voltar() {
     if (router.canGoBack()) {
@@ -82,11 +128,13 @@ export default function ClientesDoAno() {
 
   function pesquisar() {
     setBuscaAplicada(busca.trim());
+    setPagina(1);
   }
 
   function limparBusca() {
     setBusca("");
     setBuscaAplicada("");
+    setPagina(1);
   }
 
   function abrirCliente(cliente: ClienteClippingAno) {
@@ -148,6 +196,8 @@ export default function ClientesDoAno() {
             onSearch={pesquisar}
             onClear={limparBusca}
             placeholder="Buscar cliente..."
+            onFilterPress={() => setFiltrosAberto(true)}
+            filterActive={filtrosAtivos}
           />
 
           <View style={styles.topRow}>
@@ -224,7 +274,9 @@ export default function ClientesDoAno() {
                     { color: theme.textoSub },
                   ]}
                 >
-                  {cliente.total_clippings} clipping(s)
+                  {cliente.total_clippings}{" "}
+                  {Number(cliente.total_clippings) === 1 ? "clipping" : "clippings"}
+                  {" "}({ano})
                   {cliente.ativo !== 1
                     ? " • Cliente inativo"
                     : ""}
@@ -260,8 +312,29 @@ export default function ClientesDoAno() {
               </Text>
             </View>
           ) : null}
+          {!erro ? (
+            <PaginacaoLista
+              pagina={pagina}
+              limite={50}
+              total={total}
+              disabled={atualizando}
+              onChange={setPagina}
+            />
+          ) : null}
         </ScrollView>
       )}
+      {filtrosAberto ? (
+        <ClienteFilterModal
+          visible
+          filtros={filtros}
+          onClose={() => setFiltrosAberto(false)}
+          onApply={(novosFiltros) => {
+            setFiltros(novosFiltros);
+            setPagina(1);
+            setFiltrosAberto(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

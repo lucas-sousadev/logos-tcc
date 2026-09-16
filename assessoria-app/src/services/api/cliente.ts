@@ -21,6 +21,8 @@ export interface Cliente {
   ativo: number;
   created_at: string;
   updated_at: string;
+  ano_clippings?: number;
+  total_clippings_ano_atual?: number;
 }
 
 export interface DadosCliente {

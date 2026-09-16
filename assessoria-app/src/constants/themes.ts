@@ -1,5 +1,6 @@
 export const LightTheme = {
   background: "#FFFAFA",
+  backgroundSecundario: "#ffffff",
   surface: "#F5F5F5",
   texto: "#161C29",
   textoInput: "#0F172A",
@@ -21,6 +22,7 @@ export const LightTheme = {
 
 export const DarkTheme = {
   background: "#0F172A",
+  backgroundSecundario: "#0F172A",
   surface: "#e6ecf8f3",
   texto: "#FFFFFF",
   textoSub: '#999999',

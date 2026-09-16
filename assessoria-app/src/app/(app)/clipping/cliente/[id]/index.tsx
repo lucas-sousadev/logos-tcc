@@ -18,6 +18,9 @@ import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import ClippingCard from "@/components/clipping/ClippingCard";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import ClippingFilterModal, { novosFiltrosClippings, converterFiltrosClipping, possuiFiltrosClipping,} from "@/components/ui/Filtros/ClippingFilterModal";
+
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -27,11 +30,18 @@ import {
 import { buscarCliente } from "@/services/api/cliente";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 
+
 export default function ClippingsDoCliente() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const { novos } = useClippingNovos();
+
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
+  const [filtros, setFiltros] = useState(novosFiltrosClippings);
+  const [pagina, setPagina] = useState(1);
+
+  const filtrosAtivos = possuiFiltrosClipping(filtros);
 
   const params = useLocalSearchParams<{
     id?: string;
@@ -61,6 +71,15 @@ export default function ClippingsDoCliente() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
+
+  useEffect(() => {
+    setBusca("");
+    setBuscaAplicada("");
+    setExpandido(null);
+    setFiltros(novosFiltrosClippings());
+    setFiltrosAberto(false);
+    setPagina(1);
+  }, [clienteId, ano]);
 
   useEffect(() => {
     let ativo = true;
@@ -103,13 +122,14 @@ export default function ClippingsDoCliente() {
     }
 
     return listarClippings({
+      ...converterFiltrosClipping(filtros),
       cliente_id: clienteId,
       ano_referencia: ano,
       busca: buscaAplicada,
-      page: 1,
+      page: pagina,
       limit: 50,
     });
-  }, [ano, clienteId, buscaAplicada]);
+  }, [ano, clienteId, buscaAplicada, filtros, pagina]);
 
   const {
     dados,
@@ -119,11 +139,30 @@ export default function ClippingsDoCliente() {
     recarregar: carregarClippings,
   } = useConsultaClipping(
     consultarClippings,
-    JSON.stringify([clienteId, ano, buscaAplicada])
+    JSON.stringify([
+      clienteId,
+      ano,
+      buscaAplicada,
+      filtros,
+      pagina,
+    ])
   );
 
   const clippings = dados?.clippings ?? [];
   const total = dados?.pagination.total ?? 0;
+
+  useEffect(() => {
+    if (!dados || erro) return;
+
+    const ultima = Math.max(
+      1,
+      Math.ceil(dados.pagination.total / 50)
+    );
+
+    if (pagina > ultima) {
+      setPagina(ultima);
+    }
+  }, [dados, erro, pagina]);
 
   function fecharAviso() {
     router.setParams({
@@ -232,15 +271,58 @@ export default function ClippingsDoCliente() {
           <SearchBar
             value={busca}
             onChangeText={setBusca}
-            onSearch={() =>
-              setBuscaAplicada(busca.trim())
-            }
+            onSearch={() => {
+              setBuscaAplicada(busca.trim());
+              setPagina(1);
+              setExpandido(null);
+            }}
             onClear={() => {
               setBusca("");
               setBuscaAplicada("");
+              setPagina(1);
+              setExpandido(null);
             }}
-            placeholder="Buscar pauta, veículo ou categoria..."
+            onFilterPress={() => setFiltrosAberto(true)}
+            filterActive={filtrosAtivos}
+            placeholder="Buscar pauta, veículo, programa ou categoria..."
           />
+          {filtrosAtivos ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: theme.textoSub,
+                }}
+              >
+                Filtros aplicados
+              </Text>
+
+              <Button
+                title="LIMPAR"
+                variant="outline"
+                size="small"
+                style={{
+                  width: "auto",
+                  minHeight: 32,
+                  paddingHorizontal: 12,
+                  borderRadius: 20,
+                  padding: 7,
+                }}
+                onPress={() => {
+                  setFiltros(novosFiltrosClippings());
+                  setPagina(1);
+                  setExpandido(null);
+                }}
+              />
+            </View>
+          ) : null} 
 
           <View style={styles.topRow}>
             <Text
@@ -313,14 +395,40 @@ export default function ClippingsDoCliente() {
                   { color: theme.textoSub },
                 ]}
               >
-                {buscaAplicada
-                  ? "Nenhum registro corresponde à busca aplicada."
+                {buscaAplicada || filtrosAtivos
+                  ? "Nenhum registro corresponde à busca e aos filtros aplicados."
                   : "Cadastre uma publicação para este cliente e ano."}
               </Text>
             </View>
           ) : null}
+          {!erro ? (
+            <PaginacaoLista
+              pagina={pagina}
+              limite={50}
+              total={total}
+              disabled={atualizando}
+              onChange={(novaPagina) => {
+                setPagina(novaPagina);
+                setExpandido(null);
+              }}
+            /> 
+          ) : null}
         </ScrollView>
       )}
+      {filtrosAberto ? (
+        <ClippingFilterModal
+          clienteNome={clienteNome}
+          ano={ano}
+          filtros={filtros}
+          onClose={() => setFiltrosAberto(false)}
+          onApply={(novosFiltros) => {
+            setFiltros(novosFiltros);
+            setPagina(1);
+            setExpandido(null);
+            setFiltrosAberto(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -355,7 +463,7 @@ const styles = StyleSheet.create({
   },
 
   newButton: {
-    width: 100,
+    width: "auto",
   },
 
   empty: {

@@ -764,6 +764,26 @@ function alternarClienteSelecionado(id: number) {
                   >
                     {informacoes || "Sem informações adicionais"}
                   </Text>
+                  {cliente.total_clippings_ano_atual !== undefined &&
+                    cliente.ano_clippings !== undefined ? (
+                      <Text
+                        style={[
+                          styles.itemMeta,
+                          { color: "#F59E0B" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="document-outline"
+                          size={13}
+                          color="#F59E0B"
+                        />
+                        {" "}{cliente.total_clippings_ano_atual}{" "}
+                        {cliente.total_clippings_ano_atual === 1
+                          ? "clipping"
+                          : "clippings"}
+                        {" "}({cliente.ano_clippings})
+                      </Text>
+                    ) : null}
                 </View>
 
                 {modoSelecao ? (

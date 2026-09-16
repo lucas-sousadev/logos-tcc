@@ -5,6 +5,8 @@ namespace Logos\AssessoriaApi\Controllers;
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\ClienteService;
 use Logos\AssessoriaApi\Services\LogoClienteService;
+use Logos\AssessoriaApi\Models\Clipping;
+use Logos\AssessoriaApi\Services\PermissaoService;
 
 class ClienteController
 {
@@ -36,6 +38,38 @@ class ClienteController
                     'ativo' => $_GET['ativo'] ?? null,
                 ]
             );
+            
+            $podeVisualizarClipping =
+                PermissaoService::usuarioTemPermissao(
+                    (int) $usuario->sub,
+                    $usuario->perfil,
+                    'CLIPPING',
+                    'VISUALIZAR'
+                );
+
+            if ($podeVisualizarClipping) {
+                $anoAtual = (int) (
+                    new \DateTimeImmutable(
+                        'now',
+                        new \DateTimeZone('America/Sao_Paulo')
+                    )
+                )->format('Y');
+
+                $contagens = Clipping::contarPorClientesNoAno(
+                    (int) $usuario->assessoria_id,
+                    $anoAtual,
+                    array_column($resultado['clientes'], 'id')
+                );
+
+                foreach ($resultado['clientes'] as &$cliente) {
+                    $cliente['ano_clippings'] = $anoAtual;
+
+                    $cliente['total_clippings_ano_atual'] =
+                        $contagens[(int) $cliente['id']] ?? 0;
+                }
+
+                unset($cliente);
+            }
 
             echo json_encode([
                 'success' => true,

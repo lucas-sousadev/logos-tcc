@@ -71,7 +71,7 @@ export default function TierSelector({
         })}
       </View>
       <Text style={[styles.hint, { color: theme.textoSub }]}>
-        Opcional. Tier 1: mais conhecidos · Tier 2: intermediários · Tier 3: menos conhecidos.
+        Tier 1: mais conhecidos · Tier 2: intermediários · Tier 3: menos conhecidos.
       </Text>
     </View>
   );

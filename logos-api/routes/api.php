@@ -409,6 +409,15 @@ $router->put(
     ]
 );
 
+$router->delete(
+    "/api/clippings/{id}",
+    "ClippingController:excluir",
+    "CLIPPING.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
 // anexos dos clippings
 
 $router->get(
