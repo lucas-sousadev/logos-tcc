@@ -17,6 +17,7 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import ClienteFilterModal, { type FiltrosClientes,} from "@/components/ui/Filtros/ClienteFilterModal";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -230,6 +231,15 @@ export default function ClientesDoAno() {
             </View>
           ) : null}
 
+          <LimparFiltrosButton
+            visible={filtrosAtivos}
+            disabled={carregando || atualizando}
+            onPress={() => {
+              setFiltros(filtrosClientesIniciais());
+              setPagina(1);
+              setFiltrosAberto(false);
+            }}
+          />
           {clientes.map((cliente) => (
             <TouchableOpacity
               key={cliente.id}

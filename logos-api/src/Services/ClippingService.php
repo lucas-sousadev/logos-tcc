@@ -22,6 +22,7 @@ class ClippingService
         'tier',
         'inicio_segundos',
         'fim_segundos',
+        'duracao_segundos',
         'link',
         'observacoes',
     ];
@@ -726,6 +727,30 @@ class ClippingService
             );
         }
 
+        $duracao = self::inteiro(
+            $base['duracao_segundos'],
+            'Duração',
+            0,
+            4294967295,
+            true
+        );
+
+        if ($inicio !== null && $fim !== null) {
+            $duracaoCalculada = $fim - $inicio;
+
+            if (
+                array_key_exists('duracao_segundos', $dados)
+                && $duracao !== null
+                && $duracao !== $duracaoCalculada
+            ) {
+                throw new InvalidArgumentException(
+                    'A duração informada não corresponde à diferença entre início e fim.'
+                );
+            }
+
+            $duracao = $duracaoCalculada;
+        }
+
         $link = self::texto(
             $base['link'],
             'Link',
@@ -789,10 +814,7 @@ class ClippingService
             'inicio_segundos' => $inicio,
             'fim_segundos' => $fim,
 
-            'duracao_segundos' =>
-                $inicio !== null && $fim !== null
-                    ? $fim - $inicio
-                    : null,
+            'duracao_segundos' => $duracao,
 
             'link' => $link,
 
@@ -973,4 +995,102 @@ class ClippingService
             'limpeza_pendente' => $limpezaPendente,
         ];
     }
+
+    public static function excluirEmLote(
+        mixed $ids,
+        int $assessoriaId
+    ): array {
+        if (
+            !is_array($ids)
+            || !array_is_list($ids)
+            || count($ids) === 0
+            || count($ids) > 100
+        ) {
+            throw new \InvalidArgumentException(
+                'Selecione entre 1 e 100 clippings.'
+            );
+        }
+
+        $idsValidos = [];
+
+        foreach ($ids as $valor) {
+            $id = self::inteiro($valor, 'ID do clipping');
+
+            if (in_array($id, $idsValidos, true)) {
+                throw new \InvalidArgumentException(
+                    'Há clippings duplicados na seleção.'
+                );
+            }
+
+            $idsValidos[] = $id;
+        }
+
+        $resultados = [];
+        $excluidos = 0;
+        $limpezaPendente = false;
+
+        foreach ($idsValidos as $id) {
+            try {
+                $resultado = self::excluir($id, $assessoriaId);
+
+                $excluidos++;
+
+                $limpezaPendente = $limpezaPendente
+                    || $resultado['limpeza_pendente'];
+
+                $resultados[] = [
+                    'id' => $id,
+                    'status' => 'excluido',
+                    'message' => $resultado['message'],
+                    'limpeza_pendente' => $resultado['limpeza_pendente'],
+                ];
+            } catch (\OutOfBoundsException $e) {
+                $resultados[] = [
+                    'id' => $id,
+                    'status' => 'nao_encontrado',
+                    'message' => 'Clipping não encontrado.',
+                    'limpeza_pendente' => false,
+                ];
+            } catch (\DomainException $e) {
+                $resultados[] = [
+                    'id' => $id,
+                    'status' => 'protegido',
+                    'message' => $e->getMessage(),
+                    'limpeza_pendente' => false,
+                ];
+            } catch (\Throwable $e) {
+                error_log(
+                    "Erro ao excluir clipping {$id} em lote: "
+                    . $e->getMessage()
+                );
+
+                $resultados[] = [
+                    'id' => $id,
+                    'status' => 'erro',
+                    'message' =>
+                        'Não foi possível confirmar a exclusão deste clipping.',
+                    'limpeza_pendente' => false,
+                ];
+            }
+        }
+
+        return [
+            'message' => "{$excluidos} clipping(s) excluído(s).",
+            'excluidos' => $excluidos,
+            'nao_excluidos' => count($idsValidos) - $excluidos,
+            'limpeza_pendente' => $limpezaPendente,
+            'resultados' => $resultados,
+        ];
+    }
+    public static function prepararImportacao(
+        int $assessoriaId,
+        array $dados
+    ): array {
+        return self::validarDados(
+            $assessoriaId,
+            $dados,
+            null
+        );
+    }
+
 }

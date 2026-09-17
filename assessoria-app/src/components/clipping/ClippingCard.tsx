@@ -19,6 +19,10 @@ interface ClippingCardProps {
   novo?: boolean;
   onAlternarExpansao: () => void;
   onAbrirDetalhes: () => void;
+  modoSelecao?: boolean;
+  selecionado?: boolean;
+  bloqueado?: boolean;
+  onSelecionar?: () => void;
 }
 
 function formatarData(
@@ -62,6 +66,10 @@ export default function ClippingCard({
   novo = false,
   onAlternarExpansao,
   onAbrirDetalhes,
+  modoSelecao = false,
+  selecionado = false,
+  bloqueado = false,
+  onSelecionar,
 }: ClippingCardProps) {
   const { theme, mode } = useTheme();
   const { fontScale } = useWindowDimensions();
@@ -130,15 +138,21 @@ export default function ClippingCard({
       pendente: pendencias.tier,
     },
     {
-      rotulo: "Trecho",
+      rotulo: temPosicoes ? "Trecho" : "Duração",
       valor: temPosicoes
         ? "Início " +
           formatarTempo(clipping.inicio_segundos) +
           " · Fim " +
           formatarTempo(clipping.fim_segundos) +
-          " (" + formatarTempo(clipping.duracao_segundos) + ")"
-        : null,
-        pendente: pendencias.trecho,
+          " (" +
+          formatarTempo(clipping.duracao_segundos) +
+          ")"
+        : temDuracao
+          ? formatarTempo(clipping.duracao_segundos)
+          : null,
+      pendente: temPosicoes
+        ? pendencias.trecho
+        : !temDuracao,
     },
     {
       rotulo: "Observações",
@@ -182,20 +196,41 @@ export default function ClippingCard({
         styles.card,
         {
           backgroundColor: theme.backgroundSecundario,
-          borderColor: theme.borda,
+          borderColor:
+          modoSelecao && selecionado
+            ? theme.primaria
+            : theme.borda,
         },
       ]}
     >
       <TouchableOpacity
         activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: expandido }}
+        disabled={bloqueado}
+        accessibilityRole={modoSelecao ? "checkbox" : "button"}
+        accessibilityState={
+          modoSelecao
+            ? {
+                checked: selecionado,
+                disabled: bloqueado,
+              }
+            : {
+                expanded: expandido,
+                disabled: bloqueado,
+              }
+        }
         accessibilityHint={
-          expandido
-            ? "Recolher informações do clipping"
-            : "Expandir informações do clipping"
+          modoSelecao
+            ? "Marcar ou desmarcar este clipping"
+            : expandido
+              ? "Recolher informações do clipping"
+              : "Expandir informações do clipping"
         }
         onPress={() => {
+          if (modoSelecao) {
+            onSelecionar?.();
+            return;
+          }
+
           setErroLink("");
           onAlternarExpansao();
         }}
@@ -279,7 +314,7 @@ export default function ClippingCard({
 
         <Text
             weight="SemiBold"
-            numberOfLines={expandido ? undefined : 2}
+            numberOfLines={!modoSelecao && expandido ? undefined : 2}
             ellipsizeMode="tail"
             style={[
               styles.pauta,
@@ -383,20 +418,28 @@ export default function ClippingCard({
             ) : null}
 
             <Ionicons
-              name={
-                expandido
+            name={
+              modoSelecao
+                ? selecionado
+                  ? "checkbox"
+                  : "square-outline"
+                : expandido
                   ? "chevron-up"
                   : "chevron-down"
-              }
-              size={17}
-              color={theme.textoSub}
-              accessible={false}
-            />
+            }
+            size={modoSelecao ? 22 : 17}
+            color={
+              modoSelecao && selecionado
+                ? theme.primaria
+                : theme.textoSub
+            }
+            accessible={false}
+          />
           </View>
         </View>
       </TouchableOpacity>
 
-      {expandido ? (
+      {!modoSelecao && expandido ? (
         <View
           style={[
             styles.expansao,

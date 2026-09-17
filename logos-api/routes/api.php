@@ -390,6 +390,36 @@ $router->get(
 );
 
 $router->post(
+    "/api/clippings/exportar",
+    "ClippingController:exportar",
+    "CLIPPING.EXPORTAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
+    "/api/clippings/importar/previa",
+    "ClippingController:previaImportacao",
+    "CLIPPING.IMPORTAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
+    "/api/clippings/importar/confirmar",
+    "ClippingController:confirmarImportacao",
+    "CLIPPING.IMPORTAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
     "/api/clippings",
     "ClippingController:criar",
     "CLIPPING.CRIAR",
@@ -412,6 +442,16 @@ $router->put(
 $router->delete(
     "/api/clippings/{id}",
     "ClippingController:excluir",
+    "CLIPPING.EXCLUIR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
+    "/api/clippings/excluir-lote",
+    "ClippingController:excluirEmLote",
     "CLIPPING.EXCLUIR",
     middleware: [
         $authMiddleware,

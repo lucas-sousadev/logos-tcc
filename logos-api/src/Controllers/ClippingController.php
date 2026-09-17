@@ -5,6 +5,8 @@ namespace Logos\AssessoriaApi\Controllers;
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\ClippingService;
 use Logos\AssessoriaApi\Services\ClippingAnexoService;
+use Logos\AssessoriaApi\Services\ClippingCsvService;
+use Logos\AssessoriaApi\Services\ClippingImportacaoService;
 
 class ClippingController
 {
@@ -242,6 +244,20 @@ class ClippingController
         );
     }
 
+    public function excluirEmLote(): void
+    {
+        $this->executar(
+            function (int $assessoriaId, int $usuarioId): array {
+                $dados = $this->corpo();
+
+                return ClippingService::excluirEmLote(
+                    $dados['ids'] ?? null,
+                    $assessoriaId
+                );
+            }
+        );
+    }
+
     public function buscarAnexo(array $rota): void
     {
         $this->executar(fn(int $a, int $u) => [
@@ -303,6 +319,105 @@ class ClippingController
                 $rota['anexo_id'] ?? null,
                 $_GET['download'] ?? 0
             )
+        );
+    }
+
+    public function exportar(): void
+    {
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            $this->responder([
+                'success' => false,
+                'message' => 'Usuário não autenticado.',
+            ], 401);
+
+            return;
+        }
+
+        $arquivo = null;
+
+        try {
+            $arquivo = ClippingCsvService::gerar(
+                (int) $usuario->assessoria_id,
+                $this->corpo()
+            );
+
+            $info = fstat($arquivo);
+
+            if ($info === false) {
+                throw new \RuntimeException(
+                    'Não foi possível verificar o arquivo gerado.'
+                );
+            }
+        } catch (\Throwable $e) {
+            if (is_resource($arquivo)) {
+                fclose($arquivo);
+            }
+
+            $status = match (true) {
+                $e instanceof \OutOfBoundsException => 404,
+                $e instanceof \InvalidArgumentException => 422,
+                $e instanceof \DomainException => 409,
+                $e instanceof \UnexpectedValueException => 400,
+                default => 500,
+            };
+
+            if ($status === 500) {
+                error_log(
+                    'Erro na exportação de clipping: '
+                    . $e->getMessage()
+                );
+            }
+
+            $this->responder([
+                'success' => false,
+                'message' => $status === 500
+                    ? 'Não foi possível gerar o CSV.'
+                    : $e->getMessage(),
+            ], $status);
+
+            return;
+        }
+
+        $nome = 'clippings-' . date('Y-m-d-His') . '.csv';
+
+        http_response_code(200);
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $nome . '"');
+        header('Content-Length: ' . $info['size']);
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+
+        try {
+            fpassthru($arquivo);
+        } finally {
+            fclose($arquivo);
+        }
+    }
+    
+    public function previaImportacao(): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                ClippingImportacaoService::previa(
+                    $assessoriaId,
+                    $usuarioId,
+                    $_FILES['arquivo'] ?? null,
+                    $_POST
+                )
+        );
+    }
+
+    public function confirmarImportacao(): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                ClippingImportacaoService::confirmar(
+                    $assessoriaId,
+                    $usuarioId,
+                    $this->corpo()
+                )
         );
     }
 }

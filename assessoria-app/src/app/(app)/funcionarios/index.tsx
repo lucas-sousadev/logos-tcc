@@ -17,6 +17,7 @@ import BackButton from "@/components/ui/BackButton";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import SearchBar from "@/components/ui/SearchBar";
+import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 
 import FuncionarioFilterModal, {
   type FiltrosFuncionarios,
@@ -272,6 +273,17 @@ export default function Funcionarios() {
           )}
         </View>
 
+        <LimparFiltrosButton
+          visible={filtros.ativo !== undefined}
+          disabled={carregando || carregandoMais}
+          onPress={() => {
+            setPagina(1);
+
+            aplicarFiltros({
+              ativo: undefined,
+            });
+          }}
+        />
         {carregando ? (
           <View style={styles.loading}>
             <ActivityIndicator

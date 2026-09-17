@@ -15,6 +15,7 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import { rotuloTier } from "@/constants/tier";
 import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/VeiculoFilterModal";
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
@@ -507,6 +508,23 @@ export default function Veiculos() {
           </View>
         )}
 
+        <LimparFiltrosButton
+          visible={filtrosAtivos()}
+          disabled={
+            carregando ||
+            carregandoMais ||
+            excluindoSelecionados
+          }
+          onPress={() => {
+            aplicarFiltros({
+              ativo: undefined,
+              ordem: "nome",
+              direcao: "ASC",
+              minContatos: "",
+              maxContatos: "",
+            });
+          }}
+        />
         {temPermissao("VEICULOS", "EXCLUIR") &&
           veiculos.length > 0 ? (
             modoSelecao ? (

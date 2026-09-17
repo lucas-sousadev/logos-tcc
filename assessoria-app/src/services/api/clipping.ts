@@ -98,6 +98,7 @@ export interface DadosClipping {
   tier?: Tier | null;
   inicio_segundos?: number | null;
   fim_segundos?: number | null;
+  duracao_segundos?: number | null;
   link?: string | null;
   observacoes?: string | null;
 }
@@ -547,4 +548,104 @@ function montarQueryClipping(params: object) {
   }
 
   return query;
+}
+
+// exclusao multipla 
+
+export interface ItemExclusaoClipping {
+  id: number;
+  status:
+    | "excluido"
+    | "protegido"
+    | "nao_encontrado"
+    | "erro";
+  message: string;
+  limpeza_pendente: boolean;
+}
+
+export interface ResultadoExclusaoClippings {
+  message: string;
+  excluidos: number;
+  nao_excluidos: number;
+  limpeza_pendente: boolean;
+  resultados: ItemExclusaoClipping[];
+}
+
+export async function excluirClippingsEmLote(
+  ids: number[]
+): Promise<ResultadoExclusaoClippings> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/clippings/excluir-lote`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids }),
+    }
+  );
+
+  return lerResposta<ResultadoExclusaoClippings>(
+    response,
+    "Não foi possível concluir a exclusão dos clippings."
+  );
+}
+
+// exportacao
+
+export type PedidoExportacaoClipping = {
+  cliente_id: number;
+  ano_referencia: number;
+} & (
+  | {
+      modo: "selecionados";
+      ids: number[];
+    }
+  | {
+      modo: "filtrados";
+      filtros: FiltrosConsultaClipping & {
+        busca?: string;
+      };
+    }
+);
+
+export async function exportarClippingsCsv(
+  pedido: PedidoExportacaoClipping
+): Promise<ArrayBuffer> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/clippings/exportar`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(pedido),
+    }
+  );
+
+  if (!response.ok) {
+    let mensagem = "Não foi possível exportar os clippings.";
+
+    try {
+      const dados = await response.json();
+
+      if (typeof dados.message === "string") {
+        mensagem = dados.message;
+      }
+    } catch {
+      // Mantém a mensagem padrão quando a resposta não é JSON.
+    }
+
+    throw new ErroApiClipping(mensagem, response.status);
+  }
+
+  const tipo = response.headers.get("Content-Type") ?? "";
+
+  if (!tipo.toLowerCase().includes("text/csv")) {
+    throw new Error(
+      "O servidor não retornou um arquivo CSV válido."
+    );
+  }
+
+  return response.arrayBuffer();
 }

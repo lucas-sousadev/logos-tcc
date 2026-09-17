@@ -24,6 +24,8 @@ import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import ClienteFilterModal, { FiltrosClientes } from "@/components/ui/Filtros/ClienteFilterModal";
+import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
+
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
@@ -507,6 +509,23 @@ function alternarClienteSelecionado(id: number) {
           </View>
         ) : null}
         
+        <LimparFiltrosButton
+          visible={filtrosAtivos()}
+          disabled={
+            carregando ||
+            carregandoMais ||
+            excluindoSelecionados
+          }
+          onPress={() => {
+            aplicarFiltros({
+              estado: "",
+              cidade: "",
+              segmento: "",
+              ativo: undefined,
+            });
+          }}
+        />
+
         {temPermissao("CLIENTES", "EXCLUIR") &&
           clientes.length > 0 ? (
             modoSelecao ? (
@@ -773,15 +792,15 @@ function alternarClienteSelecionado(id: number) {
                         ]}
                       >
                         <Ionicons
-                          name="document-outline"
+                          name="attach-outline"
                           size={13}
                           color="#F59E0B"
                         />
-                        {" "}{cliente.total_clippings_ano_atual}{" "}
+                        {""}{cliente.total_clippings_ano_atual}{" "}
                         {cliente.total_clippings_ano_atual === 1
                           ? "clipping"
                           : "clippings"}
-                        {" "}({cliente.ano_clippings})
+                        {" • "}{cliente.ano_clippings}
                       </Text>
                     ) : null}
                 </View>

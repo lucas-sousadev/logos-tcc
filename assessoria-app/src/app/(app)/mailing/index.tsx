@@ -22,6 +22,7 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert, { type FeedbackAlertVariant,} from "@/components/forms/FeedbackAlert";
 
 import { useTheme } from "@/contexts/ThemeContext";
@@ -823,14 +824,33 @@ export default function Mailing() {
                 title="NOVO"
                 size="small"
                 onPress={() =>
-                  router.push("/mailing/formulario")
+                  router.push("/mailing/novo")
                 }
                 style={[styles.newButton]}
               />
             )}
           </View>
         </View>
-        
+          <LimparFiltrosButton
+            visible={filtrosAtivos()}
+            disabled={
+              carregando ||
+              carregandoMais ||
+              excluindoSelecionados ||
+              importando ||
+              exportando
+            }
+            onPress={() => {
+              aplicarFiltros({
+                estado: "",
+                cidade: "",
+                cargo: "",
+                ativo: 1,
+                veiculoId: undefined,
+                veiculoNome: undefined,
+              });
+            }}
+          />
           {temPermissao("MAILING", "EXCLUIR") &&
           jornalistas.length > 0 ? (
             modoSelecao ? (

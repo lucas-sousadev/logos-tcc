@@ -434,8 +434,7 @@ CREATE TABLE clippings (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
-    -- Duração em segundos.
-    -- Será calculada pela aplicação.
+    -- informada ou calculada pelo intervalo completo
     duracao_segundos INT UNSIGNED NULL,
 
     CONSTRAINT fk_clippings_assessoria
@@ -479,21 +478,18 @@ CREATE TABLE clippings (
     CONSTRAINT chk_clippings_categorias_lista
         CHECK (categorias IS NULL OR JSON_TYPE(categorias) = 'ARRAY'),
 
-    -- Uma posição isolada pode ficar pendente, com duração nula.
-    -- Com ambas preenchidas, a API deve gravar a diferença correta.
+    -- Sem o intervalo completo, a duração pode ser informada.
+    -- Com início e fim preenchidos, deve corresponder à diferença.
     CONSTRAINT chk_clippings_duracao
         CHECK (
-            (
-                (inicio_segundos IS NULL OR fim_segundos IS NULL)
-                AND duracao_segundos IS NULL
-            )
+            inicio_segundos IS NULL
+            OR fim_segundos IS NULL
             OR (
-                inicio_segundos IS NOT NULL
-                AND fim_segundos IS NOT NULL
-                AND fim_segundos > inicio_segundos
+                fim_segundos > inicio_segundos
                 AND duracao_segundos IS NOT NULL
                 AND duracao_segundos =
-                    CAST(fim_segundos AS SIGNED) - CAST(inicio_segundos AS SIGNED)
+                    CAST(fim_segundos AS SIGNED)
+                    - CAST(inicio_segundos AS SIGNED)
             )
         ),
         
@@ -504,8 +500,8 @@ CREATE TABLE clippings (
     )
 ) ENGINE=InnoDB;
 
--- 12.1. Materiais e imagens dos clippings
--- Os arquivos ficam no armazenamento; esta tabela guarda suas referências.
+-- 12.1 Materiais e imagens dos clippings
+-- os arquivos ficam no armazenamento; essa tabela guarda suas referencias
 CREATE TABLE clipping_anexos (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
@@ -513,8 +509,8 @@ CREATE TABLE clipping_anexos (
     clipping_id BIGINT UNSIGNED NOT NULL,
     criado_por BIGINT UNSIGNED NOT NULL,
 
-    -- Original que deu origem ao recorte, página ou quadro de vídeo.
-    -- A API deve impedir ciclos e alterações indevidas nessa relação.
+    -- Original que deu origem ao recorte, página ou quadro de vídeo
+    -- A API deve impedir ciclos e alterações indevidas nessa relação
     anexo_origem_id BIGINT UNSIGNED NULL,
 
     tipo ENUM('IMAGEM', 'VIDEO', 'AUDIO', 'DOCUMENTO') NOT NULL,
@@ -528,9 +524,9 @@ CREATE TABLE clipping_anexos (
     tamanho_bytes BIGINT UNSIGNED NOT NULL,
     ordem INT UNSIGNED NOT NULL DEFAULT 0,
 
-    -- 1 = selecionado; NULL = não selecionado (não usar 0).
-    -- Os índices únicos permitem vários NULL, mas só um 1 por clipping.
-    -- Uma imagem pode ser simultaneamente principal e imagem do relatório.
+    -- 1 = selecionado; NULL = não selecionado (não usar 0)
+    -- Os índices únicos permitem vários NULL, mas só um 1 por clipping
+    -- Uma imagem pode ser simultaneamente principal e imagem do relatório
     principal TINYINT UNSIGNED NULL DEFAULT NULL,
     imagem_relatorio TINYINT UNSIGNED NULL DEFAULT NULL,
 
@@ -580,6 +576,36 @@ CREATE TABLE clipping_anexos (
     UNIQUE KEY uq_clipping_anexo_principal (assessoria_id, clipping_id, principal),
     UNIQUE KEY uq_clipping_anexo_imagem (assessoria_id, clipping_id, imagem_relatorio),
     INDEX idx_clipping_anexos_ordem (assessoria_id, clipping_id, ordem, id)
+) ENGINE=InnoDB;
+
+-- 12.2 testes importacao
+CREATE TABLE clipping_importacoes (
+    token CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    usuario_id BIGINT UNSIGNED NOT NULL,
+
+    previa JSON NOT NULL,
+    resultado JSON NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_em DATETIME NOT NULL,
+    confirmado_em DATETIME NULL,
+
+    CONSTRAINT fk_clipping_importacoes_assessoria
+        FOREIGN KEY (assessoria_id)
+        REFERENCES assessorias(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_clipping_importacoes_usuario
+        FOREIGN KEY (usuario_id, assessoria_id)
+        REFERENCES usuarios(id, assessoria_id)
+        ON DELETE CASCADE,
+
+    INDEX idx_clipping_importacoes_expiracao (
+        assessoria_id,
+        expira_em
+    )
 ) ENGINE=InnoDB;
 
 -- 13. Relatórios
