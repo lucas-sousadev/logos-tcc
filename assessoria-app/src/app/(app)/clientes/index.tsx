@@ -788,7 +788,7 @@ function alternarClienteSelecionado(id: number) {
                       <Text
                         style={[
                           styles.itemMeta,
-                          { color: "#F59E0B" },
+                          { color: "#F59E0B", marginLeft: -1 },
                         ]}
                       >
                         <Ionicons
@@ -973,10 +973,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   newButton: {
-    width: 90,
+    width: "auto",
+    borderRadius: 12
   },
 
   item: {
+    padding: 8,
     minHeight: 74,
     borderWidth: 1.5,
     borderRadius: 16,
@@ -1008,11 +1010,12 @@ const styles = StyleSheet.create({
 
   itemName: {
     fontSize: 14,
+    marginBottom: -2,
   },
 
   itemMeta: {
     fontSize: 11,
-    marginTop: 4,
+    margin: 1
   },
 
   empty: {

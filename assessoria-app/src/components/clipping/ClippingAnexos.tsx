@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
 
   uploadButton: {
-    width: 120,
+    width: "auto",
     padding: 10,
   },
 

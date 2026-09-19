@@ -378,7 +378,8 @@ const styles = StyleSheet.create({
   },
 
   newButton: {
-    width: 100,
+    width: "auto",
+    borderRadius: 12
   },
 
   clientCard: {

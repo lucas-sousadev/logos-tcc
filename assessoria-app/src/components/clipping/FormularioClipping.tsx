@@ -1026,6 +1026,7 @@ const [tier, setTier] = useState<Tier | null>(
           autoCapitalize="sentences"
           editable={!bloqueado}
           showChanged={campoAlterado("pauta")}
+          clearable
         />
 
         {pautasSugeridas.length > 0 ? (
@@ -1093,6 +1094,7 @@ const [tier, setTier] = useState<Tier | null>(
           error={erros.programaSecao}
           editable={!bloqueado}
           showChanged={campoAlterado("programaSecao")}
+          clearable
         />
 
         <Input
@@ -1106,6 +1108,7 @@ const [tier, setTier] = useState<Tier | null>(
           error={erros.categorias}
           editable={!bloqueado}
           showChanged={campoAlterado("categorias")}
+          clearable
         />
 
         <View style={styles.chips}>
@@ -1193,6 +1196,7 @@ const [tier, setTier] = useState<Tier | null>(
           error={erros.link}
           editable={!bloqueado}
           showChanged={campoAlterado("link")}
+          clearable
         />
         {!editando ? (
             <ClippingArquivosInput
@@ -1217,6 +1221,7 @@ const [tier, setTier] = useState<Tier | null>(
           error={erros.observacoes}
           editable={!bloqueado}
           showChanged={campoAlterado("link")}
+          clearable
         />  
         {erroGeral ? (
           <Text style={styles.generalError}>

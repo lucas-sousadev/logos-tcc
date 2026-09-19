@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
   exportButton: { 
     width: 40,
     height: 40,
-    borderRadius: 20,
+  borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
@@ -1306,13 +1306,15 @@ const styles = StyleSheet.create({
 
   
   newButton: {
-    width: 90,
+    width: "auto",
+    borderRadius: 12
+
   },
 
   item: {
     borderWidth: 1.5,
     borderRadius: 16,
-    padding: 15,
+    padding: 12,
     marginBottom: 10,
   },
 

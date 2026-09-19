@@ -329,7 +329,8 @@ const styles = StyleSheet.create({
   },
 
   newButton: {
-    width: 120,
+    width: "auto",
+    borderRadius: 12,
     padding: 10
   },
 

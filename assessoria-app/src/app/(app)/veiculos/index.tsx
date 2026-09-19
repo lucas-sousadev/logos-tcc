@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 5,
+    marginTop: 2,
   },
 
   linkedText: {
@@ -983,10 +983,12 @@ const styles = StyleSheet.create({
   },
 
   newButton: {
-    width: 90,
+    width: "auto",
+    borderRadius: 12
   },
 
   item: {
+    padding: 8,
     minHeight: 74,
     borderWidth: 1.5,
     borderRadius: 16,
@@ -1020,7 +1022,6 @@ const styles = StyleSheet.create({
 
   itemMeta: {
     fontSize: 11,
-    marginTop: 4,
   },
 
   empty: {

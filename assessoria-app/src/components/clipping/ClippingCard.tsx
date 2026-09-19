@@ -549,7 +549,7 @@ export default function ClippingCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderTopWidth: 2,
+    borderWidth: 2,
     borderRadius: 16,
     marginBottom: 8,
     },

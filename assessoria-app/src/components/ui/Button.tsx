@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     paddingHorizontal: 20,
 
-    borderRadius: 30,
+    borderRadius: 12,
 
     justifyContent: "center",
     alignItems: "center",
@@ -107,11 +107,11 @@ const styles = StyleSheet.create({
 
   small: {
     minHeight: 40,
-    borderRadius: 20,
+    borderRadius: 12,
   },
 
   large: {
     minHeight: 58,
-    borderRadius: 30,
+    borderRadius: 14,
   },
 });

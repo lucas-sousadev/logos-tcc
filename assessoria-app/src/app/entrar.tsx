@@ -72,7 +72,7 @@ export default function Entrar() {
           />
 
           <Button
-            title="SOU FUNCIONÁRIO"
+            title="SOU COLABORADOR"
             style={styles.button}
             onPress={() =>
               router.push("/login-funcionario")
