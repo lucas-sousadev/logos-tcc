@@ -331,7 +331,29 @@ export default function Mailing() {
     }
   }
 
-  async function selecionarEImportarArquivo() {
+  function selecionarEImportarArquivo() {
+    if (temPermissao("VEICULOS", "CRIAR")) {
+      void executarImportacaoArquivo();
+      return;
+    }
+
+    mostrarFeedback({
+      variant: "warning",
+      title: "Veículos novos no CSV",
+      message:
+        "Você pode importar contatos ligados a veículos já cadastrados. " +
+        "Se o CSV trouxer um veículo desconhecido, a importação mostrará " +
+        "as linhas que precisam de correção e não incluirá contatos.",
+      primaryLabel: "ESCOLHER CSV",
+      secondaryLabel: "CANCELAR",
+      onPrimary: () => {
+        fecharFeedback();
+        void executarImportacaoArquivo();
+      },
+    });
+  }
+
+  async function executarImportacaoArquivo() {
     sairModoSelecao();
     
     try {

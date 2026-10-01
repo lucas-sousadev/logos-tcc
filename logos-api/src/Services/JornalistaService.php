@@ -281,6 +281,26 @@ class JornalistaService
             ];
         }
 
+        if (!self::podeCriarVeiculos()) {
+            foreach ($preparados as $contato) {
+                $nome = $contato['veiculo_nome'];
+
+                if ($nome === null) {
+                    continue;
+                }
+
+                $nome = VeiculoService::normalizarNome($nome);
+
+                if (!Veiculo::buscarPorNome($nome, $assessoriaId)) {
+                    $erros[] = [
+                        'linha' => $contato['linha'],
+                        'mensagem' =>
+                            "O veículo '{$nome}' não existe. Associe um veículo existente no CSV ou peça a permissão VEICULOS.CRIAR.",
+                    ];
+                }
+            }
+        }
+
         if ($erros !== []) {
             return [
                 'sucesso' => false,
@@ -1257,6 +1277,12 @@ class JornalistaService
                 return (int) $veiculo['id'];
             }
 
+            if (!self::podeCriarVeiculos()) {
+                throw new \DomainException(
+                    "O veículo '{$nome}' ainda não existe. Você precisa da permissão VEICULOS.CRIAR para cadastrá-lo. Selecione um veículo existente ou deixe o campo vazio."
+                );
+            }
+
             try {
                 return Veiculo::criar(
                     $assessoriaId,
@@ -1307,6 +1333,19 @@ class JornalistaService
         }
 
         return $id;
+    }
+
+    private static function podeCriarVeiculos(): bool
+    {
+        $usuario = AuthContext::get();
+
+        return $usuario !== null
+            && PermissaoService::usuarioTemPermissao(
+                (int) $usuario->sub,
+                (string) $usuario->perfil,
+                'VEICULOS',
+                'CRIAR'
+            );
     }
 
     public static function excluirEmLote(

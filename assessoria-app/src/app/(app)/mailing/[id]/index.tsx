@@ -339,6 +339,15 @@ export default function JornalistaDetalhes() {
         veiculoNome: formulario.veiculo_nome,
       });
 
+    if (
+      !temPermissao("VEICULOS", "CRIAR") &&
+      formulario.veiculo_id === null &&
+      formulario.veiculo_nome.trim()
+    ) {
+      errosValidacao.veiculo =
+        "Selecione um veículo existente. Você não possui permissão para criar outro.";
+    }
+
     setErros(errosValidacao);
     setErroGeral("");
 
@@ -619,6 +628,7 @@ export default function JornalistaDetalhes() {
     router.back();
   }
 
+  // modo de ediçao
   return (
     <View
       style={[
@@ -890,6 +900,7 @@ export default function JornalistaDetalhes() {
                 campoAlterado("veiculo_id") ||
                 campoAlterado("veiculo_nome")
               }
+              criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
               error={erros.veiculo}
             />
             {erroGeral ? (

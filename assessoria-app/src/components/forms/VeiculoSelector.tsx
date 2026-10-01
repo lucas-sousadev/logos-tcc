@@ -40,6 +40,7 @@ interface VeiculoSelectorProps {
   criacaoAoSalvar?: boolean;
   onCadastrar?: (nome: string) => void;
   modoFiltro?: boolean;
+  modoImportacao?: boolean;
 }
 
 interface ResultadoBusca {
@@ -57,6 +58,7 @@ export default function VeiculoSelector({
   disabled = false,
   mostrarResumo = false,
   criacaoAoSalvar = true,
+  modoImportacao = false,
   onCadastrar,
   modoFiltro = false,
 }: VeiculoSelectorProps) {
@@ -106,6 +108,7 @@ export default function VeiculoSelector({
     !criacaoAoSalvar &&
     podeCriar &&
     !modoFiltro &&
+    !modoImportacao &&
     Boolean(onCadastrar) &&
     (
       !podeConsultar ||
@@ -169,7 +172,11 @@ export default function VeiculoSelector({
   return (
     <View style={styles.container}>
       <Input
-        label="VEÍCULO"
+        label={
+          modoImportacao
+            ? "ASSOCIAR A UM VEÍCULO"
+            : "VEÍCULO"
+        }
         value={value.nome}
         onChangeText={(nome) => {
           if (disabled) return;
@@ -177,7 +184,11 @@ export default function VeiculoSelector({
           setResumoAberto(false);
           onChange({ id: null, nome });
         }}
-        placeholder="Buscar pelo nome do veículo"
+        placeholder={
+          modoImportacao
+            ? "Buscar veículo existente"
+            : "Buscar pelo nome do veículo"
+        }
         autoCapitalize="words"
         autoCorrect={false}
         editable={!disabled}
@@ -446,7 +457,9 @@ export default function VeiculoSelector({
 
       {semSelecao && temTermo && !erroNome ? (
         <Text style={[styles.ajuda, { color: theme.textoSub }]}>
-          {modoFiltro
+          {modoImportacao
+          ? "Escolha um resultado da lista. Apenas digitar o nome não cria associação."
+          : modoFiltro
             ? "Selecione um veículo específico ou mantenha o texto para pesquisar parte do nome."
             : criacaoAoSalvar
               ? "O nome digitado será usado ao salvar."

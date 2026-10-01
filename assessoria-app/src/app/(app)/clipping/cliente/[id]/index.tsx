@@ -314,6 +314,19 @@ export default function ClippingsDoCliente() {
     });
   }
 
+  function abrirImportacao() {
+    if (selecao.excluindo || exportacao.exportando) return;
+
+    router.push({
+      pathname: "/clipping/importar",
+      params: {
+        clienteId: String(clienteId),
+        ano: String(ano),
+        clienteNome,
+      },
+    });
+  }
+
   function abrirDetalhes(clipping: Clipping) {
     if (selecao.excluindo || exportacao.exportando) return;
     
@@ -406,7 +419,44 @@ export default function ClippingsDoCliente() {
             >
               {total} clipping(s) em {ano}
             </Text>
-              
+              {!selecao.ativo &&
+temPermissao("CLIPPING", "IMPORTAR") ? (
+  <TouchableOpacity
+    activeOpacity={0.8}
+    accessibilityRole="button"
+    accessibilityLabel="Importar clippings de um arquivo CSV"
+    disabled={
+      carregando ||
+      atualizando ||
+      Boolean(erro) ||
+      selecao.excluindo ||
+      exportacao.exportando
+    }
+    onPress={abrirImportacao}
+    style={[
+      styles.exportButton,
+      {
+        backgroundColor: theme.background,
+        borderColor: theme.borda,
+        opacity:
+          carregando ||
+          atualizando ||
+          Boolean(erro) ||
+          selecao.excluindo ||
+          exportacao.exportando
+            ? 0.5
+            : 1,
+      },
+    ]}
+  >
+    <Ionicons
+      name="cloud-upload-outline"
+      size={20}
+      color={theme.texto}
+    />
+  </TouchableOpacity>
+) : null}
+
               {podeExportar && !selecao.ativo ? (
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -445,6 +495,7 @@ export default function ClippingsDoCliente() {
                   />
                 </TouchableOpacity>
               ) : null}
+              
             {!selecao.ativo && temPermissao("CLIPPING", "CRIAR") ? (
               <Button
                 title="NOVO"

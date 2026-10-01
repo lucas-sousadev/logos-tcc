@@ -413,6 +413,13 @@ class JornalistaController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
+        } catch (\DomainException $e) {
+            http_response_code(403);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]); 
         } catch (\Throwable $e) {
             http_response_code(500);
 
@@ -551,6 +558,13 @@ class JornalistaController
                 'message' => $e->getMessage(),
             ]);
 
+        } catch (\DomainException $e) {
+            http_response_code(403);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]); 
         } catch (\Throwable $e) {
             http_response_code(500);
 
@@ -559,7 +573,7 @@ class JornalistaController
                 'message' =>
                     'Não foi possível cadastrar o contato.'
             ]);
-        }
+        } 
     }
 
     public function atualizar(array $dados): void
@@ -635,6 +649,13 @@ class JornalistaController
                 'message' => $e->getMessage()
             ]);
 
+        } catch (\DomainException $e) {
+            http_response_code(403);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]); 
         } catch (\Throwable $e) {
             http_response_code(500);
 

@@ -8,6 +8,20 @@ use Logos\AssessoriaApi\Models\Veiculo;
 
 class ClippingImportacaoService
 {
+    private static function podeCriarVeiculos(int $usuarioId): bool
+    {
+        $usuario = AuthContext::get();
+
+        return $usuario !== null
+            && (int) $usuario->sub === $usuarioId
+            && PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                (string) $usuario->perfil,
+                'VEICULOS',
+                'CRIAR'
+            );
+    }
+
     private static function nome(string $valor): string
     {
         return mb_strtolower(
@@ -150,7 +164,7 @@ class ClippingImportacaoService
 
         if ($ano !== $anoContexto) {
             $avisos[] =
-                "Esta publicação será organizada no ano {$ano}.";
+                "Esse clipping será organizado no ano {$ano}.";
         }
 
         $dados = [
@@ -258,6 +272,8 @@ class ClippingImportacaoService
         $pendentes = [];
         $linhas = [];
 
+        $podeCriarVeiculos = self::podeCriarVeiculos($usuarioId);
+
         foreach ($csv['registros'] as $registro) {
             $originais = $registro['originais'];
 
@@ -268,6 +284,7 @@ class ClippingImportacaoService
                 'veiculo_nome' => null,
                 'erros' => [],
                 'avisos' => [],
+                'veiculo_para_criar' => null,
             ];
 
             try {
@@ -278,6 +295,9 @@ class ClippingImportacaoService
                 }
 
                 $nomeVeiculo = $originais['veiculo'] ?? '';
+                $linha['veiculo_nome'] =
+                    $nomeVeiculo !== '' ? $nomeVeiculo : null;
+
                 $veiculoId = null;
 
                 if ($nomeVeiculo !== '') {
@@ -312,9 +332,14 @@ class ClippingImportacaoService
                         if ($veiculoId === null) {
                             $pendentes[$nomeVeiculo] = true;
 
-                            throw new \InvalidArgumentException(
-                                "Associe o veículo '{$nomeVeiculo}' ou escolha deixá-lo pendente."
-                            );
+                            if ($podeCriarVeiculos) {
+                                $linha['veiculo_para_criar'] = $nomeVeiculo;
+                                $linha['avisos'][] =
+                                    "Veículo '{$nomeVeiculo}' será criado ao confirmar a importação.";
+                            } else {
+                                $linha['avisos'][] =
+                                    "Veículo '{$nomeVeiculo}' não existe. O clipping será importado com o vínculo pendente e o nome informado será preservado.";
+                            }
                         }
                     }
                 }
@@ -328,6 +353,10 @@ class ClippingImportacaoService
                 );
 
                 $dados['veiculo_id'] = $veiculoId;
+                $dados['veiculo_nome_informado'] =
+                    $veiculoId === null && $nomeVeiculo !== ''
+                        ? $nomeVeiculo
+                        : null;
 
                 $campos = ClippingService::prepararImportacao(
                     $assessoriaId,
@@ -370,7 +399,7 @@ class ClippingImportacaoService
 
                     if ($cacheLinks[$link]) {
                         $linha['avisos'][] =
-                            'Já existe clipping deste cliente com o mesmo link. A importação continua permitida.';
+                            'Já existe clipping deste cliente com o mesmo link.';
                     }
                 }
 
@@ -390,7 +419,7 @@ class ClippingImportacaoService
                 && ($linksArquivo[$link] ?? 0) > 1
             ) {
                 $linha['avisos'][] =
-                    'O mesmo link aparece mais de uma vez neste arquivo para este cliente. Todas as ocorrências podem ser importadas.';
+                    'O mesmo link aparece mais de uma vez neste arquivo para este cliente.';
             }
         }
 
@@ -402,6 +431,7 @@ class ClippingImportacaoService
             'ano_referencia' => $ano,
             'colunas' => $csv['colunas'],
             'ignoradas' => $csv['ignoradas'],
+            'pode_criar_veiculos' => $podeCriarVeiculos,
             'veiculos_pendentes' => array_keys($pendentes),
             'linhas' => $linhas,
             'resumo' => [
@@ -570,12 +600,15 @@ class ClippingImportacaoService
             );
 
             $porNumero = [];
+            $veiculosResolvidos = [];
+            $veiculosCriados = [];
+            $vinculosPendentes = 0;
 
             foreach ($previa['linhas'] as $linha) {
                 $porNumero[$linha['registro']] = $linha;
             }
 
-            // Valida a seleção inteira antes de gravar.
+            // valida a seleção inteira antes de gravar
             foreach ($numeros as $numero) {
                 if (
                     !isset($porNumero[$numero])
@@ -584,6 +617,20 @@ class ClippingImportacaoService
                 ) {
                     throw new \InvalidArgumentException(
                         "O registro {$numero} não está disponível para importação."
+                    );
+                }
+            }
+            
+            
+            $podeCriarVeiculos = self::podeCriarVeiculos($usuarioId);
+
+            foreach ($numeros as $numero) {
+                if (
+                    !empty($porNumero[$numero]['veiculo_para_criar'])
+                    && !$podeCriarVeiculos
+                ) {
+                    throw new \DomainException(
+                        'Sua permissão para criar veículos mudou. Analise o CSV novamente para importar esses clippings com vínculo pendente.'
                     );
                 }
             }
@@ -612,13 +659,99 @@ class ClippingImportacaoService
                 $pdo->exec('SAVEPOINT clipping_importacao_linha');
 
                 try {
-                    // Valida novamente cliente, veículo e todos os campos.
-                    // Tier e duração apresentados na prévia são preservados.
+                    // valida novamente cliente, veículo e todos os campos
+                    // tier e duração apresentados na prévia são preservados
+                    $dadosLinha = $linha['dados'];
+                    $nomeParaCriar = $linha['veiculo_para_criar'] ?? null;
+                    $veiculoCriadoNestaLinha = null;
+                    $chaveVeiculo = null;
+
+                    if (
+                        is_string($nomeParaCriar)
+                        && trim($nomeParaCriar) !== ''
+                    ) {
+                        $nomeNormalizado = VeiculoService::normalizarNome(
+                            preg_replace(
+                                '/\s+/u',
+                                ' ',
+                                trim($nomeParaCriar)
+                            ) ?? trim($nomeParaCriar)
+                        );
+
+                        $chaveVeiculo = self::nome($nomeNormalizado);
+
+                        if (isset($veiculosResolvidos[$chaveVeiculo])) {
+                            $dadosLinha['veiculo_id'] =
+                                $veiculosResolvidos[$chaveVeiculo];
+                        } else {
+                            $existente = Veiculo::buscarPorNome(
+                                $nomeNormalizado,
+                                $assessoriaId
+                            );
+
+                            if ($existente) {
+                                $dadosLinha['veiculo_id'] =
+                                    (int) $existente['id'];
+                            } else {
+                                try {
+                                    $dadosLinha['veiculo_id'] = Veiculo::criar(
+                                        $assessoriaId,
+                                        $nomeNormalizado,
+                                        null,
+                                        null,
+                                        null,
+                                        true
+                                    );
+
+                                    $veiculoCriadoNestaLinha = [
+                                        'id' => (int) $dadosLinha['veiculo_id'],
+                                        'nome' => $nomeNormalizado,
+                                    ];
+                                } catch (\PDOException $e) {
+                                    if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                                        throw $e;
+                                    }
+
+                                    $existente = Veiculo::buscarPorNome(
+                                        $nomeNormalizado,
+                                        $assessoriaId
+                                    );
+
+                                    if (!$existente) {
+                                        throw $e;
+                                    }
+
+                                    $dadosLinha['veiculo_id'] =
+                                        (int) $existente['id'];
+                                }
+                            }
+                        }
+                    }
+
                     $clipping = ClippingService::criar(
                         $assessoriaId,
                         $usuarioId,
-                        $linha['dados']
+                        $dadosLinha
                     );
+
+                    // Só guardar no controle após o clipping também ter sido salvo.
+                    // Se a linha falhar, o SAVEPOINT desfaz o veículo recém-criado.
+                    if ($chaveVeiculo !== null) {
+                        $veiculosResolvidos[$chaveVeiculo] =
+                            (int) $dadosLinha['veiculo_id'];
+                    }
+
+                    if ($veiculoCriadoNestaLinha !== null) {
+                        $veiculosCriados[$chaveVeiculo] =
+                            $veiculoCriadoNestaLinha;
+                    }
+
+                    if (
+                        $clipping['veiculo_id'] === null
+                        && $clipping['veiculo_nome_informado'] !== null
+                    ) {
+                        $vinculosPendentes++;
+                    }
 
                     $importados++;
 
@@ -660,8 +793,12 @@ class ClippingImportacaoService
                     'importados' => $importados,
                     'erros' => $falhas,
                     'ignorados' => $ignorados,
+                    'veiculos_criados' => count($veiculosCriados),
+                    'vinculos_pendentes' => $vinculosPendentes,
                 ],
+                'veiculos_criados' => array_values($veiculosCriados),
                 'resultados' => $resultados,
+                
             ];
 
             $salvar = $pdo->prepare(

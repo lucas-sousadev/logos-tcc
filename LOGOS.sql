@@ -424,6 +424,7 @@ CREATE TABLE clippings (
     fim_segundos INT UNSIGNED NULL,
     link VARCHAR(2048) NULL,
     observacoes TEXT NULL,
+    veiculo_nome_informado VARCHAR(150) NULL,
 
     criado_por BIGINT UNSIGNED NOT NULL,
 

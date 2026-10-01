@@ -83,7 +83,7 @@ export default function ClippingCard({
 
   const pendencias = {
     data: !clipping.data_publicacao,
-    veiculo: !clipping.veiculo_nome?.trim(),
+    veiculo: clipping.veiculo_id === null,
     pauta: !clipping.pauta?.trim(),
     categorias: clipping.categorias.length === 0,
     tier: clipping.tier === null,
@@ -95,8 +95,13 @@ export default function ClippingCard({
     link: !clipping.link?.trim(),
   };
 
-  const veiculo =
-    clipping.veiculo_nome?.trim() || "Sem veículo";
+  const veiculo = clipping.veiculo_nome?.trim()
+  ? (
+      clipping.veiculo_id === null
+        ? `${clipping.veiculo_nome.trim()} · vínculo pendente`
+        : clipping.veiculo_nome.trim()
+    )
+  : "Sem veículo";
 
   const pauta =
     clipping.pauta?.trim() ||

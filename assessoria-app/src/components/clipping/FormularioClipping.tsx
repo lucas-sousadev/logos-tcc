@@ -668,6 +668,7 @@ const [tier, setTier] = useState<Tier | null>(
       fimSegundos,
       link,
       observacoes,
+      permitirNomeVeiculoPendente: clippingInicial?.veiculo_nome_informado != null,
     });
 
     setErros(errosValidacao);
@@ -697,7 +698,15 @@ const [tier, setTier] = useState<Tier | null>(
       fim_segundos: tempoParaSegundos(fimSegundos),
     };
 
-        travaSalvar.current = true;
+    if (
+      clippingInicial?.veiculo_nome_informado != null &&
+      veiculo.id === null
+    ) {
+      dados.veiculo_nome_informado =
+        veiculo.nome.trim() || null;
+    }
+
+    travaSalvar.current = true;
     setSalvando(true);
     setFalha(null);
     setMensagemEnvio("Salvando clipping...");

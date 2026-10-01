@@ -11,6 +11,7 @@ class Clipping
     private const CAMPOS = [
         'cliente_id',
         'veiculo_id',
+        'veiculo_nome_informado',
         'ano_referencia',
         'data_publicacao',
         'categorias',
@@ -40,7 +41,7 @@ class Clipping
         SELECT
             c.*,
             cl.nome AS cliente_nome,
-            v.nome AS veiculo_nome,
+            COALESCE(v.nome, c.veiculo_nome_informado) AS veiculo_nome,
             v.descricao AS veiculo_descricao,
             v.alcance AS veiculo_alcance,
             v.logo_path AS veiculo_logo_path,
@@ -313,7 +314,7 @@ class Clipping
                         CONCAT_WS(
                             ' ',
                             c.pauta,
-                            v.nome,
+                            COALESCE(v.nome, c.veiculo_nome_informado),
                             c.programa_secao,
                             c.categorias,
                             CONCAT('Tier ', c.tier),
@@ -357,7 +358,7 @@ class Clipping
 
         foreach (
             [
-                'veiculo_nome' => 'v.nome',
+                'veiculo_nome' => 'COALESCE(v.nome, c.veiculo_nome_informado)',
                 'programa_secao' => 'c.programa_secao',
             ] as $campo => $coluna
         ) {
@@ -397,7 +398,7 @@ class Clipping
             ' WHERE ' . implode(' AND ', $where);
 
         $coluna = match ($f['ordem']) {
-            'veiculo' => 'v.nome',
+            'veiculo' => 'COALESCE(v.nome, c.veiculo_nome_informado)',
             'tier' => 'c.tier',
             default => 'c.data_publicacao',
         };

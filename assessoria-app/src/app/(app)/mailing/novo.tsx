@@ -19,7 +19,7 @@ import {
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
-
+import { useAuth } from "@/contexts/AuthContext";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import { criarJornalista } from "@/services/api/jornalista";
@@ -28,6 +28,7 @@ export default function FormularioJornalista() {
 
         const router = useRouter();
         const { theme } = useTheme();
+        const { temPermissao } = useAuth();
 
        const [erros, setErros] = useState<ErrosJornalista>({});
         const [erroGeral, setErroGeral] = useState("");
@@ -133,6 +134,15 @@ export default function FormularioJornalista() {
             veiculoId: veiculo.id,
             veiculoNome: veiculo.nome,
           });
+
+        if (
+          !temPermissao("VEICULOS", "CRIAR") &&
+          veiculo.id === null &&
+          veiculo.nome.trim()
+        ) {
+          errosValidacao.veiculo =
+            "Selecione um veículo existente. Você não possui permissão para criar outro.";
+        }
 
         setErros(errosValidacao);
         setErroGeral("");
@@ -333,6 +343,7 @@ export default function FormularioJornalista() {
             setVeiculo(selecao);
             limparErro("veiculo");
           }}
+          criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
           error={erros.veiculo}
         />
 

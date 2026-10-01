@@ -14,6 +14,7 @@ class ClippingService
     private const CAMPOS = [
         'cliente_id',
         'veiculo_id',
+        'veiculo_nome_informado',
         'ano_referencia',
         'data_publicacao',
         'categorias',
@@ -781,9 +782,29 @@ class ClippingService
             );
         }
 
+        $veiculoNomeInformado = self::texto(
+            $base['veiculo_nome_informado'],
+            'Nome informado do veículo',
+            150
+        );
+
+        if ($veiculoId !== null) {
+            // Um vínculo real substitui o nome provisório do CSV.
+            $veiculoNomeInformado = null;
+        } elseif (
+            $atual !== null
+            && $atual['veiculo_id'] !== null
+            && !array_key_exists('veiculo_nome_informado', $dados)
+        ) {
+            // Ao remover um vínculo existente, não manter o nome
+            // do veículo antigo como se tivesse vindo do CSV.
+            $veiculoNomeInformado = null;
+        }
+
         return [
             'cliente_id' => $clienteId,
             'veiculo_id' => $veiculoId,
+            'veiculo_nome_informado' => $veiculoNomeInformado,
             'ano_referencia' => $ano,
             'data_publicacao' => $data,
 

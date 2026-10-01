@@ -44,6 +44,7 @@ export interface DadosClippingParaValidacao {
   fimSegundos: string;
   link: string;
   observacoes: string;
+  permitirNomeVeiculoPendente?: boolean;
 }
 
 function excede(valor: string, limite: number): boolean {
@@ -213,9 +214,13 @@ export function validarFormularioClipping(
     dados.veiculoId === null &&
     dados.veiculoNome.trim()
   ) {
-    erros.veiculo = excede(dados.veiculoNome, MAX_VEICULO)
-      ? `O nome do veículo deve possuir no máximo ${MAX_VEICULO} caracteres.`
-      : "Selecione o veículo na lista ou cadastre-o. Para deixar pendente, limpe o campo.";
+    if (excede(dados.veiculoNome, MAX_VEICULO)) {
+      erros.veiculo =
+        `O nome do veículo deve possuir no máximo ${MAX_VEICULO} caracteres.`;
+    } else if (!dados.permitirNomeVeiculoPendente) {
+      erros.veiculo =
+        "Selecione o veículo na lista ou cadastre-o. Para deixar pendente, limpe o campo.";
+    }
   }
 
   if (
