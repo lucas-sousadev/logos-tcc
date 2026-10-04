@@ -1,2 +1,2 @@
 export const API_URL =
-  "http://192.168.0.10/LOGOS/logos-api/public";
+  "http://192.168.0.13/LOGOS/logos-api/public";

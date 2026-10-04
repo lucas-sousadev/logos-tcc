@@ -8,6 +8,20 @@ use Logos\AssessoriaApi\Models\Veiculo;
 
 class ClippingImportacaoService
 {
+    private static function podeCriarClientes(int $usuarioId): bool
+    {
+        $usuario = AuthContext::get();
+
+        return $usuario !== null
+            && (int) $usuario->sub === $usuarioId
+            && PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                (string) $usuario->perfil,
+                'CLIENTES',
+                'CRIAR'
+            );
+    }
+
     private static function podeCriarVeiculos(int $usuarioId): bool
     {
         $usuario = AuthContext::get();
@@ -118,53 +132,93 @@ class ClippingImportacaoService
         return $resultado;
     }
 
-    private static function converter(
-        array $originais,
-        int $clienteId,
-        string $clienteNome,
-        int $anoContexto,
-        array &$avisos
+    private static function resolucoesClientes(
+        mixed $json,
+        int $assessoriaId
     ): array {
-        $clienteArquivo = $originais['cliente'] ?? '';
-
-        if (
-            $clienteArquivo !== ''
-            && self::nome($clienteArquivo) !== self::nome($clienteNome)
-        ) {
-            throw new \InvalidArgumentException(
-                "O cliente do arquivo é '{$clienteArquivo}', diferente do cliente desta importação."
-            );
+        if (!is_string($json)) {
+            throw new \InvalidArgumentException('As associações de clientes são inválidas.');
         }
 
-        $data = ClippingImportacaoCsv::data(
-            $originais['data_publicacao'] ?? ''
-        );
+        try {
+            $lista = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new \InvalidArgumentException('As associações de clientes são inválidas.');
+        }
 
-        $anoArquivo = $originais['ano_referencia'] ?? '';
+        if (!is_array($lista) || !array_is_list($lista) || count($lista) > 1000) {
+            throw new \InvalidArgumentException('As associações de clientes são inválidas.');
+        }
 
-        $ano = $anoArquivo === ''
-            ? $anoContexto
-            : ClippingImportacaoCsv::inteiro(
-                $anoArquivo,
-                'Ano',
-                1000,
-                9999
-            );
+        $resultado = [];
 
-        if ($data !== null) {
-            $anoDaData = (int) substr($data, 0, 4);
-
-            if ($anoArquivo !== '' && $ano !== $anoDaData) {
-                $avisos[] =
-                    "O ano informado foi substituído por {$anoDaData}, conforme a data da publicação.";
+        foreach ($lista as $item) {
+            if (
+                !is_array($item)
+                || !is_string($item['nome'] ?? null)
+                || trim($item['nome']) === ''
+                || !array_key_exists('cliente_id', $item)
+            ) {
+                throw new \InvalidArgumentException('Informe o nome do CSV e o cliente escolhido.');
             }
 
-            $ano = $anoDaData;
+            $chave = self::nome($item['nome']);
+
+            if (array_key_exists($chave, $resultado)) {
+                throw new \InvalidArgumentException('Há associações repetidas para o mesmo cliente.');
+            }
+
+            $id = $item['cliente_id'] === null
+                ? null
+                : ClippingImportacaoCsv::inteiro($item['cliente_id'], 'Cliente');
+
+            if ($id !== null && !Cliente::buscarPorId($id, $assessoriaId)) {
+                throw new \InvalidArgumentException('Selecione um cliente da sua assessoria.');
+            }
+
+            $resultado[$chave] = $id;
         }
+
+        return $resultado;
+    }
+
+    private static function converter(
+        array $originais,
+        ?int $clienteId,
+        int $anoContexto,
+        array &$avisos,
+        array &$avisosLink
+    ): array {
+        [$data, $ano] = ClippingImportacaoData::interpretar(
+            $originais,
+            $anoContexto,
+            $avisos
+        );
 
         if ($ano !== $anoContexto) {
             $avisos[] =
                 "Esse clipping será organizado no ano {$ano}.";
+        }
+
+        $link = trim((string) ($originais['link'] ?? ''));
+
+        if ($link !== '') {
+            $esquema = strtolower(
+                (string) parse_url($link, PHP_URL_SCHEME)
+            );
+
+            if (
+                mb_strlen($link, 'UTF-8') > 2048
+                || filter_var($link, FILTER_VALIDATE_URL) === false
+                || !in_array($esquema, ['http', 'https'], true)
+            ) {
+                $avisosLink[] = [
+                    'tipo' => 'invalido',
+                    'mensagem' => 'O link do CSV é inválido e será ignorado. Os demais dados desta publicação poderão ser importados.',
+                ];
+
+                $link = '';
+            }
         }
 
         $dados = [
@@ -188,7 +242,7 @@ class ClippingImportacaoService
                 $originais['duracao'] ?? '',
                 'Duração'
             ),
-            'link' => $originais['link'] ?? null,
+            'link' => $link === '' ? null : $link,
             'observacoes' => $originais['observacoes'] ?? null,
         ];
 
@@ -217,10 +271,9 @@ class ClippingImportacaoService
         mixed $upload,
         array $entrada
     ): array {
-        $clienteId = ClippingImportacaoCsv::inteiro(
-            $entrada['cliente_id'] ?? null,
-            'Cliente'
-        );
+        $clienteId = isset($entrada['cliente_id']) && $entrada['cliente_id'] !== ''
+            ? ClippingImportacaoCsv::inteiro($entrada['cliente_id'], 'Cliente')
+            : null;
 
         $ano = ClippingImportacaoCsv::inteiro(
             $entrada['ano_referencia'] ?? null,
@@ -229,25 +282,85 @@ class ClippingImportacaoService
             9999
         );
 
-        $cliente = Cliente::buscarPorId(
-            $clienteId,
-            $assessoriaId
-        );
+        $cliente = $clienteId === null
+            ? null
+            : Cliente::buscarPorId($clienteId, $assessoriaId);
 
-        if (!$cliente) {
+        if ($clienteId !== null && !$cliente) {
             throw new \OutOfBoundsException(
                 'Cliente não encontrado.'
             );
         }
 
-        $csv = ClippingImportacaoCsv::ler($upload);
+        $mapeamentoManual = null;
+
+        if (array_key_exists('mapeamento', $entrada)) {
+            try {
+                $mapeamentoManual = json_decode(
+                    (string) $entrada['mapeamento'],
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR
+                );
+            } catch (\JsonException) {
+                throw new \InvalidArgumentException(
+                    'O mapeamento de colunas é inválido.'
+                );
+            }
+
+            if (
+                !is_array($mapeamentoManual)
+                || !array_is_list($mapeamentoManual)
+            ) {
+                throw new \InvalidArgumentException(
+                    'O mapeamento de colunas é inválido.'
+                );
+            }
+        }
+
+        $linhaCabecalho = null;
+
+        if (
+            isset($entrada['linha_cabecalho'])
+            && $entrada['linha_cabecalho'] !== ''
+        ) {
+            $linhaCabecalho = ClippingImportacaoCsv::inteiro(
+                $entrada['linha_cabecalho'],
+                'Linha do cabeçalho',
+                1,
+                20
+            );
+        }
+
+        $csv = ClippingImportacaoCsv::ler(
+            $upload,
+            $mapeamentoManual,
+            $linhaCabecalho
+        );
 
         $resolucoes = self::resolucoes(
             $entrada['veiculos'] ?? '[]',
             $assessoriaId
         );
 
+        $resolucoesClientes = self::resolucoesClientes(
+            $entrada['clientes'] ?? '[]',
+            $assessoriaId
+        );
+
         $pdo = Connection::get();
+
+        $buscarClientes = $pdo->prepare(
+            'SELECT id, nome FROM clientes WHERE assessoria_id = :assessoria_id'
+        );
+        $buscarClientes->execute(['assessoria_id' => $assessoriaId]);
+        $clientesPorNome = [];
+        $clientesPorId = [];
+
+        foreach ($buscarClientes->fetchAll(\PDO::FETCH_ASSOC) as $cadastrado) {
+            $clientesPorNome[self::nome($cadastrado['nome'])][] = $cadastrado;
+            $clientesPorId[(int) $cadastrado['id']] = $cadastrado['nome'];
+        }
 
         $buscarVeiculo = $pdo->prepare(
             'SELECT id
@@ -258,21 +371,26 @@ class ClippingImportacaoService
         );
 
         $buscarLink = $pdo->prepare(
-            'SELECT id
-             FROM clippings
-             WHERE assessoria_id = :assessoria_id
-               AND cliente_id = :cliente_id
-               AND BINARY TRIM(link) = BINARY :link
-             LIMIT 1'
+            'SELECT id, ano_referencia, arquivado_em
+            FROM clippings
+            WHERE assessoria_id = :assessoria_id
+            AND cliente_id = :cliente_id
+            AND BINARY TRIM(link) = BINARY :link
+            ORDER BY id DESC
+            LIMIT 1'
         );
 
         $cacheVeiculos = [];
         $cacheLinks = [];
         $linksArquivo = [];
         $pendentes = [];
+        $clientesPendentes = [];
+        $clientesAmbiguos = [];
+        $clientesExistentes = [];
         $linhas = [];
 
         $podeCriarVeiculos = self::podeCriarVeiculos($usuarioId);
+        $podeCriarClientes = self::podeCriarClientes($usuarioId);
 
         foreach ($csv['registros'] as $registro) {
             $originais = $registro['originais'];
@@ -281,10 +399,13 @@ class ClippingImportacaoService
                 'registro' => $registro['registro'],
                 'originais' => $originais,
                 'dados' => null,
+                'cliente_nome' => null,
+                'cliente_para_criar' => null,
                 'veiculo_nome' => null,
                 'erros' => [],
                 'avisos' => [],
                 'veiculo_para_criar' => null,
+                'avisos_link' => [],
             ];
 
             try {
@@ -293,6 +414,71 @@ class ClippingImportacaoService
                         $registro['erro']
                     );
                 }
+
+                $nomeCliente = trim((string) ($originais['cliente'] ?? ''));
+                $clienteLinhaId = null;
+
+                if ($nomeCliente === '') {
+                    if ($cliente === null) {
+                        throw new \InvalidArgumentException(
+                            'Informe o cliente nesta linha ou importe pela tela de um cliente.'
+                        );
+                    }
+
+                    $nomeCliente = $cliente['nome'];
+                    $clienteLinhaId = (int) $cliente['id'];
+                } else {
+                    $nomeCliente = trim(preg_replace('/\s+/u', ' ', $nomeCliente) ?? $nomeCliente);
+
+                    if (mb_strlen($nomeCliente, 'UTF-8') > 150) {
+                        throw new \InvalidArgumentException(
+                            'O nome do cliente deve possuir no máximo 150 caracteres.'
+                        );
+                    }
+
+                    $chaveCliente = self::nome($nomeCliente);
+                    $encontrados = $clientesPorNome[$chaveCliente] ?? [];
+
+                    if ($encontrados !== []) {
+                        $clientesExistentes[$chaveCliente] = $nomeCliente;
+                    }
+
+                    if (array_key_exists($chaveCliente, $resolucoesClientes)) {
+                        $clienteLinhaId = $resolucoesClientes[$chaveCliente];
+
+                        if ($clienteLinhaId === null && count($encontrados) > 0) {
+                            throw new \InvalidArgumentException(
+                                "O cliente '{$nomeCliente}' já existe. Associe-o ao cadastro."
+                            );
+                        }
+                    } elseif (count($encontrados) === 1) {
+                        $clienteLinhaId = (int) $encontrados[0]['id'];
+                    } elseif (count($encontrados) > 1) {
+                        $clientesPendentes[$chaveCliente] = $nomeCliente;
+                        $clientesAmbiguos[$chaveCliente] = $nomeCliente;
+                        throw new \InvalidArgumentException(
+                            "Há mais de um cliente chamado '{$nomeCliente}'. Escolha o cadastro na revisão."
+                        );
+                    }
+
+                    if ($clienteLinhaId === null) {
+                        $clientesPendentes[$chaveCliente] = $nomeCliente;
+
+                        if (!$podeCriarClientes) {
+                            throw new \InvalidArgumentException(
+                                "O cliente '{$nomeCliente}' não existe. Associe-o antes de importar; você não tem permissão para criá-lo."
+                            );
+                        }
+
+                        $linha['cliente_para_criar'] = $nomeCliente;
+                        $linha['avisos'][] =
+                            "Cliente '{$nomeCliente}' será criado ao confirmar a importação.";
+                    }
+                }
+
+                $linha['cliente_nome'] = $clienteLinhaId !== null
+                    ? ($clientesPorId[$clienteLinhaId] ?? $nomeCliente)
+                    : $nomeCliente;
 
                 $nomeVeiculo = $originais['veiculo'] ?? '';
                 $linha['veiculo_nome'] =
@@ -346,10 +532,10 @@ class ClippingImportacaoService
 
                 $dados = self::converter(
                     $originais,
-                    $clienteId,
-                    $cliente['nome'],
+                    $clienteLinhaId,
                     $ano,
-                    $linha['avisos']
+                    $linha['avisos'],
+                    $linha['avisos_link']
                 );
 
                 $dados['veiculo_id'] = $veiculoId;
@@ -360,7 +546,8 @@ class ClippingImportacaoService
 
                 $campos = ClippingService::prepararImportacao(
                     $assessoriaId,
-                    $dados
+                    $dados,
+                    $clienteLinhaId === null
                 );
 
                 if (
@@ -383,23 +570,40 @@ class ClippingImportacaoService
                 $link = $campos['link'];
 
                 if ($link !== null) {
-                    $linksArquivo[$link] =
-                        ($linksArquivo[$link] ?? 0) + 1;
+                    $chaveLink = ($clienteLinhaId === null
+                        ? 'nome:' . self::nome($nomeCliente)
+                        : 'id:' . $clienteLinhaId) . "\0" . $link;
+                    $linksArquivo[$chaveLink] =
+                        ($linksArquivo[$chaveLink] ?? 0) + 1;
 
-                    if (!array_key_exists($link, $cacheLinks)) {
+                    if ($clienteLinhaId !== null && !array_key_exists($chaveLink, $cacheLinks)) {
                         $buscarLink->execute([
                             'assessoria_id' => $assessoriaId,
-                            'cliente_id' => $clienteId,
+                            'cliente_id' => $clienteLinhaId,
                             'link' => $link,
                         ]);
 
-                        $cacheLinks[$link] =
-                            $buscarLink->fetchColumn() !== false;
+                        $cacheLinks[$chaveLink] =
+                            $buscarLink->fetch(\PDO::FETCH_ASSOC) ?: null;
                     }
 
-                    if ($cacheLinks[$link]) {
-                        $linha['avisos'][] =
-                            'Já existe clipping deste cliente com o mesmo link.';
+                    $existente = $cacheLinks[$chaveLink] ?? null;
+
+                    if ($existente !== null) {
+                        $mensagem = 'Link já cadastrado no clipping #'
+                            . (int) $existente['id']
+                            . ' (ano '
+                            . (int) $existente['ano_referencia']
+                            . ')';
+
+                        if ($existente['arquivado_em'] !== null) {
+                            $mensagem .= ', arquivado';
+                        }
+
+                        $linha['avisos_link'][] = [
+                            'tipo' => 'cadastrado',
+                            'mensagem' => $mensagem . '.',
+                        ];
                     }
                 }
 
@@ -413,13 +617,20 @@ class ClippingImportacaoService
 
         foreach ($linhas as &$linha) {
             $link = $linha['dados']['link'] ?? null;
+            $chaveLink = $link === null ? null : (
+                $linha['dados']['cliente_id'] === null
+                    ? 'nome:' . self::nome($linha['cliente_nome'] ?? '')
+                    : 'id:' . $linha['dados']['cliente_id']
+            ) . "\0" . $link;
 
             if (
-                $link !== null
-                && ($linksArquivo[$link] ?? 0) > 1
+                $chaveLink !== null
+                && ($linksArquivo[$chaveLink] ?? 0) > 1
             ) {
-                $linha['avisos'][] =
-                    'O mesmo link aparece mais de uma vez neste arquivo para este cliente.';
+                $linha['avisos_link'][] = [
+                    'tipo' => 'no_csv',
+                    'mensagem' => 'O mesmo link aparece em mais de uma linha deste CSV para este cliente.',
+                ];
             }
         }
 
@@ -427,11 +638,15 @@ class ClippingImportacaoService
 
         $previa = [
             'cliente_id' => $clienteId,
-            'cliente_nome' => $cliente['nome'],
+            'cliente_nome' => $cliente['nome'] ?? null,
             'ano_referencia' => $ano,
             'colunas' => $csv['colunas'],
             'ignoradas' => $csv['ignoradas'],
             'pode_criar_veiculos' => $podeCriarVeiculos,
+            'pode_criar_clientes' => $podeCriarClientes,
+            'clientes_pendentes' => array_values($clientesPendentes),
+            'clientes_ambiguos' => array_values($clientesAmbiguos),
+            'clientes_existentes' => array_values($clientesExistentes),
             'veiculos_pendentes' => array_keys($pendentes),
             'linhas' => $linhas,
             'resumo' => [
@@ -442,7 +657,13 @@ class ClippingImportacaoService
                 )),
                 'com_avisos' => count(array_filter(
                     $linhas,
-                    fn(array $item) => $item['avisos'] !== []
+                    fn(array $item) =>
+                        $item['erros'] === []
+                        && $item['dados'] !== null
+                        && (
+                            $item['avisos'] !== []
+                            || $item['avisos_link'] !== []
+                        )
                 )),
             ],
         ];
@@ -600,6 +821,8 @@ class ClippingImportacaoService
             );
 
             $porNumero = [];
+            $clientesResolvidos = [];
+            $clientesCriados = [];
             $veiculosResolvidos = [];
             $veiculosCriados = [];
             $vinculosPendentes = 0;
@@ -623,6 +846,7 @@ class ClippingImportacaoService
             
             
             $podeCriarVeiculos = self::podeCriarVeiculos($usuarioId);
+            $podeCriarClientes = self::podeCriarClientes($usuarioId);
 
             foreach ($numeros as $numero) {
                 if (
@@ -631,6 +855,15 @@ class ClippingImportacaoService
                 ) {
                     throw new \DomainException(
                         'Sua permissão para criar veículos mudou. Analise o CSV novamente para importar esses clippings com vínculo pendente.'
+                    );
+                }
+
+                if (
+                    !empty($porNumero[$numero]['cliente_para_criar'])
+                    && !$podeCriarClientes
+                ) {
+                    throw new \DomainException(
+                        'Sua permissão para criar clientes mudou. Atualize a prévia antes de importar.'
                     );
                 }
             }
@@ -648,6 +881,7 @@ class ClippingImportacaoService
 
                     $resultados[] = [
                         'registro' => $numero,
+                        'cliente_nome' => $linha['cliente_nome'] ?? $linha['originais']['cliente'] ?? null,
                         'status' => 'ignorado',
                         'clipping_id' => null,
                         'message' => 'Registro não selecionado.',
@@ -662,6 +896,54 @@ class ClippingImportacaoService
                     // valida novamente cliente, veículo e todos os campos
                     // tier e duração apresentados na prévia são preservados
                     $dadosLinha = $linha['dados'];
+                    $clienteParaCriar = $linha['cliente_para_criar'] ?? null;
+                    $clienteCriadoNestaLinha = null;
+                    $chaveCliente = null;
+
+                    if (is_string($clienteParaCriar) && trim($clienteParaCriar) !== '') {
+                        $nomeNormalizado = trim(
+                            preg_replace('/\s+/u', ' ', $clienteParaCriar)
+                            ?? $clienteParaCriar
+                        );
+                        $chaveCliente = self::nome($nomeNormalizado);
+
+                        if (isset($clientesResolvidos[$chaveCliente])) {
+                            $dadosLinha['cliente_id'] = $clientesResolvidos[$chaveCliente];
+                        } else {
+                            $buscarExistente = $pdo->prepare(
+                                'SELECT id, nome FROM clientes
+                                 WHERE assessoria_id = :assessoria_id
+                                   AND LOWER(TRIM(nome)) = :nome
+                                 LIMIT 2'
+                            );
+                            $buscarExistente->execute([
+                                'assessoria_id' => $assessoriaId,
+                                'nome' => $chaveCliente,
+                            ]);
+                            $existentes = $buscarExistente->fetchAll(\PDO::FETCH_ASSOC);
+
+                            if (count($existentes) > 1) {
+                                throw new \InvalidArgumentException(
+                                    "Há mais de um cliente chamado '{$nomeNormalizado}'. Atualize a prévia."
+                                );
+                            }
+
+                            if (count($existentes) === 1) {
+                                $dadosLinha['cliente_id'] = (int) $existentes[0]['id'];
+                            } else {
+                                $criado = ClienteService::criar(
+                                    $assessoriaId,
+                                    ['nome' => $nomeNormalizado]
+                                );
+                                $dadosLinha['cliente_id'] = (int) $criado['id'];
+                                $clienteCriadoNestaLinha = [
+                                    'id' => (int) $criado['id'],
+                                    'nome' => $criado['nome'],
+                                ];
+                            }
+                        }
+                    }
+
                     $nomeParaCriar = $linha['veiculo_para_criar'] ?? null;
                     $veiculoCriadoNestaLinha = null;
                     $chaveVeiculo = null;
@@ -734,6 +1016,15 @@ class ClippingImportacaoService
                         $dadosLinha
                     );
 
+                    if ($chaveCliente !== null) {
+                        $clientesResolvidos[$chaveCliente] =
+                            (int) $dadosLinha['cliente_id'];
+                    }
+
+                    if ($clienteCriadoNestaLinha !== null) {
+                        $clientesCriados[$chaveCliente] = $clienteCriadoNestaLinha;
+                    }
+
                     // Só guardar no controle após o clipping também ter sido salvo.
                     // Se a linha falhar, o SAVEPOINT desfaz o veículo recém-criado.
                     if ($chaveVeiculo !== null) {
@@ -757,6 +1048,7 @@ class ClippingImportacaoService
 
                     $resultados[] = [
                         'registro' => $numero,
+                        'cliente_nome' => $linha['cliente_nome'],
                         'status' => 'importado',
                         'clipping_id' => (int) $clipping['id'],
                         'message' => 'Clipping importado.',
@@ -774,6 +1066,7 @@ class ClippingImportacaoService
 
                     $resultados[] = [
                         'registro' => $numero,
+                        'cliente_nome' => $linha['cliente_nome'] ?? $linha['originais']['cliente'] ?? null,
                         'status' => 'erro',
                         'clipping_id' => null,
                         'message' => $e->getMessage(),
@@ -794,9 +1087,11 @@ class ClippingImportacaoService
                     'erros' => $falhas,
                     'ignorados' => $ignorados,
                     'veiculos_criados' => count($veiculosCriados),
+                    'clientes_criados' => count($clientesCriados),
                     'vinculos_pendentes' => $vinculosPendentes,
                 ],
                 'veiculos_criados' => array_values($veiculosCriados),
+                'clientes_criados' => array_values($clientesCriados),
                 'resultados' => $resultados,
                 
             ];

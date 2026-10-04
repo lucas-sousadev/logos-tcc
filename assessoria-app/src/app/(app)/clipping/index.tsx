@@ -86,6 +86,13 @@ export default function Clipping() {
     });
   }
 
+  function importarCsv() {
+    router.push({
+      pathname: "/clipping/importar",
+      params: { ano: String(anoAtual) },
+    });
+  }
+
   return (
     <View
       style={[
@@ -99,7 +106,7 @@ export default function Clipping() {
         <View style={styles.loading}>
           <ActivityIndicator
             size="large"
-            color={theme.primaria}
+            color={theme.textoTerciaria}
           />
         </View>
       ) : (
@@ -110,8 +117,8 @@ export default function Clipping() {
           <RefreshControl
             refreshing={atualizando}
             onRefresh={() => void carregarAnos()}
-            tintColor={theme.primaria}
-            colors={[theme.primaria]}
+            tintColor={theme.textoTerciaria}
+            colors={[theme.textoTerciaria]}
           />
         }
         >
@@ -137,6 +144,16 @@ export default function Clipping() {
               />
             ) : null}
           </View>
+
+          {temPermissao("CLIPPING", "IMPORTAR") ? (
+            <Button
+              title="IMPORTAR CSV"
+              variant="outline"
+              size="small"
+              onPress={importarCsv}
+              style={styles.importButton}
+            />
+          ) : null}
 
           {erro ? (
             <View
@@ -332,6 +349,13 @@ const styles = StyleSheet.create({
     width: "auto",
     borderRadius: 12,
     padding: 10
+  },
+
+  importButton: {
+    alignSelf: "flex-start",
+    width: "auto",
+    marginBottom: 20,
+    borderRadius: 12,
   },
 
   yearCard: {

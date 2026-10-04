@@ -27,6 +27,22 @@ class ClippingImportacaoCsv
             'Data da matéria',
         ],
 
+        'mes_ano' => [
+            'Mês',
+            'Mes',
+            'Mês/ano',
+            'Mes/ano',
+            'Período',
+            'Competência',
+        ],
+
+        'dia_mes' => [
+            'Dia',
+            'Dia/mês',
+            'Dia/mes',
+            'Dia da publicação',
+        ],
+
         'categorias' => [
             'Categoria',
             'Categorias',
@@ -64,6 +80,7 @@ class ClippingImportacaoCsv
             'Início do trecho',
             'Tempo inicial',
             'Posição inicial',
+            'Tempo Inicio',
         ],
 
         'fim' => [
@@ -72,6 +89,7 @@ class ClippingImportacaoCsv
             'Fim do trecho',
             'Tempo final',
             'Posição final',
+            'Tempo Fim',
         ],
 
         'duracao' => [
@@ -79,12 +97,14 @@ class ClippingImportacaoCsv
             'Duração',
             'Duração do trecho',
             'Tempo total',
+            'Tempo Veiculação',
         ],
 
         'tier' => [
             'Tier',
             'Classificação Tier',
             'Nível Tier',
+            'Tyer',
         ],
 
         'link' => [
@@ -158,8 +178,117 @@ class ClippingImportacaoCsv
         return trim($valor);
     }
 
-    public static function ler(mixed $upload): array
-    {
+    private static function desembrulharLinhasCsv(
+        string $conteudo
+    ): string {
+        $linhas = preg_split('/\r\n|\n|\r/', $conteudo);
+
+        if (!is_array($linhas)) {
+            return $conteudo;
+        }
+
+        $naoVazias = array_values(array_filter(
+            $linhas,
+            fn(string $linha) => trim($linha) !== ''
+        ));
+
+        if (count($naoVazias) < 2) {
+            return $conteudo;
+        }
+
+        $nomesConhecidos = [];
+
+        foreach (self::ALIASES as $campo => $nomes) {
+            $nomesConhecidos[self::cabecalho($campo)] =
+                $campo;
+
+            foreach ($nomes as $nome) {
+                $nomesConhecidos[self::cabecalho($nome)] =
+                    $campo;
+            }
+        }
+
+        $encontrouCabecalhoInterno = false;
+
+        foreach (array_slice($naoVazias, 0, 10) as $linha) {
+            if (
+                preg_match(
+                    '/\A"(?:[^"]|"")*"\z/u',
+                    $linha
+                ) !== 1
+            ) {
+                continue;
+            }
+
+            $interior = str_replace(
+                '""',
+                '"',
+                substr($linha, 1, -1)
+            );
+
+            foreach ([';', ',', "\t"] as $separador) {
+                $colunas = str_getcsv(
+                    $interior,
+                    $separador,
+                    '"',
+                    ''
+                );
+
+                if (count($colunas) < 3) {
+                    continue;
+                }
+
+                $camposReconhecidos = [];
+
+                foreach ($colunas as $nome) {
+                    $campo = $nomesConhecidos[
+                        self::cabecalho((string) $nome)
+                    ] ?? null;
+
+                    if ($campo !== null) {
+                        $camposReconhecidos[$campo] = true;
+                    }
+                }
+
+                if (count($camposReconhecidos) >= 2) {
+                    $encontrouCabecalhoInterno = true;
+                    break 2;
+                }
+            }
+        }
+
+        if (!$encontrouCabecalhoInterno) {
+            return $conteudo;
+        }
+
+        $normalizadas = [];
+
+        foreach ($linhas as $linha) {
+            if (
+                preg_match(
+                    '/\A"(?:[^"]|"")*"\z/u',
+                    $linha
+                ) === 1
+            ) {
+                $normalizadas[] = str_replace(
+                    '""',
+                    '"',
+                    substr($linha, 1, -1)
+                );
+            } else {
+                $normalizadas[] = $linha;
+            }
+        }
+
+        return implode("\n", $normalizadas);
+    }
+
+    public static function ler(
+        mixed $upload,
+        ?array $mapeamentoManual = null,
+        ?int $linhaCabecalhoManual = null,
+        bool $somenteColunas = false
+    ): array {
         if (
             !is_array($upload)
             || !isset($upload['error'])
@@ -252,6 +381,10 @@ class ClippingImportacaoCsv
             );
         }
 
+        $conteudo = self::desembrulharLinhasCsv(
+            $conteudo
+        );
+
         $arquivo = fopen('php://temp', 'w+b');
 
         if ($arquivo === false) {
@@ -267,32 +400,101 @@ class ClippingImportacaoCsv
                 );
             }
 
-            // Testa os delimitadores respeitando as aspas do CSV.
-            $delimitador = ';';
-            $maiorQuantidade = 0;
+            // Monta os nomes conhecidos antes de procurar o cabeçalho.
+            $aliases = [];
+
+            foreach (self::ALIASES as $campo => $nomes) {
+                $aliases[self::cabecalho($campo)] = $campo;
+
+                foreach ($nomes as $nomeAlternativo) {
+                    $aliases[self::cabecalho($nomeAlternativo)] = $campo;
+                }
+            }
+
+            $melhor = null;
 
             foreach ([';', ',', "\t"] as $candidato) {
                 rewind($arquivo);
 
-                $teste = fgetcsv(
-                    $arquivo,
-                    0,
-                    $candidato,
-                    '"',
-                    ''
-                );
+                for ($numeroLinha = 1; $numeroLinha <= 20; $numeroLinha++) {
+                    $campos = fgetcsv(
+                        $arquivo,
+                        0,
+                        $candidato,
+                        '"',
+                        ''
+                    );
 
-                $quantidade = is_array($teste)
-                    ? count($teste)
-                    : 0;
+                    if ($campos === false) {
+                        break;
+                    }
 
-                if ($quantidade > $maiorQuantidade) {
-                    $maiorQuantidade = $quantidade;
-                    $delimitador = $candidato;
+                    $nomesReconhecidos = [];
+
+                    foreach ($campos as $nome) {
+                        $campo = $aliases[
+                            self::cabecalho((string) $nome)
+                        ] ?? null;
+
+                        if ($campo !== null) {
+                            $nomesReconhecidos[$campo] = true;
+                        }
+                    }
+
+                    $quantidadeReconhecida = count($nomesReconhecidos);
+
+                    // Prioriza colunas reconhecidas; usa a largura apenas
+                    // para desempatar candidatos parecidos.
+                    $pontuacao =
+                        $quantidadeReconhecida * 1000
+                        + min(count($campos), 100) * 10
+                        - $numeroLinha;
+
+                    if (
+                        $melhor === null
+                        || $pontuacao > $melhor['pontuacao']
+                    ) {
+                        $melhor = [
+                            'delimitador' => $candidato,
+                            'linha' => $numeroLinha,
+                            'reconhecidas' => $quantidadeReconhecida,
+                            'pontuacao' => $pontuacao,
+                        ];
+                    }
                 }
             }
 
+            if (
+                $melhor === null
+                || (
+                    $melhor['reconhecidas'] === 0
+                    && !$somenteColunas
+                    && $mapeamentoManual === null
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'Não foi possível identificar o cabeçalho do CSV.'
+                );
+            }
+
+            $delimitador = $melhor['delimitador'];
+            $linhaCabecalho = $melhor['linha'];
+
+            if ($linhaCabecalhoManual !== null) {
+                if ($linhaCabecalhoManual < 1 || $linhaCabecalhoManual > 20) {
+                    throw new \InvalidArgumentException(
+                        'Escolha uma linha de cabeçalho entre 1 e 20.'
+                    );
+                }
+
+                $linhaCabecalho = $linhaCabecalhoManual;
+            }
+
             rewind($arquivo);
+
+            for ($i = 1; $i < $linhaCabecalho; $i++) {
+                fgetcsv($arquivo, 0, $delimitador, '"', '');
+            }
 
             $cabecalhos = fgetcsv(
                 $arquivo,
@@ -302,68 +504,260 @@ class ClippingImportacaoCsv
                 ''
             );
 
-            if (!is_array($cabecalhos) || count($cabecalhos) > 100) {
+            if (
+                !is_array($cabecalhos)
+                || count($cabecalhos) === 0
+                || count($cabecalhos) > 100
+            ) {
                 throw new \InvalidArgumentException(
                     'O cabeçalho do CSV é inválido.'
                 );
             }
 
-            $aliases = [];
+            $inicioDados = ftell($arquivo);
 
-            foreach (self::ALIASES as $campo => $nomes) {
-                $aliases[self::cabecalho($campo)] = $campo;
+            if ($inicioDados === false) {
+                throw new \RuntimeException(
+                    'Não foi possível localizar os dados do CSV.'
+                );
+            }
 
-                foreach ($nomes as $nomeAlternativo) {
-                    $aliases[
-                        self::cabecalho($nomeAlternativo)
-                    ] = $campo;
+            $totalColunas = count($cabecalhos);
+            $exemplos = array_fill(0, $totalColunas, []);
+            $temDados = array_fill(0, $totalColunas, false);
+            $totalRegistros = 0;
+
+            // Lê somente para descobrir exemplos e colunas com conteúdo.
+            // Depois voltamos à posição inicial para a leitura normal.
+            while (
+                ($linhaExemplo = fgetcsv(
+                    $arquivo,
+                    0,
+                    $delimitador,
+                    '"',
+                    ''
+                )) !== false
+            ) {
+                $possuiConteudo = false;
+
+                foreach ($linhaExemplo as $valor) {
+                    if (trim((string) $valor) !== '') {
+                        $possuiConteudo = true;
+                        break;
+                    }
                 }
+
+                if (!$possuiConteudo) {
+                    continue;
+                }
+
+                $totalRegistros++;
+
+                if ($totalRegistros > 1000) {
+                    throw new \LengthException(
+                        'O CSV pode conter até 1.000 registros.'
+                    );
+                }
+
+                foreach ($cabecalhos as $indice => $_) {
+                    $valor = self::valor(
+                        (string) ($linhaExemplo[$indice] ?? '')
+                    );
+
+                    if ($valor === '') {
+                        continue;
+                    }
+
+                    $temDados[$indice] = true;
+
+                    if (
+                        count($exemplos[$indice]) < 3
+                        && !in_array($valor, $exemplos[$indice], true)
+                    ) {
+                        $exemplos[$indice][] = $valor;
+                    }
+                }
+            }
+
+            if ($totalRegistros === 0) {
+                throw new \InvalidArgumentException(
+                    'O CSV não contém registros para importar.'
+                );
+            }
+
+            // Mostra as primeiras linhas para que o usuário possa corrigir
+            // a escolha automática do cabeçalho.
+            rewind($arquivo);
+            $linhasIniciais = [];
+
+            for ($numeroInicial = 1; $numeroInicial <= 10; $numeroInicial++) {
+                $linhaInicial = fgetcsv(
+                    $arquivo,
+                    0,
+                    $delimitador,
+                    '"',
+                    ''
+                );
+
+                if ($linhaInicial === false) {
+                    break;
+                }
+
+                $camposReconhecidos = [];
+
+                foreach ($linhaInicial as $nomeInicial) {
+                    $campoInicial = $aliases[
+                        self::cabecalho((string) $nomeInicial)
+                    ] ?? null;
+
+                    if ($campoInicial !== null) {
+                        $camposReconhecidos[$campoInicial] = true;
+                    }
+                }
+
+                $linhasIniciais[] = [
+                    'linha' => $numeroInicial,
+                    'campos_reconhecidos' => count($camposReconhecidos),
+                    'valores' => array_map(
+                        fn($valor) => trim((string) $valor),
+                        $linhaInicial
+                    ),
+                ];
+            }
+
+            if (fseek($arquivo, $inicioDados) !== 0) {
+                throw new \RuntimeException(
+                    'Não foi possível continuar a leitura do CSV.'
+                );
+            }
+
+            $automatico = [];
+            $camposAutomaticosUsados = [];
+
+            foreach ($cabecalhos as $indice => $nomeColuna) {
+                $campo = $aliases[
+                    self::cabecalho((string) $nomeColuna)
+                ] ?? null;
+
+                // Quando duas colunas sugerem o mesmo destino, somente
+                // a primeira recebe associação automática.
+                if (
+                    $campo !== null
+                    && isset($camposAutomaticosUsados[$campo])
+                ) {
+                    $campo = null;
+                }
+
+                if ($campo !== null) {
+                    $camposAutomaticosUsados[$campo] = true;
+                }
+
+                $automatico[$indice] = $campo;
+            }
+
+            $escolhas = $automatico;
+
+            if ($mapeamentoManual !== null) {
+                if (
+                    !array_is_list($mapeamentoManual)
+                    || count($mapeamentoManual) !== $totalColunas
+                ) {
+                    throw new \InvalidArgumentException(
+                        'O mapeamento deve informar um destino ou null para cada coluna do CSV.'
+                    );
+                }
+
+                $escolhas = $mapeamentoManual;
             }
 
             $mapeamento = [];
             $colunas = [];
             $ignoradas = [];
+            $colunasSemNome = [];
+            $destinosUsados = [];
 
             foreach ($cabecalhos as $indice => $nomeColuna) {
-                $nomeColuna = trim((string) $nomeColuna);
+                $nome = trim((string) $nomeColuna);
+                $campo = $escolhas[$indice];
 
-                if ($nomeColuna === '') {
+                if (
+                    $campo !== null
+                    && (
+                        !is_string($campo)
+                        || !array_key_exists($campo, self::ALIASES)
+                    )
+                ) {
                     throw new \InvalidArgumentException(
-                        'Existe uma coluna sem nome no cabeçalho.'
+                        'O destino escolhido para a coluna '
+                        . ($indice + 1)
+                        . ' é inválido.'
                     );
                 }
 
-                $campo = $aliases[
-                    self::cabecalho($nomeColuna)
-                ] ?? null;
+                if ($campo !== null) {
+                    if (isset($destinosUsados[$campo])) {
+                        throw new \InvalidArgumentException(
+                            "O campo {$campo} foi associado a mais de uma coluna."
+                        );
+                    }
+
+                    $destinosUsados[$campo] = true;
+                    $mapeamento[$campo] = $indice;
+                }
+
+                $rotulo = $nome !== ''
+                    ? $nome
+                    : 'Coluna ' . ($indice + 1) . ' sem nome';
 
                 $colunas[] = [
-                    'original' => $nomeColuna,
+                    'indice' => $indice,
+                    'original' => $rotulo,
                     'campo' => $campo,
+                    'tem_dados' => $temDados[$indice],
+                    'exemplos' => $exemplos[$indice],
                 ];
 
-                if ($campo === null) {
-                    $ignoradas[] = $nomeColuna;
-                    continue;
+                if ($campo === null && $temDados[$indice]) {
+                    $ignoradas[] = $rotulo;
                 }
 
-                if (array_key_exists($campo, $mapeamento)) {
-                    throw new \InvalidArgumentException(
-                        "Mais de uma coluna corresponde a {$campo}. Mantenha apenas uma delas."
-                    );
+                // Antes da revisão manual, uma coluna sem nome que contém
+                // dados precisa ser apresentada como erro nas linhas afetadas.
+                // Depois que a tela enviar o mapeamento completo, null passa
+                // a ser uma escolha explícita de ignorar.
+                if (
+                    $nome === ''
+                    && $mapeamentoManual === null
+                    && $temDados[$indice]
+                ) {
+                    $colunasSemNome[] = $indice;
                 }
+            }
 
-                $mapeamento[$campo] = $indice;
+            $estrutura = [
+                'linha_cabecalho' => $linhaCabecalho,
+                'delimitador' => $delimitador === "\t"
+                    ? 'TAB'
+                    : $delimitador,
+                'total_registros' => $totalRegistros,
+                'linhas_iniciais' => $linhasIniciais,
+                'colunas' => $colunas,
+                'ignoradas' => $ignoradas,
+                'linha_sugerida' => (int) $melhor['linha'],
+            ];
+
+            if ($somenteColunas) {
+                return $estrutura;
             }
 
             if ($mapeamento === []) {
                 throw new \InvalidArgumentException(
-                    'Nenhuma coluna de clipping foi reconhecida.'
+                    'Associe pelo menos uma coluna antes de analisar o CSV.'
                 );
             }
 
             $registros = [];
-            $numero = 1;
+            $numero = $linhaCabecalho;
 
             while (
                 ($linha = fgetcsv(
@@ -395,9 +789,40 @@ class ClippingImportacaoCsv
                     );
                 }
 
-                $erro = count($linha) !== count($cabecalhos)
-                    ? 'Quantidade de campos diferente do cabeçalho.'
-                    : null;
+                $erro = null;
+                $totalColunas = count($cabecalhos);
+
+                // Algumas exportações omitem células vazias no final.
+                if (count($linha) < $totalColunas) {
+                    $linha = array_pad($linha, $totalColunas, '');
+                }
+
+                if (count($linha) > $totalColunas) {
+                    $excedentes = array_slice($linha, $totalColunas);
+
+                    $temConteudoExcedente = array_filter(
+                        $excedentes,
+                        fn($valor) => trim((string) $valor) !== ''
+                    ) !== [];
+
+                    if ($temConteudoExcedente) {
+                        $erro = 'Quantidade de campos diferente do cabeçalho.';
+                    } else {
+                        $linha = array_slice($linha, 0, $totalColunas);
+                    }
+                }
+
+                if ($erro === null) {
+                    foreach ($colunasSemNome as $indice) {
+                        if (trim((string) ($linha[$indice] ?? '')) !== '') {
+                            $erro =
+                                'A coluna ' . ($indice + 1)
+                                . ' não tem nome, mas contém dados. '
+                                . 'Ela deverá ser associada ou ignorada explicitamente.';
+                            break;
+                        }
+                    }
+                }
 
                 $dados = [];
 
@@ -423,8 +848,7 @@ class ClippingImportacaoCsv
             }
 
             return [
-                'colunas' => $colunas,
-                'ignoradas' => $ignoradas,
+                ...$estrutura,
                 'registros' => $registros,
             ];
         } finally {

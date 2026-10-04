@@ -663,11 +663,86 @@ export interface AssociacaoVeiculoImportacao {
   veiculo_id: number | null;
 }
 
+export type CampoImportacaoClipping =
+  | "cliente"
+  | "ano_referencia"
+  | "data_publicacao"
+  | "mes_ano"
+  | "dia_mes"
+  | "categorias"
+  | "veiculo"
+  | "programa_secao"
+  | "pauta"
+  | "inicio"
+  | "fim"
+  | "duracao"
+  | "tier"
+  | "link"
+  | "observacoes";
+
+export interface ColunaImportacaoClipping {
+  indice: number;
+  original: string;
+  campo: CampoImportacaoClipping | null;
+  tem_dados: boolean;
+  exemplos: string[];
+}
+
+export interface EstruturaImportacaoClipping {
+  linha_cabecalho: number;
+  delimitador: string;
+  total_registros: number;
+  linhas_iniciais: {
+    linha: number;
+    valores: string[];
+    campos_reconhecidos: number;
+  }[];
+  colunas: ColunaImportacaoClipping[];
+  ignoradas: string[];
+  linha_sugerida: number;
+}
+
+export async function inspecionarColunasClipping(
+  arquivo: ArquivoCsvClipping,
+  linhaCabecalho?: number
+): Promise<EstruturaImportacaoClipping> {
+  const formulario = new FormData();
+
+  formulario.append(
+    "arquivo",
+    (arquivo.file ?? {
+      uri: arquivo.uri,
+      name: arquivo.nome,
+      type: "text/csv",
+    }) as unknown as Blob
+  );
+
+  if (linhaCabecalho !== undefined) {
+    formulario.append(
+      "linha_cabecalho",
+      String(linhaCabecalho)
+    );
+  }
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/clippings/importar/colunas`,
+    {
+      method: "POST",
+      body: formulario,
+    }
+  );
+
+  return lerResposta<EstruturaImportacaoClipping>(
+    response,
+    "Não foi possível ler as colunas do CSV."
+  );
+}
+
 export interface LinhaPreviaImportacao {
   registro: number;
   originais: Record<string, string>;
   dados: {
-    cliente_id: number;
+    cliente_id: number | null;
     ano_referencia: number;
     data_publicacao: string | null;
     categorias: string[] | null;
@@ -682,24 +757,32 @@ export interface LinhaPreviaImportacao {
     veiculo_id: number | null;
     veiculo_nome_informado: string | null
   } | null;
+  cliente_nome: string | null;
+  cliente_para_criar: string | null;
   veiculo_nome: string | null;
   veiculo_para_criar: string | null;
   erros: string[];
   avisos: string[];
+  avisos_link?: {
+    tipo: "invalido" | "no_csv" | "cadastrado";
+    mensagem: string;
+  }[];
 }
 
 export interface PreviaImportacaoClipping {
   token: string;
   validade_minutos: number;
-  cliente_id: number;
-  cliente_nome: string;
+  cliente_id: number | null;
+  cliente_nome: string | null;
   ano_referencia: number;
-  colunas: {
-    original: string;
-    campo: string;
-  }[];
+  linha_cabecalho: number;
+  colunas: ColunaImportacaoClipping[];
   ignoradas: string[];
   veiculos_pendentes: string[];
+  clientes_pendentes: string[];
+  clientes_ambiguos: string[];
+  clientes_existentes: string[];
+  pode_criar_clientes: boolean;
   pode_criar_veiculos: boolean;
   linhas: LinhaPreviaImportacao[];
   resumo: {
@@ -718,10 +801,12 @@ export interface ResultadoImportacaoClipping {
     erros: number;
     ignorados: number;
     veiculos_criados: number;
+    clientes_criados: number;
     vinculos_pendentes: number;
   };
   resultados: {
     registro: number;
+    cliente_nome: string | null;
     status: "importado" | "erro" | "ignorado";
     clipping_id: number | null;
     message: string;
@@ -730,13 +815,25 @@ export interface ResultadoImportacaoClipping {
     id: number;
     nome: string;
   }[];
+  clientes_criados: {
+    id: number;
+    nome: string;
+  }[];
+}
+
+export interface AssociacaoClienteImportacao {
+  nome: string;
+  cliente_id: number | null;
 }
 
 export async function obterPreviaImportacaoClipping(
   arquivo: ArquivoCsvClipping,
-  clienteId: number,
+  clienteId: number | null,
   ano: number,
-  veiculos: AssociacaoVeiculoImportacao[] = []
+  veiculos: AssociacaoVeiculoImportacao[] = [],
+  mapeamento?: Array<CampoImportacaoClipping | null>,
+  linhaCabecalho?: number,
+  clientes: AssociacaoClienteImportacao[] = []
 ): Promise<PreviaImportacaoClipping> {
   const formulario = new FormData();
 
@@ -749,9 +846,26 @@ export async function obterPreviaImportacaoClipping(
     }) as unknown as Blob
   );
 
-  formulario.append("cliente_id", String(clienteId));
+  if (clienteId !== null) {
+    formulario.append("cliente_id", String(clienteId));
+  }
   formulario.append("ano_referencia", String(ano));
   formulario.append("veiculos", JSON.stringify(veiculos));
+  formulario.append("clientes", JSON.stringify(clientes));
+
+  if (mapeamento !== undefined) {
+    formulario.append(
+      "mapeamento",
+      JSON.stringify(mapeamento)
+    );
+  }
+
+  if (linhaCabecalho !== undefined) {
+    formulario.append(
+      "linha_cabecalho",
+      String(linhaCabecalho)
+    );
+  }
 
   const response = await authenticatedFetch(
     `${API_URL}/api/clippings/importar/previa`,

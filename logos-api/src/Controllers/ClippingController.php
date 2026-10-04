@@ -7,6 +7,7 @@ use Logos\AssessoriaApi\Services\ClippingService;
 use Logos\AssessoriaApi\Services\ClippingAnexoService;
 use Logos\AssessoriaApi\Services\ClippingCsvService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoService;
+use Logos\AssessoriaApi\Services\ClippingImportacaoCsv;
 
 class ClippingController
 {
@@ -395,7 +396,27 @@ class ClippingController
             fclose($arquivo);
         }
     }
-    
+
+    public function colunasImportacao(): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                ClippingImportacaoCsv::ler(
+                    $_FILES['arquivo'] ?? null,
+                    null,
+                    isset($_POST['linha_cabecalho'])
+                        ? ClippingImportacaoCsv::inteiro(
+                            $_POST['linha_cabecalho'],
+                            'Linha do cabeçalho',
+                            1,
+                            20
+                        )
+                        : null,
+                    true
+                )
+        );
+    }
+
     public function previaImportacao(): void
     {
         $this->executar(

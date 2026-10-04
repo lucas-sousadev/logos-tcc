@@ -33,7 +33,8 @@ function RootNavigator() {
         headerShown: false,
       }}>
       <Stack.Protected guard={autenticado}>
-        <Stack.Screen name="(app)"/>
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="configuracoes" />
       </Stack.Protected>
 
       <Stack.Protected guard={!autenticado}>

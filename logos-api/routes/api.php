@@ -400,6 +400,16 @@ $router->post(
 );
 
 $router->post(
+    "/api/clippings/importar/colunas",
+    "ClippingController:colunasImportacao",
+    "CLIPPING.IMPORTAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
     "/api/clippings/importar/previa",
     "ClippingController:previaImportacao",
     "CLIPPING.IMPORTAR",

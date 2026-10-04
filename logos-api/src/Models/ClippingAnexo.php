@@ -147,7 +147,7 @@ class ClippingAnexo
             compact('a', 'c', 'id')
         )->fetchColumn();
 
-        // Proteção provisória até o versionamento dos materiais dos relatórios.
+        // proteção provisória até o versionamento dos materiais dos relatórios.
         $slide = self::consultar(
             'SELECT id FROM relatorio_slides
              WHERE assessoria_id = :a AND clipping_id = :c LIMIT 1',

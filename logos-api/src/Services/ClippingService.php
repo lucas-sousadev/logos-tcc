@@ -601,7 +601,8 @@ class ClippingService
     private static function validarDados(
         int $assessoriaId,
         array $dados,
-        ?array $atual
+        ?array $atual,
+        bool $clienteEmCriacao = false
     ): array {
         if (
             array_diff(
@@ -625,20 +626,19 @@ class ClippingService
             $dados
         );
 
-        $clienteId = self::inteiro(
-            $base['cliente_id'],
-            'Cliente'
-        );
+        $clienteId = null;
 
-        if (
-            !Cliente::buscarPorId(
-                $clienteId,
-                $assessoriaId
-            )
-        ) {
-            throw new InvalidArgumentException(
-                'Selecione um cliente da sua assessoria.'
+        if (!$clienteEmCriacao) {
+            $clienteId = self::inteiro(
+                $base['cliente_id'],
+                'Cliente'
             );
+
+            if (!Cliente::buscarPorId($clienteId, $assessoriaId)) {
+                throw new InvalidArgumentException(
+                    'Selecione um cliente da sua assessoria.'
+                );
+            }
         }
 
         $veiculoId = self::inteiro(
@@ -1105,12 +1105,14 @@ class ClippingService
     }
     public static function prepararImportacao(
         int $assessoriaId,
-        array $dados
+        array $dados,
+        bool $clienteEmCriacao = false
     ): array {
         return self::validarDados(
             $assessoriaId,
             $dados,
-            null
+            null,
+            $clienteEmCriacao
         );
     }
 

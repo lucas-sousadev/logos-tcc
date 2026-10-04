@@ -15,11 +15,12 @@ import {
 
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
-import VeiculoSelector, {
-  type SelecaoVeiculo,
-} from "@/components/forms/VeiculoSelector";
+import VeiculoSelector, { type SelecaoVeiculo,} from "@/components/forms/VeiculoSelector";
+import MapeamentoColunasClipping from "@/components/clipping/MapeamentoColunasClipping";
+import ClienteImportacaoSelector from "@/components/clipping/ClienteImportacaoSeletor";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,17 +31,46 @@ import {
   confirmarImportacaoClipping,
   ErroApiClipping,
   obterPreviaImportacaoClipping,
+  inspecionarColunasClipping,
   type ArquivoCsvClipping,
   type LinhaPreviaImportacao,
   type PreviaImportacaoClipping,
   type ResultadoImportacaoClipping,
+  type CampoImportacaoClipping,
+  type EstruturaImportacaoClipping,
 } from "@/services/api/clipping";
 
 const LIMITE_CSV_BYTES = 5 * 1024 * 1024;
 
+function normalizarBusca(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
+function totalAvisosLinha(linha: LinhaPreviaImportacao) {
+  return linha.avisos.length + (linha.avisos_link?.length ?? 0);
+}
+
+function temLinkRepetido(linha: LinhaPreviaImportacao) {
+  return (linha.avisos_link ?? []).some(
+    (aviso) =>
+      aviso.tipo === "no_csv" ||
+      aviso.tipo === "cadastrado"
+  );
+}
+
 export default function ImportarClippings() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
+  const corAcao = mode === "dark" ? "#B5C4E5" : "#283570";
+  const fundoFiltroAtivo = mode === "dark"  ? "#001da070"  : "#5e7bff2d";
+  const fundoSelecionado = mode === "dark" ? "#5170FF" : "#5170FF";
+  const bordaNeutra = mode === "dark" ? "#6B86FF" : "#6B86FF";
+  const corAviso = mode === "dark" ? "#E2BD7E" : "#98671B";
+  const corErro = mode === "dark" ? "#F0A5B2" : "#A42E4B";
   const { temPermissao } = useAuth();
   const { marcarNovo } = useClippingNovos();
 
@@ -50,19 +80,27 @@ export default function ImportarClippings() {
     clienteNome?: string;
   }>();
 
-  const clienteId = Number(params.clienteId);
-  const ano = Number(params.ano);
-  const clienteNome =
-    params.clienteNome?.trim() || `Cliente #${clienteId}`;
+  const clienteId = params.clienteId ? Number(params.clienteId) : null;
+  const [anoTexto, setAnoTexto] = useState(
+    /^\d{4}$/.test(params.ano ?? "") ? params.ano! : ""
+  );
+  const ano = Number(anoTexto);
+  const clienteNome = params.clienteNome?.trim()
+    || (clienteId !== null ? `Cliente #${clienteId}` : "clientes do CSV");
 
   const podeImportar = temPermissao("CLIPPING", "IMPORTAR");
   const podeBuscarVeiculos =
     temPermissao("VEICULOS", "VISUALIZAR");
+  const podeBuscarClientes = temPermissao("CLIENTES", "VISUALIZAR");
 
   const trava = useRef(false);
 
   const [arquivo, setArquivo] =
     useState<ArquivoCsvClipping | null>(null);
+
+  const [estrutura, setEstrutura] =useState<EstruturaImportacaoClipping | null>(null);
+  const [mapeamento, setMapeamento] =useState<Array<CampoImportacaoClipping | null>>([]);
+  const [colunasIgnoradas, setColunasIgnoradas] = useState<Set<number>>(() => new Set());
 
   const [previa, setPrevia] =
     useState<PreviaImportacaoClipping | null>(null);
@@ -77,6 +115,10 @@ export default function ImportarClippings() {
   // null: o usuário escolheu importar sem veículo.
   const [associacoes, setAssociacoes] =
     useState<Record<string, number | null>>({});
+  const [associacoesClientes, setAssociacoesClientes] =
+    useState<Record<string, number | null>>({});
+  const [nomesClientesAssociados, setNomesClientesAssociados] =
+    useState<Record<string, string>>({});
 
   const [selecionados, setSelecionados] =
     useState<Set<number>>(() => new Set());
@@ -95,20 +137,38 @@ export default function ImportarClippings() {
   const [erro, setErro] = useState("");
 
   const [resolvendoVeiculos, setResolvendoVeiculos] = useState(false);
+  const [resolvendoClientes, setResolvendoClientes] = useState(false);
   const [veiculoEmEdicao, setVeiculoEmEdicao] = useState<string | null>(null);
+  const [clienteEmEdicao, setClienteEmEdicao] = useState<string | null>(null);
+  const [buscaClientesRevisao, setBuscaClientesRevisao] = useState("");
+  const [buscaVeiculosRevisao, setBuscaVeiculosRevisao] = useState("");
+  const [buscaPrevia, setBuscaPrevia] = useState("");
 
   const [filtrosLinhas, setFiltrosLinhas] = useState<Set<"validos" | "avisos" | "erros">>(() => new Set(["validos"]));
-
+  const [filtroAvisos, setFiltroAvisos] = useState<"todos" | "repetidos" | "demais">("todos");
+  
   const [detalhesAbertos, setDetalhesAbertos] = useState<Set<number>>(() => new Set());
 
   const [avisoSaidaAberto, setAvisoSaidaAberto] = useState(false);
 
-  const contextoValido =
-    Number.isSafeInteger(clienteId) &&
-    clienteId > 0 &&
+  const haColunasPendentes = estrutura?.colunas.some(
+  (coluna) =>
+    coluna.tem_dados &&
+    mapeamento[coluna.indice] === null &&
+    !colunasIgnoradas.has(coluna.indice)
+) ?? false;
+
+  const clienteValido =
+    clienteId === null ||
+    (Number.isSafeInteger(clienteId) && clienteId > 0);
+
+  const anoValido =
+    anoTexto.length === 4 &&
     Number.isInteger(ano) &&
     ano >= 1000 &&
     ano <= 9999;
+
+  const contextoValido = clienteValido && anoValido;
 
   function sairParaListagem() {
     if (router.canGoBack()) {
@@ -122,6 +182,11 @@ export default function ImportarClippings() {
   function voltar() {
     if (ocupado) return;
 
+    if (resolvendoClientes) {
+      setResolvendoClientes(false);
+      return;
+    }
+
     if (resolvendoVeiculos) {
       setResolvendoVeiculos(false);
       return;
@@ -129,6 +194,12 @@ export default function ImportarClippings() {
 
     if (envioPendente) {
       setAvisoSaidaAberto(true);
+      return;
+    }
+
+    if (previa !== null && resultado === null) {
+      setPrevia(null);
+      setErro("");
       return;
     }
 
@@ -170,24 +241,43 @@ export default function ImportarClippings() {
         );
       }
 
-      setArquivo({
+      const novoArquivo: ArquivoCsvClipping = {
         uri: selecionado.uri,
         nome: selecionado.name,
         file: selecionado.file,
-      });
+      };
 
+      const novaEstrutura =
+        await inspecionarColunasClipping(novoArquivo);
+
+      setArquivo(novoArquivo);
+      setEstrutura(novaEstrutura);
+      setMapeamento(
+        novaEstrutura.colunas.map(
+          (coluna) => coluna.campo
+        )
+      );
+      setColunasIgnoradas(new Set());
       setPrevia(null);
       setResultado(null);
       setAssociacoes({});
+      setAssociacoesClientes({});
+      setNomesClientesAssociados({});
       setBuscasVeiculos({});
       setSelecionados(new Set());
       setPrecisaNovaPrevia(false);
       setResolvendoVeiculos(false);
+      setResolvendoClientes(false);
       setVeiculoEmEdicao(null);
+      setClienteEmEdicao(null);
+      setBuscaClientesRevisao("");
+      setBuscaVeiculosRevisao("");
+      setBuscaPrevia("");
       setFiltrosLinhas(
         new Set<"validos" | "avisos" | "erros">(["validos"])
       );
       setDetalhesAbertos(new Set());
+      setFiltroAvisos("todos");
     } catch (error) {
       setErro(
         error instanceof Error
@@ -200,13 +290,125 @@ export default function ImportarClippings() {
     } 
   }
 
+  async function alterarLinhaCabecalho(
+  linhaCabecalho: number
+) {
+  if (
+    !arquivo
+    || trava.current
+    || envioPendente
+  ) {
+    return;
+  }
+
+  const sugerida = estrutura?.linhas_iniciais.find(
+    (item) =>
+      item.linha === estrutura.linha_sugerida
+  );
+
+  const escolhida = estrutura?.linhas_iniciais.find(
+    (item) => item.linha === linhaCabecalho
+  );
+
+  if (
+    (sugerida?.campos_reconhecidos ?? 0) >= 2
+    && escolhida?.campos_reconhecidos === 0
+  ) {
+    setErro(
+      `A linha ${linhaCabecalho} parece conter uma publicação. Use a linha ${estrutura?.linha_sugerida}, que contém os títulos das colunas.`
+    );
+    return;
+  }
+
+  trava.current = true;
+  setOcupado(true);
+  setErro("");
+
+  try {
+    const novaEstrutura =
+      await inspecionarColunasClipping(
+        arquivo,
+        linhaCabecalho
+      );
+
+    setEstrutura(novaEstrutura);
+    setMapeamento(
+      novaEstrutura.colunas.map(
+        (coluna) => coluna.campo
+      )
+    );
+    setColunasIgnoradas(new Set());
+    setPrevia(null);
+    setSelecionados(new Set());
+  } catch (error) {
+    setErro(
+      error instanceof Error
+        ? error.message
+        : "Não foi possível trocar o cabeçalho."
+    );
+  } finally {
+    trava.current = false;
+    setOcupado(false);
+  }
+}
+
+  function alterarCampoMapeado(
+    indice: number,
+    campo: CampoImportacaoClipping
+  ) {
+    setColunasIgnoradas((atual) => {
+      const proximo = new Set(atual);
+      proximo.delete(indice);
+      return proximo;
+    });
+
+    setMapeamento((atual) => {
+      const proximoCampo =
+        atual[indice] === campo ? null : campo;
+
+      return atual.map((valor, posicao) => {
+        if (posicao === indice) return proximoCampo;
+
+        if (
+          proximoCampo !== null &&
+          valor === proximoCampo
+        ) {
+          return null;
+        }
+
+        return valor;
+      });
+    });
+  }
+
+  function ignorarColuna(indice: number) {
+    setColunasIgnoradas((atual) =>
+      new Set(atual).add(indice)
+    );
+
+    setMapeamento((atual) =>
+      atual.map((valor, posicao) =>
+        posicao === indice ? null : valor
+      )
+    );
+  }
+
+  function desfazerIgnorarColuna(indice: number) {
+    setColunasIgnoradas((atual) => {
+      const proximo = new Set(atual);
+      proximo.delete(indice);
+      return proximo;
+    });
+  }
+
   async function analisarArquivo() {
     if (
       trava.current ||
       !arquivo ||
       !contextoValido ||
       !podeImportar ||
-      envioPendente
+      !estrutura ||
+      envioPendente 
     ) {
       return;
     }
@@ -222,19 +424,27 @@ export default function ImportarClippings() {
           veiculo_id,
         })
       );
+      const clientes = Object.entries(associacoesClientes).map(
+        ([nome, cliente_id]) => ({ nome, cliente_id })
+      );
 
       const novaPrevia =
         await obterPreviaImportacaoClipping(
           arquivo,
           clienteId,
           ano,
-          veiculos
+          veiculos,
+          mapeamento,
+          estrutura.linha_cabecalho,
+          clientes
         );
 
       setPrevia(novaPrevia);
       setPrecisaNovaPrevia(false);
       setResolvendoVeiculos(false);
+      setResolvendoClientes(false);
       setDetalhesAbertos(new Set());
+      setFiltroAvisos("todos");
       setSelecionados((atuais) => {
         const validos = new Set(
           novaPrevia.linhas
@@ -248,7 +458,16 @@ export default function ImportarClippings() {
 
         // Na primeira análise, marca todos os válidos.
         if (previa === null) {
-          return validos;
+          return new Set(
+            novaPrevia.linhas
+              .filter(
+                (linha) =>
+                  linha.dados !== null &&
+                  linha.erros.length === 0 &&
+                  totalAvisosLinha(linha) === 0
+              )
+              .map((linha) => linha.registro)
+          );
         }
 
         // Ao atualizar, conserva somente os registros que
@@ -269,6 +488,41 @@ export default function ImportarClippings() {
       trava.current = false;
       setOcupado(false);
     }
+  }
+
+  function associarCliente(
+    nomeNoCsv: string,
+    cliente: { id: number; nome: string }
+  ) {
+    if (ocupado || envioPendente) return;
+
+    if (associacoesClientes[nomeNoCsv] !== cliente.id) {
+      setPrecisaNovaPrevia(true);
+    }
+
+    setAssociacoesClientes((atuais) => ({
+      ...atuais,
+      [nomeNoCsv]: cliente.id,
+    }));
+    setNomesClientesAssociados((atuais) => ({
+      ...atuais,
+      [nomeNoCsv]: cliente.nome,
+    }));
+    setClienteEmEdicao(null);
+  }
+
+  function criarClienteNaImportacao(nomeNoCsv: string) {
+    if (ocupado || envioPendente) return;
+
+    if (associacoesClientes[nomeNoCsv] !== null) {
+      setPrecisaNovaPrevia(true);
+    }
+
+    setAssociacoesClientes((atuais) => ({
+      ...atuais,
+      [nomeNoCsv]: null,
+    }));
+    setClienteEmEdicao(null);
   }
 
   function alterarVeiculo(
@@ -366,7 +620,7 @@ export default function ImportarClippings() {
         (linha) =>
             linha.dados !== null &&
             linha.erros.length === 0 &&
-            (!semAvisos || linha.avisos.length === 0)
+            (!semAvisos || totalAvisosLinha(linha) === 0)
         )
         .map((linha) => linha.registro);
 
@@ -483,20 +737,21 @@ export default function ImportarClippings() {
         );
     }
 
+    const quantidadeAvisos = totalAvisosLinha(item);
     const quantidadeMensagens =
-        item.erros.length + item.avisos.length;
+      item.erros.length + quantidadeAvisos;
 
     const situacao = !valido
-        ? "Corrigir no CSV"
-        : item.avisos.length > 0
+      ? "Corrigir no CSV"
+      : quantidadeAvisos > 0
         ? "Revisar aviso"
         : "Pronto para importar ao clipping";
 
     const corSituacao = !valido
-        ? "#EF4444"
-        : item.avisos.length > 0
-        ? "#B7791F"
-        : theme.primaria;
+      ? corErro
+      : quantidadeAvisos > 0
+        ? corAviso
+        : theme.textoTerciaria;
 
     function alternarDetalhes() {
         setDetalhesAbertos((atuais) => {
@@ -519,8 +774,8 @@ export default function ImportarClippings() {
             {
             backgroundColor: theme.background,
             borderColor: valido
-                ? theme.borda
-                : "#EF4444",
+                ? bordaNeutra
+                : corErro,
             },
         ]}
         >
@@ -577,15 +832,29 @@ export default function ImportarClippings() {
         >
             Linha {item.registro}
             {" · "}
+            {item.cliente_nome || item.originais.cliente || clienteNome}
+            {" · "}
             {item.dados?.data_publicacao
             ? dataISOParaBR(item.dados.data_publicacao)
-            : item.originais.data_publicacao?.trim() ||
-                "Data pendente"}
+            : "Data pendente"}
             {" · "}
             {nomeVeiculo}
             {" · "}
             {item.dados?.ano_referencia ?? ano}
         </Text>
+
+        {item.originais.mes_ano || item.originais.dia_mes ? (
+          <Text style={[styles.linhaInfo, { color: theme.textoSub }]}>
+            No CSV: {[
+              item.originais.mes_ano
+                ? `mês/ano ${item.originais.mes_ano}`
+                : null,
+              item.originais.dia_mes
+                ? `dia ${item.originais.dia_mes}`
+                : null,
+            ].filter(Boolean).join(" · ")}
+          </Text>
+        ) : null}
 
         {atributos.length > 0 ? (
             <Text
@@ -621,7 +890,7 @@ export default function ImportarClippings() {
             variant="outline"
             size="small"
             onPress={alternarDetalhes}
-            style={styles.botaoDetalhes}
+            style={[styles.botaoDetalhes, { borderColor: bordaNeutra }]}
             />
         ) : null}
 
@@ -630,16 +899,30 @@ export default function ImportarClippings() {
             {item.erros.map((mensagem, indice) => (
                 <Text
                 key={`erro-${indice}`}
-                style={styles.erroLinha}
+                style={[styles.erroLinha, { color: corErro }]}
                 >
                 Erro: {mensagem}
                 </Text>
             ))}
 
+            {(item.avisos_link ?? []).map((aviso, indice) => (
+              <Text
+                key={`link-${indice}`}
+                style={[styles.avisoLinha, { color: corAviso }]}
+              >
+                {aviso.tipo === "invalido"
+                  ? "Link inválido: "
+                  : aviso.tipo === "no_csv"
+                    ? "Repetido no CSV: "
+                    : "Já cadastrado: "}
+                {aviso.mensagem}
+              </Text>
+            ))}
+
             {item.avisos.map((mensagem, indice) => (
                 <Text
                 key={`aviso-${indice}`}
-                style={styles.avisoLinha}
+                style={[styles.avisoLinha, { color: corAviso }]}
                 >
                 Aviso: {mensagem}
                 </Text>
@@ -650,7 +933,7 @@ export default function ImportarClippings() {
     );
     }
 
-  if (!podeImportar || !contextoValido) {
+  if (!podeImportar || !clienteValido) {
     return (
       <View
         style={[
@@ -659,14 +942,14 @@ export default function ImportarClippings() {
         ]}
       >
         <Header
-          title="Importar clippings"
+          title="Importar"
           showBackButton
           onBackPress={voltar}
         />
 
         <Text style={styles.mensagemCentral}>
-          {!contextoValido
-            ? "Cliente ou ano inválido."
+          {!clienteValido
+            ? "Cliente inválido."
             : "Você não possui permissão para importar clippings."}
         </Text>
       </View>
@@ -682,7 +965,7 @@ export default function ImportarClippings() {
         ]}
       >
         <Header
-          title="Resultado da importação"
+          title="Resultado"
           showBackButton
           onBackPress={voltar}
         />
@@ -708,6 +991,8 @@ export default function ImportarClippings() {
               </Text>
 
             <Text style={{ color: theme.textoSub }}>
+              {resultado.resumo.clientes_criados} cliente(s) criado(s)
+              {" · "}
               {resultado.resumo.veiculos_criados} veículo(s) criado(s)
               {" · "}
               {resultado.resumo.vinculos_pendentes} vínculo(s) pendente(s)
@@ -717,6 +1002,13 @@ export default function ImportarClippings() {
               <Text style={{ color: theme.textoSub }}>
                 Criados: {resultado.veiculos_criados
                   .map((veiculo) => veiculo.nome)
+                  .join(", ")}
+              </Text>
+            ) : null}
+            {resultado.clientes_criados.length > 0 ? (
+              <Text style={{ color: theme.textoSub }}>
+                Clientes criados: {resultado.clientes_criados
+                  .map((cliente) => cliente.nome)
                   .join(", ")}
               </Text>
             ) : null}
@@ -738,7 +1030,7 @@ export default function ImportarClippings() {
               title="VOLTAR À LISTAGEM"
               variant="outline"
               onPress={voltar}
-              style={{ marginTop: 8 }}
+              style={{ marginTop: 8, borderColor: bordaNeutra }}
             />
           }
           renderItem={({ item }) => (
@@ -749,13 +1041,15 @@ export default function ImportarClippings() {
                   backgroundColor: theme.background,
                   borderColor:
                     item.status === "erro"
-                      ? "#EF4444"
-                      : theme.borda,
+                      ? corErro
+                      : bordaNeutra,
                 },
               ]}
             >
               <Text weight="SemiBold">
-                Linha {item.registro} · {item.status}
+                Linha {item.registro}
+                {item.cliente_nome ? ` · ${item.cliente_nome}` : ""}
+                {` · ${item.status}`}
               </Text>
 
               <Text
@@ -784,27 +1078,38 @@ export default function ImportarClippings() {
     quantidadeValida;
 
     const quantidadeSemAvisos =
-    previa?.linhas.filter(
+      previa?.linhas.filter(
         (linha) =>
-        linha.dados !== null &&
-        linha.erros.length === 0 &&
-        linha.avisos.length === 0
-    ).length ?? 0;
+          linha.dados !== null &&
+          linha.erros.length === 0 &&
+          totalAvisosLinha(linha) === 0
+      ).length ?? 0;
 
     const quantidadeAvisosValidos =
-    previa?.linhas.filter(
-      (linha) =>
-        linha.dados !== null &&
-        linha.erros.length === 0 &&
-        linha.avisos.length > 0
-    ).length ?? 0;
-    
-    const selecionadosComAvisos =
-    previa?.linhas.filter(
+      previa?.linhas.filter(
         (linha) =>
-        selecionados.has(linha.registro) &&
-        linha.avisos.length > 0
-    ).length ?? 0;
+          linha.dados !== null &&
+          linha.erros.length === 0 &&
+          totalAvisosLinha(linha) > 0
+      ).length ?? 0;
+
+    const quantidadeLinksRepetidos =
+      previa?.linhas.filter(
+        (linha) =>
+          linha.dados !== null &&
+          linha.erros.length === 0 &&
+          temLinkRepetido(linha)
+      ).length ?? 0;
+
+    const quantidadeDemaisAvisos =
+      quantidadeAvisosValidos - quantidadeLinksRepetidos;
+
+    const selecionadosComAvisos =
+      previa?.linhas.filter(
+        (linha) =>
+          selecionados.has(linha.registro) &&
+          totalAvisosLinha(linha) > 0
+      ).length ?? 0;
 
     const veiculosNovos = [
       ...new Set(
@@ -829,6 +1134,31 @@ export default function ImportarClippings() {
         linha.veiculo_para_criar === null
     ).length;
 
+    const clientesNovos = [
+      ...new Set(
+        (previa?.linhas ?? []).flatMap((linha) =>
+          selecionados.has(linha.registro) &&
+          linha.erros.length === 0 &&
+          linha.cliente_para_criar
+            ? [normalizarBusca(linha.cliente_para_criar)]
+            : []
+        )
+      ),
+    ];
+
+    const clientesParaRevisao = [
+      ...(previa?.clientes_pendentes ?? []),
+      ...Object.keys(associacoesClientes),
+    ].filter((nome, indice, lista) =>
+      lista.findIndex((item) =>
+        normalizarBusca(item) === normalizarBusca(nome)
+      ) === indice
+    );
+
+    const clientesVisiveis = clientesParaRevisao.filter((nome) =>
+      normalizarBusca(nome).includes(normalizarBusca(buscaClientesRevisao))
+    );
+
     const vistos = new Set<string>();
 
     const veiculosParaRevisao = [
@@ -849,17 +1179,49 @@ export default function ImportarClippings() {
     const quantidadeVeiculosPendentes =
       previa?.veiculos_pendentes.length ?? 0;
 
+    const veiculosVisiveis = veiculosParaRevisao.filter((nome) =>
+      normalizarBusca(nome).includes(normalizarBusca(buscaVeiculosRevisao))
+    );
+
+    const termoPrevia = normalizarBusca(buscaPrevia);
     const linhasExibidas =
       previa?.linhas.filter((linha) => {
         // Nenhum marcado = mostrar todas as linhas.
+        const correspondeBusca = !termoPrevia || normalizarBusca([
+          String(linha.registro),
+          linha.cliente_nome,
+          linha.dados?.pauta,
+          linha.veiculo_nome,
+          linha.dados?.data_publicacao,
+          linha.dados?.ano_referencia,
+          ...(linha.dados?.categorias ?? []),
+          ...Object.values(linha.originais),
+          ...linha.erros,
+          ...linha.avisos,
+          ...(linha.avisos_link ?? []).map(
+            (aviso) => aviso.mensagem
+          ),
+        ].filter(Boolean).join(" ")).includes(termoPrevia);
+
+        if (!correspondeBusca) return false;
         if (filtrosLinhas.size === 0) return true;
 
         if (linha.erros.length > 0 || linha.dados === null) {
           return filtrosLinhas.has("erros");
         }
 
-        if (linha.avisos.length > 0) {
-          return filtrosLinhas.has("avisos");
+        if (totalAvisosLinha(linha) > 0) {
+          if (!filtrosLinhas.has("avisos")) return false;
+
+          if (filtroAvisos === "repetidos") {
+            return temLinkRepetido(linha);
+          }
+
+          if (filtroAvisos === "demais") {
+            return !temLinkRepetido(linha);
+          }
+
+          return true;
         }
 
         return filtrosLinhas.has("validos");
@@ -875,7 +1237,7 @@ export default function ImportarClippings() {
         ]}
         >
         <Header
-            title="Importar clippings"
+            title="Importar"
             showBackButton
             onBackPress={voltar}
         />
@@ -894,25 +1256,46 @@ export default function ImportarClippings() {
                 { color: theme.textoSub },
             ]}
             >
-            Você está importando clippings para{" "}
-            {clienteNome}. O ano inicial é {ano};
-            publicações com data de outro ano serão
-            organizadas no ano da própria data.
+            {clienteId === null
+              ? "O CSV pode conter vários clientes. Associe a coluna Cliente antes de abrir a prévia."
+              : `Você iniciou por ${clienteNome}. Se o CSV trouxer outros clientes, cada linha seguirá o nome informado no arquivo.`}
+            Cada linha usa o ano identificado no CSV. O ano
+            padrão abaixo vale somente quando ela não informar um.
             </Text>
+
+            <Input
+              label="ANO PADRÃO DO ARQUIVO"
+              value={anoTexto}
+              onChangeText={(valor) =>
+                setAnoTexto(valor.replace(/\D/g, "").slice(0, 4))
+              }
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="Ex.: 2026"
+              error={anoTexto !== "" && !anoValido
+                ? "Informe um ano válido com quatro dígitos."
+                : undefined}
+              containerStyle={{ marginTop: 14 }}
+              style={{
+                color: theme.texto,
+                backgroundColor: theme.background,
+                borderColor: bordaNeutra,
+              }}
+            />
 
             <View
             style={[
                 styles.painel,
                 {
                 backgroundColor: theme.background,
-                borderColor: theme.borda,
+                borderColor: bordaNeutra,
                 },
             ]}
             >
             <Ionicons
                 name="document-text-outline"
                 size={30}
-                color={theme.primaria}
+                color={corAcao}
             />
 
             <Text
@@ -949,12 +1332,33 @@ export default function ImportarClippings() {
                 onPress={() =>
                 void selecionarArquivo()
                 }
-                style={{ marginTop: 16 }}
+                style={{ marginTop: 16, borderColor: bordaNeutra }}
             />
             </View>
 
+            {estrutura ? (
+              <MapeamentoColunasClipping
+                estrutura={estrutura}
+                mapeamento={mapeamento}
+                ignoradas={colunasIgnoradas}
+                ocupado={ocupado}
+                onAlterarCampo={alterarCampoMapeado}
+                onIgnorarColuna={ignorarColuna}
+                onAlterarCabecalho={(linha) =>
+                  void alterarLinhaCabecalho(linha)
+                }
+                onDesfazerIgnorarColuna={desfazerIgnorarColuna}
+              />
+            ) : null}
+
+            {clienteId === null && estrutura && !mapeamento.includes("cliente") ? (
+              <Text style={[styles.erroGeral, { color: corErro }]}>
+                Associe uma coluna ao campo Cliente para importar pela tela inicial.
+              </Text>
+            ) : null}
+            
             {erro ? (
-            <Text style={styles.erroGeral}>
+            <Text style={[styles.erroGeral, { color: corErro }]}>
                 {erro}
             </Text>
             ) : null}
@@ -965,25 +1369,189 @@ export default function ImportarClippings() {
             styles.rodape,
             {
                 backgroundColor: theme.background,
-                borderColor: theme.borda,
+                borderColor: bordaNeutra,
             },
             ]}
         >
             <Button
-            title="ANALISAR CSV"
-            disabled={!arquivo || ocupado}
-            loading={ocupado}
-            onPress={() =>
-                void analisarArquivo()
-            }
+              title="VER PRÉVIA"
+              disabled={
+                !arquivo
+                || !estrutura
+                || ocupado
+                || !anoValido
+                || (clienteId === null && !mapeamento.includes("cliente"))
+                || haColunasPendentes
+                || !mapeamento.some(
+                  (campo) => campo !== null
+                )
+              }
+              loading={ocupado}
+              onPress={() => void analisarArquivo()}
+              style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
             />
           
         </View>
-        </View>
+      </View>
     );
     }
 
-    // TELA AUXILIAR: veículos desconhecidos.
+    if (resolvendoClientes) {
+      return (
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+          <Header
+            title="Associar clientes"
+            showBackButton
+            onBackPress={voltar}
+          />
+
+          <FlatList
+            data={clientesVisiveis}
+            keyExtractor={(nome) => nome}
+            contentContainerStyle={styles.conteudo}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 18 }}>
+                <Text weight="Bold" style={styles.etapaTitulo}>
+                  Clientes do CSV
+                </Text>
+                <Text style={[styles.etapaDescricao, { color: theme.textoSub }]}>
+                  Associe nomes a clientes cadastrados ou confira quais serão criados.
+                  Nenhum cliente é cadastrado antes da confirmação.
+                </Text>
+                <Text style={[styles.etapaDescricao, { color: theme.texto }]}>
+                  {clientesParaRevisao.length} nome(s) para conferir
+                </Text>
+                <Input
+                  label="BUSCAR NOME DO CSV"
+                  value={buscaClientesRevisao}
+                  onChangeText={setBuscaClientesRevisao}
+                  placeholder="Cliente no arquivo"
+                  containerStyle={{ marginTop: 14 }}
+                  clearable
+                />
+                {erro ? (
+                  <Text style={[styles.erroGeral, { color: corErro }]}>{erro}</Text>
+                ) : null}
+              </View>
+            }
+            ListEmptyComponent={
+              <Text style={{ color: theme.textoSub }}>
+                Nenhum cliente encontrado nesta busca.
+              </Text>
+            }
+            renderItem={({ item: nomeNoCsv }) => {
+              const escolhaFeita = Object.prototype.hasOwnProperty.call(
+                associacoesClientes,
+                nomeNoCsv
+              );
+              const id = escolhaFeita
+                ? associacoesClientes[nomeNoCsv]
+                : undefined;
+              const ambiguo = previa.clientes_ambiguos.some(
+                (nome) => normalizarBusca(nome) === normalizarBusca(nomeNoCsv)
+              );
+              const jaExiste = previa.clientes_existentes.some(
+                (nome) => normalizarBusca(nome) === normalizarBusca(nomeNoCsv)
+              );
+              const podeCriar = previa.pode_criar_clientes && !jaExiste;
+              const status = typeof id === "number"
+                ? `Associado a ${nomesClientesAssociados[nomeNoCsv] ?? `cliente #${id}`}`
+                : ambiguo
+                  ? "Há cadastros com o mesmo nome. Escolha um deles."
+                  : podeCriar
+                    ? "Será criado se houver linhas marcadas deste cliente."
+                    : "Associe a um cliente existente para importar suas linhas.";
+
+              return (
+                <View style={[
+                  styles.painel,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: bordaNeutra,
+                    marginTop: 0,
+                    marginBottom: 12,
+                  },
+                ]}>
+                  <Text weight="SemiBold">Nome no CSV: {nomeNoCsv}</Text>
+                  <Text style={{
+                    color: typeof id === "number" ? corAcao : corAviso,
+                    fontSize: 12,
+                    marginTop: 8,
+                  }}>
+                    {status}
+                  </Text>
+
+                  {clienteEmEdicao === nomeNoCsv && podeBuscarClientes ? (
+                    <View>
+                      <ClienteImportacaoSelector
+                        nomeNoCsv={nomeNoCsv}
+                        disabled={ocupado || Boolean(envioPendente)}
+                        onSelect={(cliente) => associarCliente(nomeNoCsv, cliente)}
+                      />
+                      <Button
+                        title="FECHAR BUSCA"
+                        variant="outline"
+                        size="small"
+                        onPress={() => setClienteEmEdicao(null)}
+                        style={{ marginTop: 8, borderColor: bordaNeutra }}
+                      />
+                    </View>
+                  ) : (
+                    <>
+                      {podeBuscarClientes ? (
+                        <Button
+                          title={typeof id === "number"
+                            ? "ALTERAR ASSOCIAÇÃO"
+                            : "BUSCAR CLIENTE EXISTENTE"}
+                          variant="outline"
+                          size="small"
+                          disabled={ocupado || Boolean(envioPendente)}
+                          onPress={() => setClienteEmEdicao(nomeNoCsv)}
+                          style={{ marginTop: 12, borderColor: bordaNeutra }}
+                        />
+                      ) : (
+                        <Text style={[styles.etapaDescricao, { color: theme.textoSub }]}>
+                          Sua permissão não permite procurar clientes existentes.
+                        </Text>
+                      )}
+
+                      {podeCriar && typeof id === "number" ? (
+                        <Button
+                          title="CRIAR COMO NOVO CLIENTE"
+                          variant="outline"
+                          size="small"
+                          disabled={ocupado || Boolean(envioPendente)}
+                          onPress={() => criarClienteNaImportacao(nomeNoCsv)}
+                          style={{ marginTop: 8, borderColor: bordaNeutra }}
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </View>
+              );
+            }}
+          />
+
+          <View style={[
+            styles.rodape,
+            { backgroundColor: theme.background, borderColor: bordaNeutra },
+          ]}>
+            <Button
+              title={precisaNovaPrevia ? "ATUALIZAR PRÉVIA" : "VOLTAR À PRÉVIA"}
+              loading={ocupado}
+              disabled={ocupado}
+              onPress={() => {
+                if (precisaNovaPrevia) void analisarArquivo();
+                else setResolvendoClientes(false);
+              }}
+              style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    // tela auxiliar para veículos desconhecidos
     // Deixa de ocupar espaço acima de todas as linhas.
     if (resolvendoVeiculos) {
     return (
@@ -1000,7 +1568,7 @@ export default function ImportarClippings() {
         />
 
         <FlatList
-            data={veiculosParaRevisao}
+            data={veiculosVisiveis}
             keyExtractor={(nome) => nome}
             contentContainerStyle={styles.conteudo}
             ListHeaderComponent={
@@ -1009,26 +1577,39 @@ export default function ImportarClippings() {
                 weight="Bold"
                 style={styles.etapaTitulo}
                 >
-                Veículos do arquivo
+                Veículos do CSV
                 </Text>
 
                 <Text
                 style={[
-                    styles.etapaDescricao,
-                    { color: theme.textoSub },
+                  styles.etapaDescricao,
+                  { color: theme.textoSub },
                 ]}
-                >
-                Associe cada nome do CSV a um veículo
-                existente ou escolha deixá-lo pendente.
-                Depois, atualize a prévia para conferir
-                como as linhas ficarão.
-                </Text>
-                <Text style={[styles.etapaDescricao, { color: theme.textoSub }]}>
-                  {quantidadeVeiculosPendentes} veículo(s) não encontrados. A associação é opcional; você também pode alterar associações já feitas.
+              >
+                {previa.pode_criar_veiculos
+                  ? "Associe os veículos desconhecidos a cadastros existentes ou deixe-os para criação automática ao importar. Depois, clique para atualizar a prévia."
+                  : "Associe os veículos desconhecidos a cadastros existentes ou mantenha o vínculo pendente. Você não tem permissão para criar veículos. Depois, atualize a prévia."}
+              </Text>
+                <Text style={[styles.etapaDescricao, { color: theme.texto }]}>
+                  {quantidadeVeiculosPendentes} veículo(s) não cadastrado(s) na assessoria.
                 </Text>
 
-                {erro ? <Text style={styles.erroGeral}>{erro}</Text> : null}
+                <Input
+                  label="BUSCAR NOME DO CSV"
+                  value={buscaVeiculosRevisao}
+                  onChangeText={setBuscaVeiculosRevisao}
+                  placeholder="Veículo no arquivo"
+                  containerStyle={{ marginTop: 14 }}
+                  clearable
+                />
+
+                {erro ? <Text style={[styles.erroGeral, { color: corErro }]}>{erro}</Text> : null}
             </View>
+            }
+            ListEmptyComponent={
+              <Text style={{ color: theme.textoSub }}>
+                Nenhum veículo encontrado nesta busca.
+              </Text>
             }
             renderItem={({ item: nomeOriginal }) => {
                 const foiResolvido =
@@ -1064,8 +1645,8 @@ export default function ImportarClippings() {
                     : `Associado a ${nomeAssociado}`;
 
                 const corStatus = !foiResolvido || semVeiculo
-                  ? "#B7791F"
-                  : theme.primaria;
+                  ? corAviso
+                  : corAcao;
 
                 return (
                     <View
@@ -1073,14 +1654,14 @@ export default function ImportarClippings() {
                         styles.painel,
                         {
                         backgroundColor: theme.background,
-                        borderColor: theme.borda,
+                        borderColor: bordaNeutra,
                         marginTop: 0,
                         marginBottom: 12,
                         },
                     ]}
                     >
                     <Text weight="SemiBold">
-                        No CSV: {nomeOriginal}
+                        Nome no CSV: {nomeOriginal}
                     </Text>
 
                     <Text
@@ -1124,6 +1705,7 @@ export default function ImportarClippings() {
                             onPress={() =>
                             setVeiculoEmEdicao(null)
                             }
+                            style={{ borderColor: bordaNeutra }}
                         />
                         </View>
                     ) : (
@@ -1146,7 +1728,7 @@ export default function ImportarClippings() {
                                 nomeOriginal
                                 )
                             }
-                            style={{ marginTop: 12 }}
+                            style={{ marginTop: 12, borderColor: bordaNeutra }}
                             />
                         ) : (
                             <Text
@@ -1174,7 +1756,7 @@ export default function ImportarClippings() {
                                 nomeOriginal
                                 )
                             }
-                            style={{ marginTop: 8 }}
+                            style={{ marginTop: 8, borderColor: bordaNeutra }}
                             />
                         ) : null}
                         </>
@@ -1189,7 +1771,7 @@ export default function ImportarClippings() {
             styles.rodape,
             {
                 backgroundColor: theme.background,
-                borderColor: theme.borda,
+                borderColor: bordaNeutra,
             },
             ]}
         >
@@ -1208,6 +1790,7 @@ export default function ImportarClippings() {
                 setResolvendoVeiculos(false);
                 }
             }}
+            style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
             />
         </View>
         </View>
@@ -1229,7 +1812,7 @@ export default function ImportarClippings() {
         ]}
     >
         <Header
-        title="Revisar importação"
+        title="Revisar"
         showBackButton
         onBackPress={voltar}
         />
@@ -1247,7 +1830,7 @@ export default function ImportarClippings() {
                 weight="Bold"
                 style={styles.etapaTitulo}
             >
-                2. Revise os registros
+                3. Revise os registros
             </Text>
 
             <Text
@@ -1256,10 +1839,10 @@ export default function ImportarClippings() {
                 { color: theme.textoSub },
                 ]}
             >
-                {clienteNome} · {ano}
+                {clienteId === null ? "Clientes do CSV" : clienteNome} · ano padrão {ano}
             </Text>
             {erro ? (
-                <Text style={styles.erroGeral}>
+                <Text style={[styles.erroGeral, { color: corErro }]}>
                     {erro}
                 </Text>
             ) : null}
@@ -1267,7 +1850,7 @@ export default function ImportarClippings() {
             <View
                 style={[
                 styles.arquivoPainel,
-                { borderColor: theme.borda },
+                { borderColor: bordaNeutra },
                 ]}
             >
                 <View style={{ flex: 1 }}>
@@ -1299,16 +1882,48 @@ export default function ImportarClippings() {
                 onPress={() =>
                     void selecionarArquivo()
                 }
-                style={styles.trocarBotao}
+                style={[styles.trocarBotao, { borderColor: bordaNeutra }]}
                 />
             </View>
 
             {envioPendente ? (
-                <Text style={styles.avisoLinha}>
+                <Text style={[styles.avisoLinha, { color: corAviso }]}>
                 A resposta da confirmação pode ter se
                 perdido. Use o botão abaixo para reenviar
                 exatamente a mesma solicitação.
                 </Text>
+            ) : null}
+
+            {clientesParaRevisao.length > 0 ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Revisar clientes do CSV"
+                disabled={ocupado || Boolean(envioPendente)}
+                onPress={() => setResolvendoClientes(true)}
+                style={[
+                  styles.arquivoPainel,
+                  {
+                    borderColor: bordaNeutra,
+                    backgroundColor: theme.background,
+                    opacity: ocupado || envioPendente ? 0.5 : 1,
+                    marginTop: 0,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text weight="SemiBold">Revisão de clientes</Text>
+                  <Text style={[styles.arquivoAjuda, { color: theme.texto, lineHeight: 17 }]}>
+                    {precisaNovaPrevia
+                      ? "As associações mudaram. Atualize a prévia antes de importar."
+                      : `${clientesNovos.length} cliente(s) serão criados pelas linhas marcadas; confira os nomes desconhecidos.`}
+                  </Text>
+                  <Text style={[styles.arquivoAjuda, { color: corAcao }]}>
+                    Conferir associações e cadastros
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textoSub} />
+              </TouchableOpacity>
             ) : null}
 
             {veiculosParaRevisao.length > 0 ? (
@@ -1321,7 +1936,7 @@ export default function ImportarClippings() {
                 style={[
                   styles.arquivoPainel,
                   {
-                    borderColor: theme.borda,
+                    borderColor: bordaNeutra,
                     backgroundColor: theme.background,
                     opacity: ocupado || envioPendente ? 0.5 : 1,
                     marginTop: 0
@@ -1347,10 +1962,10 @@ export default function ImportarClippings() {
                   <Text
                     style={[
                       styles.arquivoAjuda,
-                      { color: theme.primaria },
+                      { color: corAcao },
                     ]}
                   >
-                    Toque para associar ou deixar pendente
+                    Clique aqui para ver mais detalhes
                   </Text>
                 </View>
 
@@ -1363,7 +1978,7 @@ export default function ImportarClippings() {
             ) : null}
 
             {precisaNovaPrevia ? (
-                <Text style={styles.avisoLinha}>
+                <Text style={[styles.avisoLinha, { color: corAviso }]}>
                 Você mudou uma associação. A lista
                 abaixo ainda mostra a prévia anterior.
                 Atualize-a antes de importar.
@@ -1371,10 +1986,25 @@ export default function ImportarClippings() {
             ) : null}
 
             {previa.ignoradas.length > 0 ? (
-                <Text style={styles.avisoLinha}>
+                <Text style={[styles.avisoLinha, { color: corAviso, marginBottom: 10, marginTop: 0}]}>
                 Colunas não utilizadas:{" "}
                 {previa.ignoradas.join(", ")}
                 </Text>
+            ) : null}
+
+            <Input
+              label="BUSCAR NA PRÉVIA"
+              value={buscaPrevia}
+              onChangeText={setBuscaPrevia}
+              placeholder="Cliente, veículo, pauta ou linha"
+              containerStyle={{ marginBottom: 14 }}
+              clearable
+            />
+            {buscaPrevia.trim() ? (
+              <Text style={[styles.etapaDescricao, { color: theme.textoSub, marginTop: 0, marginBottom: 12 }]}>
+                {linhasExibidas.length} de {previa.linhas.length} linha(s) encontrada(s).
+                A busca não altera as linhas marcadas.
+              </Text>
             ) : null}
 
 
@@ -1387,9 +2017,9 @@ export default function ImportarClippings() {
                 const ativo = filtrosLinhas.has(valor);
                 const corNumero =
                   valor === "erros"
-                    ? "#EF4444"
+                    ? corErro
                     : valor === "avisos"
-                      ? "#B7791F"
+                      ? corAviso
                       : theme.texto;
 
                 return (
@@ -1399,6 +2029,7 @@ export default function ImportarClippings() {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: ativo }}
                     onPress={() => {
+                      setFiltroAvisos("todos");
                       setFiltrosLinhas((atuais) => {
                         const proximos = new Set(atuais);
 
@@ -1414,10 +2045,12 @@ export default function ImportarClippings() {
                     style={[
                       styles.filtroAba,
                       {
-                        backgroundColor: theme.background,
+                        backgroundColor: ativo
+                          ? fundoFiltroAtivo
+                          : theme.background,
                         borderColor: ativo
-                          ? theme.primaria
-                          : theme.borda,
+                          ? corAcao
+                          : bordaNeutra,
                         borderWidth: ativo ? 2 : 1,
                       },
                     ]}
@@ -1438,7 +2071,7 @@ export default function ImportarClippings() {
                         styles.filtroLegenda,
                         {
                           color: ativo
-                            ? theme.primaria
+                            ? corAcao
                             : theme.textoSub,
                         },
                       ]}
@@ -1449,6 +2082,98 @@ export default function ImportarClippings() {
                 );
               })}
             </View>
+
+            {filtrosLinhas.has("avisos") &&
+              quantidadeAvisosValidos > 0 ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      color: theme.textoSub,
+                      fontSize: 12,
+                      marginBottom: 8,
+                    }}
+                  >
+                    MOSTRAR AVISOS
+                  </Text>
+
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {([
+                      {
+                        id: "todos",
+                        nome: "TODOS",
+                        total: quantidadeAvisosValidos,
+                      },
+                      {
+                        id: "repetidos",
+                        nome: "LINKS REPETIDOS",
+                        total: quantidadeLinksRepetidos,
+                      },
+                      {
+                        id: "demais",
+                        nome: "DEMAIS AVISOS",
+                        total: quantidadeDemaisAvisos,
+                      },
+                    ] as const).map((opcao) => {
+                      const ativo = filtroAvisos === opcao.id;
+
+                      return (
+                        <TouchableOpacity
+                          key={opcao.id}
+                          activeOpacity={0.8}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: ativo }}
+                          onPress={() => {
+                            setFiltroAvisos(opcao.id);
+                            setFiltrosLinhas(
+                              new Set<
+                                "validos" | "avisos" | "erros"
+                              >(["avisos"])
+                            );
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            minHeight: 58,
+                            borderWidth: ativo ? 2 : 1,
+                            borderColor: ativo ? corAcao : bordaNeutra,
+                            borderRadius: 12,
+                            backgroundColor: ativo
+                              ? fundoFiltroAtivo
+                              : theme.background,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            paddingHorizontal: 4,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text
+                            weight="Bold"
+                            style={{
+                              color: ativo ? corAcao : theme.texto,
+                              fontSize: 14,
+                            }}
+                          >
+                            {opcao.total}
+                          </Text>
+
+                          <Text
+                            weight="SemiBold"
+                            style={{
+                              color: ativo ? corAcao : theme.textoSub,
+                              fontSize: 10,
+                              textAlign: "center",
+                              marginTop: 2,
+                            }}
+                          >
+                            {opcao.nome}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
 
             <View style={styles.selecaoTitulo}>
                 <Text weight="SemiBold" style={{ flex: 1 }}>
@@ -1468,7 +2193,7 @@ export default function ImportarClippings() {
                 >
                   <Text
                     weight="SemiBold"
-                    style={{ color: theme.primaria, fontSize: 12 }}
+                    style={{ color: corAcao, fontSize: 12 }}
                   >
                     DESMARCAR
                   </Text>
@@ -1487,7 +2212,7 @@ export default function ImportarClippings() {
                     quantidadeSemAvisos === 0
                     }
                     onPress={() => selecionarLinhas(true)}
-                    style={styles.acaoSelecao}
+                    style={[styles.acaoSelecao, { borderColor: bordaNeutra }]}
                 />
 
                 <Button
@@ -1501,7 +2226,7 @@ export default function ImportarClippings() {
                     quantidadeValida === 0
                     }
                     onPress={() => selecionarLinhas(false)}
-                    style={styles.acaoSelecao}
+                    style={[styles.acaoSelecao, { borderColor: bordaNeutra }]}
                 />
                 </View>
             </View>
@@ -1523,7 +2248,7 @@ export default function ImportarClippings() {
             styles.rodape,
             {
             backgroundColor: theme.background,
-            borderColor: theme.borda,
+            borderColor: bordaNeutra,
             },
         ]}
         >
@@ -1566,6 +2291,7 @@ export default function ImportarClippings() {
                 pedirConfirmacao();
             }
             }}
+            style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
         />  
         </View>
 
@@ -1574,9 +2300,10 @@ export default function ImportarClippings() {
         variant="warning"
         title="Confirmar importação?"
         message={
+            `${clientesNovos.length} cliente(s) novo(s) serão criados. ` +
             `${veiculosNovos.length} veículo(s) novo(s) serão criados. ` +
             `${vinculosPendentes} clipping(s) ficarão com vínculo pendente. ` +
-            `${selecionados.size} registro(s) serão criados para ${clienteNome}. ` +
+            `${selecionados.size} registro(s) serão criados para os clientes identificados na prévia. ` +
             `${selecionadosComAvisos} selecionado(s) possuem avisos. ` +
             "Linhas com erro não são importadas. " +
             "Confira especialmente links repetidos e mudanças de ano."
@@ -1738,24 +2465,24 @@ const styles = StyleSheet.create({
   },
 
   erroLinha: {
-    color: "#EF4444",
+
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
   },
 
   erroGeral: {
-    color: "#EF4444",
+
     fontSize: 12,
     lineHeight: 18,
     marginTop: 12,
   },
 
   avisoLinha: {
-    color: "#B7791F",
+
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 8,
+    marginTop: 8,    
   },
 
   cabecalho: {
