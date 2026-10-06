@@ -17,6 +17,7 @@ import { listarJornalistas } from "@/services/api/jornalista";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { listarClientes, } from "@/services/api/cliente";
+import { listarClippings } from "@/services/api/clipping";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -30,10 +31,10 @@ export default function Dashboard() {
     temPermissao,
   } = useAuth();
 
-  const [totalContatos, setTotalContatos] =
-    useState(0);
+  const [totalContatos, setTotalContatos] = useState(0);
   const [totalClientes, setTotalClientes] =useState(0); 
-
+  const [totalClippings, setTotalClippings] = useState(0);
+  
   useFocusEffect(
     useCallback(() => {
       let cancelado = false;
@@ -49,7 +50,7 @@ export default function Dashboard() {
             const resposta =
               await listarFuncionarios({
                 page: 1,
-                limit: 1,
+                limit: 1
               });
 
             if (!cancelado) {
@@ -118,6 +119,33 @@ export default function Dashboard() {
             );
           }
         }
+
+        if (
+          temPermissao(
+            "CLIPPING",
+            "VISUALIZAR"
+          )
+        ) {
+          try {
+            const resposta =
+              await listarClippings({
+                page: 1,
+                limit: 1,
+              });
+
+            if (!cancelado) {
+              setTotalClippings(
+                resposta.pagination.total
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Erro ao carregar total de clippings:",
+              error
+            );
+          }
+        }
+
       }
 
       void carregarTotais();
@@ -166,7 +194,7 @@ export default function Dashboard() {
 
           {temPermissao("CLIPPING", "VISUALIZAR") ? (
           <DashboardCard
-            value="0"
+            value={String(totalClippings)}
             label="Clippings"
             icon="newspaper-outline"
             onPress={() => router.push("/clipping")}

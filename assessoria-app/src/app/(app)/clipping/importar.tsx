@@ -54,19 +54,55 @@ function totalAvisosLinha(linha: LinhaPreviaImportacao) {
   return linha.avisos.length + (linha.avisos_link?.length ?? 0);
 }
 
-function temLinkRepetido(linha: LinhaPreviaImportacao) {
-  return (linha.avisos_link ?? []).some(
-    (aviso) =>
-      aviso.tipo === "no_csv" ||
-      aviso.tipo === "cadastrado"
+function temAvisoDeLink(linha: LinhaPreviaImportacao) {
+  return (linha.avisos_link?.length ?? 0) > 0;
+} 
+
+function resumirAnosDiferentes(
+  linhas: LinhaPreviaImportacao[],
+  registros: ReadonlySet<number>,
+  anoPadrao: number
+) {
+  const contagemPorAno = new Map<number, number>();
+
+  for (const linha of linhas) {
+    if (
+      !registros.has(linha.registro) ||
+      linha.dados === null ||
+      linha.erros.length > 0
+    ) {
+      continue;
+    }
+
+    const anoLinha = linha.dados.ano_referencia;
+
+    if (anoLinha === anoPadrao) continue;
+
+    contagemPorAno.set(
+      anoLinha,
+      (contagemPorAno.get(anoLinha) ?? 0) + 1
+    );
+  }
+
+  const total = [...contagemPorAno.values()].reduce(
+    (soma, quantidade) => soma + quantidade,
+    0
   );
+
+  const detalhes = [...contagemPorAno.entries()]
+    .sort(([anoA], [anoB]) => anoA - anoB)
+    .map(([ano, quantidade]) => 
+      `${ano}: ${quantidade} clipping(s)`)
+    .join(" · ");
+
+  return { total, detalhes };
 }
 
 export default function ImportarClippings() {
   const router = useRouter();
   const { theme, mode } = useTheme();
-  const corAcao = mode === "dark" ? "#B5C4E5" : "#283570";
-  const fundoFiltroAtivo = mode === "dark"  ? "#001da070"  : "#5e7bff2d";
+  const corAcao = mode === "dark" ? theme.borda : theme.borda;
+  const fundoFiltroAtivo = mode === "dark"  ? "#071a41" : "#F5F5F5";
   const fundoSelecionado = mode === "dark" ? "#5170FF" : "#5170FF";
   const bordaNeutra = mode === "dark" ? "#6B86FF" : "#6B86FF";
   const corAviso = mode === "dark" ? "#E2BD7E" : "#98671B";
@@ -107,6 +143,17 @@ export default function ImportarClippings() {
 
   const [resultado, setResultado] =
     useState<ResultadoImportacaoClipping | null>(null);
+  const [buscaResultado, setBuscaResultado] = useState("");
+  const [filtroResultado, setFiltroResultado] = useState<
+    "todos" | "importado" | "erro" | "ignorado"
+  >("todos");
+  const [limiteResultado, setLimiteResultado] = useState(30);
+  const [mostrarCadastrosResultado, setMostrarCadastrosResultado] =
+    useState(false);
+
+  const listaResultadoRef = useRef<
+    FlatList<ResultadoImportacaoClipping["resultados"][number]>
+  >(null);
 
   const [buscasVeiculos, setBuscasVeiculos] =
     useState<Record<string, SelecaoVeiculo>>({});
@@ -145,7 +192,7 @@ export default function ImportarClippings() {
   const [buscaPrevia, setBuscaPrevia] = useState("");
 
   const [filtrosLinhas, setFiltrosLinhas] = useState<Set<"validos" | "avisos" | "erros">>(() => new Set(["validos"]));
-  const [filtroAvisos, setFiltroAvisos] = useState<"todos" | "repetidos" | "demais">("todos");
+  const [filtroAvisos, setFiltroAvisos] = useState<"todos" | "links" | "demais">("todos");
   
   const [detalhesAbertos, setDetalhesAbertos] = useState<Set<number>>(() => new Set());
 
@@ -650,6 +697,12 @@ export default function ImportarClippings() {
         registros
       );
 
+      setBuscaResultado("");
+      setFiltroResultado(
+        resposta.resumo.erros > 0 ? "erro" : "importado"
+      );
+      setLimiteResultado(30);
+      setMostrarCadastrosResultado(false);
       setResultado(resposta);
       setEnvioPendente(null);
 
@@ -954,9 +1007,78 @@ export default function ImportarClippings() {
         </Text>
       </View>
     );
-  }
+  } 
 
   if (resultado) {
+    const previaPorRegistro = new Map(
+      (previa?.linhas ?? []).map((linha) => [
+        linha.registro,
+        linha,
+      ])
+    );
+
+    const registrosImportados = new Set(
+      resultado.resultados
+        .filter((item) => item.status === "importado")
+        .map((item) => item.registro)
+    );
+
+    const anosDiferentesImportados = resumirAnosDiferentes(
+      previa?.linhas ?? [],
+      registrosImportados,
+      ano
+    );
+
+    const termoBusca = normalizarBusca(buscaResultado);
+
+    const resultadosFiltrados = resultado.resultados.filter(
+      (item) => {
+        if (
+          filtroResultado !== "todos" &&
+          item.status !== filtroResultado
+        ) {
+          return false;
+        }
+
+        if (!termoBusca) return true;
+
+        const linhaOriginal = previaPorRegistro.get(
+          item.registro
+        );
+
+        return normalizarBusca(
+          [
+            item.registro,
+            item.cliente_nome,
+            item.status,
+            item.message,
+            item.clipping_id,
+            linhaOriginal?.dados?.pauta,
+            linhaOriginal?.originais.pauta,
+            linhaOriginal?.veiculo_nome,
+            linhaOriginal?.dados?.ano_referencia,
+          ]
+            .filter(
+              (valor) =>
+                valor !== null && valor !== undefined
+            )
+            .join(" ")
+        ).includes(termoBusca);
+      }
+    );
+
+    const resultadosVisiveis = resultadosFiltrados.slice(
+      0,
+      limiteResultado
+    );
+
+    const restantes =
+      resultadosFiltrados.length - resultadosVisiveis.length;
+
+    const possuiCadastrosCriados =
+      resultado.clientes_criados.length > 0 ||
+      resultado.veiculos_criados.length > 0;
+
     return (
       <View
         style={[
@@ -971,7 +1093,9 @@ export default function ImportarClippings() {
         />
 
         <FlatList
-          data={resultado.resultados}
+          ref={listaResultadoRef}
+          style={{ flex: 1 }}
+          data={resultadosVisiveis}
           keyExtractor={(item) => String(item.registro)}
           contentContainerStyle={styles.lista}
           ListHeaderComponent={
@@ -980,9 +1104,7 @@ export default function ImportarClippings() {
                 {resultado.message}
               </Text>
 
-              <Text
-                style={{ color: theme.textoSub }}
-              >
+              <Text style={{ color: theme.textoSub }}>
                 {resultado.resumo.importados} importados
                 {" · "}
                 {resultado.resumo.erros} com erro
@@ -990,82 +1112,326 @@ export default function ImportarClippings() {
                 {resultado.resumo.ignorados} ignorados
               </Text>
 
-            <Text style={{ color: theme.textoSub }}>
-              {resultado.resumo.clientes_criados} cliente(s) criado(s)
-              {" · "}
-              {resultado.resumo.veiculos_criados} veículo(s) criado(s)
-              {" · "}
-              {resultado.resumo.vinculos_pendentes} vínculo(s) pendente(s)
-            </Text>
+              {anosDiferentesImportados.total > 0 ? (
+                <Text
+                  style={{
+                    color: corAviso,
+                    marginTop: 8,
+                  }}
+                >
+                  {anosDiferentesImportados.total} clipping(s)
+                  organizados fora do ano padrão {ano}:{" "}
+                  {anosDiferentesImportados.detalhes}.
+                </Text>
+              ) : null}
 
-            {resultado.veiculos_criados.length > 0 ? (
-              <Text style={{ color: theme.textoSub }}>
-                Criados: {resultado.veiculos_criados
-                  .map((veiculo) => veiculo.nome)
-                  .join(", ")}
-              </Text>
-            ) : null}
-            {resultado.clientes_criados.length > 0 ? (
-              <Text style={{ color: theme.textoSub }}>
-                Clientes criados: {resultado.clientes_criados
-                  .map((cliente) => cliente.nome)
-                  .join(", ")}
-              </Text>
-            ) : null}
               <Text
+                style={{
+                  color: theme.textoSub,
+                  marginTop: 8,
+                }}
+              >
+                {resultado.resumo.clientes_criados} cliente(s)
+                criado(s)
+                {" · "}
+                {resultado.resumo.veiculos_criados} veículo(s)
+                criado(s)
+                {" · "}
+                {resultado.resumo.vinculos_pendentes} vínculo(s)
+                pendente(s)
+              </Text>
+
+              {possuiCadastrosCriados ? (
+                <>
+                  <Button
+                    title={
+                      mostrarCadastrosResultado
+                        ? "OCULTAR CADASTROS CRIADOS"
+                        : "VER CADASTROS CRIADOS"
+                    }
+                    variant="outline"
+                    size="small"
+                    onPress={() =>
+                      setMostrarCadastrosResultado(
+                        (atual) => !atual
+                      )
+                    }
+                    style={{
+                      marginTop: 12,
+                      borderColor: bordaNeutra,
+                    }}
+                  />
+
+                  {mostrarCadastrosResultado ? (
+                    <View style={{ marginTop: 8 }}>
+                      {resultado.clientes_criados.length > 0 ? (
+                        <Text
+                          style={[
+                            styles.ajuda,
+                            { color: theme.textoSub },
+                          ]}
+                        >
+                          Clientes:{" "}
+                          {resultado.clientes_criados
+                            .map((cliente) => cliente.nome)
+                            .join(", ")}
+                        </Text>
+                      ) : null}
+
+                      {resultado.veiculos_criados.length > 0 ? (
+                        <Text
+                          style={[
+                            styles.ajuda,
+                            { color: theme.textoSub },
+                          ]}
+                        >
+                          Veículos:{" "}
+                          {resultado.veiculos_criados
+                            .map((veiculo) => veiculo.nome)
+                            .join(", ")}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+
+              <Input
+                label="BUSCAR NOS RESULTADOS"
+                value={buscaResultado}
+                onChangeText={(valor) => {
+                  setBuscaResultado(valor);
+                  setLimiteResultado(30);
+                  listaResultadoRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: false,
+                  });
+                }}
+                placeholder="Linha, cliente, pauta ou veículo"
+                containerStyle={{ marginTop: 18 }}
+                clearable
+              />
+
+              <View
                 style={[
-                  styles.ajuda,
-                  { color: theme.textoSub },
+                  styles.filtrosLinha,
+                  { marginTop: 14 },
                 ]}
               >
-                Confira o resultado de cada linha. Se alguma
-                falhou, corrija o CSV antes de iniciar outra
-                importação.
+                {([
+                  {
+                    id: "todos",
+                    nome: "TODOS",
+                    total: resultado.resumo.total,
+                  },
+                  {
+                    id: "importado",
+                    nome: "IMPORTADOS",
+                    total: resultado.resumo.importados,
+                  },
+                  {
+                    id: "erro",
+                    nome: "ERROS",
+                    total: resultado.resumo.erros,
+                  },
+                  {
+                    id: "ignorado",
+                    nome: "IGNORADOS",
+                    total: resultado.resumo.ignorados,
+                  },
+                ] as const).map((opcao) => {
+                  const ativo =
+                    filtroResultado === opcao.id;
+
+                  return (
+                    <TouchableOpacity
+                      key={opcao.id}
+                      activeOpacity={0.8}
+                      accessibilityRole="radio"
+                      accessibilityState={{
+                        checked: ativo,
+                      }}
+                      onPress={() => {
+                        setFiltroResultado(opcao.id);
+                        setLimiteResultado(30);
+                        listaResultadoRef.current?.scrollToOffset({
+                          offset: 0,
+                          animated: false,
+                        });
+                      }}
+                      style={[
+                        styles.filtroAba,
+                        {
+                          backgroundColor: ativo
+                            ? fundoFiltroAtivo
+                            : theme.background,
+                          borderColor: ativo
+                            ? corAcao
+                            : bordaNeutra,
+                          borderWidth: ativo ? 2 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        weight="Bold"
+                        style={{
+                          color:
+                            opcao.id === "erro"
+                              ? corErro
+                              : theme.texto,
+                          fontSize: 15,
+                        }}
+                      >
+                        {opcao.total}
+                      </Text>
+
+                      <Text
+                        weight="SemiBold"
+                        style={{
+                          color: ativo
+                            ? theme.texto
+                            : theme.textoSub,
+                          fontSize: 9,
+                          textAlign: "center",
+                          marginTop: 3,
+                        }}
+                      >
+                        {opcao.nome}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text
+                style={{
+                  color: theme.textoSub,
+                  fontSize: 12,
+                }}
+              >
+                Exibindo {resultadosVisiveis.length} de{" "}
+                {resultadosFiltrados.length} resultado(s) neste
+                filtro.
               </Text>
-              
             </View>
           }
-          ListFooterComponent={
-            <Button
-              title="VOLTAR À LISTAGEM"
-              variant="outline"
-              onPress={voltar}
-              style={{ marginTop: 8, borderColor: bordaNeutra }}
-            />
-          }
-          renderItem={({ item }) => (
-            <View
+          ListEmptyComponent={
+            <Text
               style={[
-                styles.linha,
-                {
-                  backgroundColor: theme.background,
-                  borderColor:
-                    item.status === "erro"
-                      ? corErro
-                      : bordaNeutra,
-                },
+                styles.ajuda,
+                { color: theme.textoSub },
               ]}
             >
-              <Text weight="SemiBold">
-                Linha {item.registro}
-                {item.cliente_nome ? ` · ${item.cliente_nome}` : ""}
-                {` · ${item.status}`}
-              </Text>
+              Nenhum resultado encontrado neste filtro.
+            </Text>
+          }
+          ListFooterComponent={
+            restantes > 0 ? (
+              <Button
+                title={`MOSTRAR MAIS ${Math.min(
+                  30,
+                  restantes
+                )} · ${restantes} RESTANTES`}
+                variant="outline"
+                size="small"
+                onPress={() =>
+                  setLimiteResultado(
+                    (atual) => atual + 30
+                  )
+                }
+                style={{
+                  marginTop: 8,
+                  borderColor: bordaNeutra,
+                }}
+              />
+            ) : null
+          }
+          renderItem={({ item }) => {
+            const linhaOriginal = previaPorRegistro.get(
+              item.registro
+            );
 
-              <Text
+            const pauta =
+              linhaOriginal?.dados?.pauta ||
+              linhaOriginal?.originais.pauta ||
+              "Pauta não informada";
+
+            const nomeStatus =
+              item.status === "importado"
+                ? "Importado"
+                : item.status === "erro"
+                  ? "Erro"
+                  : "Ignorado";
+
+            return (
+              <View
                 style={[
-                  styles.linhaInfo,
-                  { color: theme.textoSub },
+                  styles.linha,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor:
+                      item.status === "erro"
+                        ? corErro
+                        : bordaNeutra,
+                  },
                 ]}
               >
-                {item.message}
-                {item.clipping_id !== null
-                  ? ` · Clipping #${item.clipping_id}`
-                  : ""}
-              </Text>
-            </View>
-          )}
+                <Text weight="SemiBold">
+                  Linha {item.registro}
+                  {item.cliente_nome
+                    ? ` · ${item.cliente_nome}`
+                    : ""}
+                  {` · ${nomeStatus}`}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.linhaInfo,
+                    { color: theme.texto },
+                  ]}
+                >
+                  {pauta}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.linhaInfo,
+                    { color: theme.textoSub },
+                  ]}
+                >
+                  {item.message}
+                  {item.clipping_id !== null
+                    ? ` · Clipping #${item.clipping_id}`
+                    : ""}
+                  {linhaOriginal?.dados?.ano_referencia &&
+                  linhaOriginal.dados.ano_referencia !== ano &&
+                  item.status === "importado"
+                    ? ` · Ano ${linhaOriginal.dados.ano_referencia}`
+                    : ""}
+                </Text>
+              </View>
+            );
+          }}
         />
+
+        <View
+          style={[
+            styles.rodape,
+            {
+              backgroundColor: theme.background,
+              borderColor: bordaNeutra,
+            },
+          ]}
+        >
+          <Button
+            title="VOLTAR À LISTAGEM"
+            onPress={voltar}
+            style={{
+              backgroundColor: fundoSelecionado,
+              borderColor: corAcao,
+            }}
+          />
+        </View>
       </View>
     );
   }
@@ -1093,16 +1459,16 @@ export default function ImportarClippings() {
           totalAvisosLinha(linha) > 0
       ).length ?? 0;
 
-    const quantidadeLinksRepetidos =
+    const quantidadeAvisosDeLink =
       previa?.linhas.filter(
         (linha) =>
           linha.dados !== null &&
           linha.erros.length === 0 &&
-          temLinkRepetido(linha)
+          temAvisoDeLink(linha)
       ).length ?? 0;
 
     const quantidadeDemaisAvisos =
-      quantidadeAvisosValidos - quantidadeLinksRepetidos;
+      quantidadeAvisosValidos - quantidadeAvisosDeLink;
 
     const selecionadosComAvisos =
       previa?.linhas.filter(
@@ -1110,6 +1476,12 @@ export default function ImportarClippings() {
           selecionados.has(linha.registro) &&
           totalAvisosLinha(linha) > 0
       ).length ?? 0;
+
+    const anosDiferentesSelecionados = resumirAnosDiferentes(
+      previa?.linhas ?? [],
+      selecionados,
+      ano
+    );
 
     const veiculosNovos = [
       ...new Set(
@@ -1213,12 +1585,12 @@ export default function ImportarClippings() {
         if (totalAvisosLinha(linha) > 0) {
           if (!filtrosLinhas.has("avisos")) return false;
 
-          if (filtroAvisos === "repetidos") {
-            return temLinkRepetido(linha);
+          if (filtroAvisos === "links") {
+            return temAvisoDeLink(linha);
           }
 
           if (filtroAvisos === "demais") {
-            return !temLinkRepetido(linha);
+            return !temAvisoDeLink(linha);
           }
 
           return true;
@@ -2071,7 +2443,7 @@ export default function ImportarClippings() {
                         styles.filtroLegenda,
                         {
                           color: ativo
-                            ? corAcao
+                            ? theme.texto
                             : theme.textoSub,
                         },
                       ]}
@@ -2105,13 +2477,13 @@ export default function ImportarClippings() {
                         total: quantidadeAvisosValidos,
                       },
                       {
-                        id: "repetidos",
-                        nome: "LINKS REPETIDOS",
-                        total: quantidadeLinksRepetidos,
+                        id: "links",
+                        nome: "LINKS",
+                        total: quantidadeAvisosDeLink,
                       },
                       {
                         id: "demais",
-                        nome: "DEMAIS AVISOS",
+                        nome: "OUTROS",
                         total: quantidadeDemaisAvisos,
                       },
                     ] as const).map((opcao) => {
@@ -2131,26 +2503,23 @@ export default function ImportarClippings() {
                               >(["avisos"])
                             );
                           }}
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            minHeight: 58,
-                            borderWidth: ativo ? 2 : 1,
-                            borderColor: ativo ? corAcao : bordaNeutra,
-                            borderRadius: 12,
-                            backgroundColor: ativo
-                              ? fundoFiltroAtivo
-                              : theme.background,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            paddingHorizontal: 4,
-                            paddingVertical: 6,
-                          }}
-                        >
+                          style={[
+                      styles.filtroAba,
+                      {
+                        backgroundColor: ativo
+                          ? fundoFiltroAtivo
+                          : theme.background,
+                        borderColor: ativo
+                          ? corAcao
+                          : bordaNeutra,
+                        borderWidth: ativo ? 2 : 1,
+                      },
+                    ]}
+                  >
                           <Text
                             weight="Bold"
                             style={{
-                              color: ativo ? corAcao : theme.texto,
+                              color: ativo ? theme.texto : theme.texto,
                               fontSize: 14,
                             }}
                           >
@@ -2160,8 +2529,8 @@ export default function ImportarClippings() {
                           <Text
                             weight="SemiBold"
                             style={{
-                              color: ativo ? corAcao : theme.textoSub,
-                              fontSize: 10,
+                              color: ativo ? theme.texto : theme.textoSub,
+                              fontSize: 12,
                               textAlign: "center",
                               marginTop: 2,
                             }}
@@ -2305,8 +2674,11 @@ export default function ImportarClippings() {
             `${vinculosPendentes} clipping(s) ficarão com vínculo pendente. ` +
             `${selecionados.size} registro(s) serão criados para os clientes identificados na prévia. ` +
             `${selecionadosComAvisos} selecionado(s) possuem avisos. ` +
+            (anosDiferentesSelecionados.total > 0
+            ? `${anosDiferentesSelecionados.total} registro(s) selecionado(s) irão para anos diferentes do ano padrão ${ano} (${anosDiferentesSelecionados.detalhes}). `
+            : "") +
             "Linhas com erro não são importadas. " +
-            "Confira especialmente links repetidos e mudanças de ano."
+            "Confira as linhas com avisos antes de importar."
         }
         primaryLabel="IMPORTAR"
         secondaryLabel="REVISAR"

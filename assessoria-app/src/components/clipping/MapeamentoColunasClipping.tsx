@@ -73,6 +73,7 @@ export default function MapeamentoColunasClipping({
   const bordaNeutra = mode === "dark" ? "#6B86FF" : "#6B86FF";
   const corAviso = mode === "dark" ? "#E2BD7E" : "#98671B";
   const corErro = mode === "dark" ? "#F0A5B2" : "#A42E4B";
+  const corErro2 = mode === "dark" ? "#a13245" : "#c0677d";
 
   const [colunaAberta, setColunaAberta] =
     useState<number | null>(null);
@@ -459,6 +460,7 @@ export default function MapeamentoColunasClipping({
                       : campo !== null
                         ? { backgroundColor: fundoSelecionado, borderColor: corAcao }
                         : { borderColor: bordaNeutra },
+                      ignorada && { backgroundColor: `${corErro2}`, borderColor: corErro2}
                   ]}
                 />
               </View>

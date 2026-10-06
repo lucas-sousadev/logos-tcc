@@ -516,8 +516,8 @@ export interface FiltrosConsultaClipping {
 
 export interface ListarClippingsParams
   extends FiltrosConsultaClipping {
-  cliente_id: number;
-  ano_referencia: number;
+  cliente_id?: number;
+  ano_referencia?: number;
   busca?: string;
   page?: number;
   limit?: number;
