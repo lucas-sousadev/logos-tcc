@@ -36,7 +36,7 @@ import {
 } from "@/services/api/clipping";
 import { buscarCliente } from "@/services/api/cliente";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
-
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
 export default function ClippingsDoCliente() {
   const router = useRouter();
@@ -55,6 +55,9 @@ export default function ClippingsDoCliente() {
     ano?: string;
     clienteNome?: string;
     criadoId?: string;
+    origemTipo?: string;
+    origemId?: string;
+    retornoVinculado?: "ano" | "origem";
   }>();
 
   const ano = Number(params.ano);
@@ -283,6 +286,27 @@ export default function ClippingsDoCliente() {
   function voltar() {
     if (selecao.excluindo || exportacao.exportando) return;
     
+    const origem = rotaOrigemClipping(
+      params.origemTipo,
+      params.origemId
+    );
+
+    if (origem) {
+      if (params.retornoVinculado === "ano") {
+        router.navigate({
+          pathname: "/clipping/ano",
+          params: {
+            ano: String(ano),
+            origemTipo: params.origemTipo!,
+            origemId: params.origemId!,
+          },
+        });
+      } else {
+        router.navigate(origem);
+      }
+      return;
+    }
+
     if (router.canGoBack()) {
       router.back();
       return;
@@ -329,11 +353,20 @@ export default function ClippingsDoCliente() {
 
   function abrirDetalhes(clipping: Clipping) {
     if (selecao.excluindo || exportacao.exportando) return;
-    
+
+    const origem = rotaOrigemClipping(params.origemTipo, params.origemId);
+
     router.push({
       pathname: "/clipping/[id]" as never,
       params: {
         id: String(clipping.id),
+        ...(origem
+        ? {
+            origemTipo: params.origemTipo,
+            origemId: params.origemId,
+            retornoVinculado: "lista",
+          }
+        : {}),
       },
     });
   }

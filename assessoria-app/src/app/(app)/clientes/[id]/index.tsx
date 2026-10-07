@@ -25,12 +25,12 @@ import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
 import LogoPicker from "@/components/forms/LogoPicker";
+import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -1224,6 +1224,13 @@ export default function ClienteDetalhes() {
                 />
               ) : null}
             </View>
+
+            <ClippingsVinculados
+              key={`cliente-${cliente.id}`}
+              tipo="cliente"
+              id={cliente.id}
+              nome={cliente.nome}
+            />
           </>
         )}
       </ScrollView>

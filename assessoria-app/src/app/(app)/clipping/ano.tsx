@@ -26,6 +26,7 @@ import {
   listarClientesDoAno,
 } from "@/services/api/clipping";
 import { useConsultaClipping } from "@/hooks/useConsultaClipping";
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
 function filtrosClientesIniciais(): FiltrosClientes {
   return {
@@ -43,6 +44,8 @@ export default function ClientesDoAno() {
 
   const params = useLocalSearchParams<{
     ano?: string;
+    origemTipo?: string;
+    origemId?: string;
   }>();
 
   const ano =
@@ -119,6 +122,16 @@ export default function ClientesDoAno() {
   }, [dados, erro, pagina]);
 
   function voltar() {
+    const origem = rotaOrigemClipping(
+      params.origemTipo,
+      params.origemId
+    );
+
+    if (origem) {
+      router.navigate(origem);
+      return;
+    }
+
     if (router.canGoBack()) {
       router.back();
       return;
@@ -145,6 +158,9 @@ export default function ClientesDoAno() {
         id: String(cliente.id),
         ano: String(ano),
         clienteNome: cliente.nome,
+        origemTipo: params.origemTipo,
+        origemId: params.origemId,
+        retornoVinculado: "ano",
       },
     });
   }

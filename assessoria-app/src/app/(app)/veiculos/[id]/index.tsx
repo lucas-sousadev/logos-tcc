@@ -39,6 +39,7 @@ import {
   validarFormularioVeiculo,
 } from "@/utils/validarVeiculo";
 import ContatosVinculados from "@/components/veiculos/ContatosVinculados";
+import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
 
 interface Formulario {
   nome: string;
@@ -654,6 +655,12 @@ export default function VeiculoDetalhes() {
               veiculoId={veiculo.id}
               totalVinculados={veiculo.contatos_vinculados}
               onContatosAlterados={atualizarResumoVeiculo}
+            />
+            <ClippingsVinculados
+              key={`veiculo-${veiculo.id}`}
+              tipo="veiculo"
+              id={veiculo.id}
+              nome={veiculo.nome}
             />
           </>
         )}

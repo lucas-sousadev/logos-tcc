@@ -454,8 +454,25 @@ class ClippingService
     }
 
     public static function anos(
-        int $assessoriaId
+        int $assessoriaId,
+        array $filtros = []
     ): array {
+        $clienteId = self::inteiro(
+            $filtros['cliente_id'] ?? null,
+            'Cliente',
+            1,
+            PHP_INT_MAX,
+            true
+        );
+
+        $veiculoId = self::inteiro(
+            $filtros['veiculo_id'] ?? null,
+            'Veículo',
+            1,
+            PHP_INT_MAX,
+            true
+        );
+
         $anoAtual = (int) (
             new \DateTimeImmutable(
                 'now',
@@ -464,7 +481,9 @@ class ClippingService
         )->format('Y');
 
         $anos = Clipping::listarAnos(
-            $assessoriaId
+            $assessoriaId,
+            $clienteId,
+            $veiculoId
         );
 
         $atual = [
@@ -476,9 +495,13 @@ class ClippingService
         $outros = [];
 
         foreach ($anos as $ano) {
-            if (
-                (int) $ano['ano_referencia'] === $anoAtual
-            ) {
+            $ano = [
+                'ano_referencia' => (int) $ano['ano_referencia'],
+                'total_clippings' => (int) $ano['total_clippings'],
+                'total_clientes' => (int) $ano['total_clientes'],
+            ];
+
+            if ($ano['ano_referencia'] === $anoAtual) {
                 $atual = $ano;
             } else {
                 $outros[] = $ano;

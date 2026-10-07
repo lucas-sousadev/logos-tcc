@@ -34,6 +34,7 @@ import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 import { useConsultaClipping } from "@/hooks/useConsultaClipping";
 import { buscarClipping, excluirClipping, type Clipping,} from "@/services/api/clipping";
 import { segundosParaTempo } from "@/utils/clippingFormatacao";
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
 type NomeIcone = ComponentProps<typeof Ionicons>["name"];
 
@@ -136,6 +137,9 @@ export default function ClippingDetalhes() {
 
   const params = useLocalSearchParams<{
     id: string;
+    origemTipo?: string;
+    origemId?: string;
+    retornoVinculado?: "origem" | "lista";
   }>();
 
   const id = Number(params.id);
@@ -199,6 +203,16 @@ export default function ClippingDetalhes() {
   
   function voltar() {
     if (ocupado || travaExcluir.current) return;
+
+    const origem = rotaOrigemClipping(
+      params.origemTipo,
+      params.origemId
+    );
+
+    if (params.retornoVinculado === "origem" && origem) {
+      router.navigate(origem);
+      return;
+    }
 
     if (router.canGoBack()) {
       router.back();
@@ -286,33 +300,43 @@ function concluirEdicao(registro: Clipping) {
 }
 
   function irParaLista(registro: Clipping) {
-  const estado = navigation.getState();
+    const origem = rotaOrigemClipping(
+      params.origemTipo,
+      params.origemId
+    );
 
-  const anteriores = estado
-    ? estado.routes.slice(0, estado.index)
-    : [];
+    if (params.retornoVinculado === "origem" && origem) {
+      router.navigate(origem);
+      return;
+    }
 
-  const anterior = anteriores[anteriores.length - 1];
+    const estado = navigation.getState();
+      
+    const anteriores = estado
+      ? estado.routes.slice(0, estado.index)
+      : [];
 
-  const parametros = {
-    id: String(registro.cliente_id),
-    ano: String(registro.ano_referencia),
-    clienteNome: registro.cliente_nome,
-  };
+    const anterior = anteriores[anteriores.length - 1];
 
-  // Mantém a tela de clientes do ano coerente com o novo contexto.
-  const rotaAno = [...anteriores]
-    .reverse()
-    .find((rota) => rota.name === "ano");
+    const parametros = {
+      id: String(registro.cliente_id),
+      ano: String(registro.ano_referencia),
+      clienteNome: registro.cliente_nome,
+    };
 
-  if (rotaAno && estado) {
-    navigation.dispatch({
-      ...CommonActions.setParams({
-        ano: String(registro.ano_referencia),
-      }),
-      source: rotaAno.key,
-      target: estado.key,
-    });
+    // Mantém a tela de clientes do ano coerente com o novo contexto.
+    const rotaAno = [...anteriores]
+      .reverse()
+      .find((rota) => rota.name === "ano");
+
+    if (rotaAno && estado) {
+      navigation.dispatch({
+        ...CommonActions.setParams({
+          ano: String(registro.ano_referencia),
+        }),
+        source: rotaAno.key,
+        target: estado.key,
+      });
   }
 
   const anteriorEhLista =

@@ -17,12 +17,14 @@ interface ClippingCardProps {
   clipping: Clipping;
   expandido: boolean;
   novo?: boolean;
-  onAlternarExpansao: () => void;
+  onAlternarExpansao?: () => void;
   onAbrirDetalhes: () => void;
   modoSelecao?: boolean;
   selecionado?: boolean;
   bloqueado?: boolean;
   onSelecionar?: () => void;
+  abrirAoTocar?: boolean;
+  mostrarCliente?: boolean;
 }
 
 function formatarData(
@@ -69,6 +71,8 @@ export default function ClippingCard({
   modoSelecao = false,
   selecionado = false,
   bloqueado = false,
+  abrirAoTocar = false,
+  mostrarCliente = false,
   onSelecionar,
 }: ClippingCardProps) {
   const { theme, mode } = useTheme();
@@ -214,21 +218,19 @@ export default function ClippingCard({
         accessibilityRole={modoSelecao ? "checkbox" : "button"}
         accessibilityState={
           modoSelecao
-            ? {
-                checked: selecionado,
-                disabled: bloqueado,
-              }
-            : {
-                expanded: expandido,
-                disabled: bloqueado,
-              }
+            ? { checked: selecionado, disabled: bloqueado }
+            : abrirAoTocar
+              ? { disabled: bloqueado }
+              : { expanded: expandido, disabled: bloqueado }
         }
         accessibilityHint={
           modoSelecao
             ? "Marcar ou desmarcar este clipping"
-            : expandido
-              ? "Recolher informações do clipping"
-              : "Expandir informações do clipping"
+            : abrirAoTocar
+              ? "Abrir detalhes do clipping"
+              : expandido
+                ? "Recolher informações do clipping"
+                : "Expandir informações do clipping"
         }
         onPress={() => {
           if (modoSelecao) {
@@ -236,8 +238,13 @@ export default function ClippingCard({
             return;
           }
 
+          if (abrirAoTocar) {
+            onAbrirDetalhes();
+            return;
+          }
+
           setErroLink("");
-          onAlternarExpansao();
+          onAlternarExpansao?.();
         }}
         style={styles.resumo}
       >
@@ -319,7 +326,11 @@ export default function ClippingCard({
 
         <Text
             weight="SemiBold"
-            numberOfLines={!modoSelecao && expandido ? undefined : 2}
+            numberOfLines={
+              !modoSelecao && expandido && !abrirAoTocar
+                ? undefined
+                : 2
+            }
             ellipsizeMode="tail"
             style={[
               styles.pauta,
@@ -343,6 +354,18 @@ export default function ClippingCard({
             ) : null}
             {pauta}
         </Text>
+
+        {mostrarCliente ? (
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.clienteVinculado,
+              { color: theme.textoSub },
+            ]}
+          >
+            Cliente: {clipping.cliente_nome}
+          </Text>
+        ) : null}
 
         <View style={styles.rodape}>
           <View style={styles.informacoesRodape}>
@@ -428,9 +451,11 @@ export default function ClippingCard({
                 ? selecionado
                   ? "checkbox"
                   : "square-outline"
-                : expandido
-                  ? "chevron-up"
-                  : "chevron-down"
+                : abrirAoTocar
+                  ? "chevron-forward"
+                  : expandido
+                    ? "chevron-up"
+                    : "chevron-down"
             }
             size={modoSelecao ? 22 : 17}
             color={
@@ -444,7 +469,7 @@ export default function ClippingCard({
         </View>
       </TouchableOpacity>
 
-      {!modoSelecao && expandido ? (
+      {!modoSelecao && !abrirAoTocar && expandido ? (
         <View
           style={[
             styles.expansao,
@@ -607,6 +632,10 @@ data: {
   pauta: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  clienteVinculado: {
+    fontSize: 11,
+    marginTop: 2,
   },
 
   rodape: {

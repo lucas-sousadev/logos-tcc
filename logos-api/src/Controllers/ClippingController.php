@@ -152,7 +152,7 @@ class ClippingController
     {
         $this->executar(
             fn(int $a, int $u) =>
-                ClippingService::anos($a)
+                ClippingService::anos($a, $_GET)
         );
     }
 

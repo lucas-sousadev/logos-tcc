@@ -144,11 +144,18 @@ export interface ArquivoClippingSelecionado {
   file?: File;
 }
 
-export async function listarClippingAnos(): Promise<{
+export async function listarClippingAnos(
+  params: {
+    cliente_id?: number;
+    veiculo_id?: number;
+  } = {}
+): Promise<{
   anos: AnoClipping[];
 }> {
+  const query = montarQueryClipping(params).toString();
+
   const response = await authenticatedFetch(
-    `${API_URL}/api/clippings/anos`
+    `${API_URL}/api/clippings/anos${query ? `?${query}` : ""}`
   );
 
   const dados = await lerResposta<{

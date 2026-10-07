@@ -443,27 +443,41 @@ class Clipping
     }
 
     public static function listarAnos(
-        int $assessoriaId
+        int $assessoriaId,
+        ?int $clienteId = null,
+        ?int $veiculoId = null
     ): array {
+        $where = [
+            'assessoria_id = :assessoria_id',
+            'arquivado_em IS NULL',
+        ];
+
+        $params = [
+            'assessoria_id' => $assessoriaId,
+        ];
+
+        if ($clienteId !== null) {
+            $where[] = 'cliente_id = :cliente_id';
+            $params['cliente_id'] = $clienteId;
+        }
+
+        if ($veiculoId !== null) {
+            $where[] = 'veiculo_id = :veiculo_id';
+            $params['veiculo_id'] = $veiculoId;
+        }
+
         return self::consultar(
-            "
+            '
                 SELECT
                     ano_referencia,
                     COUNT(*) AS total_clippings,
                     COUNT(DISTINCT cliente_id) AS total_clientes
-
                 FROM clippings
-
-                WHERE
-                    assessoria_id = :assessoria_id
-                    AND arquivado_em IS NULL
-
+                WHERE ' . implode(' AND ', $where) . '
                 GROUP BY ano_referencia
                 ORDER BY ano_referencia DESC
-            ",
-            [
-                'assessoria_id' => $assessoriaId,
-            ]
+            ',
+            $params
         )->fetchAll();
     }
 
