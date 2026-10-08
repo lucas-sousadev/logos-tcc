@@ -86,6 +86,36 @@ class Veiculo
                 $maxContatos;
         }
 
+        $contagemClippings = "
+            (
+                SELECT COUNT(*)
+                FROM clippings c
+                WHERE
+                    c.veiculo_id = v.id
+                    AND c.assessoria_id = v.assessoria_id
+            )
+        ";
+
+        $minClippings = self::filtroQuantidadeClippings(
+            $filtros,
+            'min_clippings'
+        );
+
+        if ($minClippings !== null) {
+            $where[] = "{$contagemClippings} >= :min_clippings";
+            $params['min_clippings'] = $minClippings;
+        }
+
+        $maxClippings = self::filtroQuantidadeClippings(
+            $filtros,
+            'max_clippings'
+        );
+
+        if ($maxClippings !== null) {
+            $where[] = "{$contagemClippings} <= :max_clippings";
+            $params['max_clippings'] = $maxClippings;
+        }
+
         $whereSql = implode(' AND ', $where);
 
         $ordenacao = self::ordenacao($filtros);
@@ -101,6 +131,7 @@ class Veiculo
                 v.ativo,
                 v.tier,
                 {$contagemVinculos} AS contatos_vinculados,
+                {$contagemClippings} AS clippings_vinculados,
                 v.created_at,
                 v.updated_at
             FROM veiculos v
@@ -198,6 +229,36 @@ class Veiculo
                 $maxContatos;
         }
         
+        $contagemClippings = "
+            (
+                SELECT COUNT(*)
+                FROM clippings c
+                WHERE
+                    c.veiculo_id = v.id
+                    AND c.assessoria_id = v.assessoria_id
+            )
+        ";
+
+        $minClippings = self::filtroQuantidadeClippings(
+            $filtros,
+            'min_clippings'
+        );
+
+        if ($minClippings !== null) {
+            $where[] = "{$contagemClippings} >= :min_clippings";
+            $params['min_clippings'] = $minClippings;
+        }
+
+        $maxClippings = self::filtroQuantidadeClippings(
+            $filtros,
+            'max_clippings'
+        );
+
+        if ($maxClippings !== null) {
+            $where[] = "{$contagemClippings} <= :max_clippings";
+            $params['max_clippings'] = $maxClippings;
+        }
+
         $whereSql = implode(' AND ', $where);
 
         $stmt = $pdo->prepare("
@@ -234,6 +295,13 @@ class Veiculo
                         j.veiculo_id = v.id
                         AND j.assessoria_id = v.assessoria_id
                 ) AS contatos_vinculados,
+                (
+                    SELECT COUNT(*)
+                    FROM clippings c
+                    WHERE
+                        c.veiculo_id = v.id
+                        AND c.assessoria_id = v.assessoria_id
+                ) AS clippings_vinculados,
                 v.created_at,
                 v.updated_at
             FROM veiculos v
@@ -451,6 +519,32 @@ class Veiculo
         return (int) $maximo;
     }
 
+    private static function filtroQuantidadeClippings(
+        array $filtros,
+        string $chave
+    ): ?int {
+        if (
+            !array_key_exists($chave, $filtros) ||
+            $filtros[$chave] === null ||
+            $filtros[$chave] === ''
+        ) {
+            return null;
+        }
+
+        if (!is_scalar($filtros[$chave])) {
+            return null;
+        }
+
+        $quantidade = filter_var(
+            $filtros[$chave],
+            FILTER_VALIDATE_INT
+        );
+
+        return $quantidade !== false && $quantidade >= 0
+            ? (int) $quantidade
+            : null;
+    }
+
     private static function ordenacao(
         array $filtros
     ): string {
@@ -469,6 +563,12 @@ class Veiculo
                 )
             )
         );
+
+        if ($ordem === 'clippings') {
+        return $direcao === 'ASC'
+            ? 'clippings_vinculados ASC, v.nome ASC'
+            : 'clippings_vinculados DESC, v.nome ASC';
+        }
 
         if ($ordem === 'vinculos') {
             return $direcao === 'ASC'

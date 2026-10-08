@@ -45,6 +45,7 @@ interface Props {
   tipo: TipoVinculo;
   id: number;
   nome?: string;
+  onExcluindoChange?: (excluindo: boolean) => void;
 }
 
 interface Feedback {
@@ -100,6 +101,7 @@ export default function ClippingsVinculados({
   tipo,
   id,
   nome,
+  onExcluindoChange,
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -125,6 +127,10 @@ export default function ClippingsVinculados({
   const [excluindo, setExcluindo] = useState(false);
   const travaExclusao = useRef(false);
   usePreventRemove(excluindo, () => {});
+
+  useEffect(() => {
+    onExcluindoChange?.(excluindo);
+  }, [excluindo, onExcluindoChange]);
 
   const [feedback, setFeedback] =
     useState<Feedback | null>(null);

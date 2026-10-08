@@ -6,14 +6,18 @@ import {
 } from "react-native";
 
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
 
 import Button from "@/components/ui/Button";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import Text from "@/components/ui/Text";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
@@ -42,14 +46,17 @@ interface ContatosVinculadosProps {
   veiculoId: number;
   totalVinculados: number;
   onContatosAlterados: () => Promise<void>;
+  onExcluindoChange?: (excluindo: boolean) => void;
 }
 
 const LIMITE_SELECAO_EM_LOTE = 100;
+const POR_PAGINA = 10;
 
 export default function ContatosVinculados({
   veiculoId,
   totalVinculados,
   onContatosAlterados,
+  onExcluindoChange,
 }: ContatosVinculadosProps) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -71,20 +78,13 @@ export default function ContatosVinculados({
     setPagina,
   ] = useState(1);
 
-  const [
-    temMais,
-    setTemMais,
-  ] = useState(false);
+  const [total, setTotal] = useState(totalVinculados);
+  const requisicao = useRef(0);
 
   const [
     carregando,
     setCarregando,
-  ] = useState(false);
-
-  const [
-    carregandoMais,
-    setCarregandoMais,
-  ] = useState(false);
+  ] = useState(true);
 
   const [
     erro,
@@ -105,6 +105,7 @@ export default function ContatosVinculados({
     excluindo,
     setExcluindo,
   ] = useState(false);
+  usePreventRemove(excluindo, () => {});
 
   const [
     feedback,
@@ -112,12 +113,8 @@ export default function ContatosVinculados({
   ] = useState<FeedbackState | null>(null);
 
   useEffect(() => {
-    if (!podeVisualizar) {
-      return;
-    }
-
-    void carregarContatos(true);
-  }, [veiculoId, podeVisualizar]);
+    onExcluindoChange?.(excluindo);
+  }, [excluindo, onExcluindoChange]);
 
   function mostrarFeedback(dados: FeedbackState) {
     setFeedback(dados);
@@ -127,70 +124,78 @@ export default function ContatosVinculados({
     setFeedback(null);
   }
 
-  async function carregarContatos(
-    reset = false
-  ) {
-    if (
-      !veiculoId ||
-      Number.isNaN(veiculoId) ||
-      carregando ||
-      carregandoMais
-    ) {
-      return;
+  const carregarContatos = useCallback(async (): Promise<boolean> => {
+    if (!podeVisualizar || !Number.isSafeInteger(veiculoId) || veiculoId <= 0) {
+      return false;
     }
 
+    const numero = ++requisicao.current;
+    setCarregando(true);
+    setErro("");
+
     try {
-      setErro("");
+      const resposta = await listarJornalistas({
+        page: pagina,
+        limit: POR_PAGINA,
+        veiculo_id: veiculoId,
+        ordem: "nome",
+        direcao: "ASC",
+      });
 
-      if (reset) {
-        setCarregando(true);
-        setContatos([]);
-        setPagina(1);
-        setTemMais(false);
-      } else {
-        setCarregandoMais(true);
-      }
+      if (numero !== requisicao.current) return false;
 
-      const paginaAtual = reset
-        ? 1
-        : pagina + 1;
+      setTotal(resposta.pagination.total);
 
-      const resposta =
-        await listarJornalistas({
-          page: paginaAtual,
-          limit: 50,
-          veiculo_id: veiculoId,
-          ativo: undefined,
-          ordem: "nome",
-          direcao: "ASC",
-        });
-
-      if (reset) {
-        setContatos(resposta.jornalistas);
-        setPagina(1);
-      } else {
-        setContatos((atuais) => [
-          ...atuais,
-          ...resposta.jornalistas,
-        ]);
-
-        setPagina(paginaAtual);
-      }
-
-      setTemMais(
-        resposta.pagination.has_next
+      const ultimaPagina = Math.max(
+        1,
+        Math.ceil(resposta.pagination.total / POR_PAGINA)
       );
+
+      if (pagina > ultimaPagina) {
+        setPagina(ultimaPagina);
+      } else {
+        setContatos(resposta.jornalistas);
+      }
+
+      return true;
     } catch (error) {
+      if (numero !== requisicao.current) return false;
+
       setErro(
         error instanceof Error
           ? error.message
           : "Não foi possível carregar os contatos vinculados."
       );
+      return false;
     } finally {
-      setCarregando(false);
-      setCarregandoMais(false);
+      if (numero === requisicao.current) {
+        setCarregando(false);
+      }
     }
-  }
+  }, [pagina, podeVisualizar, veiculoId]);
+
+  useEffect(() => {
+    setPagina(1);
+    setModoSelecao(false);
+    setIdsSelecionados([]);
+  }, [veiculoId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setModoSelecao(false);
+      setIdsSelecionados([]);
+    }, [veiculoId])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void carregarContatos();
+
+      return () => {
+        requisicao.current += 1;
+      };
+    }, [carregarContatos])
+  );
 
   function abrirModoSelecao() {
     setIdsSelecionados([]);
@@ -205,6 +210,8 @@ export default function ContatosVinculados({
   function alternarContatoSelecionado(
     contatoId: number
   ) {
+    if (carregando || excluindo || erro || !modoSelecao) return;
+
     if (idsSelecionados.includes(contatoId)) {
       setIdsSelecionados((atual) =>
         atual.filter((id) => id !== contatoId)
@@ -234,6 +241,8 @@ export default function ContatosVinculados({
   }
 
   function selecionarTodosVisiveis() {
+    if (carregando || excluindo || erro || !modoSelecao) return;
+
     const idsVisiveis = contatos.map(
       (contato) => contato.id
     );
@@ -244,18 +253,26 @@ export default function ContatosVinculados({
         idsSelecionados.includes(contatoId)
       );
 
-    if (
-      todosSelecionados ||
-      idsSelecionados.length >=
-        LIMITE_SELECAO_EM_LOTE
-    ) {
-      setIdsSelecionados([]);
+    if (todosSelecionados) {
+      const idsDaPagina = new Set(idsVisiveis);
+      setIdsSelecionados((atuais) =>
+        atuais.filter((id) => !idsDaPagina.has(id))
+      );
       return;
     }
 
     const vagasRestantes =
       LIMITE_SELECAO_EM_LOTE -
       idsSelecionados.length;
+
+    if (vagasRestantes <= 0) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Limite de seleção atingido",
+        message: "Você pode selecionar até 100 contatos por vez.",
+      });
+      return;
+    }
 
     const idsParaAdicionar = idsVisiveis
       .filter(
@@ -312,15 +329,25 @@ export default function ContatosVinculados({
 
       sairModoSelecao();
 
-      await carregarContatos(true);
-      await onContatosAlterados();
+      const [listaAtualizada, resumoAtualizado] = await Promise.allSettled([
+        carregarContatos(),
+        onContatosAlterados(),
+      ]);
+
+      const atualizado =
+        listaAtualizada.status === "fulfilled" &&
+        listaAtualizada.value &&
+        resumoAtualizado.status === "fulfilled";
 
       mostrarFeedback({
-        variant: "success",
+        variant: atualizado ? "success" : "warning",
         title: "Contatos excluídos",
         message:
           `${resultado.excluidos} contato(s) ` +
-          "foram excluídos com sucesso.",
+          "foram excluídos com sucesso." +
+          (atualizado
+            ? ""
+            : " A lista ou a contagem não pôde ser atualizada. Confira os dados antes de outra exclusão."),
       });
     } catch (error) {
       mostrarFeedback({
@@ -383,12 +410,12 @@ export default function ContatosVinculados({
               fontSize: 12,
             }}
           >
-            {totalVinculados}
+            {total}
           </Text>
         </View>
       </View>
 
-      {podeExcluir && contatos.length > 0 ? (
+      {podeExcluir && (contatos.length > 0 || idsSelecionados.length > 0) ? (
         modoSelecao ? (
           <View
             style={[
@@ -414,14 +441,14 @@ export default function ContatosVinculados({
                   { color: theme.textoSub },
                 ]}
               >
-                Escolha os contatos que deseja excluir.
+                TODOS marca apenas esta página.
               </Text>
             </View>
 
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={selecionarTodosVisiveis}
-              disabled={excluindo}
+              disabled={carregando || excluindo || Boolean(erro)}
               style={[
                 styles.selectAllButton,
                 { borderColor: theme.borda },
@@ -434,11 +461,7 @@ export default function ContatosVinculados({
                   { color: theme.texto },
                 ]}
               >
-                {todosVisiveisSelecionados ||
-                idsSelecionados.length >=
-                  LIMITE_SELECAO_EM_LOTE
-                  ? "LIMPAR"
-                  : "TODOS"}
+                {todosVisiveisSelecionados ? "LIMPAR" : "TODOS"}
               </Text>
             </TouchableOpacity>
 
@@ -447,7 +470,7 @@ export default function ContatosVinculados({
               onPress={confirmarExclusao}
               disabled={
                 idsSelecionados.length === 0 ||
-                excluindo
+                carregando || excluindo || Boolean(erro)
               }
               style={[
                 styles.selectionIconButton,
@@ -455,7 +478,7 @@ export default function ContatosVinculados({
                   backgroundColor: "#EF4444",
                   opacity:
                     idsSelecionados.length === 0 ||
-                    excluindo
+                    carregando || excluindo || Boolean(erro)
                       ? 0.5
                       : 1,
                 },
@@ -498,6 +521,7 @@ export default function ContatosVinculados({
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={abrirModoSelecao}
+            disabled={carregando || excluindo || Boolean(erro)}
             style={[
               styles.selectionStartButton,
               { borderColor: theme.borda },
@@ -526,7 +550,7 @@ export default function ContatosVinculados({
         <View style={styles.loading}>
           <ActivityIndicator
             size="small"
-            color={theme.primaria}
+            color={theme.textoTerciaria}
           />
         </View>
       ) : erro ? (
@@ -544,6 +568,11 @@ export default function ContatosVinculados({
           >
             {erro}
           </Text>
+          <Button
+            title="TENTAR NOVAMENTE"
+            size="small"
+            onPress={() => void carregarContatos()}
+          />
         </View>
       ) : contatos.length === 0 ? (
         <View
@@ -572,6 +601,7 @@ export default function ContatosVinculados({
           <TouchableOpacity
             key={contato.id}
             activeOpacity={0.8}
+            disabled={carregando || excluindo || Boolean(erro)}
             onPress={() => {
               if (modoSelecao) {
                 alternarContatoSelecionado(contato.id);
@@ -694,15 +724,13 @@ export default function ContatosVinculados({
         ))
       )}
 
-      {temMais ? (
-        <Button
-          title="CARREGAR MAIS"
-          variant="outline"
-          loading={carregandoMais}
-          onPress={() =>
-            carregarContatos(false)
-          }
-          style={styles.moreButton}
+      {!carregando && !erro ? (
+        <PaginacaoLista
+          pagina={pagina}
+          limite={POR_PAGINA}
+          total={total}
+          disabled={carregando || excluindo}
+          onChange={setPagina}
         />
       ) : null}
 
@@ -889,7 +917,4 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  moreButton: {
-    marginTop: 4,
-  },
 });

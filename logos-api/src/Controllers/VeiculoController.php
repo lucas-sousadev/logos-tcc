@@ -32,6 +32,8 @@ class VeiculoController
                         'direcao' => $_GET['direcao'] ?? 'ASC',
                         'min_contatos' => $_GET['min_contatos'] ?? null,
                         'max_contatos' => $_GET['max_contatos'] ?? null,
+                        'min_clippings' => $_GET['min_clippings'] ?? null,
+                        'max_clippings' => $_GET['max_clippings'] ?? null,
                     ]
                 );
 

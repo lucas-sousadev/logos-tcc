@@ -39,6 +39,23 @@ interface FeedbackState {
   primaryDanger?: boolean;
   onPrimary?: () => void;
 }
+
+function resumoVinculos(veiculo: Veiculo): string {
+  const contatos = Number(veiculo.contatos_vinculados) || 0;
+  const clippings = Number(veiculo.clippings_vinculados) || 0;
+  const partes: string[] = [];
+
+  if (contatos > 0) {
+    partes.push(`${contatos} ${contatos === 1 ? "contato" : "contatos"}`);
+  }
+
+  if (clippings > 0) {
+    partes.push(`${clippings} ${clippings === 1 ? "clipping" : "clippings"}`);
+  }
+
+  return `${partes.join(" · ")}`;
+}
+
 const LIMITE_SELECAO_EM_LOTE = 100;
 
 export default function Veiculos() {
@@ -55,6 +72,8 @@ export default function Veiculos() {
     direcao: "ASC",
     minContatos: "",
     maxContatos: "",
+    minClippings: "",
+    maxClippings: "",
   });
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
@@ -85,7 +104,7 @@ export default function Veiculos() {
     setFeedback(null);
   }
 
-  function quantidadeContatosFiltro(
+  function quantidadeFiltro(
     valorOriginal: string
   ): number | undefined {
     const valor = valorOriginal.trim();
@@ -122,12 +141,14 @@ export default function Veiculos() {
           ativo: filtros.ativo,
           ordem: filtros.ordem,
           direcao: filtros.direcao,
-          min_contatos: quantidadeContatosFiltro(
+          min_contatos: quantidadeFiltro(
             filtros.minContatos
           ),
-          max_contatos: quantidadeContatosFiltro(
+          max_contatos: quantidadeFiltro(
             filtros.maxContatos
           ),
+          min_clippings: quantidadeFiltro(filtros.minClippings),
+          max_clippings: quantidadeFiltro(filtros.maxClippings),
         });
 
         if (reset) {
@@ -170,6 +191,8 @@ export default function Veiculos() {
         filtros.direcao, 
         filtros.minContatos,
         filtros.maxContatos,
+        filtros.minClippings,
+        filtros.maxClippings,
       ]
   );
 
@@ -188,6 +211,8 @@ export default function Veiculos() {
         filtros.direcao,
         filtros.minContatos,
         filtros.maxContatos,
+        filtros.minClippings,
+        filtros.maxClippings,
       ])
   );
 
@@ -211,7 +236,9 @@ export default function Veiculos() {
       filtros.ordem !== "nome" ||
       filtros.direcao !== "ASC" ||
       filtros.minContatos.trim() !== "" ||
-      filtros.maxContatos.trim() !== ""
+      filtros.maxContatos.trim() !== "" ||
+      filtros.minClippings.trim() !== "" ||
+      filtros.maxClippings.trim() !== ""
     );
   }
 
@@ -522,6 +549,8 @@ export default function Veiculos() {
               direcao: "ASC",
               minContatos: "",
               maxContatos: "",
+              minClippings: "",
+              maxClippings: "",
             });
           }}
         />
@@ -778,28 +807,27 @@ export default function Veiculos() {
                       .filter(Boolean)
                       .join(" • ")}
                   </Text>
-                  {veiculo.contatos_vinculados > 0 ? (
-                  <View style={styles.linkedInfo}>
-                    <Ionicons
-                      name="link-outline"
-                      size={13}
-                      color="#F59E0B"
-                    />
+                  {(Number(veiculo.contatos_vinculados) > 0 ||
+                    Number(veiculo.clippings_vinculados) > 0) ? (
+                    <View style={styles.linkedInfo}>
+                      <Ionicons
+                        name="link-outline"
+                        size={13}
+                        color="#F59E0B"
+                      />
 
-                    <Text
-                      weight="Medium"
-                      style={[
-                        styles.linkedText,
-                        { color: "#F59E0B" },
-                      ]}
-                    >
-                      Vinculado a {veiculo.contatos_vinculados}{" "}
-                      {veiculo.contatos_vinculados === 1
-                        ? "contato"
-                        : "contatos"}
-                    </Text>
-                  </View>
-                ) : null}
+                      <Text
+                        weight="Medium"
+                        numberOfLines={1}
+                        style={[
+                          styles.linkedText,
+                          { color: "#F59E0B" },
+                        ]}
+                      >
+                        {resumoVinculos(veiculo)}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {modoSelecao ? (

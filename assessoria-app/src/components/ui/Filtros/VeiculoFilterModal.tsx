@@ -19,10 +19,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 
 export interface FiltrosVeiculos {
   ativo?: number;
-  ordem: "nome" | "vinculos";
+  ordem: "nome" | "vinculos" | "clippings";
   direcao: "ASC" | "DESC";
   minContatos: string;
   maxContatos: string;
+  minClippings: string;
+  maxClippings: string;
 }
 
 interface VeiculoFilterModalProps {
@@ -55,6 +57,9 @@ export default function VeiculoFilterModal({
     setErroMaxContatos,
   ] = useState("");
 
+  const [erroMinClippings, setErroMinClippings] = useState("");
+  const [erroMaxClippings, setErroMaxClippings] = useState("");
+
   useEffect(() => {
     if (!visible) {
       return;
@@ -64,6 +69,8 @@ export default function VeiculoFilterModal({
       setFiltrosTemporarios(filtros);
       setErroMinContatos("");
       setErroMaxContatos("");
+      setErroMinClippings("");
+      setErroMaxClippings("");
     }, 0);
 
     return () => {
@@ -72,8 +79,8 @@ export default function VeiculoFilterModal({
   }, [visible, filtros]);
 
   function definirOrdenacao(
-    ordem: "nome" | "vinculos",
-    direcao: "ASC" | "DESC"
+    ordem: FiltrosVeiculos["ordem"],
+    direcao: FiltrosVeiculos["direcao"]
   ) {
     setFiltrosTemporarios((atual) => ({
       ...atual,
@@ -89,50 +96,75 @@ export default function VeiculoFilterModal({
       direcao: "ASC",
       minContatos: "",
       maxContatos: "",
+      minClippings: "",
+      maxClippings: "",
     });
 
     setErroMinContatos("");
     setErroMaxContatos("");
+    setErroMinClippings("");
+    setErroMaxClippings("");
   }
 
   function aplicarFiltros() {
-  const minimo =
-    filtrosTemporarios.minContatos.trim();
+  const minContatos = filtrosTemporarios.minContatos.trim();
+  const maxContatos = filtrosTemporarios.maxContatos.trim();
+  const minClippings = filtrosTemporarios.minClippings.trim();
+  const maxClippings = filtrosTemporarios.maxClippings.trim();
 
-  const maximo =
-    filtrosTemporarios.maxContatos.trim();
+  function quantidadeValida(valor: string) {
+      return (
+        valor === "" ||
+        (/^\d+$/.test(valor) && Number.isSafeInteger(Number(valor)))
+      );
+    }
 
-  if (minimo !== "" && !/^\d+$/.test(minimo)) {
-    setErroMinContatos(
-      "Informe uma quantidade inteira igual ou maior que zero."
-    );
-    return;
+    if (!quantidadeValida(minContatos)) {
+      setErroMinContatos("Informe uma quantidade inteira igual ou maior que zero.");
+      return;
+    }
+
+    if (!quantidadeValida(maxContatos)) {
+      setErroMaxContatos("Informe uma quantidade inteira igual ou maior que zero.");
+      return;
+    }
+
+    if (
+      minContatos !== "" &&
+      maxContatos !== "" &&
+      Number(maxContatos) < Number(minContatos)
+    ) {
+      setErroMaxContatos("A quantidade máxima não pode ser menor que a mínima.");
+      return;
+    }
+
+    if (!quantidadeValida(minClippings)) {
+      setErroMinClippings("Informe uma quantidade inteira igual ou maior que zero.");
+      return;
+    }
+
+    if (!quantidadeValida(maxClippings)) {
+      setErroMaxClippings("Informe uma quantidade inteira igual ou maior que zero.");
+      return;
+    }
+
+    if (
+      minClippings !== "" &&
+      maxClippings !== "" &&
+      Number(maxClippings) < Number(minClippings)
+    ) {
+      setErroMaxClippings("A quantidade máxima não pode ser menor que a mínima.");
+      return;
+    }
+
+    onApply({
+      ...filtrosTemporarios,
+      minContatos,
+      maxContatos,
+      minClippings,
+      maxClippings,
+    });
   }
-
-  if (maximo !== "" && !/^\d+$/.test(maximo)) {
-    setErroMaxContatos(
-      "Informe uma quantidade inteira igual ou maior que zero."
-    );
-    return;
-  }
-
-  if (
-    minimo !== "" &&
-    maximo !== "" &&
-    Number(maximo) < Number(minimo)
-  ) {
-    setErroMaxContatos(
-      "A quantidade máxima não pode ser menor que a mínima."
-    );
-    return;
-  }
-
-  onApply({
-    ...filtrosTemporarios,
-    minContatos: minimo,
-    maxContatos: maximo,
-  });
-}
 
   return (
     <FiltroModalBase
@@ -173,7 +205,7 @@ export default function VeiculoFilterModal({
         />
 
         <OpcaoOrdenacao
-          label="MAIS VÍNCULOS"
+          label="MAIS CONTATOS"
           selecionada={
             filtrosTemporarios.ordem ===
               "vinculos" &&
@@ -185,7 +217,7 @@ export default function VeiculoFilterModal({
         />
 
         <OpcaoOrdenacao
-          label="MENOS VÍNCULOS"
+          label="MENOS CONTATOS"
           selecionada={
             filtrosTemporarios.ordem ===
               "vinculos" &&
@@ -194,6 +226,24 @@ export default function VeiculoFilterModal({
           onPress={() =>
             definirOrdenacao("vinculos", "ASC")
           }
+        />
+
+        <OpcaoOrdenacao
+          label="MAIS CLIPPINGS"
+          selecionada={
+            filtrosTemporarios.ordem === "clippings" &&
+            filtrosTemporarios.direcao === "DESC"
+          }
+          onPress={() => definirOrdenacao("clippings", "DESC")}
+        />
+
+        <OpcaoOrdenacao
+          label="MENOS CLIPPINGS"
+          selecionada={
+            filtrosTemporarios.ordem === "clippings" &&
+            filtrosTemporarios.direcao === "ASC"
+          }
+          onPress={() => definirOrdenacao("clippings", "ASC")}
         />
       </View>
 
@@ -234,15 +284,39 @@ export default function VeiculoFilterModal({
         clearable
         error={erroMaxContatos}
       />
-      <Text
-        style={[
-          styles.helper,
-          { color: theme.textoSub },
-        ]}
-      >
-        Defina a quantidade mínima e/ou máxima de vínculos.
-      </Text>
-      
+        
+      <Input
+        label="MÍNIMO DE CLIPPINGS VINCULADOS"
+        value={filtrosTemporarios.minClippings}
+        onChangeText={(texto) => {
+          setFiltrosTemporarios((atual) => ({
+            ...atual,
+            minClippings: texto,
+          }));
+          setErroMinClippings("");
+        }}
+        placeholder="Ex.: 1"
+        keyboardType="number-pad"
+        clearable
+        error={erroMinClippings}
+      />
+
+      <Input
+        label="MÁXIMO DE CLIPPINGS VINCULADOS"
+        value={filtrosTemporarios.maxClippings}
+        onChangeText={(texto) => {
+          setFiltrosTemporarios((atual) => ({
+            ...atual,
+            maxClippings: texto,
+          }));
+          setErroMaxClippings("");
+        }}
+        placeholder="Ex.: 10"
+        keyboardType="number-pad"
+        clearable
+        error={erroMaxClippings}
+      />
+
     </FiltroModalBase>
   );
 }

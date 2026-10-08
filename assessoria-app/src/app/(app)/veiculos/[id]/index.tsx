@@ -85,6 +85,9 @@ export default function VeiculoDetalhes() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [abaVinculos, setAbaVinculos] =
+    useState<"contatos" | "clippings">("contatos");
+  const [excluindoVinculos, setExcluindoVinculos] = useState(false);
   const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
   const [logoRemovido, setLogoRemovido] = useState(false);
@@ -382,6 +385,13 @@ export default function VeiculoDetalhes() {
 
   if (!veiculo) return null;
 
+  const podeVerContatos = temPermissao("MAILING", "VISUALIZAR");
+  const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
+  const abaVinculosAtiva =
+    podeVerContatos && (!podeVerClippings || abaVinculos === "contatos")
+      ? "contatos"
+      : "clippings";
+
   const logoPerfil = obterUrlLogoVeiculo(
     veiculo.logo_path
   );
@@ -637,6 +647,7 @@ export default function VeiculoDetalhes() {
               {temPermissao("VEICULOS", "EDITAR") && (
                 <Button
                   title="EDITAR"
+                  disabled={excluindoVinculos}
                   onPress={() => setModoEdicao(true)}
                   style={styles.actionButton}
                 />
@@ -646,22 +657,58 @@ export default function VeiculoDetalhes() {
                   title="EXCLUIR"
                   variant="outline"
                   loading={excluindo}
+                  disabled={excluindoVinculos}
                   onPress={confirmarExclusao}
                   style={styles.actionButton}
                 />
               )}
             </View>
-            <ContatosVinculados
-              veiculoId={veiculo.id}
-              totalVinculados={veiculo.contatos_vinculados}
-              onContatosAlterados={atualizarResumoVeiculo}
-            />
-            <ClippingsVinculados
-              key={`veiculo-${veiculo.id}`}
-              tipo="veiculo"
-              id={veiculo.id}
-              nome={veiculo.nome}
-            />
+            {podeVerContatos || podeVerClippings ? (
+              <View style={styles.vinculos}>
+                <Text weight="Bold" style={styles.sectionTitle}>
+                  VÍNCULOS DO VEÍCULO
+                </Text>
+
+                {podeVerContatos && podeVerClippings ? (
+                  <View style={styles.actions}>
+                    <Button
+                      title="CONTATOS"
+                      size="small"
+                      variant={abaVinculosAtiva === "contatos" ? "primary" : "outline"}
+                      disabled={excluindoVinculos || excluindo}
+                      onPress={() => setAbaVinculos("contatos")}
+                      style={styles.actionButton}
+                    />
+                    <Button
+                      title="CLIPPINGS"
+                      size="small"
+                      variant={abaVinculosAtiva === "clippings" ? "primary" : "outline"}
+                      disabled={excluindoVinculos || excluindo}
+                      onPress={() => setAbaVinculos("clippings")}
+                      style={styles.actionButton}
+                    />
+                  </View>
+                ) : null}
+
+                {abaVinculosAtiva === "contatos" ? (
+                  <ContatosVinculados
+                    key={`contatos-${veiculo.id}`}
+                    veiculoId={veiculo.id}
+                    totalVinculados={veiculo.contatos_vinculados}
+                    onContatosAlterados={atualizarResumoVeiculo}
+                    onExcluindoChange={setExcluindoVinculos}
+                  />
+                ) : (
+                  <ClippingsVinculados
+                    key={`veiculo-${veiculo.id}`}
+                    tipo="veiculo"
+                    id={veiculo.id}
+                    nome={veiculo.nome}
+                    onExcluindoChange={setExcluindoVinculos}
+                  />
+                )}
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -817,6 +864,9 @@ const styles = StyleSheet.create({
     gap: 10, 
     marginTop: 10 
 },
+  vinculos: {
+    marginTop: 26,
+  },
   actionButton: { 
     flex: 1 
 },

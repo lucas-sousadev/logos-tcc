@@ -15,6 +15,7 @@ export interface Veiculo {
   tier: Tier | null;
   ativo: number;
   contatos_vinculados: number;
+  clippings_vinculados: number;
   created_at: string;
   updated_at: string;
 }
@@ -40,10 +41,12 @@ export interface ListarVeiculosParams {
   limit?: number;
   busca?: string;
   ativo?: number;
-  ordem?: "nome" | "vinculos";
+  ordem?: "nome" | "vinculos" | "clippings";
   direcao?: "ASC" | "DESC";
   min_contatos?: number;
   max_contatos?: number;
+  min_clippings?: number;
+  max_clippings?: number;
 }
 
 export interface ListarVeiculosResponse {
@@ -106,6 +109,15 @@ export async function listarVeiculos(
       String(params.max_contatos)
     );
   }
+
+  if (params.min_clippings !== undefined) {
+    query.set("min_clippings", String(params.min_clippings));
+  }
+
+  if (params.max_clippings !== undefined) {
+    query.set("max_clippings", String(params.max_clippings));
+  }
+
   const response =
     await authenticatedFetch(
       `${API_URL}/api/veiculos?${query.toString()}`,
