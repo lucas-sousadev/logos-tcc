@@ -24,8 +24,8 @@ export function useConsultaClipping<T>(
     erro: "",
   });
 
-  const recarregar = useCallback(async () => {
-    if (!ativo.current) return;
+  const recarregar = useCallback(async (): Promise<boolean> => {
+    if (!ativo.current) return false;
 
     const numero = ++requisicao.current;
 
@@ -40,7 +40,7 @@ export function useConsultaClipping<T>(
       const dados = await consultar();
 
       if (!ativo.current || numero !== requisicao.current) {
-        return;
+        return false;
       }
 
       setEstado({
@@ -49,9 +49,10 @@ export function useConsultaClipping<T>(
         carregando: false,
         erro: "",
       });
+      return true;
     } catch (error) {
       if (!ativo.current || numero !== requisicao.current) {
-        return;
+        return false;
       }
 
       const limparDados =
@@ -70,6 +71,7 @@ export function useConsultaClipping<T>(
             ? error.message
             : "Não foi possível atualizar os dados.",
       }));
+      return false;
     }
   }, [chave, consultar]);
 

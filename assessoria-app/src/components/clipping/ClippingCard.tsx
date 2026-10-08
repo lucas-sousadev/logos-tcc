@@ -207,7 +207,7 @@ export default function ClippingCard({
           backgroundColor: theme.backgroundSecundario,
           borderColor:
           modoSelecao && selecionado
-            ? theme.primaria
+            ? theme.textoTerciaria
             : theme.borda,
         },
       ]}
@@ -460,7 +460,7 @@ export default function ClippingCard({
             size={modoSelecao ? 22 : 17}
             color={
               modoSelecao && selecionado
-                ? theme.primaria
+                ? theme.textoTerciaria
                 : theme.textoSub
             }
             accessible={false}

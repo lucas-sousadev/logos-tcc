@@ -9,12 +9,14 @@ import {
   useCallback,
   useEffect,
   useState,
+  useRef
 } from "react";
 import {
   useFocusEffect,
   useRouter,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { usePreventRemove } from "expo-router/react-navigation";
 
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -54,6 +56,46 @@ interface Feedback {
 const POR_PAGINA = 10;
 const LIMITE_SELECAO = 100;
 
+function AvisoAtualizacao({
+  mensagem,
+  onRetry,
+}: {
+  mensagem: string;
+  onRetry: () => void;
+}) {
+  const { theme } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.avisoAtualizacao,
+        { borderColor: theme.erro },
+      ]}
+    >
+      <Text
+        style={[
+          styles.avisoAtualizacaoTexto,
+          { color: theme.erro },
+        ]}
+      >
+        {mensagem} Os dados exibidos podem estar desatualizados.
+      </Text>
+
+      <TouchableOpacity
+        accessibilityRole="button"
+        onPress={onRetry}
+      >
+        <Text
+          weight="SemiBold"
+          style={{ color: theme.textoTerciaria, fontSize: 11 }}
+        >
+          TENTAR NOVAMENTE
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function ClippingsVinculados({
   tipo,
   id,
@@ -81,6 +123,9 @@ export default function ClippingsVinculados({
     useState(false);
 
   const [excluindo, setExcluindo] = useState(false);
+  const travaExclusao = useRef(false);
+  usePreventRemove(excluindo, () => {});
+
   const [feedback, setFeedback] =
     useState<Feedback | null>(null);
 
@@ -169,6 +214,7 @@ export default function ClippingsVinculados({
   useEffect(() => {
     setPagina(1);
     setModoSelecao(false);
+    setConfirmarExclusao(false);
     setIdsSelecionados([]);
   }, [ano, id, tipo]);
 
@@ -176,6 +222,7 @@ export default function ClippingsVinculados({
     useCallback(() => {
       setModoSelecao(false);
       setIdsSelecionados([]);
+      setConfirmarExclusao(false);
     }, [id, tipo])
   );
 
@@ -216,13 +263,15 @@ export default function ClippingsVinculados({
     consultaLista.carregando ||
     consultaLista.atualizando;
 
+  const selecaoBloqueada = ocupado || Boolean(consultaLista.erro);
+  
   function escolherAno(novoAno: number) {
-    if (excluindo || novoAno === ano) return;
+    if (excluindo || novoAno === ano || modoSelecao) return;
     setAnoEscolhido(novoAno);
   }
 
   function alternarSelecao(clippingId: number) {
-    if (ocupado || !modoSelecao) return;
+    if (selecaoBloqueada|| !modoSelecao) return;
 
     if (idsSelecionados.includes(clippingId)) {
       setIdsSelecionados((atuais) =>
@@ -250,7 +299,7 @@ export default function ClippingsVinculados({
   }
 
   function alternarPaginaSelecionada() {
-    if (ocupado || !modoSelecao) return;
+    if (selecaoBloqueada || !modoSelecao) return;
 
     if (todosDaPagina) {
       const ids = new Set(idsDaPagina);
@@ -286,7 +335,7 @@ export default function ClippingsVinculados({
   }
 
   function abrirAno() {
-    if (ano === null || excluindo) return;
+    if (ano === null || excluindo || modoSelecao) return;
 
     router.push({
         pathname: "/clipping/ano",
@@ -302,7 +351,7 @@ export default function ClippingsVinculados({
     clienteId: number,
     clienteNome?: string
     ) {
-    if (ano === null || excluindo) return;
+    if (ano === null || excluindo || modoSelecao) return;
 
     router.push({
         pathname: "/clipping/cliente/[id]" as never,
@@ -333,62 +382,88 @@ export default function ClippingsVinculados({
 
   async function excluirSelecionados() {
     if (
+      travaExclusao.current ||
       excluindo ||
-      idsSelecionados.length === 0
+      idsSelecionados.length === 0 ||
+      consultaLista.erro
     ) {
       return;
     }
 
+    const ids = [...idsSelecionados];
+
+    travaExclusao.current = true;
     setConfirmarExclusao(false);
     setExcluindo(true);
 
+    let retorno: Feedback;
+
     try {
-      const resposta =
-        await excluirClippingsEmLote(
-          [...idsSelecionados]
+      const resposta = await excluirClippingsEmLote(ids);
+      const preservados = resposta.resultados.filter(
+        (item) => item.status !== "excluido"
+      );
+
+      const mensagens = [
+        `${resposta.excluidos} de ${ids.length} clipping(s) excluído(s).`,
+        ...preservados.map(
+          (item) => `#${item.id}: ${item.message}`
+        ),
+      ];
+
+      if (resposta.limpeza_pendente) {
+        mensagens.push(
+          "A limpeza de alguns arquivos ficou pendente no servidor."
         );
+      }
 
-      setIdsSelecionados([]);
-      setModoSelecao(false);
+      retorno = {
+        variant:
+          preservados.length > 0 || resposta.limpeza_pendente
+            ? "warning"
+            : "success",
+        title:
+          preservados.length > 0
+            ? "Resultado da exclusão"
+            : "Clippings excluídos",
+        message: mensagens.join("\n\n"),
+      };
+    } catch (error) {
+      retorno = {
+        variant: "warning",
+        title: "Resultado não confirmado",
+        message:
+          (error instanceof Error
+            ? error.message
+            : "Não foi possível receber o resultado.") +
+          "\n\nParte da exclusão pode ter sido concluída. Confira a lista atualizada antes de tentar novamente.",
+      };
+    }
 
-      await Promise.all([
+    setIdsSelecionados([]);
+    setModoSelecao(false);
+
+    try {
+      const [anosAtualizados, listaAtualizada] = await Promise.all([
         consultaAnos.recarregar(),
         consultaLista.recarregar(),
       ]);
 
-      const primeiroNaoExcluido =
-        resposta.resultados.find(
-          (item) => item.status !== "excluido"
-        );
-
-      setFeedback({
-        variant:
-          resposta.nao_excluidos > 0 ||
-          resposta.limpeza_pendente
-            ? "warning"
-            : "success",
-        title: "Exclusão concluída",
+      if (!anosAtualizados || !listaAtualizada) {
+        throw new Error("Não foi possível atualizar os dados.");
+      }
+    } catch {
+      retorno = {
+        ...retorno,
+        variant: "warning",
         message:
-          `${resposta.excluidos} clipping(s) excluído(s). ` +
-          `${resposta.nao_excluidos} preservado(s).` +
-          (primeiroNaoExcluido
-            ? ` ${primeiroNaoExcluido.message}`
-            : "") +
-          (resposta.limpeza_pendente
-            ? " A limpeza de alguns arquivos ficou pendente no servidor."
-            : ""),
-      });
-    } catch (error) {
-      setFeedback({
-        variant: "error",
-        title: "Não foi possível excluir",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Tente novamente.",
-      });
+          retorno.message +
+          "\n\nNão foi possível atualizar a listagem. Atualize-a antes de outra exclusão.",
+      };
     } finally {
+      setFeedback(retorno);
       setExcluindo(false);
+      travaExclusao.current = false;
     }
   }
 
@@ -435,6 +510,13 @@ export default function ClippingsVinculados({
           </Text>
         </View>
       </View>
+
+      {consultaAnos.erro && consultaAnos.dados ? (
+        <AvisoAtualizacao
+          mensagem={consultaAnos.erro}
+          onRetry={() => void consultaAnos.recarregar()}
+        />
+      ) : null}
 
       {consultaAnos.carregando ? (
         <ActivityIndicator
@@ -491,7 +573,7 @@ export default function ClippingsVinculados({
                     checked: ativo,
                   }}
                   activeOpacity={0.8}
-                  disabled={excluindo}
+                  disabled={excluindo || modoSelecao}
                   onPress={() =>
                     escolherAno(anoItem)
                   }
@@ -527,7 +609,7 @@ export default function ClippingsVinculados({
             <View style={styles.atalhos}>
             <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={excluindo}
+                disabled={excluindo || modoSelecao}
                 onPress={abrirAno}
                 style={[
                 styles.atalho,
@@ -551,7 +633,7 @@ export default function ClippingsVinculados({
             {tipo === "cliente" ? (
                 <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={excluindo}
+                disabled={excluindo || modoSelecao}
                 onPress={() => abrirListaDoCliente(id, nome)}
                 style={[
                     styles.atalho,
@@ -610,7 +692,7 @@ export default function ClippingsVinculados({
                         { color: theme.textoSub },
                     ]}
                     >
-                    Escolha os clippings desta página.
+                    TODOS marca apenas esta página.
                     </Text>
                 </View>
 
@@ -622,7 +704,7 @@ export default function ClippingsVinculados({
                         ? "Limpar seleção desta página"
                         : "Selecionar todos desta página"
                     }
-                    disabled={ocupado || Boolean(consultaLista.erro)}
+                    disabled={selecaoBloqueada}
                     onPress={alternarPaginaSelecionada}
                     style={[
                     styles.selectAllButton,
@@ -646,8 +728,7 @@ export default function ClippingsVinculados({
                     accessibilityLabel="Excluir clippings selecionados"
                     disabled={
                     idsSelecionados.length === 0 ||
-                    ocupado ||
-                    Boolean(consultaLista.erro)
+                    selecaoBloqueada
                     }
                     onPress={() => setConfirmarExclusao(true)}
                     style={[
@@ -656,8 +737,7 @@ export default function ClippingsVinculados({
                         backgroundColor: "#EF4444",
                         opacity:
                         idsSelecionados.length === 0 ||
-                        ocupado ||
-                        Boolean(consultaLista.erro)
+                        selecaoBloqueada
                             ? 0.5
                             : 1,
                     },
@@ -678,7 +758,7 @@ export default function ClippingsVinculados({
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityLabel="Sair do modo de seleção"
-                    disabled={ocupado}
+                    disabled={excluindo}
                     onPress={() => {
                     setModoSelecao(false);
                     setIdsSelecionados([]);
@@ -700,7 +780,7 @@ export default function ClippingsVinculados({
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Selecionar clippings"
-                disabled={ocupado || Boolean(consultaLista.erro)}
+                disabled={selecaoBloqueada}
                 onPress={() => setModoSelecao(true)}
                 style={[
                     styles.selectionStartButton,
@@ -723,6 +803,13 @@ export default function ClippingsVinculados({
                 </Text>
               </TouchableOpacity>
             )
+          ) : null}
+
+          {consultaLista.erro && consultaLista.dados ? (
+            <AvisoAtualizacao
+              mensagem={consultaLista.erro}
+              onRetry={() => void consultaLista.recarregar()}
+            />
           ) : null}
 
           {consultaLista.carregando ? (
@@ -787,7 +874,7 @@ export default function ClippingsVinculados({
                         }
                         modoSelecao={modoSelecao}
                         selecionado={selecionado}
-                        bloqueado={ocupado}
+                        bloqueado={selecaoBloqueada}
                         onSelecionar={() =>
                         alternarSelecao(clipping.id)
                         }
@@ -812,7 +899,7 @@ export default function ClippingsVinculados({
                             { color: theme.textoTerciaria },
                             ]}
                         >
-                            LISTAGEM DE {clipping.cliente_nome}
+                            VER LISTAGEM DO CLIENTE 
                         </Text>
                         <Ionicons
                             name="arrow-forward"
@@ -830,7 +917,7 @@ export default function ClippingsVinculados({
                 pagina={pagina}
                 limite={POR_PAGINA}
                 total={totalNoAno}
-                disabled={ocupado}
+                disabled={selecaoBloqueada}
                 onChange={setPagina}
             />
             ) : null}
@@ -875,6 +962,19 @@ export default function ClippingsVinculados({
 }
 
 const styles = StyleSheet.create({
+  avisoAtualizacao: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    marginBottom: 10,
+  },
+  avisoAtualizacaoTexto: {
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  
   secao: {
     marginTop: 28,
   },
@@ -947,9 +1047,11 @@ linkCliente: {
   alignSelf: "flex-end",
   flexDirection: "row",
   alignItems: "center",
+  justifyContent: "center",
   gap: 4,
+  minHeight: 40,
+  paddingHorizontal: 8,
   marginBottom: 9,
-  paddingVertical: 2,
 },
 linkClienteTexto: {
   fontSize: 10,

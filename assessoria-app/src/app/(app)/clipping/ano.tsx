@@ -170,6 +170,9 @@ export default function ClientesDoAno() {
       pathname: "/clipping/novo",
       params: {
         ano: String(ano),
+        origemTipo: params.origemTipo,
+        origemId: params.origemId,
+        retornoVinculado: "ano",
       },
     });
   }

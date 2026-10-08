@@ -279,6 +279,16 @@ export default function ClippingsDoCliente() {
       pathname: "/clipping/[id]",
       params: {
         id: String(criadoId),
+        ...(rotaOrigemClipping(
+          params.origemTipo,
+          params.origemId
+        )
+          ? {
+              origemTipo: params.origemTipo,
+              origemId: params.origemId,
+              retornoVinculado: "lista",
+            }
+          : {}),
       },
     });
   }
@@ -334,6 +344,9 @@ export default function ClippingsDoCliente() {
         ano: String(ano),
         clienteId: String(clienteId),
         clienteNome,
+        origemTipo: params.origemTipo,
+        origemId: params.origemId,
+        retornoVinculado: params.retornoVinculado,
       },
     });
   }
@@ -347,6 +360,9 @@ export default function ClippingsDoCliente() {
         clienteId: String(clienteId),
         ano: String(ano),
         clienteNome,
+        origemTipo: params.origemTipo,
+        origemId: params.origemId,
+        retornoVinculado: params.retornoVinculado,
       },
     });
   }

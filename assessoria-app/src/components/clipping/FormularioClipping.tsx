@@ -8,7 +8,8 @@ import {
 } from "react-native";
 
 import { useEffect, useRef, useState } from "react";
-import { useIsFocused, useNavigation,useRouter,} from "expo-router";
+import { useIsFocused, useNavigation,useRouter, useLocalSearchParams,} from "expo-router";
+
 
 import { CommonActions, usePreventRemove,} from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,6 +35,7 @@ import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import { dataBRParaISO,tempoParaSegundos, dataISOParaBR, segundosParaTempo} from "@/utils/clippingFormatacao";
 import { type ErrosClipping, identificarCampoErroClipping, normalizarCategorias,obterAnoDaPublicacao, validarFormularioClipping,} from "@/utils/validarClipping";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,7 +60,7 @@ const CATEGORIAS_SUGERIDAS = [
   "Podcast",
   "Redes sociais",
 ];
-
+  
 function compararData(valor: string): string {
   const texto = valor.trim();
 
@@ -95,6 +97,11 @@ export default function FormularioClipping({
   onSalvo?: (clipping: Clipping) => void;
 }) {
   const router = useRouter();
+  const paramsRota = useLocalSearchParams<{
+    origemTipo?: string;
+    origemId?: string;
+    retornoVinculado?: "ano" | "origem" | "lista";
+  }>();
   const navigation = useNavigation();
   const focado = useIsFocused();
 
@@ -397,6 +404,19 @@ const [tier, setTier] = useState<Tier | null>(
         id: String(clipping.cliente_id),
         ano: String(clipping.ano_referencia),
         clienteNome: clipping.cliente_nome,
+        ...(rotaOrigemClipping(
+          paramsRota.origemTipo,
+          paramsRota.origemId
+        )
+          ? {
+              origemTipo: paramsRota.origemTipo,
+              origemId: paramsRota.origemId,
+              retornoVinculado:
+                paramsRota.retornoVinculado === "ano"
+                  ? "ano"
+                  : "origem",
+            }
+          : {}),
       },
     });
   }, [
@@ -406,7 +426,10 @@ const [tier, setTier] = useState<Tier | null>(
     navigation,
     router,
     editando,
-    onSalvo
+    onSalvo,
+    paramsRota.origemTipo,
+    paramsRota.origemId,
+    paramsRota.retornoVinculado,
   ]);
 
   const podeCriarVeiculo = temPermissao("VEICULOS", "CRIAR");

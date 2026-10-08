@@ -39,6 +39,7 @@ import {
   type CampoImportacaoClipping,
   type EstruturaImportacaoClipping,
 } from "@/services/api/clipping";
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
 const LIMITE_CSV_BYTES = 5 * 1024 * 1024;
 
@@ -114,6 +115,9 @@ export default function ImportarClippings() {
     clienteId?: string;
     ano?: string;
     clienteNome?: string;
+    origemTipo?: string;
+    origemId?: string;
+    retornoVinculado?: "ano" | "origem" | "lista";
   }>();
 
   const clienteId = params.clienteId ? Number(params.clienteId) : null;
@@ -220,6 +224,39 @@ export default function ImportarClippings() {
   function sairParaListagem() {
     if (router.canGoBack()) {
       router.back();
+      return;
+    }
+
+    const anoDaEntrada = Number(params.ano);
+    const origem = rotaOrigemClipping(
+      params.origemTipo,
+      params.origemId
+    );
+
+    if (
+      clienteId !== null &&
+      Number.isSafeInteger(clienteId) &&
+      clienteId > 0 &&
+      Number.isInteger(anoDaEntrada) &&
+      anoDaEntrada >= 1000 &&
+      anoDaEntrada <= 9999
+    ) {
+      router.replace({
+        pathname: "/clipping/cliente/[id]",
+        params: {
+          id: String(clienteId),
+          ano: String(anoDaEntrada),
+          clienteNome,
+          origemTipo: params.origemTipo,
+          origemId: params.origemId,
+          retornoVinculado: params.retornoVinculado,
+        },
+      });
+      return;
+    }
+
+    if (origem) {
+      router.replace(origem);
       return;
     }
 
