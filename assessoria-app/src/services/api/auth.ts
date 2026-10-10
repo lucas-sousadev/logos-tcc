@@ -193,9 +193,15 @@ export async function refreshAccessToken(): Promise<string> {
 
 // requisiçoes autenticadas
 
+type RequestExecutor = (
+  url: string,
+  options: RequestInit
+) => Promise<Response>;
+
 export async function authenticatedFetch(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  request: RequestExecutor = fetch
 ): Promise<Response> {
   let token = await getToken();
 
@@ -212,7 +218,7 @@ export async function authenticatedFetch(
     `Bearer ${token}`
   );
 
-  let response = await fetch(url, {
+  let response = await request(url, {
     ...options,
     headers,
   });
@@ -232,7 +238,7 @@ export async function authenticatedFetch(
     `Bearer ${token}`
   );
 
-  response = await fetch(url, {
+  response = await request(url, {
     ...options,
     headers: retryHeaders,
   });

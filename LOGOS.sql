@@ -496,6 +496,9 @@ CREATE TABLE clippings (
         
 	UNIQUE KEY uq_clipping_id_assessoria (id, assessoria_id),
     INDEX idx_clippings_assessoria_data (assessoria_id, data_publicacao),
+    INDEX idx_clippings_cliente_data (
+        assessoria_id, cliente_id, data_publicacao, id
+    ),
     INDEX idx_clippings_cliente_ano (
         assessoria_id, cliente_id, ano_referencia, arquivado_em, data_publicacao, id
     )
@@ -623,8 +626,12 @@ CREATE TABLE relatorios (
 
     periodo_inicio DATE NULL,
     periodo_fim DATE NULL,
+    inclusao_automatica TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    modelo_codigo VARCHAR(50) NOT NULL DEFAULT 'EDITORIAL',
+    modelo_versao SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    configuracao_json JSON NULL,
 
-    -- Caminho do arquivo gerado (PPTX/PDF/etc.).
+    -- caminho antigo, mantido para compatibilidade com registros existentes
     arquivo_path VARCHAR(500) NULL,
 
     gerado_em DATETIME NULL,
@@ -648,11 +655,36 @@ CREATE TABLE relatorios (
 		REFERENCES usuarios(id, assessoria_id)
 		ON DELETE RESTRICT,
         
+	CONSTRAINT chk_relatorios_periodo
+        CHECK (
+            periodo_inicio IS NULL
+            OR periodo_fim IS NULL
+            OR periodo_inicio <= periodo_fim
+        ),
+
+    CONSTRAINT chk_relatorios_inclusao_automatica
+        CHECK (
+            inclusao_automatica IN (0, 1)
+            AND (
+                inclusao_automatica = 0
+                OR (periodo_inicio IS NOT NULL AND periodo_fim IS NOT NULL)
+            )
+        ),
+
+    CONSTRAINT chk_relatorios_configuracao
+        CHECK (
+            configuracao_json IS NULL
+            OR JSON_TYPE(configuracao_json) = 'OBJECT'
+        ),
+
 	UNIQUE KEY uq_relatorio_id_assessoria (id, assessoria_id),
 
     INDEX idx_relatorios_assessoria (assessoria_id),
     INDEX idx_relatorios_cliente (cliente_id),
-    INDEX idx_relatorios_periodo (periodo_inicio, periodo_fim)
+    INDEX idx_relatorios_periodo (periodo_inicio, periodo_fim),
+    INDEX idx_relatorios_sincronizacao (
+        assessoria_id, cliente_id, inclusao_automatica, periodo_inicio, periodo_fim
+    )
 ) ENGINE=InnoDB;
 
 
@@ -671,6 +703,12 @@ CREATE TABLE relatorio_slides (
     clipping_id BIGINT UNSIGNED NULL,
 
     ordem INT UNSIGNED NOT NULL,
+    tipo ENUM('CAPA', 'CLIPPING', 'COMPLEMENTAR', 'ENCERRAMENTO')
+        NOT NULL DEFAULT 'CLIPPING',
+    origem_inclusao ENUM('AUTOMATICA', 'MANUAL', 'ESTRUTURA')
+        NOT NULL DEFAULT 'MANUAL',
+    revisao_pendente TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    imagem_anexo_id BIGINT UNSIGNED NULL,
 
     titulo VARCHAR(255) NULL,
 
@@ -682,9 +720,10 @@ CREATE TABLE relatorio_slides (
 
     observacoes TEXT NULL,
 
-    -- Guarda informações específicas adicionadas ao slide
-    -- sem obrigar a criação de novas colunas toda vez.
+    -- cópia dos dados da origem usados no slide
     dados_json JSON NULL,
+    -- ajustes que valem só para este slide
+    edicoes_json JSON NULL,
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -700,12 +739,104 @@ CREATE TABLE relatorio_slides (
 		REFERENCES clippings(id, assessoria_id)
 		ON DELETE RESTRICT,
 
+    CONSTRAINT fk_relatorio_slides_imagem_anexo
+        FOREIGN KEY (imagem_anexo_id, clipping_id, assessoria_id)
+        REFERENCES clipping_anexos(id, clipping_id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_relatorio_slides_imagem_anexo
+        CHECK (imagem_anexo_id IS NULL OR clipping_id IS NOT NULL),
+
+    CONSTRAINT chk_relatorio_slides_revisao
+        CHECK (revisao_pendente IN (0, 1)),
+
+    CONSTRAINT chk_relatorio_slides_dados
+        CHECK (dados_json IS NULL OR JSON_TYPE(dados_json) = 'OBJECT'),
+
+    CONSTRAINT chk_relatorio_slides_edicoes
+        CHECK (edicoes_json IS NULL OR JSON_TYPE(edicoes_json) = 'OBJECT'),
+
     UNIQUE KEY uq_relatorio_ordem (relatorio_id, ordem),
 
     INDEX idx_relatorio_slides_relatorio (relatorio_id),
     INDEX idx_relatorio_slides_clipping (clipping_id)
 ) ENGINE=InnoDB;
 
+
+-- clippings retirados manualmente não voltam pela inclusão automática
+CREATE TABLE relatorio_clippings_excluidos (
+    relatorio_id BIGINT UNSIGNED NOT NULL,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    clipping_id BIGINT UNSIGNED NOT NULL,
+    excluido_por BIGINT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (relatorio_id, clipping_id),
+
+    CONSTRAINT fk_relatorio_excluidos_relatorio
+        FOREIGN KEY (relatorio_id, assessoria_id)
+        REFERENCES relatorios(id, assessoria_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_relatorio_excluidos_clipping
+        FOREIGN KEY (clipping_id, assessoria_id)
+        REFERENCES clippings(id, assessoria_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_relatorio_excluidos_usuario
+        FOREIGN KEY (excluido_por, assessoria_id)
+        REFERENCES usuarios(id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    INDEX idx_relatorio_excluidos_clipping (assessoria_id, clipping_id)
+) ENGINE=InnoDB;
+
+-- cada exportação guarda uma cópia do conteúdo usado naquela versão
+CREATE TABLE relatorio_versoes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    relatorio_id BIGINT UNSIGNED NOT NULL,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    numero INT UNSIGNED NOT NULL,
+    conteudo_json JSON NOT NULL,
+    gerado_por BIGINT UNSIGNED NOT NULL,
+    gerado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_relatorio_versoes_relatorio
+        FOREIGN KEY (relatorio_id, assessoria_id)
+        REFERENCES relatorios(id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_relatorio_versoes_usuario
+        FOREIGN KEY (gerado_por, assessoria_id)
+        REFERENCES usuarios(id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_relatorio_versoes_conteudo
+        CHECK (JSON_TYPE(conteudo_json) = 'OBJECT'),
+
+    UNIQUE KEY uq_relatorio_versao (relatorio_id, numero),
+    UNIQUE KEY uq_relatorio_versao_assessoria (id, assessoria_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE relatorio_arquivos (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    versao_id BIGINT UNSIGNED NOT NULL,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    formato ENUM('PDF', 'PPTX') NOT NULL,
+    arquivo_path VARCHAR(500) NOT NULL,
+    tamanho_bytes BIGINT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_relatorio_arquivos_versao
+        FOREIGN KEY (versao_id, assessoria_id)
+        REFERENCES relatorio_versoes(id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_relatorio_arquivos_tamanho
+        CHECK (tamanho_bytes > 0),
+
+    UNIQUE KEY uq_relatorio_arquivo_formato (versao_id, formato)
+) ENGINE=InnoDB;
 
 -- 15. Auditoria
 

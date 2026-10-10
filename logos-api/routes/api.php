@@ -511,3 +511,33 @@ $router->delete(
     "CLIPPING.EXCLUIR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
+
+// relatorios
+
+$router->get(
+    "/api/relatorios/materias",
+    "RelatorioController:materias",
+    "RELATORIOS.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/relatorios",
+    "RelatorioController:listar",
+    "RELATORIOS.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/relatorios/{id}",
+    "RelatorioController:buscar",
+    "RELATORIOS.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/relatorios",
+    "RelatorioController:criar",
+    "RELATORIOS.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);

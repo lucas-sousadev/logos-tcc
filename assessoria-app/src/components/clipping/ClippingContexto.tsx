@@ -29,11 +29,12 @@ interface ClippingContextoProps {
   clienteNome: string;
   ano: number;
   anoPelaData: boolean;
+  apenasCliente?: boolean;
   erroCliente?: string;
   erroAno?: string;
   disabled?: boolean;
   onCliente: (cliente: ClienteClippingAno) => void;
-  onAno: (ano: number) => void;
+  onAno?: (ano: number) => void;
   clienteAlterado?: boolean;
   anoAlterado?: boolean;
 }
@@ -50,6 +51,7 @@ export default function ClippingContexto({
   disabled = false,
   onCliente,
   onAno,
+  apenasCliente = false,
 }: ClippingContextoProps) {
   const { theme } = useTheme();
 
@@ -80,29 +82,34 @@ export default function ClippingContexto({
             : "Selecione o cliente"
         }
         action={clienteId !== null ? "Alterar" : "Selecionar"}
-        disabled={disabled || !anoValido}
+        disabled={disabled || (!apenasCliente && !anoValido)}        
         error={erroCliente}
         onPress={() => abrir("cliente")}
         showChanged={clienteAlterado}
+        
       />
 
-      <CampoContexto
-        label="ANO DE REFERÊNCIA"
-        value={anoValido ? String(ano) : "Defina o ano"}
-        action={anoPelaData ? "Pela data" : "Alterar"}
-        disabled={disabled || anoPelaData}
-        error={erroAno}
-        onPress={() => abrir("ano")}
-        showChanged={anoAlterado}
-      />
+      {!apenasCliente ? (
+        <>
+          <CampoContexto
+            label="ANO DE REFERÊNCIA"
+            value={anoValido ? String(ano) : "Defina o ano"}
+            action={anoPelaData ? "Pela data" : "Alterar"}
+            disabled={disabled || anoPelaData}
+            error={erroAno}
+            onPress={() => abrir("ano")}
+            showChanged={anoAlterado}
+          />
 
-      <Text style={[styles.ajuda, { color: theme.textoSub }]}>
-        {!anoValido
-          ? "Defina um ano válido para selecionar o cliente."
-          : anoPelaData
-            ? `O clipping será agrupado em ${ano}, conforme a data da publicação.`
-            : `Sem data de publicação, o clipping ficará em ${ano}.`}
-      </Text>
+          <Text style={[styles.ajuda, { color: theme.textoSub }]}>
+            {!anoValido
+              ? "Defina um ano válido para selecionar o cliente."
+              : anoPelaData
+                ? `O clipping será agrupado em ${ano}, conforme a data da publicação.`
+                : `Sem data de publicação, o clipping ficará em ${ano}.`}
+          </Text>
+        </>
+      ) : null}
 
       {painel === "cliente" ? (
         <PainelClientes
@@ -117,12 +124,12 @@ export default function ClippingContexto({
         />
       ) : null}
 
-      {painel === "ano" ? (
+      {!apenasCliente && painel === "ano" ? (
         <PainelAno
           ano={ano}
           onClose={fechar}
           onAplicar={(novoAno) => {
-            onAno(novoAno);
+            onAno?.(novoAno);
             fechar();
           }}
         />
@@ -138,6 +145,7 @@ function CampoContexto({
   disabled,
   error,
   onPress,
+  
   showChanged = false,
 }: {
   label: string;

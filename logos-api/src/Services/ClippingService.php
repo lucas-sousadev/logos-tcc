@@ -917,11 +917,38 @@ class ClippingService
                     $dados,
                     null
                 );
+                
+                $bloquearCliente = Connection::get()->prepare(
+                    "
+                        SELECT id
+                        FROM clientes
+                        WHERE id = :cliente_id
+                        AND assessoria_id = :assessoria_id
+                        LIMIT 1
+                        FOR UPDATE
+                    "
+                );
+
+                $bloquearCliente->execute([
+                    'cliente_id' => $campos['cliente_id'],
+                    'assessoria_id' => $assessoriaId,
+                ]);
+
+                if (!$bloquearCliente->fetchColumn()) {
+                    throw new OutOfBoundsException(
+                        'Cliente não encontrado.'
+                    );
+                }
 
                 $id = Clipping::criar(
                     $assessoriaId,
                     $usuarioId,
                     $campos
+                );
+
+                RelatorioService::sincronizarNovoClipping(
+                    $assessoriaId,
+                    $id
                 );
 
                 return self::buscar(

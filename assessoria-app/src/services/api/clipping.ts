@@ -1,4 +1,11 @@
 import { API_URL } from "@/constants/api";
+import { fetch as expoFetch } from "expo/fetch";
+import {
+  Directory,
+  File as ExpoFile,
+  Paths,
+} from "expo-file-system";
+import { Platform } from "react-native";
 import {
   authenticatedFetch,
   getToken,
@@ -373,40 +380,72 @@ export async function enviarAnexo(
   arquivo: ArquivoClippingSelecionado
 ): Promise<AnexoClipping> {
   const formData = new FormData();
+  let diretorioTemporario: Directory | null = null;
 
-  const multipart = arquivo.file ?? {
-    uri: arquivo.uri,
-    name: arquivo.nome,
-    type: arquivo.mimeType,
-  };
+  try {
+    if (Platform.OS === "web") {
+      if (!arquivo.file) {
+        throw new Error("O arquivo selecionado não está disponível para envio.");
+      }
 
-  formData.append(
-    "arquivo",
-    multipart as unknown as Blob
-  );
+      formData.append("arquivo", arquivo.file, arquivo.nome);
+    } else {
+      const selecionado = new ExpoFile(arquivo.uri);
 
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clippings/${clippingId}/anexos`,
-    {
-      method: "POST",
-      body: formData,
+      if (!selecionado.exists) {
+        throw new Error("O arquivo selecionado não está mais disponível.");
+      }
+
+      // o seletor salva com nome aleatório, então copiamos com o nome original
+      const nome = arquivo.nome
+        .split(/[\\/]/)
+        .pop()
+        ?.replace(/[\u0000-\u001f\u007f]/g, "_")
+        .trim() || "arquivo";
+
+      diretorioTemporario = new Directory(
+        Paths.cache,
+        `clipping-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      );
+      diretorioTemporario.create();
+
+      const arquivoNativo = new ExpoFile(diretorioTemporario, nome);
+      await selecionado.copy(arquivoNativo);
+      formData.append("arquivo", arquivoNativo, nome);
     }
-  );
 
-  const dados = await lerResposta<{
-    success: boolean;
-    message?: string;
-    anexo?: AnexoClipping;
-  }>(
-    response,
-    "Não foi possível enviar o anexo."
-  );
+    const response = await authenticatedFetch(
+      `${API_URL}/api/clippings/${clippingId}/anexos`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      Platform.OS === "web" ? fetch : expoFetch
+    );
 
-  if (!dados.anexo) {
-    throw new Error("A API não retornou o anexo enviado.");
+    const dados = await lerResposta<{
+      success: boolean;
+      message?: string;
+      anexo?: AnexoClipping;
+    }>(
+      response,
+      "Não foi possível enviar o anexo."
+    );
+
+    if (!dados.anexo) {
+      throw new Error("A API não retornou o anexo enviado.");
+    }
+
+    return dados.anexo;
+  } finally {
+    if (diretorioTemporario?.exists) {
+      try {
+        diretorioTemporario.delete();
+      } catch {
+        // o cache ainda pode ser limpo pelo sistema
+      }
+    }
   }
-
-  return dados.anexo;
 }
 
 export async function atualizarAnexo(
