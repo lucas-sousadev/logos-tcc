@@ -223,3 +223,33 @@ export async function buscarRelatorio(
     "Não foi possível abrir o relatório."
   );
 }
+
+export interface ClienteSelecaoRelatorio {
+  id: number;
+  nome: string;
+  ativo: number;
+}
+
+export async function listarClientesRelatorio(params: {
+  busca: string;
+  page: number;
+  limit: number;
+}): Promise<{
+  clientes: ClienteSelecaoRelatorio[];
+  pagination: PaginacaoRelatorio;
+}> {
+  const query = new URLSearchParams({
+    busca: params.busca.trim(),
+    page: String(params.page),
+    limit: String(params.limit),
+  });
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/clientes?${query.toString()}`
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível carregar os clientes."
+  );
+}

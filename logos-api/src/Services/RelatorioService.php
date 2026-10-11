@@ -244,6 +244,75 @@ class RelatorioService
         return $linha;
     }
 
+    public static function clientesParaSelecao(
+        int $assessoriaId,
+        array $dados
+    ): array {
+        $page = self::id($dados['page'] ?? 1, 'Página');
+        $limit = self::id($dados['limit'] ?? 50, 'Limite');
+
+        if ($limit > 100) {
+            throw new \InvalidArgumentException(
+                'O limite máximo é 100 clientes por página.'
+            );
+        }
+
+        $busca = $dados['busca'] ?? '';
+
+        if (!is_string($busca) || mb_strlen($busca, 'UTF-8') > 150) {
+            throw new \InvalidArgumentException('Busca inválida.');
+        }
+
+        $busca = trim($busca);
+        $where = ' WHERE assessoria_id = :assessoria_id';
+        $parametros = ['assessoria_id' => $assessoriaId];
+
+        if ($busca !== '') {
+            $termo = '%' . strtr(
+                $busca,
+                ['!' => '!!', '%' => '!%', '_' => '!_']
+            ) . '%';
+
+            $where .= " AND nome LIKE :busca ESCAPE '!'";
+            $parametros['busca'] = $termo;
+        }
+
+        $total = (int) self::consultar(
+            'SELECT COUNT(*) FROM clientes' . $where,
+            $parametros
+        )->fetchColumn();
+
+        $offset = ($page - 1) * $limit;
+
+        $clientes = self::consultar(
+            'SELECT id, nome, ativo FROM clientes'
+                . $where
+                . ' ORDER BY nome ASC, id ASC'
+                . ' LIMIT :limit OFFSET :offset',
+            [
+                ...$parametros,
+                'limit' => $limit,
+                'offset' => $offset,
+            ]
+        )->fetchAll();
+
+        foreach ($clientes as &$cliente) {
+            $cliente['id'] = (int) $cliente['id'];
+            $cliente['ativo'] = (int) $cliente['ativo'];
+        }
+        unset($cliente);
+
+        return [
+            'clientes' => $clientes,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+                'has_next' => $offset + count($clientes) < $total,
+            ],
+        ];
+    }
+
     public static function materias(
         int $assessoriaId,
         array $dados

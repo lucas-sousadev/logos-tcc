@@ -130,4 +130,15 @@ class RelatorioController
             201
         );
     }
+
+    public function clientes(): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                RelatorioService::clientesParaSelecao(
+                    $assessoriaId,
+                    $_GET
+                )
+        );
+    }
 }

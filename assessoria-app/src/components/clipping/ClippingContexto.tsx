@@ -24,6 +24,20 @@ import {
   type ClienteClippingAno,
 } from "@/services/api/clipping";
 
+type ClienteDoSeletor = Pick<
+  ClienteClippingAno,
+  "id" | "nome" | "ativo"
+>;
+
+type BuscarClientes = (params: {
+  busca: string;
+  page: number;
+  limit: number;
+}) => Promise<{
+  clientes: ClienteDoSeletor[];
+  pagination: { has_next: boolean };
+}>;
+
 interface ClippingContextoProps {
   clienteId: number | null;
   clienteNome: string;
@@ -33,7 +47,8 @@ interface ClippingContextoProps {
   erroCliente?: string;
   erroAno?: string;
   disabled?: boolean;
-  onCliente: (cliente: ClienteClippingAno) => void;
+  buscarClientes?: BuscarClientes;
+  onCliente: (cliente: ClienteDoSeletor) => void;
   onAno?: (ano: number) => void;
   clienteAlterado?: boolean;
   anoAlterado?: boolean;
@@ -49,6 +64,7 @@ export default function ClippingContexto({
   anoAlterado = false,
   erroAno,
   disabled = false,
+  buscarClientes,
   onCliente,
   onAno,
   apenasCliente = false,
@@ -116,6 +132,7 @@ export default function ClippingContexto({
           key={ano}
           ano={ano}
           selecionado={clienteId}
+          buscarClientes={buscarClientes}
           onClose={fechar}
           onSelecionar={(cliente) => {
             onCliente(cliente);
@@ -359,13 +376,15 @@ function PainelAno({
 function PainelClientes({
   ano,
   selecionado,
+  buscarClientes,
   onClose,
   onSelecionar,
 }: {
   ano: number;
   selecionado: number | null;
+  buscarClientes?: BuscarClientes;
   onClose: () => void;
-  onSelecionar: (cliente: ClienteClippingAno) => void;
+  onSelecionar: (cliente: ClienteDoSeletor) => void;
 }) {
   const { theme } = useTheme();
 
@@ -373,7 +392,7 @@ function PainelClientes({
   const [consulta, setConsulta] = useState("");
   const [pagina, setPagina] = useState(1);
   const [tentativa, setTentativa] = useState(0);
-  const [clientes, setClientes] = useState<ClienteClippingAno[]>([]);
+  const [clientes, setClientes] = useState<ClienteDoSeletor[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [temMais, setTemMais] = useState(false);
   const [erro, setErro] = useState("");
@@ -383,10 +402,16 @@ function PainelClientes({
 
     async function carregar() {
       try {
-        const resposta = await listarClientesDoAno(ano, {
-          busca: consulta,
-          page: pagina,
-          limit: 50,
+        const resposta = buscarClientes
+          ? await buscarClientes({
+              busca: consulta,
+              page: pagina,
+              limit: 50,
+            })
+          : await listarClientesDoAno(ano, {
+              busca: consulta,
+              page: pagina,
+              limit: 50,
         });
 
         if (!ativo) return;
@@ -424,7 +449,7 @@ function PainelClientes({
     return () => {
       ativo = false;
     };
-  }, [ano, consulta, pagina, tentativa]);
+  }, [ano, consulta, pagina, tentativa, buscarClientes]);
 
   function pesquisar(termo = busca) {
     Keyboard.dismiss();
@@ -538,7 +563,9 @@ function PainelClientes({
             >
               {consulta
                 ? "Nenhum cliente encontrado para essa busca."
-                : "Nenhum cliente disponível neste ano."}
+                : buscarClientes
+                  ? "Nenhum cliente cadastrado nesta assessoria."
+                  : "Nenhum cliente disponível neste ano."}
             </Text>
           ) : null
         }

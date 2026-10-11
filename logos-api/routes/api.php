@@ -514,12 +514,6 @@ $router->delete(
 
 // relatorios
 
-$router->get(
-    "/api/relatorios/materias",
-    "RelatorioController:materias",
-    "RELATORIOS.CRIAR",
-    middleware: [$authMiddleware, $permissionMiddleware]
-);
 
 $router->get(
     "/api/relatorios",
@@ -532,6 +526,20 @@ $router->get(
     "/api/relatorios/{id}",
     "RelatorioController:buscar",
     "RELATORIOS.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/relatorios/materias",
+    "RelatorioController:materias",
+    "RELATORIOS.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/relatorios/clientes",
+    "RelatorioController:clientes",
+    "RELATORIOS.CRIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 
