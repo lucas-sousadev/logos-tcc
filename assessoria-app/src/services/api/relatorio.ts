@@ -51,6 +51,8 @@ export interface SlideRelatorio {
     };
     veiculo?: {
       nome?: string | null;
+      descricao?: string | null;
+      alcance?: string | null;
     };
   } | null;
 }
@@ -60,6 +62,7 @@ export interface RelatorioDetalhado extends ResumoRelatorio {
   modelo_codigo: string;
   modelo_versao: number;
   configuracao_json: Record<string, unknown> | null;
+  total_slides: number;
 }
 
 export interface DadosNovoRelatorio {
@@ -208,14 +211,15 @@ export async function criarRelatorio(
 
 export async function buscarRelatorio(
   id: number,
-  page = 1
+  page = 1,
+  busca = ""
 ): Promise<{
   relatorio: RelatorioDetalhado;
   slides: SlideRelatorio[];
   pagination: PaginacaoRelatorio;
 }> {
   const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${id}?page=${page}&limit=20`
+    `${API_URL}/api/relatorios/${id}?page=${page}&limit=20&busca=${encodeURIComponent(busca.trim())}`
   );
 
   return lerResposta(
@@ -251,5 +255,114 @@ export async function listarClientesRelatorio(params: {
   return lerResposta(
     response,
     "Não foi possível carregar os clientes."
+  );
+}
+
+export interface DadosEdicaoRelatorio {
+  titulo: string;
+  inclusao_automatica: boolean;
+}
+
+export async function atualizarRelatorio(
+  id: number,
+  dados: DadosEdicaoRelatorio
+): Promise<{ relatorio: RelatorioDetalhado }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    }
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível atualizar o relatório."
+  );
+}
+
+export async function excluirRelatorio(
+  id: number
+): Promise<{ message: string }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}`,
+    { method: "DELETE" }
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível excluir o relatório."
+  );
+}
+
+export interface ResumoMateriasEdicao {
+  novas: number;
+  ja_incluidas: number;
+  fora_do_periodo: number;
+  assinatura: string;
+}
+
+export async function listarMateriasCandidatasRelatorio(
+  id: number,
+  params: {
+    periodo_inicio: string;
+    periodo_fim: string;
+    page?: number;
+    limit?: number;
+    busca?: string;
+  }
+): Promise<{
+  materias: MateriaRelatorio[];
+  resumo: ResumoMateriasEdicao;
+  pagination: PaginacaoRelatorio;
+}> {
+  const query = new URLSearchParams({
+    periodo_inicio: params.periodo_inicio,
+    periodo_fim: params.periodo_fim,
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+
+  if (params.busca?.trim()) {
+    query.set("busca", params.busca.trim());
+  }
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}/materias-candidatas?${query}`
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível consultar as matérias disponíveis."
+  );
+}
+
+export async function atualizarPeriodoRelatorio(
+  id: number,
+  dados: {
+    periodo_inicio: string;
+    periodo_fim: string;
+    ids_incluir: number[];
+    ids_excluir: number[];
+    incluir_todas: boolean;
+    assinatura: string;
+  }
+): Promise<{
+  relatorio: RelatorioDetalhado;
+  materias_incluidas: number;
+}> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}/periodo`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    }
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível atualizar o período."
   );
 }

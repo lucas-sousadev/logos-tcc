@@ -78,6 +78,11 @@ class RelatorioController
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 400);
+        } catch (\DomainException $e) {
+            $this->responder([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 409); 
         } catch (\Throwable $e) {
             error_log('Erro no módulo Relatórios: ' . $e->getMessage());
 
@@ -138,6 +143,56 @@ class RelatorioController
                 RelatorioService::clientesParaSelecao(
                     $assessoriaId,
                     $_GET
+                )
+        );
+    }
+
+    public function atualizar(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Relatório atualizado com sucesso.',
+                'relatorio' => RelatorioService::atualizar(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+
+    public function excluir(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                RelatorioService::excluir(
+                    $assessoriaId,
+                    $rota['id'] ?? null
+                )
+        );
+    }
+
+    public function materiasParaEdicao(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                RelatorioService::materiasParaEdicao(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $_GET
+                )
+        );
+    }
+    
+    public function atualizarPeriodo(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) =>
+                RelatorioService::atualizarPeriodo(
+                    $assessoriaId,
+                    $usuarioId,
+                    $rota['id'] ?? null,
+                    $this->corpo()
                 )
         );
     }

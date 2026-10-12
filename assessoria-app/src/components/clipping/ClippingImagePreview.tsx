@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import type { ImageURISource } from "react-native";
+import type {
+  ImageURISource,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import Text from "@/components/ui/Text";
@@ -21,11 +25,15 @@ import { obterUrlArquivoAnexo } from "@/services/api/clipping";
 interface ClippingImagemPreviewProps {
   endpoint: string;
   nome: string;
+  style?: StyleProp<ViewStyle>;
+  resizeMode?: "cover" | "contain";
 }
 
 export default function ClippingImagemPreview({
   endpoint,
   nome,
+  style,
+  resizeMode = "cover",
 }: ClippingImagemPreviewProps) {
   const { theme } = useTheme();
 
@@ -135,6 +143,7 @@ export default function ClippingImagemPreview({
           styles.preview,
           styles.centralizado,
           { backgroundColor: `${theme.primaria}12` },
+          style
         ]}
       >
         <Ionicons
@@ -160,6 +169,7 @@ export default function ClippingImagemPreview({
       style={[
         styles.preview,
         { backgroundColor: `${theme.primaria}12` },
+        style
       ]}
     >
       {fonte ? (
@@ -167,7 +177,7 @@ export default function ClippingImagemPreview({
           source={fonte}
           accessibilityLabel={nome}
           style={styles.imagem}
-          resizeMode="cover"
+          resizeMode={resizeMode}
           onLoad={() => setCarregando(false)}
           onError={() => {
             setErro("Não foi possível exibir esta imagem.");

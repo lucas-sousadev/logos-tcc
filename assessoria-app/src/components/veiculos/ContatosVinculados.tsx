@@ -759,7 +759,7 @@ export default function ContatosVinculados({
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: 28,
+    marginTop: 20,
   },
 
   header: {

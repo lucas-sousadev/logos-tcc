@@ -523,6 +523,13 @@ $router->get(
 );
 
 $router->get(
+    "/api/relatorios/{id}/materias-candidatas",
+    "RelatorioController:materiasParaEdicao",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
     "/api/relatorios/{id}",
     "RelatorioController:buscar",
     "RELATORIOS.VISUALIZAR",
@@ -540,6 +547,27 @@ $router->get(
     "/api/relatorios/clientes",
     "RelatorioController:clientes",
     "RELATORIOS.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/relatorios/{id}/periodo",
+    "RelatorioController:atualizarPeriodo",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/relatorios/{id}",
+    "RelatorioController:atualizar",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->delete(
+    "/api/relatorios/{id}",
+    "RelatorioController:excluir",
+    "RELATORIOS.EXCLUIR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 

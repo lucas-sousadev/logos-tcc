@@ -137,7 +137,7 @@ export default function RelatorioFilterModal({
       onApply={aplicar}
     >
       <Text style={{ color: theme.textoSub, marginBottom: 16 }}>
-        A busca da listagem já encontra títulos e clientes.
+        A pesquisa da listagem já encontra títulos e clientes.
       </Text>
 
       <Input

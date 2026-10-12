@@ -135,25 +135,27 @@ export default function Clipping() {
               </Text>
             </View>
 
+          </View>
+          
+          <View style={styles.acoesContainer}>
             {temPermissao("CLIPPING", "CRIAR") ? (
+                <Button
+                  title="NOVO CLIPPING"
+                  size="small"
+                  onPress={novoClipping}
+                  style={styles.newButton}
+                />
+            ) : null}
+              {temPermissao("CLIPPING", "IMPORTAR") ? (
               <Button
-                title="CLIPPING RÁPIDO"
+                title="IMPORTAR CSV"
+                variant="outline"
                 size="small"
-                onPress={novoClipping}
-                style={styles.newButton}
+                onPress={importarCsv}
+                style={styles.importButton}
               />
             ) : null}
           </View>
-
-          {temPermissao("CLIPPING", "IMPORTAR") ? (
-            <Button
-              title="IMPORTAR CSV"
-              variant="outline"
-              size="small"
-              onPress={importarCsv}
-              style={styles.importButton}
-            />
-          ) : null}
 
           {erro ? (
             <View
@@ -345,17 +347,22 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+  acoesContainer:{
+    gap: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20
+  },
   newButton: {
-    width: "auto",
+    width: 130,
     borderRadius: 12,
     padding: 10
   },
 
   importButton: {
-    alignSelf: "flex-start",
-    width: "auto",
-    marginBottom: 20,
+    width: 130,
     borderRadius: 12,
+    padding: 10
   },
 
   yearCard: {

@@ -980,9 +980,8 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  
   secao: {
-    marginTop: 28,
+    marginTop: 20,
   },
   cabecalho: {
     flexDirection: "row",

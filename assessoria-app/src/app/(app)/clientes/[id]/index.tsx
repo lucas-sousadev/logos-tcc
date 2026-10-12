@@ -12,6 +12,7 @@ import {
 import {
   useEffect,
   useState,
+  useRef
 } from "react";
 
 import {
@@ -31,6 +32,7 @@ import FeedbackAlert, {
 } from "@/components/forms/FeedbackAlert";
 import LogoPicker from "@/components/forms/LogoPicker";
 import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
+import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -138,6 +140,16 @@ export default function ClienteDetalhes() {
 
   const [feedback, setFeedback] =
     useState<FeedbackState | null>(null);
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [modoEdicao]);
 
   useEffect(() => {
     void carregarCliente();
@@ -713,14 +725,32 @@ export default function ClienteDetalhes() {
       />
 
       <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+      {!modoEdicao ? (
+        <AcoesDetalhes
+          onEditar={
+            temPermissao("CLIENTES", "EDITAR")
+              ? () => setModoEdicao(true)
+              : undefined
+          }
+          onExcluir={
+            temPermissao("CLIENTES", "EXCLUIR")
+              ? confirmarExclusao
+              : undefined
+          }
+          excluindo={excluindo}
+        />
+      ) : null }
         <View
           style={[
             styles.profile,
             {
               borderColor: theme.borda,
+              backgroundColor: theme.backgroundSecundario
             },
           ]}
         >
@@ -1087,13 +1117,13 @@ export default function ClienteDetalhes() {
           </>
         ) : (
           <>
+          
             <Text
               weight="Bold"
               style={[styles.sectionTitle, {color: theme.texto, borderBottomColor: theme.borda, borderBottomWidth: 0, textAlign: "left"}]}
             >
               INFORMAÇÕES
             </Text>
-
             <InfoRow
               icon="person-outline"
               label="RESPONSÁVEL"
@@ -1197,34 +1227,6 @@ export default function ClienteDetalhes() {
               />
             ) : null}
 
-            <View style={styles.actions}>
-              {temPermissao(
-                "CLIENTES",
-                "EDITAR"
-              ) ? (
-                <Button
-                  title="EDITAR"
-                  onPress={() =>
-                    setModoEdicao(true)
-                  }
-                  style={styles.actionButton}
-                />
-              ) : null}
-
-              {temPermissao(
-                "CLIENTES",
-                "EXCLUIR"
-              ) ? (
-                <Button
-                  title="EXCLUIR"
-                  variant="outline"
-                  loading={excluindo}
-                  onPress={confirmarExclusao}
-                  style={styles.actionButton}
-                />
-              ) : null}
-            </View>
-
             <ClippingsVinculados
               key={`cliente-${cliente.id}`}
               tipo="cliente"
@@ -1283,6 +1285,7 @@ function InfoRow({
         styles.infoRow,
         {
           borderColor: theme.borda,
+          backgroundColor: theme.backgroundSecundario
         },
       ]}
     >
@@ -1353,6 +1356,7 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 20,
+    paddingTop: 12,
     paddingBottom: 40,
   },
 
@@ -1393,7 +1397,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 12,
   },
 
   avatar: {
@@ -1434,7 +1438,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 13,
-    marginBottom: 14,
+    marginBottom: 12,
     borderBottomWidth: 1.5,
     paddingBottom: 2,
     textAlign: "center"
@@ -1494,7 +1498,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 22,
+    marginBottom: 14,
   },
 
   statusInfo: {
@@ -1520,7 +1524,6 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 10,
   },
 
   actionButton: {

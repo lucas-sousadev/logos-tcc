@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   useLocalSearchParams,
   useRouter,
@@ -26,6 +26,7 @@ import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
+import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 
 import {
   ErrosJornalista,
@@ -103,6 +104,16 @@ export default function JornalistaDetalhes() {
 
     const [excluindo, setExcluindo] =
         useState(false);
+
+    const scrollRef = useRef<ScrollView>(null);
+
+    useEffect(() => {
+      const frame = requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+
+      return () => cancelAnimationFrame(frame);
+    }, [modoEdicao]);
 
     useEffect(() => {
         carregarJornalista();
@@ -650,17 +661,34 @@ export default function JornalistaDetalhes() {
       />
 
       <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={styles.content}
       >
+        {!modoEdicao ? (
+          <AcoesDetalhes
+            onEditar={
+                temPermissao("MAILING", "EDITAR")
+                  ? () => setModoEdicao(true)
+                : undefined
+            }
+            onExcluir={
+              temPermissao("MAILING", "EXCLUIR")
+                ? confirmarExclusao
+                : undefined
+            }
+            excluindo={excluindo}
+          />
+        ) : null }
 
         <View
           style={[
             styles.profile,
             {
               borderColor: theme.borda,
+              backgroundColor: theme.backgroundSecundario
+
             },
           ]}
         >
@@ -1031,28 +1059,6 @@ export default function JornalistaDetalhes() {
                 theme={theme}
               />
             ) : null}
-
-            <View style={styles.actions}>
-             {temPermissao("MAILING", "EDITAR") && (
-              <Button
-                title="EDITAR"
-                onPress={() =>
-                  setModoEdicao(true)
-                }
-                style={styles.primaryAction}
-              />
-             )}
-             
-            {temPermissao("MAILING", "EXCLUIR") && (
-              <Button
-                title="EXCLUIR"
-                variant="outline"
-                loading={excluindo}
-                onPress={confirmarExclusao}
-                style={styles.deleteButton}
-              />
-            )}
-            </View>
           </>
         )}
       </ScrollView>
@@ -1085,6 +1091,7 @@ function InfoRow({
         styles.infoRow,
         {
           borderColor: theme.borda,
+          backgroundColor: theme.backgroundSecundario
         },
       ]}
     >
@@ -1154,6 +1161,7 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 20,
+    paddingTop: 12,
     paddingBottom: 40,
   },
 
@@ -1169,7 +1177,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 10,
   },
 
   avatar: {

@@ -21,6 +21,12 @@ export function rotaOrigemClipping(
       params: { id: String(numero) },
     };
   }
-
+  
+  if (tipo === "relatorio") {
+    return {
+      pathname: "/relatorios/[id]" as const,
+      params: { id: String(numero) },
+    };
+  }
   return null;
 }

@@ -9,7 +9,7 @@ import {
   Image,
 } from "react-native";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -20,6 +20,7 @@ import Text from "@/components/ui/Text";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import LogoPicker from "@/components/forms/LogoPicker";
 import TierSelector from "@/components/forms/TierSelector";
+import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 import { DESCRICOES_TIER, rotuloTier, Tier } from "@/constants/tier";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -91,6 +92,16 @@ export default function VeiculoDetalhes() {
   const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
   const [logoRemovido, setLogoRemovido] = useState(false);
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [modoEdicao]);
 
   const carregarVeiculo = useCallback(
     async () => {
@@ -405,10 +416,32 @@ export default function VeiculoDetalhes() {
       />
 
       <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <View style={[styles.profile, { borderColor: theme.borda }]}>
+      {!modoEdicao ? (
+       <AcoesDetalhes
+          onEditar={
+            temPermissao("VEICULOS", "EDITAR")
+              ? () => setModoEdicao(true)
+              : undefined
+          }
+          onExcluir={
+            temPermissao("VEICULOS", "EXCLUIR")
+              ? confirmarExclusao
+              : undefined
+          }
+            editarDesabilitado={excluindoVinculos}
+            excluirDesabilitado={excluindoVinculos}
+            excluindo={excluindo}
+        />
+      ) : null }
+        <View style={[styles.profile, { 
+          borderColor: theme.borda,           
+          backgroundColor: theme.backgroundSecundario
+        }]}>
           <View
             style={[
               styles.avatar,
@@ -643,26 +676,6 @@ export default function VeiculoDetalhes() {
                   : "contatos"
               }`}
             />
-            <View style={styles.actions}>
-              {temPermissao("VEICULOS", "EDITAR") && (
-                <Button
-                  title="EDITAR"
-                  disabled={excluindoVinculos}
-                  onPress={() => setModoEdicao(true)}
-                  style={styles.actionButton}
-                />
-              )}
-              {temPermissao("VEICULOS", "EXCLUIR") && (
-                <Button
-                  title="EXCLUIR"
-                  variant="outline"
-                  loading={excluindo}
-                  disabled={excluindoVinculos}
-                  onPress={confirmarExclusao}
-                  style={styles.actionButton}
-                />
-              )}
-            </View>
             {podeVerContatos || podeVerClippings ? (
               <View style={styles.vinculos}>
                 <Text weight="Bold" style={styles.sectionTitle}>
@@ -728,7 +741,8 @@ function InfoRow({
   const { theme } = useTheme();
 
   return (
-    <View style={[styles.infoRow, { borderColor: theme.borda }]}>
+    <View style={[styles.infoRow, { borderColor: theme.borda, backgroundColor: theme.backgroundSecundario
+}]}>
       <View
         style={[
           styles.infoIcon,
@@ -755,6 +769,7 @@ const styles = StyleSheet.create({
 },
   content: { 
     padding: 20, 
+    paddingTop: 12,
     paddingBottom: 40 
 },
   loading: { 
@@ -768,7 +783,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 10,
   },
   avatar: {
     width: 64,
@@ -845,7 +860,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 22,
+    marginBottom: 14,
   },
   statusInfo: { 
     flex: 1,
@@ -862,10 +877,10 @@ const styles = StyleSheet.create({
   actions: { 
     flexDirection: "row",
     gap: 10, 
-    marginTop: 10 
+    marginTop: 0,
 },
   vinculos: {
-    marginTop: 26,
+    marginTop: 5,
   },
   actionButton: { 
     flex: 1 

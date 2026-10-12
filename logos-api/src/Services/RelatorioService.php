@@ -1380,6 +1380,12 @@ class RelatorioService
                         FROM relatorio_slides s
                         WHERE s.relatorio_id = r.id
                         AND s.assessoria_id = r.assessoria_id
+                    ) AS total_slides,
+                    (
+                        SELECT COUNT(*)
+                        FROM relatorio_slides s
+                        WHERE s.relatorio_id = r.id
+                        AND s.assessoria_id = r.assessoria_id
                         AND s.origem_inclusao = 'AUTOMATICA'
                         AND s.revisao_pendente = 1
                     ) AS novos_pendentes
@@ -1422,6 +1428,8 @@ class RelatorioService
         $relatorio['novos_pendentes'] =
             (int) $relatorio['novos_pendentes'];
 
+        $relatorio['total_slides'] = (int) $relatorio['total_slides'];
+
         $relatorio['configuracao_json'] =
             $relatorio['configuracao_json'] === null
                 ? null
@@ -1432,17 +1440,50 @@ class RelatorioService
                     JSON_THROW_ON_ERROR
                 );
 
+                $busca = $dados['busca'] ?? '';
+
+        if (!is_string($busca) || mb_strlen($busca, 'UTF-8') > 200) {
+            throw new \InvalidArgumentException('Busca inválida.');
+        }
+
+        $busca = trim($busca);
+
+        $whereSlides = '
+            WHERE s.relatorio_id = :relatorio_id
+            AND s.assessoria_id = :assessoria_id
+        ';
+
+        $parametrosSlides = [
+            'relatorio_id' => $relatorioId,
+            'assessoria_id' => $assessoriaId,
+        ];
+
+        if ($busca !== '') {
+            $termo = '%' . strtr(
+                $busca,
+                ['!' => '!!', '%' => '!%', '_' => '!_']
+            ) . '%';
+
+            $whereSlides .= "
+                AND (
+                    s.titulo LIKE :busca_titulo ESCAPE '!'
+                    OR JSON_UNQUOTE(
+                        JSON_EXTRACT(s.dados_json, '$.clipping.pauta')
+                    ) LIKE :busca_pauta ESCAPE '!'
+                    OR JSON_UNQUOTE(
+                        JSON_EXTRACT(s.dados_json, '$.veiculo.nome')
+                    ) LIKE :busca_veiculo ESCAPE '!'
+                )
+            ";
+
+            $parametrosSlides['busca_titulo'] = $termo;
+            $parametrosSlides['busca_pauta'] = $termo;
+            $parametrosSlides['busca_veiculo'] = $termo;
+        }
+
         $totalSlides = (int) self::consultar(
-            "
-                SELECT COUNT(*)
-                FROM relatorio_slides
-                WHERE relatorio_id = :relatorio_id
-                AND assessoria_id = :assessoria_id
-            ",
-            [
-                'relatorio_id' => $relatorioId,
-                'assessoria_id' => $assessoriaId,
-            ]
+            'SELECT COUNT(*) FROM relatorio_slides s' . $whereSlides,
+            $parametrosSlides
         )->fetchColumn();
 
         $offset = ($page - 1) * $limit;
@@ -1465,18 +1506,16 @@ class RelatorioService
                     edicoes_json,
                     created_at,
                     updated_at
-                FROM relatorio_slides
-                WHERE relatorio_id = :relatorio_id
-                AND assessoria_id = :assessoria_id
-                ORDER BY ordem ASC
+                FROM relatorio_slides s
+                {$whereSlides}
+                ORDER BY s.ordem ASC
                 LIMIT :limit OFFSET :offset
-            ",
-            [
-                'relatorio_id' => $relatorioId,
-                'assessoria_id' => $assessoriaId,
-                'limit' => $limit,
-                'offset' => $offset,
-            ]
+                ",
+                [
+                    ...$parametrosSlides,
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ]
         )->fetchAll();
 
         foreach ($slides as &$slide) {
@@ -1523,4 +1562,825 @@ class RelatorioService
         ];
     }
 
+    public static function sincronizarImagemClipping(
+        int $assessoriaId,
+        int $clippingId
+    ): int {
+        $db = Connection::get();
+
+        if (!$db->inTransaction()) {
+            throw new \LogicException(
+                'A atualização da imagem exige a transação do anexo.'
+            );
+        }
+
+        $imagem = self::consultar(
+            "
+                SELECT id, arquivo_path
+                FROM clipping_anexos
+                WHERE assessoria_id = :assessoria_id
+                AND clipping_id = :clipping_id
+                AND imagem_relatorio = 1
+                LIMIT 1
+            ",
+            [
+                'assessoria_id' => $assessoriaId,
+                'clipping_id' => $clippingId,
+            ]
+        )->fetch();
+
+        $imagemId = $imagem ? (int) $imagem['id'] : null;
+        $imagemPath = $imagem['arquivo_path'] ?? null;
+
+        $stmt = self::consultar(
+            "
+                UPDATE relatorio_slides
+                SET
+                    imagem_anexo_id = :imagem_id,
+                    imagem_path = :imagem_path,
+                    dados_json = JSON_SET(
+                        COALESCE(dados_json, JSON_OBJECT()),
+                        '$.imagem.anexo_id',
+                        :dados_imagem_id,
+                        '$.imagem.arquivo_path',
+                        :dados_imagem_path
+                    )
+                WHERE assessoria_id = :assessoria_id
+                AND clipping_id = :clipping_id
+                AND tipo = 'CLIPPING'
+                AND (
+                    edicoes_json IS NULL
+                    OR JSON_CONTAINS_PATH(
+                        edicoes_json,
+                        'one',
+                        '$.imagem'
+                    ) = 0
+                )
+            ",
+            [
+                'imagem_id' => $imagemId,
+                'imagem_path' => $imagemPath,
+                'dados_imagem_id' => $imagemId,
+                'dados_imagem_path' => $imagemPath,
+                'assessoria_id' => $assessoriaId,
+                'clipping_id' => $clippingId,
+            ]
+        );
+
+        return $stmt->rowCount();
+    }
+
+    public static function atualizar(
+        int $assessoriaId,
+        mixed $valorId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorId, 'Relatório');
+
+        if (
+            array_diff(
+                array_keys($dados),
+                ['titulo', 'inclusao_automatica']
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Há campos não permitidos na edição do relatório.'
+            );
+        }
+
+        $titulo = $dados['titulo'] ?? null;
+        $inclusaoAutomatica =
+            $dados['inclusao_automatica'] ?? null;
+
+        if (
+            !is_string($titulo)
+            || trim($titulo) === ''
+            || mb_strlen(trim($titulo), 'UTF-8') > 200
+        ) {
+            throw new \InvalidArgumentException(
+                'Informe um título com até 200 caracteres.'
+            );
+        }
+
+        if (!is_bool($inclusaoAutomatica)) {
+            throw new \InvalidArgumentException(
+                'Informe se a inclusão automática está ativa.'
+            );
+        }
+
+        $titulo = trim($titulo);
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $atual = self::consultar(
+                "
+                    SELECT id, periodo_inicio, periodo_fim
+                    FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$atual) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            if (
+                $inclusaoAutomatica
+                && (
+                    $atual['periodo_inicio'] === null
+                    || $atual['periodo_fim'] === null
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'Defina o período antes de ativar a inclusão automática.'
+                );
+            }
+
+            self::consultar(
+                "
+                    UPDATE relatorios
+                    SET titulo = :titulo,
+                        inclusao_automatica = :inclusao_automatica
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'titulo' => $titulo,
+                    'inclusao_automatica' =>
+                        $inclusaoAutomatica ? 1 : 0,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            self::consultar(
+                "
+                    UPDATE relatorio_slides
+                    SET titulo = :titulo
+                    WHERE relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    AND tipo = 'CAPA'
+                    AND (
+                        edicoes_json IS NULL
+                        OR JSON_CONTAINS_PATH(
+                            edicoes_json,
+                            'one',
+                            '$.titulo'
+                        ) = 0
+                    )
+                ",
+                [
+                    'titulo' => $titulo,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            $db->commit();
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+
+        return self::buscar(
+            $assessoriaId,
+            $relatorioId,
+            ['page' => 1, 'limit' => 1]
+        )['relatorio'];
+    }
+
+    public static function excluir(
+        int $assessoriaId,
+        mixed $valorId
+    ): array {
+        $relatorioId = self::id($valorId, 'Relatório');
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $relatorio = self::consultar(
+                "
+                    SELECT id, arquivo_path, gerado_em
+                    FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$relatorio) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            $totalVersoes = (int) self::consultar(
+                "
+                    SELECT COUNT(*)
+                    FROM relatorio_versoes
+                    WHERE relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchColumn();
+
+            if (
+                $totalVersoes > 0
+                || $relatorio['arquivo_path'] !== null
+                || $relatorio['gerado_em'] !== null
+            ) {
+                throw new \DomainException(
+                    'Este relatório possui uma versão gerada. A exclusão ficará disponível após tratarmos esses arquivos.'
+                );
+            }
+
+            self::consultar(
+                "
+                    DELETE FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            $db->commit();
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+
+        return [
+            'message' => 'Relatório excluído com sucesso.',
+        ];
+    }
+
+    public static function materiasParaEdicao(
+        int $assessoriaId,
+        mixed $valorId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorId, 'Relatório');
+
+        $relatorio = self::consultar(
+            "
+                SELECT cliente_id
+                FROM relatorios
+                WHERE id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+                LIMIT 1
+            ",
+            [
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+            ]
+        )->fetch();
+
+        if (!$relatorio) {
+            throw new \OutOfBoundsException(
+                'Relatório não encontrado nesta assessoria.'
+            );
+        }
+
+        [$inicio, $fim] = self::periodo($dados);
+        $page = self::id($dados['page'] ?? 1, 'Página');
+        $limit = self::id($dados['limit'] ?? 20, 'Limite');
+
+        if ($limit > 100) {
+            throw new \InvalidArgumentException(
+                'O limite máximo é 100 matérias por página.'
+            );
+        }
+
+        $busca = $dados['busca'] ?? '';
+
+        if (!is_string($busca) || mb_strlen($busca, 'UTF-8') > 200) {
+            throw new \InvalidArgumentException('Busca inválida.');
+        }
+
+        [$where, $parametros] = self::condicao(
+            $assessoriaId,
+            (int) $relatorio['cliente_id'],
+            $inicio,
+            $fim,
+            false
+        );
+
+        $where .= "
+            AND NOT EXISTS (
+                SELECT 1
+                FROM relatorio_slides s
+                WHERE s.relatorio_id = :relatorio_id
+                AND s.assessoria_id = c.assessoria_id
+                AND s.clipping_id = c.id
+                AND s.tipo = 'CLIPPING'
+            )
+        ";
+        $parametros['relatorio_id'] = $relatorioId;
+
+        $idsCandidatas = self::consultar(
+            'SELECT c.id '
+                . self::ORIGEM
+                . $where
+                . ' ORDER BY c.id ASC',
+            $parametros
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        $totalNovas = count($idsCandidatas);
+        $assinatura = hash('sha256', implode(',', $idsCandidatas));
+
+        $busca = trim($busca);
+
+        if ($busca !== '') {
+            $termo = '%' . strtr(
+                $busca,
+                ['!' => '!!', '%' => '!%', '_' => '!_']
+            ) . '%';
+
+            $where .= "
+                AND (
+                    c.pauta LIKE :busca_pauta ESCAPE '!'
+                    OR COALESCE(
+                        v.nome,
+                        c.veiculo_nome_informado
+                    ) LIKE :busca_veiculo ESCAPE '!'
+                )
+            ";
+
+            $parametros['busca_pauta'] = $termo;
+            $parametros['busca_veiculo'] = $termo;
+        }
+
+        $totalFiltrado = (int) self::consultar(
+            'SELECT COUNT(DISTINCT c.id) '
+                . self::ORIGEM
+                . $where,
+            $parametros
+        )->fetchColumn();
+
+        $offset = ($page - 1) * $limit;
+
+        $linhas = self::consultar(
+            self::SELECT_MATERIA
+                . self::ORIGEM
+                . $where
+                . "
+                    ORDER BY c.data_publicacao ASC, c.id ASC
+                    LIMIT :limit OFFSET :offset
+                ",
+            [
+                ...$parametros,
+                'limit' => $limit,
+                'offset' => $offset,
+            ]
+        )->fetchAll();
+
+        $jaIncluidas = (int) self::consultar(
+            "
+                SELECT COUNT(*)
+                FROM relatorio_slides
+                WHERE relatorio_id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+                AND tipo = 'CLIPPING'
+            ",
+            [
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+            ]
+        )->fetchColumn();
+
+        $foraDoPeriodo = (int) self::consultar(
+            "
+                SELECT COUNT(*)
+                FROM relatorio_slides s
+                INNER JOIN clippings c
+                    ON c.id = s.clipping_id
+                AND c.assessoria_id = s.assessoria_id
+                WHERE s.relatorio_id = :relatorio_id
+                AND s.assessoria_id = :assessoria_id
+                AND s.tipo = 'CLIPPING'
+                AND (
+                    c.data_publicacao IS NULL
+                    OR c.data_publicacao NOT BETWEEN :inicio AND :fim
+                )
+            ",
+            [
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+                'inicio' => $inicio,
+                'fim' => $fim,
+            ]
+        )->fetchColumn();
+
+        return [
+            'materias' => array_map(
+                self::prepararMateria(...),
+                $linhas
+            ),
+            'resumo' => [
+                'novas' => $totalNovas,
+                'ja_incluidas' => $jaIncluidas,
+                'fora_do_periodo' => $foraDoPeriodo,
+                'assinatura' => $assinatura,
+            ],
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalFiltrado,
+                'has_next' => $offset + count($linhas) < $totalFiltrado,
+            ],
+        ];
+    }
+
+    public static function atualizarPeriodo(
+        int $assessoriaId,
+        int $usuarioId,
+        mixed $valorId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorId, 'Relatório');
+        [$inicio, $fim] = self::periodo($dados);
+        $incluirTodas = $dados['incluir_todas'] ?? false;
+
+        if (!is_bool($incluirTodas)) {
+            throw new \InvalidArgumentException(
+                'A opção de selecionar todas é inválida.'
+            );
+        }
+
+        $idsIncluir = self::listaIds(
+            $dados['ids_incluir'] ?? [],
+            'Matérias escolhidas'
+        );
+
+        $idsExcluir = self::listaIds(
+            $dados['ids_excluir'] ?? [],
+            'Matérias desmarcadas'
+        );
+
+        if ($incluirTodas && $idsIncluir !== []) {
+            throw new \InvalidArgumentException(
+                'Envie apenas as matérias desmarcadas ao selecionar todas.'
+            );
+        }
+
+        if (!$incluirTodas && $idsExcluir !== []) {
+            throw new \InvalidArgumentException(
+                'As matérias desmarcadas exigem a seleção de todas.'
+            );
+        }
+        
+        $assinaturaEsperada = $dados['assinatura'] ?? null;
+
+        if (
+            !is_string($assinaturaEsperada)
+            || !preg_match('/^[a-f0-9]{64}$/D', $assinaturaEsperada)
+        ) {
+            throw new \InvalidArgumentException(
+                'Revise as matérias antes de salvar o período.'
+            );
+        }
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $relatorio = self::consultar(
+                "
+                    SELECT cliente_id
+                    FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$relatorio) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            [$where, $parametros] = self::condicao(
+                $assessoriaId,
+                (int) $relatorio['cliente_id'],
+                $inicio,
+                $fim,
+                false
+            );
+
+            $where .= "
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM relatorio_slides s
+                    WHERE s.relatorio_id = :relatorio_id
+                    AND s.assessoria_id = c.assessoria_id
+                    AND s.clipping_id = c.id
+                    AND s.tipo = 'CLIPPING'
+                )
+            ";
+
+            $parametros['relatorio_id'] = $relatorioId;
+
+            $linhas = self::consultar(
+                self::SELECT_MATERIA
+                    . self::ORIGEM
+                    . $where
+                    . ' ORDER BY c.data_publicacao ASC, c.id ASC',
+                $parametros
+            )->fetchAll();
+
+            $idsAtuais = array_map(
+                static fn(array $linha): int => (int) $linha['id'],
+                $linhas
+            );
+            sort($idsAtuais, SORT_NUMERIC);
+
+            $assinaturaAtual = hash(
+                'sha256',
+                implode(',', $idsAtuais)
+            );
+
+            if (!hash_equals($assinaturaEsperada, $assinaturaAtual)) {
+                throw new \DomainException(
+                    'A lista de matérias mudou. Revise as disponíveis antes de salvar.'
+                );
+            }
+
+            $disponiveis = array_fill_keys($idsAtuais, true);
+
+            if ($incluirTodas) {
+                foreach ($idsExcluir as $id) {
+                    if (!isset($disponiveis[$id])) {
+                        throw new \DomainException(
+                            'Uma matéria desmarcada não está mais disponível. Revise a seleção.'
+                        );
+                    }
+                }
+
+                $excluidas = array_fill_keys($idsExcluir, true);
+
+                $idsIncluir = array_values(array_filter(
+                    $idsAtuais,
+                    static fn(int $id): bool => !isset($excluidas[$id])
+                ));
+            } else {
+                foreach ($idsIncluir as $id) {
+                    if (!isset($disponiveis[$id])) {
+                        throw new \DomainException(
+                            'Uma matéria escolhida não está mais disponível. Revise a seleção.'
+                        );
+                    }
+                }
+            }
+
+            $escolhidas = array_fill_keys($idsIncluir, true);
+
+            $cliente = $idsIncluir === []
+                ? null
+                : self::bloquearCliente(
+                    $assessoriaId,
+                    (int) $relatorio['cliente_id']
+                );
+
+            $ordem = 0;
+            $stmtSlide = null;
+
+            if ($idsIncluir !== []) {
+                $encerramento = self::consultar(
+                    "
+                        SELECT id, ordem
+                        FROM relatorio_slides
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                        AND tipo = 'ENCERRAMENTO'
+                        ORDER BY ordem DESC
+                        LIMIT 1
+                        FOR UPDATE
+                    ",
+                    [
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                )->fetch();
+
+                $ultimaOrdem = (int) self::consultar(
+                    "
+                        SELECT COALESCE(MAX(ordem), 0)
+                        FROM relatorio_slides
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                    ",
+                    [
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                )->fetchColumn();
+
+                if (
+                    !$encerramento
+                    || (int) $encerramento['ordem'] !== $ultimaOrdem
+                ) {
+                    throw new \DomainException(
+                        'A ordem dos slides precisa ser revisada antes de incluir matérias.'
+                    );
+                }
+
+                self::consultar(
+                    "
+                        UPDATE relatorio_slides
+                        SET ordem = :nova_ordem
+                        WHERE id = :slide_id
+                        AND relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                    ",
+                    [
+                        'nova_ordem' => $ultimaOrdem + count($idsIncluir),
+                        'slide_id' => (int) $encerramento['id'],
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                );
+
+                $ordem = $ultimaOrdem;
+
+                $stmtSlide = $db->prepare(
+                    "
+                        INSERT INTO relatorio_slides (
+                            relatorio_id,
+                            assessoria_id,
+                            clipping_id,
+                            ordem,
+                            tipo,
+                            origem_inclusao,
+                            revisao_pendente,
+                            imagem_anexo_id,
+                            titulo,
+                            imagem_path,
+                            link,
+                            observacoes,
+                            dados_json
+                        )
+                        VALUES (
+                            :relatorio_id,
+                            :assessoria_id,
+                            :clipping_id,
+                            :ordem,
+                            :tipo,
+                            :origem_inclusao,
+                            :revisao_pendente,
+                            :imagem_anexo_id,
+                            :titulo,
+                            :imagem_path,
+                            :link,
+                            :observacoes,
+                            :dados_json
+                        )
+                    "
+                );
+            }
+
+            $stmtExcluir = $db->prepare(
+                "
+                    INSERT IGNORE INTO relatorio_clippings_excluidos (
+                        relatorio_id,
+                        assessoria_id,
+                        clipping_id,
+                        excluido_por
+                    )
+                    VALUES (
+                        :relatorio_id,
+                        :assessoria_id,
+                        :clipping_id,
+                        :excluido_por
+                    )
+                "
+            );
+
+            $stmtReincluir = $db->prepare(
+                "
+                    DELETE FROM relatorio_clippings_excluidos
+                    WHERE relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    AND clipping_id = :clipping_id
+                "
+            );
+
+            foreach ($linhas as $linha) {
+                $id = (int) $linha['id'];
+
+                if (!isset($escolhidas[$id])) {
+                    $stmtExcluir->execute([
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                        'clipping_id' => $id,
+                        'excluido_por' => $usuarioId,
+                    ]);
+
+                    continue;
+                }
+
+                $stmtReincluir->execute([
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                    'clipping_id' => $id,
+                ]);
+
+                self::inserirSlide(
+                    $stmtSlide,
+                    $assessoriaId,
+                    $relatorioId,
+                    $ordem,
+                    self::slideClipping(
+                        self::prepararMateria($linha),
+                        $cliente
+                    )
+                );
+            }
+
+            self::consultar(
+                "
+                    UPDATE relatorios
+                    SET periodo_inicio = :inicio,
+                        periodo_fim = :fim
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'inicio' => $inicio,
+                    'fim' => $fim,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            self::consultar(
+                "
+                    UPDATE relatorio_slides
+                    SET dados_json = JSON_SET(
+                        COALESCE(dados_json, JSON_OBJECT()),
+                        '$.periodo.inicio', :inicio,
+                        '$.periodo.fim', :fim
+                    )
+                    WHERE relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    AND tipo IN ('CAPA', 'ENCERRAMENTO')
+                ",
+                [
+                    'inicio' => $inicio,
+                    'fim' => $fim,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            $db->commit();
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+
+        return [
+            'relatorio' => self::buscar(
+                $assessoriaId,
+                $relatorioId,
+                ['page' => 1, 'limit' => 1]
+            )['relatorio'],
+            'materias_incluidas' => count($idsIncluir),
+        ];
+    }
 }
