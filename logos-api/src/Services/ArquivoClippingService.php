@@ -505,4 +505,22 @@ class ArquivoClippingService
 
         exit;
     }
+
+    public static function caminhoImagemRelatorio(
+        int $assessoriaId,
+        int $clippingId,
+        string $arquivoPath
+    ): string {
+        if (!preg_match('~\.(?:jpg|png|webp)\z~i', $arquivoPath)) {
+            throw new \DomainException(
+                'O anexo escolhido para o slide não é uma imagem.'
+            );
+        }
+
+        return self::caminho([
+            'assessoria_id' => $assessoriaId,
+            'clipping_id' => $clippingId,
+            'arquivo_path' => $arquivoPath,
+        ]);
+    }
 }

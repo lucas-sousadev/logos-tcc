@@ -50,9 +50,11 @@ export interface SlideRelatorio {
       data_publicacao?: string | null;
     };
     veiculo?: {
+      id?: number | null;
       nome?: string | null;
       descricao?: string | null;
       alcance?: string | null;
+      logo_path?: string | null;
     };
   } | null;
 }
@@ -212,20 +214,41 @@ export async function criarRelatorio(
 export async function buscarRelatorio(
   id: number,
   page = 1,
-  busca = ""
+  busca = "",
+  revisao: "todas" | "pendentes" = "todas"
 ): Promise<{
   relatorio: RelatorioDetalhado;
   slides: SlideRelatorio[];
   pagination: PaginacaoRelatorio;
 }> {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: "20",
+    busca: busca.trim(),
+    revisao,
+  });
+
   const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${id}?page=${page}&limit=20&busca=${encodeURIComponent(busca.trim())}`
+    `${API_URL}/api/relatorios/${id}?${query.toString()}`
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível abrir o relatório."
+  return lerResposta(response, "Não foi possível abrir o relatório.");
+}
+
+export async function marcarSlideRevisado(
+  relatorioId: number,
+  slideId: number
+): Promise<{ slide_id: number; revisao_pendente: false }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/revisao`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revisao_pendente: false }),
+    }
   );
+
+  return lerResposta(response, "Não foi possível concluir a revisão.");
 }
 
 export interface ClienteSelecaoRelatorio {
@@ -365,4 +388,46 @@ export async function atualizarPeriodoRelatorio(
     response,
     "Não foi possível atualizar o período."
   );
+}
+
+export async function completarDadosVeiculosRelatorio(
+  id: number
+): Promise<{
+  message: string;
+  slides_atualizados: number;
+}> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}/completar-veiculos`,
+    { method: "POST" }
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível completar os dados dos veículos."
+  );
+}
+
+export async function gerarPptxTeste(
+  id: number
+): Promise<ArrayBuffer> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${id}/pptx-teste`
+  );
+
+  if (!response.ok) {
+    let mensagem = "Não foi possível gerar o PPTX.";
+
+    try {
+      const dados = await response.json();
+      if (typeof dados.message === "string") {
+        mensagem = dados.message;
+      }
+    } catch {
+      // mantém a mensagem padrão
+    }
+
+    throw new Error(mensagem);
+  }
+
+  return response.arrayBuffer();
 }

@@ -12,6 +12,9 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
+import { Platform } from "react-native";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
@@ -26,6 +29,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   buscarRelatorio,
+  completarDadosVeiculosRelatorio,
+  gerarPptxTeste,
   type PaginacaoRelatorio,
   type RelatorioDetalhado,
   type SlideRelatorio,
@@ -228,6 +233,7 @@ export default function DetalheRelatorio() {
   const [pagina, setPagina] = useState(1);
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
+  const [filtroRevisao, setFiltroRevisao] = useState<"todas" | "pendentes">("todas");
 
   const [tentativa, setTentativa] = useState(0);
   const [relatorio, setRelatorio] =
@@ -238,12 +244,19 @@ export default function DetalheRelatorio() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [slideAberto, setSlideAberto] =useState<SlideRelatorio | null>(null);
-
+  
   const [edicaoAberta, setEdicaoAberta] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] =useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
   const [edicaoSalva, setEdicaoSalva] = useState(false);
+  const [confirmarDadosVeiculos, setConfirmarDadosVeiculos] = useState(false);
+  const [atualizandoDadosVeiculos, setAtualizandoDadosVeiculos] = useState(false);
+  const [resultadoDadosVeiculos, setResultadoDadosVeiculos] = useState("");
+
+  const [exportandoPptx, setExportandoPptx] = useState(false);
+  const [mensagemPptx, setMensagemPptx] = useState("");
+  const travaPptx = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -263,7 +276,7 @@ export default function DetalheRelatorio() {
         setSlides([]);
 
         try {
-          const resposta = await buscarRelatorio(id, pagina, buscaAplicada);
+          const resposta = await buscarRelatorio(id, pagina, buscaAplicada, filtroRevisao);
 
           if (!ativo) return;
 
@@ -288,7 +301,7 @@ export default function DetalheRelatorio() {
       return () => {
         ativo = false;
       };
-    }, [id, pagina, tentativa, buscaAplicada])
+    }, [id, pagina, tentativa, buscaAplicada, filtroRevisao])
   );
 
   function pesquisarSlides() {
@@ -357,6 +370,108 @@ export default function DetalheRelatorio() {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
     });
   }
+
+  async function completarDadosVeiculos() {
+    if (!relatorio || atualizandoDadosVeiculos) return;
+
+    setAtualizandoDadosVeiculos(true);
+    setErroAcao("");
+    setResultadoDadosVeiculos("");
+
+    try {
+      const resposta = await completarDadosVeiculosRelatorio(
+        relatorio.id
+      );
+
+      const quantidade = resposta.slides_atualizados; 
+
+      setResultadoDadosVeiculos(
+        quantidade === 0
+          ? "Nenhum slide tinha descrição ou alcance ausente para completar."
+          : `${quantidade} ${
+              quantidade === 1 ? "slide atualizado" : "slides atualizados"
+            } com dados dos veículos.`
+      );
+
+      setConfirmarDadosVeiculos(false);
+      setTentativa((atual) => atual + 1);
+    } catch (error) {
+      setConfirmarDadosVeiculos(false);
+      setErroAcao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível completar os dados dos veículos."
+      );
+    } finally {
+      setAtualizandoDadosVeiculos(false);
+    }
+  }
+
+  async function exportarPptx() {
+    if (!relatorio || travaPptx.current) return;
+
+    travaPptx.current = true;
+    setExportandoPptx(true);
+    setMensagemPptx("");
+    setErroAcao("");
+
+    try {
+      if (
+        Platform.OS !== "web" &&
+        !(await Sharing.isAvailableAsync())
+      ) {
+        throw new Error(
+          "O compartilhamento de arquivos não está disponível neste dispositivo."
+        );
+      }
+
+      const conteudo = await gerarPptxTeste(relatorio.id);
+      const nomeArquivo = `relatorio-${relatorio.id}-teste.pptx`;
+      const tipo =
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+      if (Platform.OS === "web") {
+        const url = URL.createObjectURL(
+          new Blob([conteudo], { type: tipo })
+        );
+        const link = document.createElement("a");
+
+        try {
+          link.href = url;
+          link.download = nomeArquivo;
+          document.body.appendChild(link);
+          link.click();
+        } finally {
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        setMensagemPptx("O download do PPTX foi iniciado.");
+      } else {
+        const arquivo = new File(Paths.cache, nomeArquivo);
+        arquivo.write(new Uint8Array(conteudo));
+
+        await Sharing.shareAsync(arquivo.uri, {
+          mimeType: tipo,
+          dialogTitle: "Exportar relatório",
+        });
+
+        setMensagemPptx(
+          "PPTX preparado. Escolha onde salvar ou enviar o arquivo."
+        );
+      }
+    } catch (error) {
+      setErroAcao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o PPTX."
+      );
+    } finally {
+      travaPptx.current = false;
+      setExportandoPptx(false);
+    }
+  }
+
   return (
     <View
       style={[
@@ -392,6 +507,18 @@ export default function DetalheRelatorio() {
           }
           excluindo={excluindo}
         />
+
+        {resultadoDadosVeiculos ? (
+          <Text
+            weight="SemiBold"
+            style={[
+              styles.mensagemAcao,
+              { color: theme.textoTerciaria },
+            ]}
+          >
+            {resultadoDadosVeiculos}
+          </Text>
+        ) : null}
 
         {edicaoSalva ? (
           <Text
@@ -483,8 +610,35 @@ export default function DetalheRelatorio() {
                   ALTERAR PERÍODO E MATÉRIAS
                 </Text>
               </TouchableOpacity>
-            ) : null}
               
+            ) : null}
+
+          {temPermissao("RELATORIOS", "EDITAR") ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={() => setConfirmarDadosVeiculos(true)}
+              style={[
+                styles.atalhoPeriodo,
+                { borderColor: theme.borda },
+              ]}
+            >
+              <Ionicons
+                name="sync-outline"
+                size={16}
+                color={theme.textoTerciaria}
+              />
+              <Text
+                weight="SemiBold"
+                style={{
+                  color: theme.textoTerciaria,
+                  fontSize: 12,
+                }}
+              >
+                COMPLETAR DADOS DOS VEÍCULOS
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
             <View
               style={[
                 styles.resumoNumeros,
@@ -580,6 +734,40 @@ export default function DetalheRelatorio() {
           </View>
         ) : null}
 
+        {relatorio && temPermissao("RELATORIOS", "GERAR") ? (
+          <>
+            <Button
+              title="EXPORTAR PPTX DE TESTE"
+              onPress={() => void exportarPptx()}
+              loading={exportandoPptx}
+              disabled={excluindo}
+              style={{marginTop: 15}}
+            />
+
+            <Text
+              style={{
+                color: theme.textoSub,
+                fontSize: 12,
+                marginTop: 6,
+              }}
+            >
+              Esta exportação ainda não cria uma versão salva do relatório.
+            </Text>
+
+            {mensagemPptx ? (
+              <Text
+                style={{
+                  color: theme.textoTerciaria,
+                  fontSize: 12,
+                  marginTop: 6,
+                }}
+              >
+                {mensagemPptx}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
         {relatorio?.novos_pendentes ? (
           <View
             style={[
@@ -637,6 +825,53 @@ export default function DetalheRelatorio() {
             placeholder="Buscar pauta, veículo..."
           />
         ) : null}
+
+        {relatorio ? (
+          <View style={styles.filtrosRevisao}>
+            {(["todas", "pendentes"] as const).map((opcao) => {
+              const selecionado = filtroRevisao === opcao;
+
+              return (
+                <TouchableOpacity
+                  key={opcao}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selecionado }}
+                  onPress={() => {
+                    setPagina(1);
+                    setFiltroRevisao(opcao);
+                  }}
+                  style={[
+                    styles.filtroRevisao,
+                    {
+                      borderColor: theme.borda,
+                      borderWidth: selecionado 
+                        ? 2
+                        : 1,
+                      backgroundColor: selecionado
+                        ? theme.backgroundSecundario
+                        : theme.background
+                    },
+                  ]}
+                >
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      color: selecionado
+                        ? theme.texto
+                        : theme.textoSub,
+                      fontSize: 11,
+                    }}
+                  >
+                    {opcao === "todas"
+                      ? "TODOS OS SLIDES"
+                      : `A REVISAR · ${relatorio.novos_pendentes}`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
+
         {carregando ? (
           <ActivityIndicator
             size="small"
@@ -683,9 +918,13 @@ export default function DetalheRelatorio() {
                 ]}
               >
                 <Text style={{ color: theme.textoSub }}>
-                  {buscaAplicada
-                    ? `Nenhum slide encontrado para “${buscaAplicada}”.`
-                    : "Nenhum slide neste relatório."}
+                  {filtroRevisao === "pendentes"
+                    ? buscaAplicada
+                      ? `Nenhum slide pendente encontrado para “${buscaAplicada}”.`
+                      : "Nenhum slide precisa de revisão."
+                    : buscaAplicada
+                      ? `Nenhum slide encontrado para “${buscaAplicada}”.`
+                      : "Nenhum slide neste relatório."}
                 </Text>
               </View>
             ) : (
@@ -745,6 +984,15 @@ export default function DetalheRelatorio() {
           slide={slideAberto}
           relatorio={relatorio}
           onClose={() => setSlideAberto(null)}
+          onReviewed={() => {
+            setSlideAberto(null);
+
+            if (filtroRevisao === "pendentes" && slides.length === 1 && pagina > 1) {
+              setPagina(pagina - 1);
+            } else {
+              setTentativa((atual) => atual + 1);
+            }
+          }}
         />
       ) : null}
       {edicaoAberta && relatorio ? (
@@ -775,6 +1023,27 @@ export default function DetalheRelatorio() {
         onClose={() => setConfirmarExclusao(false)}
         onSecondary={() => setConfirmarExclusao(false)}
         onPrimary={() => void removerRelatorio()}
+      />
+
+      <FeedbackAlert
+        visible={confirmarDadosVeiculos}
+        variant="info"
+        title="Atualizar os dados nos relatórios?"
+        message={
+          "Descrição e alcance ausentes serão atualizados dos veículos vinculados. " +
+          "O logo será atualizado para o arquivo atual do veículo. " +
+          "Textos já preenchidos no relatório não serão substituídos."
+        }
+        primaryLabel="COMPLETAR"
+        secondaryLabel="CANCELAR"
+        loading={atualizandoDadosVeiculos}
+        onClose={() => {
+          if (!atualizandoDadosVeiculos) {
+            setConfirmarDadosVeiculos(false);
+          }
+        }}
+        onSecondary={() => setConfirmarDadosVeiculos(false)}
+        onPrimary={() => void completarDadosVeiculos()}
       />
     </View>
   );
@@ -889,6 +1158,20 @@ const styles = StyleSheet.create({
   descricaoSecao: {
     fontSize: 12,
     lineHeight: 18,
+  },
+  filtrosRevisao: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  filtroRevisao: {
+    flex: 1,
+    minHeight: 40,
+    borderWidth: 1.5,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
   },
   listaSlides: {
     gap: 9,

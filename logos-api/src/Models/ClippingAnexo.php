@@ -150,8 +150,11 @@ class ClippingAnexo
         // proteção provisória até o versionamento dos materiais dos relatórios.
         $slide = self::consultar(
             'SELECT id FROM relatorio_slides
-             WHERE assessoria_id = :a AND clipping_id = :c LIMIT 1',
-            compact('a', 'c')
+            WHERE assessoria_id = :a
+            AND clipping_id = :c
+            AND imagem_anexo_id = :id
+            LIMIT 1',
+            compact('a', 'c', 'id')
         )->fetchColumn();
 
         return $derivado !== false || $slide !== false;

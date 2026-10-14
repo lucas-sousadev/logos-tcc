@@ -530,6 +530,20 @@ $router->get(
 );
 
 $router->get(
+    "/api/relatorios/{id}/pptx-teste",
+    "RelatorioController:pptxTeste",
+    "RELATORIOS.GERAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/relatorios/{id}/completar-veiculos",
+    "RelatorioController:completarDadosVeiculos",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
     "/api/relatorios/{id}",
     "RelatorioController:buscar",
     "RELATORIOS.VISUALIZAR",
@@ -547,6 +561,13 @@ $router->get(
     "/api/relatorios/clientes",
     "RelatorioController:clientes",
     "RELATORIOS.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/relatorios/{id}/slides/{slide_id}/revisao",
+    "RelatorioController:revisarSlide",
+    "RELATORIOS.EDITAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 
@@ -577,3 +598,4 @@ $router->post(
     "RELATORIOS.CRIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
+

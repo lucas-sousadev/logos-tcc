@@ -66,7 +66,10 @@ export default function VeiculoDetalhes() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
-  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam, origemRelatorioId } = useLocalSearchParams<{
+    id: string;
+    origemRelatorioId?: string;
+  }>();
   const id = Number(idParam);
 
    const [erros, setErros] = useState<ErrosVeiculo>({});
@@ -103,11 +106,30 @@ export default function VeiculoDetalhes() {
     return () => cancelAnimationFrame(frame);
   }, [modoEdicao]);
 
+  const voltarDoVeiculo = useCallback(() => {
+    const relatorioId = Number(origemRelatorioId);
+
+    if (Number.isSafeInteger(relatorioId) && relatorioId > 0) {
+      router.navigate({
+        pathname: "/relatorios/[id]",
+        params: { id: String(relatorioId) },
+      });
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/veiculos");
+  }, [origemRelatorioId, router]);
+  
   const carregarVeiculo = useCallback(
     async () => {
       if (!id || Number.isNaN(id)) {
         Alert.alert("Erro", "Veículo inválido.");
-        router.back();
+        voltarDoVeiculo();
         return;
       }
 
@@ -129,14 +151,14 @@ export default function VeiculoDetalhes() {
             : "Não foi possível carregar o veículo."
         );
 
-        router.back();
+        voltarDoVeiculo();
       } finally {
         setCarregando(false);
         setNovoLogo(null);
         setLogoRemovido(false);
       }
     },
-    [id, router]
+    [id, voltarDoVeiculo]
   );
 
   useEffect(() => {
@@ -215,9 +237,8 @@ export default function VeiculoDetalhes() {
   }
 
   function handleBack() {
-
     if (!modoEdicao) {
-      router.back();
+      voltarDoVeiculo()
       return;
     }
     
@@ -386,7 +407,11 @@ export default function VeiculoDetalhes() {
   if (carregando) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Header title="Veículo" showBackButton />
+        <Header
+          title="Veículo"
+          showBackButton
+          onBackPress={voltarDoVeiculo}
+        />
         <View style={styles.loading}>
           <ActivityIndicator size="large" color={theme.primaria} />
         </View>

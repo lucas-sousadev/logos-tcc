@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   TouchableOpacity,
   View,
+  Image,
+  Modal
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,10 +17,10 @@ import type {
 
 const MAX_BYTES = 30 * 1024 * 1024;
 
-export interface ArquivoRascunho
-  extends ArquivoClippingSelecionado {
+export interface ArquivoRascunho extends ArquivoClippingSelecionado {
   chave: string;
   tamanhoBytes: number | null;
+  previewUri?: string;
 }
 
 interface ClippingArquivosInputProps {
@@ -43,11 +45,41 @@ export default function ClippingArquivosInput({
 
   const [selecionando, setSelecionando] = useState(false);
   const [erro, setErro] = useState("");
+  const [imagemAberta, setImagemAberta] = useState<string | null>(null);
 
-  async function selecionar() {
-    if (disabled || !podeSelecionar || trava.current) {
-      return;
+  const arquivosAnteriores = useRef<ArquivoRascunho[]>([]);
+
+  useEffect(() => {
+    const chavesAtuais = new Set(arquivos.map((arquivo) => arquivo.chave));
+
+    for (const arquivo of arquivosAnteriores.current) {
+      if (
+        !chavesAtuais.has(arquivo.chave) &&
+        arquivo.uri?.startsWith("blob:") &&
+        typeof URL !== "undefined"
+      ) {
+        URL.revokeObjectURL(arquivo.uri);
+      }
     }
+
+    arquivosAnteriores.current = arquivos;
+  }, [arquivos]);
+
+  useEffect(() => {
+    return () => {
+      for (const arquivo of arquivosAnteriores.current) {
+        if (
+          arquivo.uri.startsWith("blob:") &&
+          typeof URL !== "undefined"
+        ) {
+          URL.revokeObjectURL(arquivo.uri);
+        }
+      }
+    };
+  }, []);
+  
+  async function selecionar() {
+    if (disabled || !podeSelecionar || trava.current) return;
 
     trava.current = true;
     setSelecionando(true);
@@ -55,68 +87,55 @@ export default function ClippingArquivosInput({
     setErro("");
 
     try {
-      const resultado =
-        await DocumentPicker.getDocumentAsync({
-          type: [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "application/pdf",
-            "video/mp4",
-            "video/webm",
-            "video/quicktime",
-            "audio/mpeg",
-            "audio/wav",
-            "audio/x-wav",
-            "audio/vnd.wave",
-          ],
-          multiple: true,
-          copyToCacheDirectory: true,
-          base64: false,
-        });
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "application/pdf",
+          "video/mp4",
+          "video/webm",
+          "video/quicktime",
+          "audio/mpeg",
+          "audio/wav",
+          "audio/x-wav",
+          "audio/vnd.wave",
+        ],
+        multiple: true,
+        copyToCacheDirectory: true,
+        base64: false,
+      });
 
       if (resultado.canceled) return;
 
-      try {
-        const selecionados: ArquivoRascunho[] =
-          resultado.assets.map((arquivo) => {
-            if (
-              arquivo.size !== undefined &&
-              (arquivo.size <= 0 || arquivo.size > MAX_BYTES)
-            ) {
-              throw new Error(
-                `A seleção não foi adicionada: "${arquivo.name}" está vazio ou ultrapassa 30 MB.`
-              );
-            }
-
-            sequencia.current += 1;
-
-            return {
-              chave: `${Date.now()}-${sequencia.current}`,
-              uri: arquivo.uri,
-              nome: arquivo.name,
-              mimeType:
-                arquivo.mimeType || "application/octet-stream",
-              file: arquivo.file,
-              tamanhoBytes: arquivo.size ?? null,
-            };
-          });
-
-        onChange([...arquivos, ...selecionados]);
-      } finally {
-        // No navegador, enviarAnexo utiliza o objeto File.
-        // Não precisamos manter URLs de prévia em memória.
-        for (const arquivo of resultado.assets) {
-          if (
-            arquivo.file &&
-            arquivo.uri.startsWith("blob:") &&
-            typeof URL !== "undefined" &&
-            typeof URL.revokeObjectURL === "function"
-          ) {
-            URL.revokeObjectURL(arquivo.uri);
-          }
+      const selecionados: ArquivoRascunho[] = resultado.assets.map((arquivo) => {
+        if (
+          arquivo.size !== undefined &&
+          (arquivo.size <= 0 || arquivo.size > MAX_BYTES)
+        ) {
+          throw new Error(
+            `A seleção não foi adicionada: "${arquivo.name}" está vazio ou ultrapassa 30 MB.`
+          );
         }
-      }
+
+        sequencia.current += 1;
+
+        const ehImagem =
+          arquivo.mimeType?.startsWith("image/") ||
+          /\.(jpe?g|png|webp)$/i.test(arquivo.name);
+
+        return {
+          chave: `${Date.now()}-${sequencia.current}`,
+          uri: arquivo.uri,
+          nome: arquivo.name,
+          mimeType: arquivo.mimeType || "application/octet-stream",
+          file: arquivo.file,
+          tamanhoBytes: arquivo.size ?? null,
+          previewUri: ehImagem ? arquivo.uri : undefined,
+        };
+      });
+
+      onChange([...arquivos, ...selecionados]);
     } catch (error) {
       setErro(
         error instanceof Error
@@ -182,11 +201,25 @@ export default function ClippingArquivosInput({
             borderBottomColor: theme.borda,
           }}
         >
-          <Ionicons
-            name="document-attach-outline"
-            size={20}
-            color={theme.textoSub}
-          />
+          {arquivo.previewUri ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Visualizar ${arquivo.nome}`}
+              onPress={() => setImagemAberta(arquivo.previewUri!)}
+            >
+              <Image
+                source={{ uri: arquivo.previewUri }}
+                style={{ width: 58, height: 58, borderRadius: 9 }}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ) : (
+            <Ionicons
+              name="document-attach-outline"
+              size={24}
+              color={theme.textoSub}
+            />
+          )}
 
           <View style={{ flex: 1 }}>
             <Text
@@ -245,6 +278,40 @@ export default function ClippingArquivosInput({
           {erro}
         </Text>
       ) : null}
+      
+
+      <Modal
+        visible={imagemAberta !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImagemAberta(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Fechar prévia"
+            onPress={() => setImagemAberta(null)}
+            style={{ alignSelf: "flex-end", padding: 10 }}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {imagemAberta ? (
+            <Image
+              source={{ uri: imagemAberta }}
+              resizeMode="contain"
+              style={{ width: "100%", flex: 1 }}
+            />
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }

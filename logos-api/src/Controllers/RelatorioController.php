@@ -4,6 +4,7 @@ namespace Logos\AssessoriaApi\Controllers;
 
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\RelatorioService;
+use Logos\AssessoriaApi\Services\RelatorioPptxService;
 
 class RelatorioController
 {
@@ -172,6 +173,21 @@ class RelatorioController
         );
     }
 
+    public function revisarSlide(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Slide marcado como revisado.',
+                ...RelatorioService::revisarSlide(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $rota['slide_id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+
     public function materiasParaEdicao(array $rota): void
     {
         $this->executar(
@@ -196,4 +212,93 @@ class RelatorioController
                 )
         );
     }
+
+    public function completarDadosVeiculos(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Dados dos veículos conferidos.',
+                ...RelatorioService::completarDadosVeiculos(
+                    $assessoriaId,
+                    $rota['id'] ?? null
+                ),
+            ]
+        );
+    }
+
+    public function pptxTeste(array $rota): void
+    {
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            $this->responder([
+                'success' => false,
+                'message' => 'Usuário não autenticado.',
+            ], 401);
+            return;
+        }
+
+        $arquivo = null;
+
+        try {
+            $arquivo = RelatorioPptxService::gerar(
+                (int) $usuario->assessoria_id,
+                $rota['id'] ?? null
+            );
+
+            $tamanho = filesize($arquivo);
+
+            if ($tamanho === false || $tamanho < 1) {
+                throw new \RuntimeException(
+                    'Não foi possível verificar o PPTX gerado.'
+                );
+            }
+        } catch (\Throwable $e) {
+            if ($arquivo && is_file($arquivo)) {
+                @unlink($arquivo);
+            }
+
+            $status = match (true) {
+                $e instanceof \OutOfBoundsException => 404,
+                $e instanceof \InvalidArgumentException => 422,
+                $e instanceof \DomainException => 409,
+                default => 500,
+            };
+
+            if ($status === 500) {
+                error_log('Erro ao gerar PPTX: ' . $e->getMessage());
+            }
+
+            $this->responder([
+                'success' => false,
+                'message' => $status === 500
+                    ? 'Não foi possível gerar o PPTX.'
+                    : $e->getMessage(),
+            ], $status);
+
+            return;
+        }
+
+        $nome = 'relatorio-'
+            . (int) ($rota['id'] ?? 0)
+            . '-teste.pptx';
+
+        http_response_code(200);
+        header(
+            'Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        );
+        header(
+            'Content-Disposition: attachment; filename="' . $nome . '"'
+        );
+        header('Content-Length: ' . $tamanho);
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+
+        try {
+            readfile($arquivo);
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+    
 }

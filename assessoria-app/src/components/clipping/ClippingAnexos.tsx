@@ -244,10 +244,6 @@ async function alterarMarcador(
   }
 }
 
-function marcarPrincipal(anexo: AnexoClipping) {
-  return alterarMarcador(anexo, "principal");
-}
-
 function marcarImagemRelatorio(anexo: AnexoClipping) {
   return alterarMarcador(anexo, "imagem_relatorio");
 }
@@ -328,14 +324,6 @@ async function removerAnexo() {
             ANEXOS
           </Text>
 
-          <Text
-            style={[
-              styles.subtitle,
-              { color: theme.textoSub },
-            ]}
-          >
-            Arquivos disponíveis para a publicação e para o relatório.
-          </Text>
         </View>
 
         {podeAnexar ? (
@@ -445,106 +433,63 @@ async function removerAnexo() {
                 {anexo.tipo} •{" "}
                 {tamanhoArquivo(anexo.tamanho_bytes)}
               </Text>
+              
+              {imagem && anexo.imagem_relatorio === 1 ? (
+                <Text
+                  weight="SemiBold"
+                  style={{ color: theme.textoTerciaria, fontSize: 10, marginTop: 6 }}
+                >
+                  IMAGEM USADA NOS RELATÓRIOS
+                </Text>
+              ) : null}
 
-              <View style={styles.badges}>
-                {anexo.principal === 1 ? (
-                  <Text
-                    style={[
-                      styles.badge,
-                      {
-                        color: theme.textoContainer,
-                        backgroundColor:
-                          theme.backgroundContainer,
-                      },
-                    ]}
-                  >
-                    PRINCIPAL
-                  </Text>
-                ) : null}
-
-                {anexo.imagem_relatorio === 1 ? (
-                  <Text
-                    style={[
-                      styles.badge,
-                      {
-                        color: theme.texto,
-                        borderColor: theme.borda,
-                      },
-                    ]}
-                  >
-                    RELATÓRIO
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-
-            {processando ? (
-              <ActivityIndicator
-                color={theme.primaria}
-              />
-            ) : null}
-
-            {!processando && podeEditar ? (
-              <View style={styles.actions}>
+              {imagem && podeEditar ? (
                 <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    void marcarPrincipal(anexo)
-                  }
-                  style={[
-                    styles.actionButton,
-                    { borderColor: theme.borda },
-                  ]}
-                  disabled={ocupado}
                   accessibilityRole="button"
                   accessibilityLabel={
                     anexo.imagem_relatorio === 1
-                      ? "Remover seleção para relatório"
-                      : "Selecionar imagem para relatório"
+                      ? "Remover imagem dos relatórios"
+                      : "Usar imagem nos relatórios"
                   }
+                  activeOpacity={0.8}
+                  disabled={ocupado}
+                  onPress={() => void marcarImagemRelatorio(anexo)}
+                  style={[
+                    styles.botaoUsoRelatorio,
+                    {
+                      borderColor: theme.borda,
+                      backgroundColor:
+                        anexo.imagem_relatorio === 1
+                          ? `${theme.textoTerciaria}18`
+                          : theme.backgroundSecundario,
+                      opacity: ocupado ? 0.5 : 1,
+                    },
+                  ]}
                 >
-                  <Ionicons
-                    name={
-                      anexo.principal === 1
-                        ? "star"
-                        : "star-outline"
-                    }
-                    size={17}
-                    color={theme.primaria}
-                  />
-                </TouchableOpacity>
-
-                {anexo.tipo === "IMAGEM" ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      void marcarImagemRelatorio(anexo)
-                    }
-                    style={[
-                      styles.actionButton,
-                      { borderColor: theme.borda },
-                    ]}
-                    disabled={ocupado}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      anexo.imagem_relatorio === 1
-                        ? "Remover seleção para relatório"
-                        : "Selecionar imagem para relatório"
-                    }
-                  >
+                  {processando ? (
+                    <ActivityIndicator size="small" color={theme.textoTerciaria} />
+                  ) : (
                     <Ionicons
                       name={
                         anexo.imagem_relatorio === 1
-                          ? "images"
-                          : "images-outline"
+                          ? "checkmark-circle-outline"
+                          : "image-outline"
                       }
-                      size={17}
-                      color={theme.primaria}
+                      size={16}
+                      color={theme.textoTerciaria}
                     />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
+                  )}
+                  <Text
+                    weight="SemiBold"
+                    style={{ color: theme.textoTerciaria, fontSize: 10, flexShrink: 1 }}
+                  >
+                    {anexo.imagem_relatorio === 1
+                      ? "REMOVER DOS RELATÓRIOS"
+                      : "USAR NOS RELATÓRIOS"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
 
             {!processando && podeExcluir ? (
               <TouchableOpacity
@@ -689,35 +634,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 4,
   },
-
-  badges: {
+  botaoUsoRelatorio: {
+    alignSelf: "flex-start",
+    minHeight: 34,
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 8,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
-    marginTop: 6,
-  },
-
-  badge: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    fontSize: 8,
-  },
-
-  actions: {
-    gap: 6,
-  },
-
-  actionButton: {
-    width: 44,
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 12,
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
   },
-
   deleteButton: {
     width: 44,
     height: 44,
