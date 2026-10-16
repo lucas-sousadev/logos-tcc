@@ -544,6 +544,13 @@ $router->post(
 );
 
 $router->get(
+    "/api/relatorios/{id}/midias/{midia_id}",
+    "RelatorioController:arquivoMidia",
+    "RELATORIOS.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
     "/api/relatorios/{id}",
     "RelatorioController:buscar",
     "RELATORIOS.VISUALIZAR",
@@ -565,9 +572,16 @@ $router->get(
 );
 
 $router->put(
-    "/api/relatorios/{id}/slides/{slide_id}/revisao",
-    "RelatorioController:revisarSlide",
+    "/api/relatorios/{id}/slides/{slide_id}/decisao",
+    "RelatorioController:decidirRevisaoSlide",
     "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/relatorios/{id}/slides/excluir-lote",
+    "RelatorioController:excluirSlides",
+    "RELATORIOS.EXCLUIR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 

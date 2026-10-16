@@ -1,29 +1,69 @@
 import {
+  ActivityIndicator,
+  Platform,
   ScrollView,
+  Share,
   StyleSheet,
   View,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
+  useFocusEffect,
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { useTheme } from "@/contexts/ThemeContext";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  ConviteHistorico, 
-} from "@/services/api/auth";
+import { TouchableOpacity } from "react-native";
+import * as Clipboard from "expo-clipboard";
 
 import Header from "@/components/layout/Header";
-import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
+import Text from "@/components/ui/Text";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import type { ConviteHistorico } from "@/services/api/auth";
+
+const LIMITE_PAGINA = 20;
+
+function formatarData(data: string | null): string {
+  if (!data) return "Data não informada";
+
+  const partes = data.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/
+  );
+
+  if (!partes) return data;
+
+  return `${partes[3]}/${partes[2]}/${partes[1]} às ${partes[4]}:${partes[5]}`;
+}
 
 export default function Convites() {
   const router = useRouter();
-  
-  const { origem } = useLocalSearchParams<{
-    origem?: string;
-  }>();
+  const { theme } = useTheme();
+  const { origem } = useLocalSearchParams<{ origem?: string }>();
+  const { criarConvite, listarConvites, temPermissao } = useAuth();
+
+  const podeVisualizar = temPermissao("CONVITES", "VISUALIZAR");
+  const podeCriar = temPermissao("CONVITES", "CRIAR");
+
+  const [historico, setHistorico] = useState<ConviteHistorico[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [atualizacao, setAtualizacao] = useState(0);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(true);
+  const [criando, setCriando] = useState(false);
+  const [erroHistorico, setErroHistorico] = useState("");
+  const [erroCriacao, setErroCriacao] = useState("");
+
+  const [conviteCriado, setConviteCriado] = useState<{
+    codigo: string;
+    expira_em: string;
+  } | null>(null);
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+
+  const requisicaoAtual = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
 
   function voltar() {
     if (origem === "funcionarios") {
@@ -39,143 +79,154 @@ export default function Convites() {
     router.replace("/");
   }
 
-  const { theme } = useTheme();
+  useFocusEffect(
+    useCallback(() => {
+      if (!podeVisualizar) return;
 
-  const {
-    criarConvite,
-    listarConvites,
-    temPermissao
-  } = useAuth();
+      const requisicao = ++requisicaoAtual.current;
+      setCarregandoHistorico(true);
+      setErroHistorico("");
 
-  const podeVisualizarConvites = temPermissao(
-    "CONVITES",
-    "VISUALIZAR"
+      void listarConvites(pagina, LIMITE_PAGINA)
+        .then((resposta) => {
+          if (requisicao !== requisicaoAtual.current) return;
+
+          setHistorico(resposta.convites ?? []);
+          setTotal(resposta.pagination?.total ?? 0);
+        })
+        .catch((error) => {
+          if (requisicao !== requisicaoAtual.current) return;
+
+          setHistorico([]);
+          setTotal(0);
+          setErroHistorico(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os convites."
+          );
+        })
+        .finally(() => {
+          if (requisicao === requisicaoAtual.current) {
+            setCarregandoHistorico(false);
+          }
+        });
+
+      return () => {
+        requisicaoAtual.current++;
+      };
+    }, [podeVisualizar, listarConvites, pagina, atualizacao])
   );
 
-  const podeCriarConvites = temPermissao(
-    "CONVITES",
-    "CRIAR"
-  );
-  const [historico, setHistorico] = useState<
-    ConviteHistorico[]
-  >([]);
+  async function gerarConvite() {
+    if (criando) return;
 
-  const [erro, setErro] = useState("");
-  const [pagina, setPagina] = useState(1);
-  const [temMais, setTemMais] = useState(false);
-  const [carregandoMais, setCarregandoMais] =
-    useState(false);
-
-  const [carregando, setCarregando] = useState(false);
-
-  const [convite, setConvite] = useState<{
-    codigo: string;
-    email_destino: string | null;
-    expira_em: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!podeVisualizarConvites) {
-      return;
-    }
-
-    carregarHistorico();
-  }, [podeVisualizarConvites]);
-
-  async function carregarHistorico() {
-    try {
-      const resposta = await listarConvites(1, 20);
-
-      setHistorico(resposta.convites || []);
-      setPagina(1);
-      setTemMais(
-        resposta.pagination?.has_next ?? false
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao carregar histórico de convites:",
-        error
-      );
-    }
-  }
-
-  async function carregarMais() {
-    if (!temMais || carregandoMais) {
-      return;
-    }
+    setCriando(true);
+    setErroCriacao("");
+    setConviteCriado(null);
+    setCodigoCopiado(false);
 
     try {
-      setCarregandoMais(true);
+      const resposta = await criarConvite();
 
-      const proximaPagina = pagina + 1;
-
-      const resposta = await listarConvites(
-        proximaPagina,
-        20
-      );
-
-      setHistorico((atual) => [
-        ...atual,
-        ...(resposta.convites || []),
-      ]);
-
-      setPagina(proximaPagina);
-
-      setTemMais(
-        resposta.pagination?.has_next ?? false
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao carregar mais convites:",
-        error
-      );
-    } finally {
-      setCarregandoMais(false);
-    }
-  }
-
-  async function handleCriarConvite() {
-    setErro("");
-    setConvite(null);
-
-    try {
-      setCarregando(true);
-
-      const resultado = await criarConvite();
-
-      if (!resultado.convite) {
-        throw new Error(
-          "A API não retornou os dados do convite."
-        );
+      if (!resposta.convite) {
+        throw new Error("A API não retornou os dados do convite.");
       }
 
-      setConvite(resultado.convite);
+      setConviteCriado({
+        codigo: resposta.convite.codigo,
+        expira_em: resposta.convite.expira_em,
+      });
 
-      await carregarHistorico();
+      setPagina(1);
+      setAtualizacao((valor) => valor + 1);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error) {
-      console.error(
-        "Erro ao criar convite:",
-        error
-      );
-
-      setErro(
+      setErroCriacao(
         error instanceof Error
           ? error.message
-          : "Não foi possível criar o convite."
+          : "Não foi possível gerar o convite."
       );
     } finally {
-      setCarregando(false);
+      setCriando(false);
     }
   }
 
-  if (!podeVisualizarConvites) {
+  async function copiarConvite() {
+    if (!conviteCriado) return;
+
+    try {
+      const copiou = await Clipboard.setStringAsync(conviteCriado.codigo);
+      if (!copiou) throw new Error("A cópia não foi concluída.");
+
+      setCodigoCopiado(true);
+      setErroCriacao("");
+    } catch {
+      setCodigoCopiado(false);
+      setErroCriacao("Não foi possível copiar o código. Tente selecioná-lo manualmente.");
+    }
+  }
+
+  async function compartilharConvite() {
+    if (!conviteCriado) return;
+
+    try {
+      await Share.share({
+        message:
+          `Código de convite para cadastro na assessoria: ` +
+          `${conviteCriado.codigo}\n` +
+          `Válido até: ${formatarData(conviteCriado.expira_em)}`,
+      });
+    } catch {
+      setErroCriacao(
+        "Não foi possível abrir o compartilhamento. Selecione o código para copiá-lo."
+      );
+    }
+  }
+
+  if (!podeVisualizar) {
+    return (
+      <View
+        style={[
+          styles.screen,
+          { backgroundColor: theme.background },
+        ]}
+      >
+        <Header
+          title="Convites"
+          showBackButton
+          onBackPress={voltar}
+        />
+
+        <View style={styles.restrito}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={30}
+            color={theme.textoSub}
+          />
+
+          <Text weight="Bold" style={styles.restritoTitulo}>
+            Acesso restrito
+          </Text>
+
+          <Text style={{ color: theme.textoSub, textAlign: "center" }}>
+            Você não tem permissão para visualizar convites.
+          </Text>
+
+          <Button
+            title="VOLTAR"
+            variant="outline"
+            onPress={voltar}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
         styles.screen,
-        {
-          backgroundColor: theme.background,
-        },
+        { backgroundColor: theme.background },
       ]}
     >
       <Header
@@ -184,465 +235,596 @@ export default function Convites() {
         onBackPress={voltar}
       />
 
-      <View style={styles.restrictedContainer}>
-        <Text
-          weight="SemiBold"
-          style={styles.title}
-        >
-          Acesso restrito
-        </Text>
-
-        <Text
-          style={[
-            styles.message,
-            {
-              color: theme.textoSub,
-            },
-          ]}
-        >
-          Você não tem permissão para gerenciar convites.
-        </Text>
-
-        <Button
-          title="VOLTAR"
-          variant="outline"
-          onPress={voltar}
-        />
-      </View>
-    </View>
-  );
-}
-
-  return (
-    <View
-    style={[
-      styles.screen,
-      {
-        backgroundColor: theme.background,
-      },
-    ]}
-  >
-    <Header
-      title="Convites"
-      showBackButton
-      onBackPress={voltar}
-    />
-
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-    >
-
-      <Text
-        style={[
-          styles.subtitle,
-          {
-            color: theme.textoTerciaria,
-          },
-        ]}
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.conteudo}
       >
-        Crie e compartilhe um convite para adicionar um funcionário
-        à sua assessoria.
-      </Text>
+        <View style={styles.linhaSuperior}>
+          <Text
+            weight="Medium"
+            style={[styles.contagem, { color: theme.textoSub }]}
+          >
+            {total} {total === 1 ? "convite" : "convites"}
+          </Text>
 
-      {podeCriarConvites ? (
-        <Button
-          title="GERAR CONVITE"
-          loading={carregando}
-          onPress={handleCriarConvite}
-          style={styles.generateButton}
-        />
-      ) : null}
+          {podeCriar ? (
+            <Button
+              title="GERAR CONVITE"
+              size="small"
+              loading={criando}
+              onPress={() => void gerarConvite()}
+              style={styles.botaoGerar}
+            />
+          ) : null}
+        </View>
 
-      {erro ? (
-        <Text
-          weight="Medium"
-          style={styles.errorText}
-        >
-          {erro}
-        </Text>
-      ) : null}
-
-      {convite && (
         <View
           style={[
-            styles.result,
+            styles.introducao,
             {
-              backgroundColor: theme.background,
+              backgroundColor: theme.backgroundSecundario,
               borderColor: theme.borda,
             },
           ]}
         >
-          <Text
-            weight="SemiBold"
-            style={styles.resultTitle}
-          >
-            Convite criado
-          </Text>
-
-          <Text
-            weight="ExtraBold"
+          <View
             style={[
-              styles.code,
+              styles.iconeIntroducao,
               {
-                color: theme.textoTerciaria,
+                backgroundColor: `${theme.textoTerciaria}18`,
               },
             ]}
           >
-            {convite.codigo}
-          </Text>
+            <Ionicons
+              name="person-add-outline"
+              size={21}
+              color={theme.textoTerciaria}
+            />
+          </View>
 
-          <Text
-            style={[
-              styles.expiration,
-              {
-                color: theme.texto,
-              },
-            ]}
-          >
-            Válido até:{" "}
-            {formatarData(convite.expira_em)}
-          </Text>
+          <View style={styles.textosIntroducao}>
+            <Text weight="Bold" style={styles.tituloIntroducao}>
+              Convide alguém para a equipe
+            </Text>
 
-          <Text
-            style={[
-              styles.info,
-              {
-                color: theme.texto,
-              },
-            ]}
-          >
-            Envie este código para o <Text style={{color:theme.textoTerciaria}}>funcionário. </Text>
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.historyContainer}>
-        <Text
-          weight="SemiBold"
-          style={styles.historyTitle}
-        >
-          Histórico de convites
-        </Text>
-
-        {historico.length === 0 ? (
-          <Text
-            style={[
-              styles.emptyText,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            Nenhum convite criado.
-          </Text>
-        ) : (
-          historico.map((item) => (
-            <View
-              key={item.id}
+            <Text
               style={[
-                styles.historyItem,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.borda,
-                },
+                styles.descricaoIntroducao,
+                { color: theme.textoSub },
               ]}
             >
-              <View style={styles.historyTop}>
-                <Text
-                  weight="SemiBold"
-                  style={styles.historyCode}
-                >
-                  {item.codigo}
-                </Text>
+              Gere um código para o funcionário se cadastrar. Ele
+              é válido por 7 dias e pode ser usado uma vez.
+            </Text>
+          </View>
+        </View>
 
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.status,
-                    item.status === "ATIVO" &&
-                      styles.statusAtivo,
-                    item.status === "UTILIZADO" &&
-                      styles.statusUtilizado,
-                    item.status === "EXPIRADO" &&
-                      styles.statusExpirado,
-                  ]}
-                >
-                  {item.status}
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.historyInfo,
-                  {
-                    color: theme.texto,
-                  },
-                ]}
-              >
-                <Text
-                  weight="SemiBold"
-                  style={{
-                    color: theme.textoTerciaria,
-                  }}
-                >
-                  Criado por:
-                </Text>{" "}
-                {item.criado_por}
-              </Text>
-
-              <Text
-                style={[
-                  styles.historyInfo,
-                  {
-                    color: theme.texto,
-                  },
-                ]}
-              >
-                <Text
-                  weight="SemiBold"
-                  style={{
-                    color: theme.textoTerciaria,
-                  }}
-                >
-                  Criado em:
-                </Text>{" "}
-                {formatarData(item.created_at)}
-              </Text>
-
-              <Text
-                style={[
-                  styles.historyInfo,
-                  {
-                    color: theme.texto,
-                  },
-                ]}
-              >
-                <Text
-                  weight="SemiBold"
-                  style={{
-                    color: theme.textoTerciaria,
-                  }}
-                >
-                  Expira em:
-                </Text>{" "}
-                {formatarData(item.expira_em)}
-              </Text>
-
-              {item.utilizado_por && (
-                <Text
-                  style={[
-                    styles.historyInfo,
-                    {
-                      color: theme.texto,
-                    },
-                  ]}
-                >
-                  <Text
-                    weight="SemiBold"
-                    style={{
-                      color: theme.textoTerciaria,
-                    }}
-                  >
-                    Utilizado por:
-                  </Text>{" "}
-                  {item.utilizado_por}
-                </Text>
-              )}
-
-              {item.utilizado_em && (
-                <Text
-                  style={[
-                    styles.historyInfo,
-                    {
-                      color: theme.texto,
-                    },
-                  ]}
-                >
-                  <Text
-                    weight="SemiBold"
-                    style={{
-                      color: theme.textoTerciaria,
-                    }}
-                  >
-                    Utilizado em:
-                  </Text>{" "}
-                  {formatarData(item.utilizado_em)}
-                </Text>
-              )}
-            </View>
-          ))
-        )}
-
-        {temMais && (
-          <Button
-            title="CARREGAR MAIS"
-            variant="outline"
-            loading={carregandoMais}
-            onPress={carregarMais}
-            style={styles.loadMoreButton}
-          />
-        )}
-
-        {!temMais && historico.length > 0 && (
-          <Text
+        {erroCriacao ? (
+          <View
             style={[
-              styles.endText,
+              styles.mensagem,
+              { borderColor: theme.erro },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={18}
+              color={theme.erro}
+            />
+            <Text style={{ color: theme.erro, flex: 1 }}>
+              {erroCriacao}
+            </Text>
+          </View>
+        ) : null}
+
+        {conviteCriado ? (
+          <View
+            style={[
+              styles.conviteCriado,
               {
-                color: theme.textoTerciaria,
+                backgroundColor: theme.backgroundSecundario,
+                borderColor: theme.textoTerciaria,
               },
             ]}
           >
-            Todos os convites foram carregados.
+            <View style={styles.tituloResultado}>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={21}
+                color={theme.textoTerciaria}
+              />
+              <Text weight="Bold" style={styles.tituloConviteCriado}>
+                Convite pronto
+              </Text>
+            </View>
+
+            <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+              Compartilhe este código com o funcionário:
+            </Text>
+
+            <View
+              style={[
+                styles.caixaCodigo,
+                { borderColor: theme.borda },
+              ]}
+            >
+              <Text
+                selectable
+                weight="ExtraBold"
+                style={[
+                  styles.codigoCriado,
+                  { color: theme.textoTerciaria },
+                ]}
+              >
+                {conviteCriado.codigo}
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={codigoCopiado ? "Código copiado" : "Copiar código do convite"}
+                onPress={() => void copiarConvite()}
+                style={[
+                  styles.botaoCopiar,
+                  { backgroundColor: theme.background, borderColor: theme.borda },
+                ]}
+              >
+                <Ionicons
+                  name={codigoCopiado ? "checkmark-outline" : "copy-outline"}
+                  size={19}
+                  color={theme.textoTerciaria}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+              Válido até {formatarData(conviteCriado.expira_em)}
+            </Text>
+
+            {codigoCopiado ? (
+              <Text style={{ color: theme.textoTerciaria, fontSize: 12 }}>
+                Código copiado!
+              </Text>
+            ) : null}
+
+            {Platform.OS !== "web" ? (
+              <Button
+                title="COMPARTILHAR CÓDIGO"
+                variant="outline"
+                size="small"
+                onPress={() => void compartilharConvite()}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.cabecalhoHistorico}>
+          <Text weight="Bold" style={styles.tituloHistorico}>
+            Histórico de convites
           </Text>
+          <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+            Mais recentes primeiro
+          </Text>
+        </View>
+
+        {erroHistorico ? (
+          <View
+            style={[
+              styles.estado,
+              {
+                borderColor: theme.borda,
+                backgroundColor: theme.backgroundSecundario,
+              },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={24}
+              color={theme.erro}
+            />
+            <Text style={{ color: theme.erro, textAlign: "center" }}>
+              {erroHistorico}
+            </Text>
+            <Button
+              title="TENTAR NOVAMENTE"
+              size="small"
+              onPress={() =>
+                setAtualizacao((valor) => valor + 1)
+              }
+            />
+          </View>
+        ) : carregandoHistorico ? (
+          <ActivityIndicator
+            size="large"
+            color={theme.textoTerciaria}
+            style={styles.carregando}
+          />
+        ) : historico.length === 0 ? (
+          <View
+            style={[
+              styles.estado,
+              {
+                borderColor: theme.borda,
+                backgroundColor: theme.backgroundSecundario,
+              },
+            ]}
+          >
+            <Ionicons
+              name="ticket-outline"
+              size={28}
+              color={theme.textoSub}
+            />
+            <Text weight="SemiBold">
+              Nenhum convite criado
+            </Text>
+            <Text
+              style={{
+                color: theme.textoSub,
+                textAlign: "center",
+                fontSize: 12,
+              }}
+            >
+              Os convites gerados aparecerão aqui.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {historico.map((item) => {
+              const corStatus =
+                item.status === "ATIVO"
+                  ? theme.textoTerciaria
+                  : item.status === "EXPIRADO"
+                    ? theme.erro
+                    : theme.textoSub;
+
+              return (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.cartao,
+                    {
+                      backgroundColor: theme.backgroundSecundario,
+                      borderColor: theme.borda,
+                    },
+                  ]}
+                >
+                  <View style={styles.cartaoTopo}>
+                    <View
+                      style={[
+                        styles.iconeCartao,
+                        {
+                          backgroundColor:
+                            `${theme.textoTerciaria}18`,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="ticket-outline"
+                        size={19}
+                        color={theme.textoTerciaria}
+                      />
+                    </View>
+
+                    <View style={styles.identificacaoCartao}>
+                      <Text
+                        selectable
+                        weight="Bold"
+                        style={styles.codigoCartao}
+                      >
+                        {item.codigo}
+                      </Text>
+                      <Text
+                        style={{
+                          color: theme.textoSub,
+                          fontSize: 11,
+                        }}
+                      >
+                        Gerado por {item.criado_por}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.seloStatus,
+                        {
+                          backgroundColor: `${corStatus}18`,
+                          borderColor: `${corStatus}70`,
+                        },
+                      ]}
+                    >
+                      <Text
+                        weight="Bold"
+                        style={[
+                          styles.textoStatus,
+                          { color: corStatus },
+                        ]}
+                      >
+                        {item.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.divisor,
+                      { backgroundColor: theme.borda },
+                    ]}
+                  />
+
+                  <View style={styles.detalhe}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={15}
+                      color={theme.textoSub}
+                    />
+                    <Text
+                      style={[
+                        styles.textoDetalhe,
+                        { color: theme.textoSub },
+                      ]}
+                    >
+                      Criado em {formatarData(item.created_at)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detalhe}>
+                    <Ionicons
+                      name="time-outline"
+                      size={15}
+                      color={theme.textoSub}
+                    />
+                    <Text
+                      style={[
+                        styles.textoDetalhe,
+                        { color: theme.textoSub },
+                      ]}
+                    >
+                      Expira em {formatarData(item.expira_em)}
+                    </Text>
+                  </View>
+
+                  {item.utilizado_por ? (
+                    <View style={styles.detalhe}>
+                      <Ionicons
+                        name="person-outline"
+                        size={15}
+                        color={theme.textoSub}
+                      />
+                      <Text
+                        style={[
+                          styles.textoDetalhe,
+                          { color: theme.textoSub },
+                        ]}
+                      >
+                        Utilizado por {item.utilizado_por}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {item.utilizado_em ? (
+                    <View style={styles.detalhe}>
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={15}
+                        color={theme.textoSub}
+                      />
+                      <Text
+                        style={[
+                          styles.textoDetalhe,
+                          { color: theme.textoSub },
+                        ]}
+                      >
+                        Utilizado em{" "}
+                        {formatarData(item.utilizado_em)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+
+            <Text
+              style={[
+                styles.faixaResultados,
+                { color: theme.textoSub },
+              ]}
+            >
+              Exibindo {(pagina - 1) * LIMITE_PAGINA + 1}–
+              {Math.min(pagina * LIMITE_PAGINA, total)} de{" "}
+              {total}
+            </Text>
+
+            <PaginacaoLista
+              pagina={pagina}
+              limite={LIMITE_PAGINA}
+              total={total}
+              disabled={carregandoHistorico || criando}
+              onChange={(novaPagina) => {
+                setPagina(novaPagina);
+                scrollRef.current?.scrollTo({
+                  y: 0,
+                  animated: true,
+                });
+              }}
+            />
+          </>
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
-function formatarData(data: string): string {
-  const dataObj = new Date(
-    data.replace(" ", "T")
-  );
-
-  return dataObj.toLocaleString("pt-BR");
-}
-
 const styles = StyleSheet.create({
   screen: {
-  flex: 1,
-},
-
-container: {
-  flexGrow: 1,
-  paddingHorizontal: 25,
-  paddingTop: 25,
-  paddingBottom: 30,
-},
-  restrictedContainer: {
     flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 25,
   },
-
-  title: {
-    fontSize: 30,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-
-  subtitle: {
-    textAlign: "center",
-    marginBottom: 35,
-  },
-
-  generateButton: {
-    marginTop: 5,
-  },
-
-  result: {
-    marginTop: 30,
-
+  conteudo: {
     padding: 20,
-
-    borderRadius: 15,
-    borderWidth: 1,
-
-    alignItems: "center",
+    paddingBottom: 36,
+    gap: 14,
   },
-
-  resultTitle: {
-    fontSize: 18,
-    marginBottom: 15,
-  },
-
-  code: {
-    fontSize: 23,
-    letterSpacing: 2,
-    marginBottom: 15,
-  },
-
-  expiration: {
-    marginBottom: 10,
-  },
-
-  info: {
-    textAlign: "center",
-  },
-
-  message: {
-    textAlign: "center",
-    marginBottom: 25,
-  },
-
-  historyContainer: {
-    marginTop: 35,
-  },
-
-  historyTitle: {
-    fontSize: 22,
-    marginBottom: 15,
-  },
-
-  emptyText: {
-    marginBottom: 10,
-  },
-
-  historyItem: {
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
-
-    borderWidth: 2,
-  },
-
-  historyTop: {
+  linhaSuperior: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-
-    marginBottom: 10,
+    justifyContent: "space-between",
+    gap: 10,
   },
-
-  historyCode: {
+  contagem: {
+    flex: 1,
+    fontSize: 13,
+  },
+  botaoGerar: {
+    width: "auto",
+    paddingHorizontal: 12,
+  },
+  introducao: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    gap: 11,
+  },
+  iconeIntroducao: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textosIntroducao: {
+    flex: 1,
+    gap: 4,
+  },
+  tituloIntroducao: {
+    fontSize: 14,
+  },
+  descricaoIntroducao: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  mensagem: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  conviteCriado: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 15,
+    gap: 10,
+  },
+  tituloResultado: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  tituloConviteCriado: {
     fontSize: 16,
   },
-
-  status: {
-    fontSize: 12,
+  caixaCodigo: {
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-
-  statusAtivo: {
-    color: "#2E8B57",
-  },
-
-  statusUtilizado: {
-    color: "#808080",
-  },
-
-  statusExpirado: {
-    color: "#D32F2F",
-  },
-
-  historyInfo: {
-    marginBottom: 4,
-  },
-
-  errorText: {
-    color: "#D32F2F",
+  codigoCriado: {
+    flex: 1,
+    fontSize: 18,
+    letterSpacing: 1,
     textAlign: "center",
-    marginTop: 15,
   },
-
-  loadMoreButton: {
+  botaoCopiar: {
+    width: 38,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cabecalhoHistorico: {
+    gap: 3,
     marginTop: 5,
-    marginBottom: 20,
   },
-
-  endText: {
+  tituloHistorico: {
+    fontSize: 18,
+  },
+  estado: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    gap: 10,
+  },
+  carregando: {
+    marginVertical: 32,
+  },
+  cartao: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    gap: 9,
+  },
+  cartaoTopo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+  },
+  iconeCartao: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  identificacaoCartao: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  codigoCartao: {
+    fontSize: 13,
+  },
+  seloStatus: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  textoStatus: {
+    fontSize: 9,
+  },
+  divisor: {
+    height: 1,
+    opacity: 0.45,
+  },
+  detalhe: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 7,
+  },
+  textoDetalhe: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  faixaResultados: {
     textAlign: "center",
-    marginBottom: 20,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  restrito: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  restritoTitulo: {
+    fontSize: 20,
   },
 });

@@ -1006,7 +1006,17 @@ class ClippingService
                     $assessoriaId,
                     $campos
                 );
+                
+                RelatorioService::sincronizarNovoClipping(
+                    $assessoriaId,
+                    $id
+                );
 
+                RelatorioService::atualizarRevisoesDoClipping(
+                    $assessoriaId,
+                    $id
+                );
+                
                 return self::buscar(
                     $id,
                     $assessoriaId

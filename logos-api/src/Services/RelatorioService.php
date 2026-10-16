@@ -472,6 +472,46 @@ class RelatorioService
             ),
             'revisao_pendente' => $slide['revisao_pendente'] ?? 0,
         ]);
+
+        if ($slide['tipo'] !== 'CLIPPING') {
+            return;
+        }
+
+        $slideId = (int) Connection::get()->lastInsertId();
+        $logoPath = $slide['dados']['veiculo']['logo_path'] ?? null;
+
+        $logoMidiaId = RelatorioMidiaService::copiarLogo(
+            $assessoriaId,
+            $relatorioId,
+            is_string($logoPath) ? $logoPath : null
+        );
+
+        $imagemMidiaId = RelatorioMidiaService::copiarImagem(
+            $assessoriaId,
+            $relatorioId,
+            (int) $slide['clipping_id'],
+            $slide['imagem_path'] ?? null
+        );
+
+        if ($logoMidiaId !== null || $imagemMidiaId !== null) {
+            self::consultar(
+                "
+                    UPDATE relatorio_slides
+                    SET logo_midia_id = :logo_midia_id,
+                        imagem_midia_id = :imagem_midia_id
+                    WHERE id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'logo_midia_id' => $logoMidiaId,
+                    'imagem_midia_id' => $imagemMidiaId,
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+        }
     }
 
     private static function slideClipping(
@@ -1203,8 +1243,16 @@ class RelatorioService
                     FROM relatorio_slides pendente
                     WHERE pendente.relatorio_id = r.id
                     AND pendente.assessoria_id = r.assessoria_id
-                    AND pendente.origem_inclusao = 'AUTOMATICA'
-                    AND pendente.revisao_pendente = 1
+                    AND (
+                        pendente.revisao_pendente = 1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM relatorio_slide_revisoes rv
+                            WHERE rv.slide_id = pendente.id
+                            AND rv.assinatura_atual
+                                <> rv.assinatura_reconhecida
+                        )
+                    )
                 )
             ";
 
@@ -1283,7 +1331,23 @@ class RelatorioService
                         AND s.assessoria_id = r.assessoria_id
                         AND s.origem_inclusao = 'AUTOMATICA'
                         AND s.revisao_pendente = 1
-                    ) AS novos_pendentes
+                    ) AS novos_pendentes,
+                    (
+                        SELECT COUNT(*)
+                        FROM relatorio_slides s
+                        WHERE s.relatorio_id = r.id
+                        AND s.assessoria_id = r.assessoria_id
+                        AND (
+                            s.revisao_pendente = 1
+                            OR EXISTS (
+                                SELECT 1
+                                FROM relatorio_slide_revisoes rv
+                                WHERE rv.slide_id = s.id
+                                AND rv.assinatura_atual
+                                    <> rv.assinatura_reconhecida
+                            )
+                        )
+                    ) AS total_pendentes
             "
                 . $origem
                 . $where
@@ -1311,6 +1375,8 @@ class RelatorioService
 
             $relatorio['novos_pendentes'] =
                 (int) $relatorio['novos_pendentes'];
+            $relatorio['total_pendentes'] =
+                (int) $relatorio['total_pendentes'];
         }
 
         unset($relatorio);
@@ -1324,6 +1390,318 @@ class RelatorioService
                 'has_next' => $offset + count($relatorios) < $total,
             ],
         ];
+    }
+
+    private static function valoresOrigem(
+        array $dados,
+        string $origem
+    ): array {
+        $clipping = $dados['clipping'] ?? [];
+        $veiculo = $dados['veiculo'] ?? [];
+        $imagem = $dados['imagem'] ?? [];
+
+        if ($origem === 'VEICULO') {
+            return [
+                'id' => $veiculo['id'] ?? null,
+                'nome' => $veiculo['nome'] ?? null,
+                'descricao' => $veiculo['descricao'] ?? null,
+                'alcance' => $veiculo['alcance'] ?? null,
+                'logo_path' => $veiculo['logo_path'] ?? null,
+            ];
+        }
+
+        return [
+            'cliente_id' => $dados['cliente']['id'] ?? null,
+            'id' => $clipping['id'] ?? null,
+            'veiculo_id' => $veiculo['id'] ?? null,
+            'veiculo_nome_informado' => $veiculo['nome_informado'] ?? null,
+            'ano_referencia' => $clipping['ano_referencia'] ?? null,
+            'data_publicacao' => $clipping['data_publicacao'] ?? null,
+            'categorias' => $clipping['categorias'] ?? [],
+            'programa_secao' => $clipping['programa_secao'] ?? null,
+            'pauta' => $clipping['pauta'] ?? null,
+            'tier' => $clipping['tier'] ?? null,
+            'inicio_segundos' => $clipping['inicio_segundos'] ?? null,
+            'fim_segundos' => $clipping['fim_segundos'] ?? null,
+            'duracao_segundos' => $clipping['duracao_segundos'] ?? null,
+            'link' => $clipping['link'] ?? null,
+            'observacoes' => $clipping['observacoes'] ?? null,
+            'imagem_anexo_id' => $imagem['anexo_id'] ?? null,
+            'imagem_path' => $imagem['arquivo_path'] ?? null,
+        ];
+    }
+
+    private static function assinaturaOrigem(
+        array $dados,
+        string $origem
+    ): string {
+        return hash(
+            'sha256',
+            json_encode(
+                self::valoresOrigem($dados, $origem),
+                JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                    | JSON_THROW_ON_ERROR
+            )
+        );
+    }
+
+    private static function registrarRevisoes(
+        int $assessoriaId,
+        int $relatorioId
+    ): array {
+        $slides = self::consultar(
+            "
+                SELECT id, clipping_id, dados_json
+                FROM relatorio_slides
+                WHERE relatorio_id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+                AND tipo = 'CLIPPING'
+            ",
+            [
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+            ]
+        )->fetchAll();
+
+        if (!$slides) {
+            return [
+                'campos' => [],
+                'valores' => [],
+                'tokens' => [],
+                'atuais' => [],
+            ];
+        }
+        
+        $ids = array_values(array_unique(array_map(
+            'intval',
+            array_column($slides, 'clipping_id')
+        )));
+
+        $parametros = ['assessoria_id' => $assessoriaId];
+        $marcadores = [];
+
+        foreach ($ids as $indice => $id) {
+            $nome = 'clipping_' . $indice;
+            $marcadores[] = ':' . $nome;
+            $parametros[$nome] = $id;
+        }
+
+        $linhas = self::consultar(
+            self::SELECT_MATERIA
+                . self::ORIGEM
+                . ' WHERE c.assessoria_id = :assessoria_id'
+                . ' AND c.id IN (' . implode(', ', $marcadores) . ')',
+            $parametros
+        )->fetchAll();
+
+        $atuais = [];
+        $historico = [];
+
+        $revisoes = self::consultar(
+            "
+                SELECT
+                    slide_id,
+                    origem,
+                    assinatura_reconhecida
+                FROM relatorio_slide_revisoes
+                WHERE relatorio_id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+            ",
+            [
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+            ]
+        )->fetchAll();
+
+        foreach ($revisoes as $revisao) {
+            $historico[(int) $revisao['slide_id']][$revisao['origem']] =
+                $revisao;
+        }
+
+        foreach ($linhas as $linha) {
+            $materia = self::prepararMateria($linha);
+
+            $atuais[$materia['id']] = self::slideClipping(
+                $materia,
+                [
+                    'id' => $materia['cliente_id'],
+                    'nome' => '',
+                ]
+            )['dados'];
+        }
+
+        $registrar = Connection::get()->prepare(
+            "
+                INSERT INTO relatorio_slide_revisoes (
+                    slide_id,
+                    relatorio_id,
+                    assessoria_id,
+                    origem,
+                    assinatura_reconhecida,
+                    assinatura_atual,
+                    dados_reconhecidos_json
+                ) VALUES (
+                    :slide_id,
+                    :relatorio_id,
+                    :assessoria_id,
+                    :origem,
+                    :assinatura_reconhecida,
+                    :assinatura_atual,
+                    :dados_reconhecidos_json
+                )
+                ON DUPLICATE KEY UPDATE
+                    assinatura_reconhecida = CASE
+                    WHEN VALUES(assinatura_atual) = VALUES(assinatura_reconhecida)
+                        THEN VALUES(assinatura_reconhecida)
+                    ELSE assinatura_reconhecida
+                END,
+                assinatura_atual = VALUES(assinatura_atual),
+                dados_reconhecidos_json = CASE
+                    WHEN VALUES(assinatura_atual) = VALUES(assinatura_reconhecida)
+                        THEN VALUES(dados_reconhecidos_json)
+                    ELSE COALESCE(
+                        dados_reconhecidos_json,
+                        VALUES(dados_reconhecidos_json)
+                    )
+                END
+            "
+        );
+
+        $camposAlterados = [];
+        $novosValores = [];
+        $tokens = [];
+
+        foreach ($slides as $slide) {
+            $slideId = (int) $slide['id'];
+            $atual = $atuais[(int) $slide['clipping_id']] ?? null;
+
+            if ($atual === null) {
+                continue;
+            }
+            
+            $assinaturas = [];
+
+            $salvo = json_decode(
+                $slide['dados_json'] ?? '{}',
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+
+            foreach (['VEICULO', 'CLIPPING'] as $origem) {
+                $valoresSalvos = self::valoresOrigem($salvo, $origem);
+                $valoresAtuais = self::valoresOrigem($atual, $origem);
+                $registro = $historico[$slideId][$origem] ?? null;
+
+                $assinaturaSalva = self::assinaturaOrigem($salvo, $origem);
+
+                $assinaturaReconhecida = $registro === null
+                    ? $assinaturaSalva
+                    : $registro['assinatura_reconhecida'];
+
+                $assinaturaAtual = self::assinaturaOrigem($atual, $origem);
+                $chave = strtolower($origem);
+                $assinaturas[$chave] = $assinaturaAtual;
+                $camposAlterados[$slideId][$chave] = [];
+                $novosValores[$slideId][$chave] = [];
+
+                if ($assinaturaAtual === $assinaturaSalva) {
+                    $assinaturaReconhecida = $assinaturaAtual;
+                }
+
+                if ($assinaturaAtual !== $assinaturaReconhecida) {
+                    foreach ($valoresAtuais as $campo => $valor) {
+                        if (($valoresSalvos[$campo] ?? null) !== $valor) {
+                            $camposAlterados[$slideId][$chave][] = $campo;
+                            $novosValores[$slideId][$chave][$campo] = $valor;
+                        }
+                    }
+                }
+
+                $registrar->execute([
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                    'origem' => $origem,
+                    'assinatura_reconhecida' =>
+                        self::assinaturaOrigem($salvo, $origem),
+                    'assinatura_atual' => $assinaturaAtual,
+                    'dados_reconhecidos_json' => json_encode(
+                        $valoresSalvos,
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                ]);
+            }
+            $tokens[$slideId] = hash(
+                'sha256',
+                $slideId . '|'
+                . $assinaturas['veiculo'] . '|'
+                . $assinaturas['clipping']
+            );
+        }
+
+        return [
+            'campos' => $camposAlterados,
+            'valores' => $novosValores,
+            'tokens' => $tokens,
+            'atuais' => $atuais,
+        ];
+    }
+
+    public static function atualizarRevisoesDoClipping(
+        int $assessoriaId,
+        int $clippingId
+    ): void {
+        $ids = self::consultar(
+            "
+                SELECT DISTINCT relatorio_id
+                FROM relatorio_slides
+                WHERE assessoria_id = :assessoria_id
+                AND clipping_id = :clipping_id
+                AND tipo = 'CLIPPING'
+            ",
+            [
+                'assessoria_id' => $assessoriaId,
+                'clipping_id' => $clippingId,
+            ]
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($ids as $relatorioId) {
+            self::registrarRevisoes(
+                $assessoriaId,
+                (int) $relatorioId
+            );
+        }
+    }
+
+    public static function atualizarRevisoesDoVeiculo(
+        int $assessoriaId,
+        int $veiculoId
+    ): void {
+        $ids = self::consultar(
+            "
+                SELECT DISTINCT s.relatorio_id
+                FROM relatorio_slides s
+                INNER JOIN clippings c
+                    ON c.id = s.clipping_id
+                    AND c.assessoria_id = s.assessoria_id
+                WHERE s.assessoria_id = :assessoria_id
+                AND s.tipo = 'CLIPPING'
+                AND c.veiculo_id = :veiculo_id
+            ",
+            [
+                'assessoria_id' => $assessoriaId,
+                'veiculo_id' => $veiculoId,
+            ]
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($ids as $relatorioId) {
+            self::registrarRevisoes(
+                $assessoriaId,
+                (int) $relatorioId
+            );
+        }
     }
 
     public static function buscar(
@@ -1409,6 +1787,53 @@ class RelatorioService
             );
         }
 
+        $resultadoRevisoes = self::registrarRevisoes(
+            $assessoriaId,
+            $relatorioId
+        );
+
+        $contagens = self::consultar(
+        "
+            SELECT
+                COUNT(DISTINCT CASE
+                    WHEN s.revisao_pendente = 1 THEN s.id
+                END) AS novo,
+                COUNT(DISTINCT CASE
+                    WHEN rv.origem = 'VEICULO'
+                        AND rv.assinatura_atual <> rv.assinatura_reconhecida
+                    THEN s.id
+                END) AS veiculo,
+                COUNT(DISTINCT CASE
+                    WHEN rv.origem = 'CLIPPING'
+                        AND rv.assinatura_atual <> rv.assinatura_reconhecida
+                    THEN s.id
+                END) AS clipping,
+                COUNT(DISTINCT CASE
+                    WHEN s.revisao_pendente = 1
+                        OR rv.assinatura_atual <> rv.assinatura_reconhecida
+                    THEN s.id
+                END) AS total
+            FROM relatorio_slides s
+            LEFT JOIN relatorio_slide_revisoes rv
+                ON rv.slide_id = s.id
+                AND rv.relatorio_id = s.relatorio_id
+                AND rv.assessoria_id = s.assessoria_id
+            WHERE s.relatorio_id = :relatorio_id
+            AND s.assessoria_id = :assessoria_id
+        ",
+        [
+            'relatorio_id' => $relatorioId,
+            'assessoria_id' => $assessoriaId,
+        ]
+    )->fetch();
+
+    $relatorio['total_pendentes'] = (int) ($contagens['total'] ?? 0);
+    $relatorio['pendentes_por_origem'] = [
+        'novo' => (int) ($contagens['novo'] ?? 0),
+        'veiculo' => (int) ($contagens['veiculo'] ?? 0),
+        'clipping' => (int) ($contagens['clipping'] ?? 0),
+];
+
         $relatorio['id'] = (int) $relatorio['id'];
         $relatorio['cliente_id'] =
             (int) $relatorio['cliente_id'];
@@ -1465,7 +1890,55 @@ class RelatorioService
         }
 
         if ($revisao === 'pendentes') {
-            $whereSlides .= ' AND s.revisao_pendente = 1';
+            $origens = $dados['origens'] ?? 'novo,veiculo,clipping';
+
+            if (!is_string($origens) || strlen($origens) > 40) {
+                throw new \InvalidArgumentException(
+                    'Filtros de revisão inválidos.'
+                );
+            }
+
+            $origens = array_values(array_unique(array_map(
+                'trim',
+                explode(',', $origens)
+            )));
+
+            if (
+                !$origens
+                || array_diff($origens, ['novo', 'veiculo', 'clipping'])
+            ) {
+                throw new \InvalidArgumentException(
+                    'Filtros de revisão inválidos.'
+                );
+            }
+
+            $condicoes = [];
+
+            if (in_array('novo', $origens, true)) {
+                $condicoes[] = 's.revisao_pendente = 1';
+            }
+
+            foreach ([
+                'veiculo' => 'VEICULO',
+                'clipping' => 'CLIPPING',
+            ] as $filtro => $origem) {
+                if (!in_array($filtro, $origens, true)) {
+                    continue;
+                }
+
+                $condicoes[] = "
+                    EXISTS (
+                        SELECT 1
+                        FROM relatorio_slide_revisoes rv
+                        WHERE rv.slide_id = s.id
+                        AND rv.origem = '{$origem}'
+                        AND rv.assinatura_atual
+                            <> rv.assinatura_reconhecida
+                    )
+                ";
+            }
+
+            $whereSlides .= ' AND (' . implode(' OR ', $condicoes) . ')';
         }
 
         if ($busca !== '') {
@@ -1514,6 +1987,23 @@ class RelatorioService
                     observacoes,
                     dados_json,
                     edicoes_json,
+                    relatorio_id,
+                    logo_midia_id,
+                    imagem_midia_id,
+                    EXISTS (
+                        SELECT 1
+                        FROM relatorio_slide_revisoes rv
+                        WHERE rv.slide_id = s.id
+                        AND rv.origem = 'VEICULO'
+                        AND rv.assinatura_atual <> rv.assinatura_reconhecida
+                    ) AS revisao_veiculo_pendente,
+                    EXISTS (
+                        SELECT 1
+                        FROM relatorio_slide_revisoes rv
+                        WHERE rv.slide_id = s.id
+                        AND rv.origem = 'CLIPPING'
+                        AND rv.assinatura_atual <> rv.assinatura_reconhecida
+                    ) AS revisao_clipping_pendente,
                     created_at,
                     updated_at
                 FROM relatorio_slides s
@@ -1544,6 +2034,40 @@ class RelatorioService
 
             $slide['revisao_pendente'] =
                 (bool) $slide['revisao_pendente'];
+            $campos = $resultadoRevisoes['campos'][$slide['id']]
+                ?? ['veiculo' => [], 'clipping' => []];
+
+            $valores = $resultadoRevisoes['valores'][$slide['id']]
+                ?? ['veiculo' => [], 'clipping' => []];
+
+            $slide['campos_alterados'] = $slide['revisao_pendente']
+                ? ['veiculo' => [], 'clipping' => []]
+                : $campos;
+
+            $slide['novos_valores'] = $slide['revisao_pendente']
+                ? ['veiculo' => null, 'clipping' => null]
+                : [
+                    'veiculo' => empty($valores['veiculo'])
+                        ? null
+                        : (object) $valores['veiculo'],
+                    'clipping' => empty($valores['clipping'])
+                        ? null
+                        : (object) $valores['clipping'],
+                ];
+            $slide['revisao_token'] =
+                $resultadoRevisoes['tokens'][$slide['id']] ?? null;
+            $slide['revisao_veiculo_pendente'] =
+                (bool) $slide['revisao_veiculo_pendente'];
+            $slide['revisao_clipping_pendente'] =
+                (bool) $slide['revisao_clipping_pendente'];
+
+            $slide['relatorio_id'] = (int) $slide['relatorio_id'];
+
+            foreach (['logo_midia_id', 'imagem_midia_id'] as $campo) {
+                $slide[$campo] = $slide[$campo] === null
+                    ? null
+                    : (int) $slide[$campo];
+            }
 
             foreach (['dados_json', 'edicoes_json'] as $campo) {
                 $slide[$campo] =
@@ -1555,6 +2079,36 @@ class RelatorioService
                             512,
                             JSON_THROW_ON_ERROR
                         );
+            }
+
+            if ($slide['revisao_pendente']) {
+                $dadosAtuais = $resultadoRevisoes['atuais'][
+                    $slide['clipping_id']
+                ] ?? null;
+
+                if ($dadosAtuais !== null) {
+                    $dadosAtuais['cliente']['nome'] =
+                        $relatorio['cliente_nome'];
+
+                    $pautaAtual =
+                        $dadosAtuais['clipping']['pauta'] ?? null;
+
+                    $slide['dados_json'] = $dadosAtuais;
+                    $slide['titulo'] = is_string($pautaAtual)
+                        ? mb_substr($pautaAtual, 0, 255, 'UTF-8')
+                        : null;
+                    $slide['link'] =
+                        $dadosAtuais['clipping']['link'] ?? null;
+                    $slide['observacoes'] =
+                        $dadosAtuais['clipping']['observacoes'] ?? null;
+                    $slide['imagem_anexo_id'] =
+                        $dadosAtuais['imagem']['anexo_id'] ?? null;
+                    $slide['imagem_path'] =
+                        $dadosAtuais['imagem']['arquivo_path'] ?? null;
+
+                    $slide['logo_midia_id'] = null;
+                    $slide['imagem_midia_id'] = null;
+                }
             }
         }
 
@@ -1640,72 +2194,475 @@ class RelatorioService
         ];
     }
 
-    public static function sincronizarImagemClipping(
+    public static function decidirRevisaoSlide(
         int $assessoriaId,
-        int $clippingId
-    ): int {
-        $db = Connection::get();
+        int $usuarioId,
+        mixed $valorRelatorioId,
+        mixed $valorSlideId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorRelatorioId, 'Relatório');
+        $slideId = self::id($valorSlideId, 'Slide');
+        $decisao = $dados['decisao'] ?? null;
+        $token = $dados['revisao_token'] ?? null;
 
-        if (!$db->inTransaction()) {
-            throw new \LogicException(
-                'A atualização da imagem exige a transação do anexo.'
+        if (
+            array_diff(array_keys($dados), ['decisao', 'revisao_token'])
+            || !is_string($decisao)
+            || !in_array($decisao, ['INCLUIR', 'ALTERAR', 'IGNORAR'], true)
+            || !is_string($token)
+            || !preg_match('/^[a-f0-9]{64}$/D', $token)
+        ) {
+            throw new \InvalidArgumentException(
+                'Decisão ou token de revisão inválido.'
             );
         }
 
-        $imagem = self::consultar(
-            "
-                SELECT id, arquivo_path
-                FROM clipping_anexos
-                WHERE assessoria_id = :assessoria_id
-                AND clipping_id = :clipping_id
-                AND imagem_relatorio = 1
-                LIMIT 1
-            ",
-            [
-                'assessoria_id' => $assessoriaId,
-                'clipping_id' => $clippingId,
-            ]
-        )->fetch();
+        $db = Connection::get();
+        $db->beginTransaction();
 
-        $imagemId = $imagem ? (int) $imagem['id'] : null;
-        $imagemPath = $imagem['arquivo_path'] ?? null;
+        try {
+            $relatorio = self::consultar(
+                "
+                    SELECT cliente_id
+                    FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
 
-        $stmt = self::consultar(
-            "
-                UPDATE relatorio_slides
-                SET
-                    imagem_anexo_id = :imagem_id,
-                    imagem_path = :imagem_path,
-                    dados_json = JSON_SET(
-                        COALESCE(dados_json, JSON_OBJECT()),
-                        '$.imagem.anexo_id',
-                        :dados_imagem_id,
-                        '$.imagem.arquivo_path',
-                        :dados_imagem_path
+            if (!$relatorio) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            $slide = self::consultar(
+                "
+                    SELECT
+                        id, clipping_id, ordem, tipo, origem_inclusao,
+                        revisao_pendente, titulo, link, observacoes,
+                        imagem_anexo_id, imagem_path, dados_json,
+                        logo_midia_id, imagem_midia_id
+                    FROM relatorio_slides
+                    WHERE id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$slide || $slide['tipo'] !== 'CLIPPING') {
+                throw new \OutOfBoundsException(
+                    'Slide não encontrado neste relatório.'
+                );
+            }
+
+            $novo = (bool) $slide['revisao_pendente'];
+
+            if (
+                ($novo && $decisao === 'ALTERAR')
+                || (!$novo && $decisao === 'INCLUIR')
+            ) {
+                throw new \InvalidArgumentException(
+                    'A decisão não corresponde à situação do slide.'
+                );
+            }
+
+            if ($novo && $slide['origem_inclusao'] !== 'AUTOMATICA') {
+                throw new \DomainException(
+                    'A inclusão pendente não é automática.'
+                );
+            }
+
+            $clippingId = (int) $slide['clipping_id'];
+
+            $linha = self::consultar(
+                self::SELECT_MATERIA
+                    . self::ORIGEM
+                    . "
+                        WHERE c.id = :clipping_id
+                        AND c.assessoria_id = :assessoria_id
+                        LIMIT 1
+                    ",
+                [
+                    'clipping_id' => $clippingId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$linha) {
+                throw new \DomainException(
+                    'O clipping de origem não está disponível. Reabra o relatório.'
+                );
+            }
+
+            $materia = self::prepararMateria($linha);
+
+            if ((int) $materia['cliente_id'] !== (int) $relatorio['cliente_id']) {
+                throw new \DomainException(
+                    'O clipping não pertence mais ao cliente do relatório.'
+                );
+            }
+
+            $cliente = self::cliente(
+                $assessoriaId,
+                (int) $relatorio['cliente_id']
+            );
+
+            $atual = self::slideClipping($materia, $cliente);
+            $assinaturas = [
+                'VEICULO' => self::assinaturaOrigem(
+                    $atual['dados'],
+                    'VEICULO'
+                ),
+                'CLIPPING' => self::assinaturaOrigem(
+                    $atual['dados'],
+                    'CLIPPING'
+                ),
+            ];
+
+            $tokenAtual = hash(
+                'sha256',
+                $slideId . '|'
+                    . $assinaturas['VEICULO'] . '|'
+                    . $assinaturas['CLIPPING']
+            );
+
+            if (!hash_equals($tokenAtual, $token)) {
+                throw new \DomainException(
+                    'O veículo ou clipping mudou. Reabra o slide antes de decidir.'
+                );
+            }
+
+            if ($novo && $decisao === 'IGNORAR') {
+                self::consultar(
+                    "
+                        INSERT IGNORE INTO relatorio_clippings_excluidos (
+                            relatorio_id,
+                            assessoria_id,
+                            clipping_id,
+                            excluido_por
+                        ) VALUES (
+                            :relatorio_id,
+                            :assessoria_id,
+                            :clipping_id,
+                            :usuario_id
+                        )
+                    ",
+                    [
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                        'clipping_id' => $clippingId,
+                        'usuario_id' => $usuarioId,
+                    ]
+                );
+
+                self::consultar(
+                    "
+                        DELETE FROM relatorio_slides
+                        WHERE id = :slide_id
+                        AND relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                    ",
+                    [
+                        'slide_id' => $slideId,
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                );
+
+                self::consultar(
+                    "
+                        UPDATE relatorio_slides
+                        SET ordem = ordem - 1
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                        AND ordem > :ordem
+                        ORDER BY ordem ASC
+                    ",
+                    [
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                        'ordem' => (int) $slide['ordem'],
+                    ]
+                );
+
+                $db->commit();
+
+                return [
+                    'slide_id' => $slideId,
+                    'decisao' => $decisao,
+                    'removido' => true,
+                    'origens_decididas' => [],
+                ];
+            }
+
+            $reconhecidas = self::consultar(
+                "
+                    SELECT origem, assinatura_reconhecida
+                    FROM relatorio_slide_revisoes
+                    WHERE slide_id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    FOR UPDATE
+                ",
+                [
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            if (!$novo && (
+                !isset($reconhecidas['VEICULO'])
+                || !isset($reconhecidas['CLIPPING'])
+            )) {
+                throw new \DomainException(
+                    'A revisão mudou. Reabra o relatório antes de decidir.'
+                );
+            }
+
+            $pendentes = [
+                'VEICULO' => $novo || (
+                    isset($reconhecidas['VEICULO'])
+                    && !hash_equals(
+                        $reconhecidas['VEICULO'],
+                        $assinaturas['VEICULO']
                     )
-                WHERE assessoria_id = :assessoria_id
-                AND clipping_id = :clipping_id
-                AND tipo = 'CLIPPING'
-                AND (
-                    edicoes_json IS NULL
-                    OR JSON_CONTAINS_PATH(
-                        edicoes_json,
-                        'one',
-                        '$.imagem'
-                    ) = 0
-                )
-            ",
-            [
-                'imagem_id' => $imagemId,
-                'imagem_path' => $imagemPath,
-                'dados_imagem_id' => $imagemId,
-                'dados_imagem_path' => $imagemPath,
-                'assessoria_id' => $assessoriaId,
-                'clipping_id' => $clippingId,
-            ]
-        );
+                ),
+                'CLIPPING' => $novo || (
+                    isset($reconhecidas['CLIPPING'])
+                    && !hash_equals(
+                        $reconhecidas['CLIPPING'],
+                        $assinaturas['CLIPPING']
+                    )
+                ),
+            ];
 
-        return $stmt->rowCount();
+            if (!$pendentes['VEICULO'] && !$pendentes['CLIPPING']) {
+                throw new \DomainException(
+                    'Este slide já não precisa de revisão.'
+                );
+            }
+
+            $salvo = json_decode(
+                $slide['dados_json'] ?? '{}',
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+
+            $novosDados = $salvo;
+            $titulo = $slide['titulo'];
+            $link = $slide['link'];
+            $observacoes = $slide['observacoes'];
+            $imagemAnexoId = $slide['imagem_anexo_id'];
+            $imagemPath = $slide['imagem_path'];
+            $logoMidiaId = $slide['logo_midia_id'];
+            $imagemMidiaId = $slide['imagem_midia_id'];
+
+            if ($decisao === 'IGNORAR') {
+                $logoSalvo = $salvo['veiculo']['logo_path'] ?? null;
+
+                if ($logoMidiaId === null && $logoSalvo) {
+                    $logoMidiaId = RelatorioMidiaService::copiarLogo(
+                        $assessoriaId,
+                        $relatorioId,
+                        $logoSalvo
+                    );
+
+                    if ($logoMidiaId === null) {
+                        throw new \DomainException(
+                            'A logo salva não está disponível para preservação.'
+                        );
+                    }
+                }
+
+                $imagemSalva = $salvo['imagem']['arquivo_path'] ?? null;
+
+                if ($imagemMidiaId === null && $imagemSalva) {
+                    $imagemMidiaId = RelatorioMidiaService::copiarImagem(
+                        $assessoriaId,
+                        $relatorioId,
+                        $clippingId,
+                        $imagemSalva
+                    );
+
+                    if ($imagemMidiaId === null) {
+                        throw new \DomainException(
+                            'A imagem salva não está disponível para preservação.'
+                        );
+                    }
+                }
+            } else {
+                if ($novo) {
+                    $novosDados = $atual['dados'];
+                } elseif ($pendentes['VEICULO']) {
+                    $nomeInformado =
+                        $novosDados['veiculo']['nome_informado'] ?? null;
+
+                    $novosDados['veiculo'] = $atual['dados']['veiculo'];
+                    $novosDados['veiculo']['nome_informado'] =
+                        $nomeInformado;
+                }
+
+                if ($novo || $pendentes['VEICULO']) {
+                    $logoAtual = $atual['dados']['veiculo']['logo_path'];
+                    $logoMidiaId = RelatorioMidiaService::copiarLogo(
+                        $assessoriaId,
+                        $relatorioId,
+                        $logoAtual
+                    );
+
+                    if ($logoAtual && $logoMidiaId === null) {
+                        throw new \DomainException(
+                            'A nova logo do veículo não está disponível.'
+                        );
+                    }
+                }
+
+                if ($novo || $pendentes['CLIPPING']) {
+                    $novosDados['cliente'] = $atual['dados']['cliente'];
+                    $novosDados['clipping'] = $atual['dados']['clipping'];
+                    $novosDados['imagem'] = $atual['dados']['imagem'];
+                    $novosDados['veiculo']['nome_informado'] =
+                        $atual['dados']['veiculo']['nome_informado'];
+
+                    $titulo = $atual['titulo'];
+                    $link = $atual['link'];
+                    $observacoes = $atual['observacoes'];
+                    $imagemAnexoId = $atual['imagem_anexo_id'];
+                    $imagemPath = $atual['imagem_path'];
+
+                    $imagemMidiaId = RelatorioMidiaService::copiarImagem(
+                        $assessoriaId,
+                        $relatorioId,
+                        $clippingId,
+                        $imagemPath
+                    );
+
+                    if ($imagemPath && $imagemMidiaId === null) {
+                        throw new \DomainException(
+                            'A nova imagem do clipping não está disponível.'
+                        );
+                    }
+                }
+            }
+
+            self::consultar(
+                "
+                    UPDATE relatorio_slides
+                    SET revisao_pendente = 0,
+                        titulo = :titulo,
+                        link = :link,
+                        observacoes = :observacoes,
+                        imagem_anexo_id = :imagem_anexo_id,
+                        imagem_path = :imagem_path,
+                        logo_midia_id = :logo_midia_id,
+                        imagem_midia_id = :imagem_midia_id,
+                        dados_json = :dados_json
+                    WHERE id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                ",
+                [
+                    'titulo' => $titulo,
+                    'link' => $link,
+                    'observacoes' => $observacoes,
+                    'imagem_anexo_id' => $imagemAnexoId,
+                    'imagem_path' => $imagemPath,
+                    'logo_midia_id' => $logoMidiaId,
+                    'imagem_midia_id' => $imagemMidiaId,
+                    'dados_json' => json_encode(
+                        $novosDados,
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            $registrar = $db->prepare(
+                "
+                    INSERT INTO relatorio_slide_revisoes (
+                        slide_id, relatorio_id, assessoria_id, origem,
+                        assinatura_reconhecida, assinatura_atual,
+                        dados_reconhecidos_json, ultima_decisao,
+                        decidido_por, decidido_em
+                    ) VALUES (
+                        :slide_id, :relatorio_id, :assessoria_id, :origem,
+                        :assinatura, :assinatura_atual,
+                        :dados_reconhecidos_json, :ultima_decisao,
+                        :usuario_id, NOW()
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        assinatura_reconhecida =
+                            VALUES(assinatura_reconhecida),
+                        assinatura_atual = VALUES(assinatura_atual),
+                        dados_reconhecidos_json =
+                            VALUES(dados_reconhecidos_json),
+                        ultima_decisao = VALUES(ultima_decisao),
+                        decidido_por = VALUES(decidido_por),
+                        decidido_em = NOW()
+                "
+            );
+
+            $origensDecididas = [];
+
+            foreach (['VEICULO', 'CLIPPING'] as $origem) {
+                if (!$pendentes[$origem]) {
+                    continue;
+                }
+
+                $registrar->execute([
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                    'origem' => $origem,
+                    'assinatura' => $assinaturas[$origem],
+                    'assinatura_atual' => $assinaturas[$origem],
+                    'dados_reconhecidos_json' => json_encode(
+                        self::valoresOrigem($atual['dados'], $origem),
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'ultima_decisao' => $decisao === 'IGNORAR'
+                        ? 'IGNORADO'
+                        : 'VALIDADO',
+                    'usuario_id' => $usuarioId,
+                ]);
+
+                $origensDecididas[] = $origem;
+            }
+
+            $db->commit();
+
+            return [
+                'slide_id' => $slideId,
+                'decisao' => $decisao,
+                'removido' => false,
+                'origens_decididas' => $origensDecididas,
+            ];
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function atualizar(
@@ -1917,6 +2874,184 @@ class RelatorioService
         return [
             'message' => 'Relatório excluído com sucesso.',
         ];
+    }
+
+    public static function excluirSlides(
+        int $assessoriaId,
+        int $usuarioId,
+        mixed $valorRelatorioId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorRelatorioId, 'Relatório');
+        $valores = $dados['slide_ids'] ?? null;
+
+        if (
+            array_diff(array_keys($dados), ['slide_ids'])
+            || !is_array($valores)
+            || !array_is_list($valores)
+            || count($valores) < 1
+            || count($valores) > 100
+        ) {
+            throw new \InvalidArgumentException(
+                'Envie de 1 a 100 IDs de slides.'
+            );
+        }
+
+        $ids = array_map(
+            fn(mixed $valor): int => self::id($valor, 'Slide'),
+            $valores
+        );
+
+        if (count(array_unique($ids)) !== count($ids)) {
+            throw new \InvalidArgumentException(
+                'A seleção contém slides repetidos.'
+            );
+        }
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $relatorio = self::consultar(
+                "
+                    SELECT id
+                    FROM relatorios
+                    WHERE id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    LIMIT 1
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchColumn();
+
+            if ($relatorio === false) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            $linhas = self::consultar(
+                "
+                    SELECT id, ordem, tipo, clipping_id
+                    FROM relatorio_slides
+                    WHERE relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id
+                    ORDER BY ordem ASC
+                    FOR UPDATE
+                ",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchAll();
+
+            $porId = [];
+
+            foreach ($linhas as $linha) {
+                $porId[(int) $linha['id']] = $linha;
+            }
+
+            $alvos = [];
+
+            foreach ($ids as $id) {
+                $slide = $porId[$id] ?? null;
+
+                if (!$slide) {
+                    throw new \OutOfBoundsException(
+                        'Um dos slides não pertence a este relatório.'
+                    );
+                }
+
+                if (
+                    !in_array(
+                        $slide['tipo'],
+                        ['CLIPPING', 'COMPLEMENTAR'],
+                        true
+                    )
+                ) {
+                    throw new \DomainException(
+                        'Capa e encerramento não podem ser excluídos.'
+                    );
+                }
+
+                $alvos[] = $slide;
+            }
+
+            usort(
+                $alvos,
+                fn(array $a, array $b): int =>
+                    (int) $b['ordem'] <=> (int) $a['ordem']
+            );
+
+            foreach ($alvos as $slide) {
+                if ($slide['clipping_id'] !== null) {
+                    self::consultar(
+                        "
+                            INSERT IGNORE INTO relatorio_clippings_excluidos (
+                                relatorio_id,
+                                assessoria_id,
+                                clipping_id,
+                                excluido_por
+                            ) VALUES (
+                                :relatorio_id,
+                                :assessoria_id,
+                                :clipping_id,
+                                :usuario_id
+                            )
+                        ",
+                        [
+                            'relatorio_id' => $relatorioId,
+                            'assessoria_id' => $assessoriaId,
+                            'clipping_id' => (int) $slide['clipping_id'],
+                            'usuario_id' => $usuarioId,
+                        ]
+                    );
+                }
+
+                self::consultar(
+                    "
+                        DELETE FROM relatorio_slides
+                        WHERE id = :slide_id
+                        AND relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                    ",
+                    [
+                        'slide_id' => (int) $slide['id'],
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                );
+
+                self::consultar(
+                    "
+                        UPDATE relatorio_slides
+                        SET ordem = ordem - 1
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                        AND ordem > :ordem
+                        ORDER BY ordem ASC
+                    ",
+                    [
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                        'ordem' => (int) $slide['ordem'],
+                    ]
+                );
+            }
+
+            $db->commit();
+
+            return ['slides_excluidos' => count($alvos)];
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function materiasParaEdicao(

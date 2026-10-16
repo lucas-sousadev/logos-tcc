@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -29,14 +29,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   buscarRelatorio,
+  excluirSlidesRelatorio,
   completarDadosVeiculosRelatorio,
   gerarPptxTeste,
+  decidirRevisaoSlide,
   type PaginacaoRelatorio,
   type RelatorioDetalhado,
   type SlideRelatorio,
+  type OrigemRevisao,
+  type DecisaoRevisaoSlide,
 } from "@/services/api/relatorio";
 import { excluirRelatorio } from "@/services/api/relatorio";
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
+
 
 const PAGINACAO_INICIAL: PaginacaoRelatorio = {
   page: 1,
@@ -44,6 +49,8 @@ const PAGINACAO_INICIAL: PaginacaoRelatorio = {
   total: 0,
   has_next: false,
 };
+
+type AcaoSlides = "VALIDAR" | "IGNORAR" | "EXCLUIR";
 
 function nomeTipoSlide(tipo: SlideRelatorio["tipo"]) {
   switch (tipo) {
@@ -70,157 +77,321 @@ function tituloSlide(slide: SlideRelatorio) {
   return slide.titulo?.trim() || nomeTipoSlide(slide.tipo);
 }
 
+function avisoSlide(slide: SlideRelatorio): string | null {
+  if (slide.revisao_pendente) return "NOVO SLIDE";
+
+  if (
+    slide.revisao_veiculo_pendente &&
+    slide.revisao_clipping_pendente
+  ) {
+    return "VEÍCULO E CLIPPING";
+  }
+
+  if (slide.revisao_veiculo_pendente) {
+    return "VEÍCULO ALTERADO";
+  }
+
+  if (slide.revisao_clipping_pendente) {
+    return "CLIPPING ALTERADO";
+  }
+
+  return null;
+}
+
 function CartaoSlide({
   slide,
   onPress,
+  onDecidir,
+  onIgnorar,
+  onSelecionar,
+  decidindo,
+  podeEditar,
+  erro,
+  modoSelecao,
+  selecionavel,
+  selecionado,
 }: {
   slide: SlideRelatorio;
   onPress: () => void;
+  onDecidir: () => void;
+  onIgnorar: () => void;
+  decidindo: boolean;
+  podeEditar: boolean;
+  erro?: string;
+  modoSelecao: boolean;
+  selecionavel: boolean;
+  selecionado: boolean;
+  onSelecionar: () => void;
 }) {
   const { theme } = useTheme();
   const ehMateria = slide.tipo === "CLIPPING";
+  const aviso = avisoSlide(slide);
   const veiculo =
     slide.dados_json?.veiculo?.nome?.trim() || "Sem veículo";
   const data =
     dataISOParaBR(
       slide.dados_json?.clipping?.data_publicacao ?? null
     ) || "Sem data";
+  const imagemDefinida = Boolean(slide.imagem_midia_id || slide.imagem_anexo_id);
 
   return (
-    <TouchableOpacity
-      accessibilityRole="button"
-      accessibilityLabel={`Abrir slide ${slide.ordem}`}
-      activeOpacity={0.8}
-      onPress={onPress}
+    <View
       style={[
-        styles.slideCard,
+        styles.slideGrupo,
         {
           backgroundColor: theme.backgroundSecundario,
-          borderColor: slide.revisao_pendente
-            ? theme.aviso
-            : theme.borda,
+          borderColor: selecionado
+            ? theme.primaria
+            : aviso
+              ? theme.aviso
+              : theme.borda,
         },
       ]}
     >
-      <View style={styles.slideTop}>
-        <View
-          style={[
-            styles.numeroSlide,
-            { backgroundColor: `${theme.borda}22` },
-          ]}
-        >
-          <Text
-            weight="Bold"
-            style={[
-              styles.numeroSlideTexto,
-              { color: theme.textoTerciaria },
-            ]}
-          >
-            {String(slide.ordem).padStart(2, "0")}
-          </Text>
-        </View>
-
-        <Text
-          weight="SemiBold"
-          style={[
-            styles.tipoSlide,
-            { color: theme.textoSub },
-          ]}
-        >
-          {nomeTipoSlide(slide.tipo)}
-        </Text>
-
-        {slide.revisao_pendente ? (
-          <View
-            style={[
-              styles.pendente,
-              { backgroundColor: `${theme.aviso}18` },
-            ]}
-          >
-            <Ionicons
-              name="alert-circle-outline"
-              size={14}
-              color={theme.aviso}
-            />
-            <Text
-              weight="SemiBold"
-              style={[
-                styles.pendenteTexto,
-                { color: theme.aviso },
-              ]}
-            >
-              REVISAR
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      <Text
-        weight="SemiBold"
-        numberOfLines={2}
-        style={styles.tituloSlide}
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={
+          modoSelecao && selecionavel
+            ? `${selecionado ? "Desmarcar" : "Selecionar"} slide ${slide.ordem}`
+            : `Abrir slide ${slide.ordem}`
+        }
+        accessibilityState={
+          modoSelecao && selecionavel
+            ? { selected: selecionado }
+            : undefined
+        }
+        onPress={
+          modoSelecao && selecionavel
+            ? onSelecionar
+            : onPress
+        }
+        activeOpacity={0.8}
+        style={styles.slideCard}
       >
-        {tituloSlide(slide)}
-      </Text>
-
-      {ehMateria ? (
-        <>
-          <View style={styles.metadadosSlide}>
-            <Ionicons
-              name="newspaper-outline"
-              size={15}
-              color={theme.textoTerciaria}
-            />
-            <Text
-              weight="Medium"
-              numberOfLines={1}
+        <View style={styles.slideTop}>
+          {modoSelecao && selecionavel ? (
+            <View
               style={[
-                styles.veiculoSlide,
-                { color: theme.textoTerciaria },
-              ]}
-            >
-              {veiculo}
-            </Text>
-            <Text
-              style={[
-                styles.dataSlide,
-                { color: theme.textoSub },
-              ]}
-            >
-              {data}
-            </Text>
-          </View>
-
-          <View style={styles.imagemSlide}>
-            <Ionicons
-              name="image-outline"
-              size={14}
-              color={
-                slide.imagem_anexo_id
-                  ? theme.textoSub
-                  : theme.aviso
-              }
-            />
-            <Text
-              style={[
-                styles.imagemTexto,
+                styles.selecaoCheckbox,
                 {
-                  color: slide.imagem_anexo_id
-                    ? theme.textoSub
-                    : theme.aviso,
+                  borderColor: selecionado
+                    ? theme.backgroundContainer
+                    : theme.borda,
+                  backgroundColor: selecionado
+                    ? theme.backgroundContainer
+                    : theme.background,
                 },
               ]}
             >
-              {slide.imagem_anexo_id
-                ? "Imagem definida"
-                : "Sem imagem para o slide"}
+              {selecionado ? (
+                <Ionicons
+                  name="checkmark"
+                  size={16}
+                  color={theme.textoContainer}
+                />
+              ) : null}
+            </View>
+          ) : null }
+          <View
+            style={[
+              styles.numeroSlide,
+              { backgroundColor: `${theme.borda}22` },
+            ]}
+          >
+            <Text
+              weight="Bold"
+              style={[
+                styles.numeroSlideTexto,
+                { color: theme.textoTerciaria },
+              ]}
+            >
+              {String(slide.ordem).padStart(2, "0")}
             </Text>
           </View>
-        </>
+          <Text
+            weight="SemiBold"
+            style={[
+              styles.tipoSlide,
+              { color: theme.texto },
+            ]}
+          >
+            {nomeTipoSlide(slide.tipo)}
+          </Text>
+          {aviso ? (
+            <View
+              style={[
+                styles.pendente,
+                { backgroundColor: `${theme.aviso}18` },
+              ]}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={14}
+                color={theme.aviso}
+              />
+              <Text
+                weight="SemiBold"
+                style={[
+                  styles.pendenteTexto,
+                  { color: theme.aviso },
+                ]}
+              >
+                {aviso}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text
+          weight="SemiBold"
+          numberOfLines={2}
+          style={styles.tituloSlide}
+        >
+          {tituloSlide(slide)}
+        </Text>
+
+        {ehMateria ? (
+          <>
+            <View style={styles.metadadosSlide}>
+              <Ionicons
+                name="newspaper-outline"
+                size={15}
+                color={theme.textoTerciaria}
+              />
+              <Text
+                weight="Medium"
+                numberOfLines={1}
+                style={[
+                  styles.veiculoSlide,
+                  { color: theme.textoTerciaria },
+                ]}
+              >
+                {veiculo}
+              </Text>
+              <Text
+                style={[
+                  styles.dataSlide,
+                  { color: theme.textoSub },
+                ]}
+              >
+                {data}
+              </Text>
+            </View>
+
+            <View style={styles.imagemSlide}>
+              <Ionicons
+                name="image-outline"
+                size={14}
+                color={
+                  imagemDefinida
+                    ? theme.textoSub
+                    : theme.aviso
+                }
+              />
+              <Text
+                style={[
+                  styles.imagemTexto,
+                  {
+                    color: imagemDefinida
+                      ? theme.textoSub
+                      : theme.aviso,
+                  },
+                ]}
+              >
+                {imagemDefinida
+                  ? "Imagem definida"
+                  : "Sem imagem para o slide"}
+              </Text>
+            </View>
+          </>
+        ) : null}
+      </TouchableOpacity>
+        {aviso && !modoSelecao ? (
+        <View
+          style={[
+            styles.slideRevisaoRodape,
+            { borderTopColor: `${theme.aviso}60` },
+          ]}
+        >
+          <View style={styles.slideRevisaoMensagem}>
+            <Ionicons
+              name="information-circle-outline"
+              size={15}
+              color={theme.aviso}
+            />
+            <Text style={{ color: theme.textoSub, flex: 1, fontSize: 11 }}>
+              {slide.revisao_pendente
+                ? "Novo slide aguardando confirmação"
+                : "Toque no slide para conferir as alterações"}
+            </Text>
+          </View>
+
+          {podeEditar ? (
+            <View style={styles.slideRevisaoAcoes}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={
+                  slide.revisao_pendente
+                    ? "Incluir slide no relatório"
+                    : "Aplicar alterações ao slide"
+                }
+                onPress={onDecidir}
+                disabled={decidindo}
+                style={[
+                  styles.slideRevisaoBotao,
+                  {
+                    borderColor: theme.primaria,
+                    backgroundColor: theme.primaria,
+                  },
+                ]}
+              >
+                {decidindo ? (
+                  <ActivityIndicator size="small" color={theme.branco} />
+                ) : (
+                  <Ionicons
+                    name="checkmark-outline"
+                    size={16}
+                    color={theme.branco}
+                  />
+                )}
+                <Text weight="Bold" style={{ color: theme.branco, fontSize: 11 }}>
+                  {slide.revisao_pendente ? "INCLUIR" : "ATUALIZAR"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Ignorar revisão do slide"
+                accessibilityState={{ disabled: decidindo }}
+                disabled={decidindo}
+                onPress={onIgnorar}
+                style={[
+                  styles.slideRevisaoBotao,
+                  {
+                    borderColor: theme.borda,
+                    backgroundColor: theme.background,
+                    opacity: decidindo ? 0.5 : 1
+                  },
+                ]}
+              >
+                <Ionicons name="close-outline" size={16} color={theme.textoSub} />
+                <Text weight="SemiBold" style={{ color: theme.textoSub, fontSize: 11 }}>
+                  IGNORAR
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {erro ? (
+            <Text style={{ color: theme.erro, fontSize: 11 }}>
+              {erro}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
-    </TouchableOpacity>
+    </View>
   );
 }
+
 
 export default function DetalheRelatorio() {
   const { theme } = useTheme();
@@ -234,7 +405,12 @@ export default function DetalheRelatorio() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [filtroRevisao, setFiltroRevisao] = useState<"todas" | "pendentes">("todas");
-
+  const [origensRevisao, setOrigensRevisao] = useState<OrigemRevisao[]>([
+    "novo",
+    "veiculo",
+    "clipping",
+  ]); 
+    
   const [tentativa, setTentativa] = useState(0);
   const [relatorio, setRelatorio] =
     useState<RelatorioDetalhado | null>(null);
@@ -244,7 +420,23 @@ export default function DetalheRelatorio() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [slideAberto, setSlideAberto] =useState<SlideRelatorio | null>(null);
+  const [slideDecidindoId, setSlideDecidindoId] = useState<number | null>(null);
+  const [slideParaIgnorar, setSlideParaIgnorar] = useState<SlideRelatorio | null>(null);
+  const [slideParaAtualizar, setSlideParaAtualizar] = useState<SlideRelatorio | null>(null);
+  const [erroSlide, setErroSlide] = useState<{
+    id: number;
+    mensagem: string;
+  } | null>(null);
   
+  const [modoSelecaoSlides, setModoSelecaoSlides] = useState(false);
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
+  const [acaoSlides, setAcaoSlides] = useState<{
+    tipo: AcaoSlides;
+    slides: SlideRelatorio[];
+  } | null>(null);
+  const [processandoAcaoSlides, setProcessandoAcaoSlides] = useState(false);
+  const [mensagemAcaoSlides, setMensagemAcaoSlides] = useState("");
+
   const [edicaoAberta, setEdicaoAberta] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] =useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -257,6 +449,26 @@ export default function DetalheRelatorio() {
   const [exportandoPptx, setExportandoPptx] = useState(false);
   const [mensagemPptx, setMensagemPptx] = useState("");
   const travaPptx = useRef(false);
+
+  const slidesSelecionaveis = slides.filter(
+    (slide) =>
+      slide.tipo === "CLIPPING" ||
+      slide.tipo === "COMPLEMENTAR"
+  );
+
+  const slidesSelecionados = slidesSelecionaveis.filter(
+    (slide) => idsSelecionados.includes(slide.id)
+  );
+
+  const revisoesSelecionadas = slidesSelecionados.filter(
+    (slide) => avisoSlide(slide) !== null
+  );
+
+  const todosVisiveisSelecionados =
+    slidesSelecionaveis.length > 0 &&
+    slidesSelecionaveis.every((slide) =>
+      idsSelecionados.includes(slide.id)
+    );
 
   useFocusEffect(
     useCallback(() => {
@@ -276,7 +488,7 @@ export default function DetalheRelatorio() {
         setSlides([]);
 
         try {
-          const resposta = await buscarRelatorio(id, pagina, buscaAplicada, filtroRevisao);
+          const resposta = await buscarRelatorio(id, pagina, buscaAplicada, filtroRevisao, origensRevisao);
 
           if (!ativo) return;
 
@@ -301,9 +513,121 @@ export default function DetalheRelatorio() {
       return () => {
         ativo = false;
       };
-    }, [id, pagina, tentativa, buscaAplicada, filtroRevisao])
+    }, [id, pagina, tentativa, buscaAplicada, filtroRevisao, origensRevisao])
   );
+  useEffect(() => {
+    setIdsSelecionados([]);
+  }, [pagina, buscaAplicada, filtroRevisao, origensRevisao]);
 
+  function alternarSlideSelecionado(slideId: number) {
+    setIdsSelecionados((atuais) =>
+      atuais.includes(slideId)
+        ? atuais.filter((id) => id !== slideId)
+        : [...atuais, slideId]
+    );
+  }
+
+  function alternarTodosVisiveis() {
+    setIdsSelecionados(
+      todosVisiveisSelecionados
+        ? []
+        : slidesSelecionaveis.map((slide) => slide.id)
+    );
+  }
+
+  function sairSelecaoSlides() {
+    setModoSelecaoSlides(false);
+    setIdsSelecionados([]);
+  }
+
+  function pedirAcaoSlides(
+    tipo: AcaoSlides,
+    candidatos: SlideRelatorio[]
+  ) {
+    const alvos =
+      tipo === "EXCLUIR"
+        ? candidatos.filter(
+            (slide) =>
+              slide.tipo === "CLIPPING" ||
+              slide.tipo === "COMPLEMENTAR"
+          )
+        : candidatos.filter(
+            (slide) => avisoSlide(slide) !== null
+          );
+
+    if (alvos.length === 0) return;
+
+    setErroAcao("");
+    setMensagemAcaoSlides("");
+    setAcaoSlides({ tipo, slides: alvos });
+  }
+
+  async function executarAcaoSlides() {
+    if (!relatorio || !acaoSlides || processandoAcaoSlides) return;
+
+    const { tipo, slides: alvos } = acaoSlides;
+    let concluidos = 0;
+
+    setProcessandoAcaoSlides(true);
+    setErroAcao("");
+    setMensagemAcaoSlides("");
+
+    try {
+      if (tipo === "EXCLUIR") {
+        const resultado = await excluirSlidesRelatorio(
+          relatorio.id,
+          alvos.map((slide) => slide.id)
+        );
+        concluidos = resultado.slides_excluidos;
+      } else {
+        for (const slide of alvos) {
+          if (!slide.revisao_token) {
+            throw new Error(
+              `A revisão do slide ${slide.ordem} mudou. Reabra o relatório.`
+            );
+          }
+
+          const decisao: DecisaoRevisaoSlide =
+            tipo === "IGNORAR"
+              ? "IGNORAR"
+              : slide.revisao_pendente
+                ? "INCLUIR"
+                : "ALTERAR";
+
+          await decidirRevisaoSlide(
+            relatorio.id,
+            slide.id,
+            decisao,
+            slide.revisao_token
+          );
+          concluidos++;
+        }
+      }
+
+      setMensagemAcaoSlides(
+        `${concluidos} ${
+          concluidos === 1 ? "slide processado" : "slides processados"
+        } com sucesso.`
+      );
+    } catch (error) {
+      const detalhe =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível concluir a operação.";
+
+      setErroAcao(
+        concluidos > 0
+          ? `${concluidos} slide(s) processado(s). A operação parou: ${detalhe}`
+          : detalhe
+      );
+    } finally {
+      setAcaoSlides(null);
+      sairSelecaoSlides();
+      setPagina(1);
+      setTentativa((atual) => atual + 1);
+      setProcessandoAcaoSlides(false);
+    }
+  }
   function pesquisarSlides() {
     const termo = busca.trim();
 
@@ -472,6 +796,87 @@ export default function DetalheRelatorio() {
     }
   }
 
+  function recarregarAposRevisao(removido = false) {
+    if (
+      pagina > 1 &&
+      slides.length === 1 &&
+      (filtroRevisao === "pendentes" || removido)
+    ) {
+      setPagina(pagina - 1);
+    } else {
+      setTentativa((atual) => atual + 1);
+    }
+  }
+
+  async function decidirSlide(
+    slide: SlideRelatorio,
+    decisao: DecisaoRevisaoSlide
+  ) {
+    if (!relatorio || slideDecidindoId !== null) return;
+
+    if (!slide.revisao_token) {
+      setSlideParaAtualizar(null);
+      setSlideParaIgnorar(null);
+      setErroSlide({
+        id: slide.id,
+        mensagem: "Reabra o relatório para obter a revisão atual.",
+      });
+      return;
+    }
+
+    setSlideDecidindoId(slide.id);
+    setErroSlide(null);
+
+    try {
+      const resultado = await decidirRevisaoSlide(
+        relatorio.id,
+        slide.id,
+        decisao,
+        slide.revisao_token
+      );
+
+      setSlideAberto(null);
+      setSlideParaAtualizar(null);
+      setSlideParaIgnorar(null);
+      recarregarAposRevisao(resultado.removido);
+    } catch (error) {
+      setSlideParaAtualizar(null);
+      setSlideParaIgnorar(null);
+      setErroSlide({
+        id: slide.id,
+        mensagem:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível registrar a decisão.",
+      });
+    } finally {
+      setSlideDecidindoId(null);
+    }
+  }
+
+function pedirParaIgnorar(slide: SlideRelatorio) {
+  setErroSlide(null);
+
+  if (slideAberto?.id === slide.id) {
+    setSlideAberto(null);
+    setTimeout(() => setSlideParaIgnorar(slide), 300);
+    return;
+  }
+
+  setSlideParaIgnorar(slide);
+}
+
+function pedirParaAtualizar(slide: SlideRelatorio) {
+  setErroSlide(null);
+
+  if (slideAberto?.id === slide.id) {
+    setSlideAberto(null);
+    setTimeout(() => setSlideParaAtualizar(slide), 300);
+    return;
+  }
+
+  setSlideParaAtualizar(slide);
+}
   return (
     <View
       style={[
@@ -744,16 +1149,6 @@ export default function DetalheRelatorio() {
               style={{marginTop: 15}}
             />
 
-            <Text
-              style={{
-                color: theme.textoSub,
-                fontSize: 12,
-                marginTop: 6,
-              }}
-            >
-              Esta exportação ainda não cria uma versão salva do relatório.
-            </Text>
-
             {mensagemPptx ? (
               <Text
                 style={{
@@ -848,7 +1243,7 @@ export default function DetalheRelatorio() {
                         ? 2
                         : 1,
                       backgroundColor: selecionado
-                        ? theme.backgroundSecundario
+                        ? theme.background
                         : theme.background
                     },
                   ]}
@@ -864,14 +1259,272 @@ export default function DetalheRelatorio() {
                   >
                     {opcao === "todas"
                       ? "TODOS OS SLIDES"
-                      : `A REVISAR · ${relatorio.novos_pendentes}`}
+                      : `A REVISAR · ${relatorio.total_pendentes}`}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         ) : null}
+        {relatorio && filtroRevisao === "pendentes" ? (
+          <View style={styles.opcoesRevisao}>
+            {(["novo", "veiculo", "clipping"] as const).map((origem) => {
+              const quantidade = relatorio.pendentes_por_origem[origem] ?? 0;
+              const marcado = origensRevisao.includes(origem);
+              const unicoMarcado = marcado && origensRevisao.length === 1;
 
+              const principal =
+                origem === "novo"
+                  ? quantidade === 1 ? "NOVO" : "NOVOS"
+                  : origem === "veiculo"
+                    ? quantidade === 1 ? "VEÍCULO" : "VEÍCULOS"
+                    : quantidade === 1 ? "CLIPPING" : "CLIPPINGS";
+
+              const complemento =
+                origem === "novo"
+                  ? quantidade === 1 ? "SLIDE" : "SLIDES"
+                  : quantidade === 1 ? "ALTERADO" : "ALTERADOS";
+
+              return (
+                <TouchableOpacity
+                  key={origem}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{
+                    checked: marcado,
+                    disabled: unicoMarcado,
+                  }}
+                  accessibilityLabel={`${principal} ${complemento}: ${quantidade}`}
+                  accessibilityHint={
+                    unicoMarcado
+                      ? "Mantenha pelo menos um tipo de revisão ativo"
+                      : undefined
+                  }
+                  disabled={unicoMarcado}
+                  onPress={() => {
+                    setOrigensRevisao((atuais) =>
+                      atuais.includes(origem)
+                        ? atuais.filter((item) => item !== origem)
+                        : [...atuais, origem]
+                    );
+                    setPagina(1);
+                  }}
+                  style={[
+                    styles.opcaoRevisao,
+                    {
+                      borderColor: marcado ? theme.primaria : theme.borda,
+                      borderWidth: marcado ? 2 : 1,
+                      backgroundColor: marcado
+                        ? theme.primaria
+                        : theme.primaria,
+                      opacity: marcado ? 1 : 0.5,
+                    },
+                  ]}
+                >
+                  <Text
+                    weight="Bold"
+                    style={{
+                      color: theme.branco,
+                      fontSize: 16,
+                      lineHeight: 23,
+                    }}
+                  >
+                    {quantidade}
+                  </Text>
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      color: marcado ? theme.branco : theme.branco,
+                      fontSize: 10,
+                      textAlign: "center",
+                    }}
+                  >
+                    {principal}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
+        {relatorio &&
+          slidesSelecionaveis.length > 0 &&
+          (temPermissao("RELATORIOS", "EDITAR") ||
+            temPermissao("RELATORIOS", "EXCLUIR")) ? (
+            modoSelecaoSlides ? (
+              <>
+                <View
+                  style={[
+                    styles.selecaoToolbar,
+                    {
+                      backgroundColor: theme.background,
+                      borderColor: theme.borda,
+                    },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text weight="SemiBold" style={{ fontSize: 13 }}>
+                      {slidesSelecionados.length} selecionado(s)
+                    </Text>
+                    <Text style={{ color: theme.textoSub, fontSize: 11, marginTop: 1, }}>
+                      slides desta página
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      todosVisiveisSelecionados
+                        ? "Limpar seleção"
+                        : "Selecionar todos desta página"
+                    }
+                    onPress={alternarTodosVisiveis}
+                    style={[
+                      styles.selecionarTodosBotao,
+                      { borderColor: theme.borda },
+                    ]}
+                  >
+                    <Text weight="SemiBold" style={{ color: theme.texto, fontSize: 11 }}>
+                      {todosVisiveisSelecionados ? "LIMPAR" : "TODOS"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {temPermissao("RELATORIOS", "EXCLUIR") ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Excluir slides selecionados"
+                      disabled={slidesSelecionados.length === 0}
+                      onPress={() =>
+                        pedirAcaoSlides("EXCLUIR", slidesSelecionados)
+                      }
+                      style={[
+                        styles.selecaoIconeBotao,
+                        {
+                          backgroundColor: "#EF4444",
+                          opacity: slidesSelecionados.length ? 1 : 0.5,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={19}
+                        color="#FFFFFF"
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Sair da seleção"
+                    onPress={sairSelecaoSlides}
+                    style={[
+                      styles.selecaoIconeBotao,
+                      { backgroundColor: theme.backgroundContainer },
+                    ]}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={20}
+                      color={theme.textoContainer}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {temPermissao("RELATORIOS", "EDITAR") ? (
+                  <View style={styles.selecaoAcoesBotao}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Atualizar ${revisoesSelecionadas.length} revisões selecionadas`}
+                      accessibilityState={{
+                        disabled: revisoesSelecionadas.length === 0,
+                      }}
+                      activeOpacity={0.8}
+                      disabled={revisoesSelecionadas.length === 0}
+                      onPress={() =>
+                        pedirAcaoSlides("VALIDAR", revisoesSelecionadas)
+                      }
+                      style={[
+                        styles.slideRevisaoBotao,
+                        {
+                          minHeight: 40,
+                          borderColor: theme.primaria,
+                          backgroundColor: theme.primaria,
+                          opacity: revisoesSelecionadas.length === 0 ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="checkmark-outline"
+                        size={16}
+                        color={theme.branco}
+                      />
+                      <Text weight="Bold" style={{ color: theme.branco, fontSize: 11 }}>
+                        ATUALIZAR ({revisoesSelecionadas.length})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Ignorar ${revisoesSelecionadas.length} revisões selecionadas`}
+                      accessibilityState={{
+                        disabled: revisoesSelecionadas.length === 0,
+                      }}
+                      activeOpacity={0.8}
+                      disabled={revisoesSelecionadas.length === 0}
+                      onPress={() =>
+                        pedirAcaoSlides("IGNORAR", revisoesSelecionadas)
+                      }
+                      style={[
+                        styles.slideRevisaoBotao,
+                        {
+                          minHeight: 40,
+                          borderColor: theme.borda,
+                          backgroundColor: theme.background,
+                          opacity: revisoesSelecionadas.length === 0 ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="close-outline"
+                        size={16}
+                        color={theme.textoSub}
+                      />
+                      <Text weight="SemiBold" style={{ color: theme.textoSub, fontSize: 11 }}>
+                        IGNORAR ({revisoesSelecionadas.length})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Selecionar slides"
+                activeOpacity={0.8}
+                onPress={() => setModoSelecaoSlides(true)}
+                style={[
+                  styles.selecaoInicioBotao,
+                  { borderColor: theme.borda },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={19}
+                  color={theme.texto}
+                />
+                <Text
+                  weight="SemiBold"
+                  style={{ color: theme.texto, fontSize: 12 }}
+                >
+                  SELECIONAR SLIDES
+                </Text>
+              </TouchableOpacity>
+            )
+          ) : null}
+
+          {mensagemAcaoSlides ? (
+            <Text style={{ color: theme.textoTerciaria, fontSize: 12 }}>
+              {mensagemAcaoSlides}
+            </Text>
+          ) : null}
         {carregando ? (
           <ActivityIndicator
             size="small"
@@ -934,6 +1587,24 @@ export default function DetalheRelatorio() {
                     key={slide.id}
                     slide={slide}
                     onPress={() => setSlideAberto(slide)}
+                    onDecidir={() => {
+                      if (slide.revisao_pendente) {
+                        void decidirSlide(slide, "INCLUIR");
+                      } else {
+                        pedirParaAtualizar(slide);
+                      }
+                    }}
+                    onIgnorar={() => pedirParaIgnorar(slide)}
+                    decidindo={slideDecidindoId === slide.id}
+                    podeEditar={temPermissao("RELATORIOS", "EDITAR")}
+                    erro={erroSlide?.id === slide.id ? erroSlide.mensagem : undefined}
+                    modoSelecao={modoSelecaoSlides}
+                    selecionavel={
+                      slide.tipo === "CLIPPING" ||
+                      slide.tipo === "COMPLEMENTAR"
+                    }
+                    selecionado={idsSelecionados.includes(slide.id)}
+                    onSelecionar={() => alternarSlideSelecionado(slide.id)}
                   />
                 ))}
               </View>
@@ -984,15 +1655,34 @@ export default function DetalheRelatorio() {
           slide={slideAberto}
           relatorio={relatorio}
           onClose={() => setSlideAberto(null)}
-          onReviewed={() => {
-            setSlideAberto(null);
-
-            if (filtroRevisao === "pendentes" && slides.length === 1 && pagina > 1) {
-              setPagina(pagina - 1);
+          onDecidir={(decisao) => {
+            if (decisao === "ALTERAR") {
+              pedirParaAtualizar(slideAberto);
             } else {
-              setTentativa((atual) => atual + 1);
+              void decidirSlide(slideAberto, decisao);
             }
           }}
+          onIgnorar={() => pedirParaIgnorar(slideAberto)}
+          revisando={slideDecidindoId === slideAberto.id}
+          erroRevisao={
+            erroSlide?.id === slideAberto.id
+              ? erroSlide.mensagem
+              : undefined
+          }
+          onExcluir={
+            temPermissao("RELATORIOS", "EXCLUIR")
+              ? () => {
+                  const alvo = slideAberto;
+                  if (!alvo) return;
+
+                  setSlideAberto(null);
+                  setTimeout(
+                    () => pedirAcaoSlides("EXCLUIR", [alvo]),
+                    300
+                  );
+                }
+              : undefined
+          }
         />
       ) : null}
       {edicaoAberta && relatorio ? (
@@ -1007,6 +1697,62 @@ export default function DetalheRelatorio() {
           }}
         />
       ) : null}
+      
+      <FeedbackAlert
+        visible={slideParaAtualizar !== null}
+        variant="warning"
+        title="Atualizar este slide?"
+        message={
+          slideParaAtualizar?.revisao_veiculo_pendente &&
+          slideParaAtualizar?.revisao_clipping_pendente
+            ? "Os dados atuais do veículo e do clipping substituirão os dados salvos neste slide. As duas alterações serão confirmadas juntas."
+            : slideParaAtualizar?.revisao_veiculo_pendente
+              ? "Os dados atuais do veículo substituirão os dados salvos neste slide."
+              : "Os dados atuais do clipping substituirão os dados salvos neste slide."
+        }
+        primaryLabel="ATUALIZAR"
+        secondaryLabel="CANCELAR"
+        loading={slideDecidindoId === slideParaAtualizar?.id}
+        onClose={() => {
+          if (slideDecidindoId === null) {
+            setSlideParaAtualizar(null);
+          }
+        }}
+        onSecondary={() => setSlideParaAtualizar(null)}
+        onPrimary={() => {
+          if (slideParaAtualizar) {
+            void decidirSlide(slideParaAtualizar, "ALTERAR");
+          }
+        }}
+      />
+
+      <FeedbackAlert
+        visible={slideParaIgnorar !== null}
+        variant="warning"
+        title={
+          slideParaIgnorar?.revisao_pendente
+            ? "Ignorar novo slide?"
+            : "Ignorar alterações?"
+        }
+        message={
+          slideParaIgnorar?.revisao_pendente
+            ? "Este slide será removido do relatório e a matéria não será incluída novamente de forma automática."
+            : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
+        }
+        primaryLabel="IGNORAR"
+        secondaryLabel="CANCELAR"
+        primaryDanger={Boolean(slideParaIgnorar?.revisao_pendente)}
+        loading={slideDecidindoId !== null}
+        onClose={() => {
+          if (slideDecidindoId === null) setSlideParaIgnorar(null);
+        }}
+        onSecondary={() => setSlideParaIgnorar(null)}
+        onPrimary={() => {
+          if (slideParaIgnorar) {
+            void decidirSlide(slideParaIgnorar, "IGNORAR");
+          }
+        }}
+      />
 
       <FeedbackAlert
         visible={confirmarExclusao}
@@ -1044,6 +1790,34 @@ export default function DetalheRelatorio() {
         }}
         onSecondary={() => setConfirmarDadosVeiculos(false)}
         onPrimary={() => void completarDadosVeiculos()}
+      />
+
+      <FeedbackAlert
+        visible={acaoSlides !== null}
+        variant="warning"
+        title={
+          acaoSlides?.tipo === "EXCLUIR"
+            ? `Excluir ${acaoSlides.slides.length} slide(s)?`
+            : acaoSlides?.tipo === "IGNORAR"
+              ? `Ignorar ${acaoSlides?.slides.length ?? 0} revisão(ões)?`
+              : `Validar ${acaoSlides?.slides.length ?? 0} revisão(ões)?`
+        }
+        message={
+          acaoSlides?.tipo === "EXCLUIR"
+            ? "Os slides serão retirados do relatório. As matérias excluídas não voltarão pela inclusão automática."
+            : acaoSlides?.tipo === "IGNORAR"
+              ? "Slides novos serão retirados. Nos demais, os dados salvos serão mantidos. Alterações de veículo e clipping serão ignoradas juntas."
+              : "Slides novos serão incluídos. Os demais receberão todas as alterações pendentes de veículo e clipping."
+        }
+        primaryLabel={acaoSlides?.tipo ?? "CONFIRMAR"}
+        secondaryLabel="CANCELAR"
+        primaryDanger={acaoSlides?.tipo === "EXCLUIR"}
+        loading={processandoAcaoSlides}
+        onClose={() => {
+          if (!processandoAcaoSlides) setAcaoSlides(null);
+        }}
+        onSecondary={() => setAcaoSlides(null)}
+        onPrimary={() => void executarAcaoSlides()}
       />
     </View>
   );
@@ -1162,7 +1936,7 @@ const styles = StyleSheet.create({
   filtrosRevisao: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   filtroRevisao: {
     flex: 1,
@@ -1173,15 +1947,111 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 6,
   },
+  opcoesRevisao: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 12,
+  },
+  opcaoRevisao: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 62,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 4,
+    paddingVertical: 5,
+  },
+  selecaoInicioBotao: {
+    minHeight: 42,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  selecaoToolbar: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  selecionarTodosBotao: {
+    height: 36,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+  selecaoIconeBotao: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selecaoCheckbox: {
+    width: 25,
+    height: 25,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selecaoAcoesBotao: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  slideGrupo: {
+  borderWidth: 1.5,
+  borderRadius: 13,
+  overflow: "hidden",
+},
+slideRevisaoRodape: {
+  borderTopWidth: 1,
+  paddingHorizontal: 12,
+  paddingTop: 9,
+  paddingBottom: 11,
+  gap: 9,
+},
+slideRevisaoMensagem: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+},
+slideRevisaoAcoes: {
+  flexDirection: "row",
+  gap: 7,
+},
+slideRevisaoBotao: {
+  flex: 1,
+  minHeight: 35,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 5,
+  borderWidth: 1,
+  borderRadius: 8,
+  paddingHorizontal: 7,
+},
   listaSlides: {
     gap: 9,
   },
   slideCard: {
-    borderWidth: 1.5,
-    borderRadius: 13,
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-  },
+  paddingHorizontal: 13,
+  paddingVertical: 11,
+},
   slideTop: {
     flexDirection: "row",
     alignItems: "center",
@@ -1206,6 +2076,8 @@ const styles = StyleSheet.create({
   pendente: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 6,
     gap: 4,
     borderRadius: 7,
     paddingHorizontal: 7,

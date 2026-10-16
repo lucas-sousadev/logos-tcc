@@ -332,7 +332,7 @@ export default function ListaRelatorios() {
                 </Text>
               </View>
 
-              {relatorio.novos_pendentes > 0 ? (
+              {relatorio.total_pendentes > 0 ? (
                 <View
                   style={[
                     styles.pending,
@@ -352,10 +352,10 @@ export default function ListaRelatorios() {
                     weight="SemiBold"
                     style={{ color: theme.aviso }}
                   >
-                    {relatorio.novos_pendentes}{" "}
-                    {relatorio.novos_pendentes === 1
-                      ? "slide novo para revisar"
-                      : "slides novos para revisar"}
+                    {relatorio.total_pendentes}{" "}
+                    {relatorio.total_pendentes === 1
+                      ? "slide para revisar"
+                      : "slides para revisar"}
                   </Text>
                 </View>
               ) : null}

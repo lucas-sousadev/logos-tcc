@@ -17,7 +17,6 @@ import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import RelatorioSlideVisual from "@/components/relatorios/RelatorioSlideVisual";
 
-import { marcarSlideRevisado } from "@/services/api/relatorio";
 import type {
   RelatorioDetalhado,
   SlideRelatorio,
@@ -28,54 +27,83 @@ interface Props {
   slide: SlideRelatorio;
   relatorio: RelatorioDetalhado;
   onClose: () => void;
-  onReviewed: () => void;
+  onDecidir: (decisao: "INCLUIR" | "ALTERAR") => void;
+  onIgnorar: () => void;
+  onExcluir?: () => void;
+  revisando: boolean;
+  erroRevisao?: string;
+}
+
+function BotaoAlteracao({
+  cor,
+  aberto,
+  plural = false,
+  onPress,
+}: {
+  cor: string;
+  aberto: boolean;
+  plural?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={aberto ? "Ver original" : plural ? "Ver alterações" : "Ver alteração"}
+      accessibilityState={{ expanded: aberto }}
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={[
+        styles.seloAlterado,
+        { backgroundColor: `${cor}18` },
+      ]}
+    >
+      <Ionicons name="sync-outline" size={12} color={cor} />
+      <Text weight="SemiBold" style={{ color: cor, fontSize: 10 }}>
+        {aberto ? "VER ORIGINAL" : plural ? "VER ALTERAÇÕES" : "VER ALTERAÇÃO"}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function textoAlterado(valor: unknown): string {
+  return typeof valor === "string" ? valor.trim() : "";
 }
 
 export default function RelatorioSlidePreview({
   slide,
   relatorio,
   onClose,
-  onReviewed,
+  onDecidir,
+  onIgnorar,
+  onExcluir,
+  revisando,
+  erroRevisao
 }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { temPermissao } = useAuth();
   const [erroLink, setErroLink] = useState("");
-  const [revisando, setRevisando] = useState(false);
-  const [erroRevisao, setErroRevisao] = useState("");
+  const [mostrarMateriaNova, setMostrarMateriaNova] = useState(false);
+  const [mostrarVeiculoNovo, setMostrarVeiculoNovo] = useState(false);
 
   const podeVerClipping = temPermissao(
     "CLIPPING",
     "VISUALIZAR"
   );
   const ehMateria = slide.tipo === "CLIPPING";
+  const revisaoAtiva =
+    slide.revisao_pendente ||
+    slide.revisao_veiculo_pendente ||
+    slide.revisao_clipping_pendente;
+
   const clipping = slide.dados_json?.clipping;
   const veiculo = slide.dados_json?.veiculo;
-
-  const veiculoId = Number(veiculo?.id);
-  const podeAbrirVeiculo =
-    Number.isSafeInteger(veiculoId) &&
-    veiculoId > 0 &&
-    temPermissao("VEICULOS", "VISUALIZAR");
 
   const pauta = ehMateria
     ? clipping?.pauta?.trim()
     : slide.titulo?.trim();
 
-  function abrirVeiculo() {
-    if (!podeAbrirVeiculo) return;
-
-    onClose();
-    router.push({
-      pathname: "/veiculos/[id]",
-      params: {
-        id: String(veiculoId),
-        origemRelatorioId: String(relatorio.id),
-      },
-    });
-  }
-  
   const data =
     dataISOParaBR(clipping?.data_publicacao ?? null) ||
     "Sem data";
@@ -84,17 +112,269 @@ export default function RelatorioSlidePreview({
   const alcance = veiculo?.alcance?.trim();
   const link = slide.link?.trim();
 
-  const endpointImagem =
-    slide.clipping_id && slide.imagem_anexo_id
-      ? `/clippings/${slide.clipping_id}/anexos/${slide.imagem_anexo_id}/arquivo`
-      : null;
+  const imagemDefinida = Boolean(
+    slide.imagem_midia_id || slide.imagem_anexo_id
+  );
+  
+  const camposVeiculo = slide.revisao_pendente
+    ? []
+    : (slide.campos_alterados?.veiculo ?? []);
+
+  const camposClipping = slide.revisao_pendente
+    ? []
+    : (slide.campos_alterados?.clipping ?? []);
+
+  const novosVeiculo = slide.novos_valores?.veiculo;
+  const novosClipping = slide.novos_valores?.clipping;
+
+  const pautaAlterada = camposClipping.includes("pauta");
+  const dataAlterada = camposClipping.includes("data_publicacao");
+  const logoAlterada = camposVeiculo.includes("logo_path");
+  const imagemAlterada =
+    camposClipping.includes("imagem_anexo_id") ||
+    camposClipping.includes("imagem_path");
+
+  const veiculoAlterado =
+    camposVeiculo.some((campo) => ["id", "nome"].includes(campo)) ||
+    camposClipping.includes("veiculo_id") ||
+    (!veiculo?.id && camposClipping.includes("veiculo_nome_informado"));
+
+  const descricaoAlterada = camposVeiculo.includes("descricao");
+  const alcanceAlterado = camposVeiculo.includes("alcance");
+  const linkAlterado = camposClipping.includes("link");
+
+  const materiaAlterada =
+  pautaAlterada || dataAlterada || imagemAlterada || linkAlterado;
+
+  const dadosVeiculoAlterados =
+    veiculoAlterado ||
+    logoAlterada ||
+    descricaoAlterada ||
+    alcanceAlterado;
+
+  const novoVeiculoId = Number(
+    camposVeiculo.includes("id")
+      ? novosVeiculo?.id
+      : camposClipping.includes("veiculo_id")
+        ? novosClipping?.veiculo_id
+        : veiculo?.id
+  ) || 0;
+
+  const novoNomeVeiculo = camposVeiculo.includes("nome")
+    ? textoAlterado(novosVeiculo?.nome)
+    : !novoVeiculoId && camposClipping.includes("veiculo_nome_informado")
+      ? textoAlterado(novosClipping?.veiculo_nome_informado)
+      : veiculo?.nome?.trim() || "";
+
+  const pautaExibida =
+    mostrarMateriaNova && pautaAlterada
+      ? textoAlterado(novosClipping?.pauta)
+      : pauta;
+
+  const dataNova = textoAlterado(novosClipping?.data_publicacao);
+
+  const dataExibida =
+    mostrarMateriaNova && dataAlterada
+      ? dataISOParaBR(dataNova) || "Sem data"
+      : data;
+
+  const nomeVeiculoExibido =
+    mostrarVeiculoNovo && veiculoAlterado
+      ? novoNomeVeiculo
+      : veiculo?.nome?.trim() || "";
+
+  const veiculoIdExibido =
+    mostrarVeiculoNovo && veiculoAlterado
+      ? novoVeiculoId
+      : Number(veiculo?.id) || 0;
+
+  const podeAbrirVeiculo =
+    Number.isSafeInteger(veiculoIdExibido) &&
+    veiculoIdExibido > 0 &&
+    temPermissao("VEICULOS", "VISUALIZAR");
+
+  const imagemAnexoAtual = camposClipping.includes("imagem_anexo_id")
+    ? Number(novosClipping?.imagem_anexo_id) || null
+    : slide.imagem_anexo_id;
+
+  const imagemPathAtual = camposClipping.includes("imagem_path")
+    ? textoAlterado(novosClipping?.imagem_path) || null
+    : slide.dados_json?.imagem?.arquivo_path ?? null;
+
+  const imagemNovaDefinida = Boolean(imagemAnexoAtual || imagemPathAtual);
+
+  const imagemExibida =
+    mostrarMateriaNova && imagemAlterada
+      ? imagemNovaDefinida
+      : imagemDefinida;
+
+  const corImagem =
+    mostrarMateriaNova && imagemAlterada
+      ? theme.alteracao
+      : imagemExibida
+        ? theme.textoTerciaria
+        : theme.aviso;
+
+  const logoPathAtual = logoAlterada
+    ? textoAlterado(novosVeiculo?.logo_path) || null
+    : veiculo?.logo_path ?? null;
+
+  const slideParaPrevia: SlideRelatorio =
+  mostrarMateriaNova || mostrarVeiculoNovo
+    ? {
+        ...slide,
+        link:
+          mostrarMateriaNova && linkAlterado
+            ? textoAlterado(novosClipping?.link) || null
+            : slide.link,
+        logo_midia_id:
+          mostrarVeiculoNovo && logoAlterada
+            ? null
+            : slide.logo_midia_id,
+        imagem_midia_id:
+          mostrarMateriaNova && imagemAlterada
+            ? null
+            : slide.imagem_midia_id,
+        imagem_anexo_id:
+          mostrarMateriaNova && imagemAlterada
+            ? imagemAnexoAtual
+            : slide.imagem_anexo_id,
+        dados_json: {
+          ...slide.dados_json,
+          clipping: {
+            ...clipping,
+            pauta:
+              mostrarMateriaNova && pautaAlterada
+                ? textoAlterado(novosClipping?.pauta) || null
+                : clipping?.pauta,
+            data_publicacao:
+              mostrarMateriaNova && dataAlterada
+                ? dataNova || null
+                : clipping?.data_publicacao,
+          },
+          veiculo: {
+            ...veiculo,
+            id:
+              mostrarVeiculoNovo && veiculoAlterado
+                ? novoVeiculoId || null
+                : veiculo?.id,
+            nome:
+              mostrarVeiculoNovo && veiculoAlterado
+                ? novoNomeVeiculo || null
+                : veiculo?.nome,
+            descricao:
+              mostrarVeiculoNovo && descricaoAlterada
+                ? textoAlterado(novosVeiculo?.descricao) || null
+                : veiculo?.descricao,
+            alcance:
+              mostrarVeiculoNovo && alcanceAlterado
+                ? textoAlterado(novosVeiculo?.alcance) || null
+                : veiculo?.alcance,
+            logo_path:
+              mostrarVeiculoNovo && logoAlterada
+                ? logoPathAtual
+                : veiculo?.logo_path,
+          },
+          imagem: {
+            ...slide.dados_json?.imagem,
+            anexo_id:
+              mostrarMateriaNova && imagemAlterada
+                ? imagemAnexoAtual
+                : slide.dados_json?.imagem?.anexo_id,
+            arquivo_path:
+              mostrarMateriaNova && imagemAlterada
+                ? imagemPathAtual
+                : slide.dados_json?.imagem?.arquivo_path,
+          },
+        },
+      }
+    : slide;
+
+  const camposDadosAlterados = [
+    ...camposVeiculo
+      .filter(
+        (campo) =>
+          !["id", "nome", "logo_path", "descricao", "alcance"].includes(campo)
+      )
+      .map((campo) => ({ origem: "veiculo" as const, campo })),
+
+    ...camposClipping
+      .filter(
+        (campo) =>
+          ![
+            "pauta",
+            "data_publicacao",
+            "veiculo_id",
+            "link",
+            "imagem_anexo_id",
+            "imagem_path",
+          ].includes(campo) &&
+          !(campo === "veiculo_nome_informado" && veiculoAlterado)
+      )
+      .map((campo) => ({ origem: "clipping" as const, campo })),
+  ];
+  function abrirVeiculo() {
+    if (!podeAbrirVeiculo) return;
+
+    onClose();
+    router.push({
+      pathname: "/veiculos/[id]",
+      params: {
+        id: String(veiculoIdExibido),
+        origemRelatorioId: String(relatorio.id),
+      },
+    });
+  }
+
+  const rotulos: Record<string, string> = {
+    nome: "Nome do veículo",
+    descricao: "Descrição",
+    alcance: "Alcance",
+    logo_path: "Logo do veículo",
+    data_publicacao: "Data",
+    pauta: "Pauta",
+    link: "Link da matéria",
+    imagem_anexo_id: "Imagem",
+    imagem_path: "Imagem",
+    categorias: "Categorias",
+    programa_secao: "Programa ou seção",
+    tier: "Tier",
+    observacoes: "Observações",
+    imagem: "Imagem",
+    id: "Identificador",
+    cliente_id: "Cliente vinculado",
+    veiculo_id: "Veículo vinculado",
+    veiculo_nome_informado: "Nome informado do veículo",
+    ano_referencia: "Ano de referência",
+    inicio_segundos: "Início",
+    fim_segundos: "Fim",
+    duracao_segundos: "Duração",
+  };
+
+  const nomesDadosAlterados = Array.from(
+    new Set(
+      camposDadosAlterados
+        .filter(({ campo }) => campo !== "imagem")
+        .map(({ campo }) => rotulos[campo] ?? campo.replaceAll("_", " "))
+    )
+  );
+
+  const descricaoExibida = mostrarVeiculoNovo && descricaoAlterada
+    ? textoAlterado(novosVeiculo?.descricao)
+    : descricao;
+  const alcanceExibido = mostrarVeiculoNovo && alcanceAlterado
+    ? textoAlterado(novosVeiculo?.alcance)
+    : alcance;
+  const linkExibido = mostrarMateriaNova && linkAlterado
+    ? textoAlterado(novosClipping?.link)
+    : link;
 
   async function abrirLink() {
-    if (!link) return;
+    if (!linkExibido) return;
 
     setErroLink("");
 
-    if (!/^https?:\/\/\S+$/i.test(link)) {
+    if (!/^https?:\/\/\S+$/i.test(linkExibido)) {
         setErroLink(
         "O link desta matéria não tem um endereço válido para abrir."
         );
@@ -102,7 +382,7 @@ export default function RelatorioSlidePreview({
     }
 
     try {
-        await Linking.openURL(link);
+        await Linking.openURL(linkExibido);
     } catch {
         setErroLink("Não foi possível abrir o link da matéria.");
     }
@@ -124,25 +404,6 @@ export default function RelatorioSlidePreview({
     });
   }
 
-  async function concluirRevisao() {
-    if (revisando || !slide.revisao_pendente) return;
-
-    setRevisando(true);
-    setErroRevisao("");
-
-    try {
-      await marcarSlideRevisado(relatorio.id, slide.id);
-      onReviewed();
-    } catch (error) {
-      setErroRevisao(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível concluir a revisão."
-      );
-    } finally {
-      setRevisando(false);
-    }
-  }
   return (
     <Modal
       visible
@@ -183,6 +444,28 @@ export default function RelatorioSlidePreview({
             </View>
 
             <View style={styles.headerAcoes}>
+              {onExcluir &&
+                slide.tipo !== "CAPA" &&
+                slide.tipo !== "ENCERRAMENTO" ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Excluir este slide"
+                    accessibilityHint="Abre a confirmação de exclusão"
+                    activeOpacity={0.8}
+                    disabled={revisando}
+                    onPress={onExcluir}
+                    style={[
+                      styles.acaoHeader,
+                      {
+                        backgroundColor: `${theme.erro}10`,
+                        borderColor: `${theme.erro}70`,
+                        opacity: revisando ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={theme.erro} />
+                  </TouchableOpacity>
+                ) : null}
                 {ehMateria && slide.clipping_id && podeVerClipping ? (
                     <TouchableOpacity
                     accessibilityRole="button"
@@ -191,7 +474,7 @@ export default function RelatorioSlidePreview({
                     activeOpacity={0.8}
                     onPress={abrirClipping}
                     style={[
-                        styles.atalhoClipping,
+                        styles.acaoHeader,
                         {
                         backgroundColor: theme.backgroundSecundario,
                         borderColor: `${theme.borda}70`,
@@ -223,7 +506,7 @@ export default function RelatorioSlidePreview({
                 </TouchableOpacity>
             </View>
           </View>
-
+                    
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.conteudo}
@@ -237,199 +520,304 @@ export default function RelatorioSlidePreview({
                   PRÉVIA DO SLIDE
                 </Text>
 
-                <RelatorioSlideVisual slide={slide} />
+                <RelatorioSlideVisual slide={slideParaPrevia} />
 
-                <Text
-                  weight="SemiBold"
-                  style={{
-                    color: theme.textoSub,
-                    fontSize: 11,
-                    marginTop: 8,
-                  }}
+                <View
+                  style={[
+                    styles.blocoDados,
+                    { borderTopColor: `${theme.borda}70` },
+                  ]}
                 >
-                  DADOS DO SLIDE
-                </Text>
-              </>
-            ) : null}
-            <View style={styles.identificacao}>
-              <View style={styles.campoResumo}>
-                <Text weight="SemiBold" style={styles.nomeCliente}>
-                  {relatorio.cliente_nome}
-                </Text>
-              </View>
+                  <View style={styles.rotuloComEstado}>
+                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                      MATÉRIA
+                    </Text>
+                    {materiaAlterada ? (
+                      <BotaoAlteracao
+                        cor={theme.alteracao}
+                        aberto={mostrarMateriaNova}
+                        plural
+                        onPress={() => {
+                          setErroLink("");
+                          setMostrarMateriaNova((atual) => !atual);
+                        }}
+                      />
+                    ) : null}
+                  </View>
 
-              <View style={styles.campoResumo}>
-                {pauta ? (
-                  <Text selectable weight="Bold" style={[styles.titulo, {color: theme.textoTerciaria}]}>
-                    {pauta}
-                  </Text>
-                ) : (
-                  <View style={styles.valorAusente}>
-                    <Ionicons name="alert-circle-outline" size={16} color={theme.aviso} />
-                    <Text weight="SemiBold" style={{ color: theme.aviso }}>
-                      {ehMateria ? "Sem pauta cadastrada" : "Sem título"}
+                  <View style={styles.campo}>
+                    {pautaExibida ? (
+                      <Text
+                        selectable
+                        weight="Bold"
+                        style={[
+                          styles.titulo,
+                          {
+                            color:
+                              mostrarMateriaNova && pautaAlterada
+                                ? theme.alteracao
+                                : theme.texto,
+                          },
+                        ]}
+                      >
+                        {pautaExibida}
+                      </Text>
+                    ) : (
+                      <Text
+                        style={{
+                          color:
+                            mostrarMateriaNova && pautaAlterada
+                              ? theme.alteracao
+                              : theme.aviso,
+                        }}
+                      >
+                        {mostrarMateriaNova && pautaAlterada
+                          ? "Pauta removida"
+                          : "Sem pauta cadastrada"}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.metadados}>
+                    <Ionicons name="calendar-outline" size={15} color={theme.textoSub} />
+                    <Text
+                      style={{
+                        color:
+                          mostrarMateriaNova && dataAlterada
+                            ? theme.alteracao
+                            : theme.textoSub,
+                      }}
+                    >
+                      {dataExibida}
                     </Text>
                   </View>
-                )}
-              </View>
-            </View>
-            
-            {ehMateria ? (
-              <>
-                <View style={styles.metadados}>
+
+                  <View style={styles.semImagem}>
+                    <Ionicons name="image-outline" size={18} color={corImagem} />
+                    <Text weight="SemiBold" style={{ color: corImagem }}>
+                      {imagemExibida
+                        ? "Imagem definida"
+                        : mostrarMateriaNova && imagemAlterada
+                          ? "Imagem removida"
+                          : "Sem imagem definida para este slide"}
+                    </Text>
+                  </View>
+
+                  {link || linkAlterado ? (
+                    <View style={styles.campo}>
+                      <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                        LINK
+                      </Text>
+
+                      {linkExibido ? (
+                        <View style={styles.linhaLink}>
+                          <Text
+                            selectable
+                            style={[
+                              styles.valorLink,
+                              {
+                                color:
+                                  mostrarMateriaNova && linkAlterado
+                                    ? theme.alteracao
+                                    : theme.textoTerciaria,
+                              },
+                            ]}
+                          >
+                            {linkExibido}
+                          </Text>
+                          <TouchableOpacity
+                            accessibilityRole="link"
+                            accessibilityLabel="Abrir link da matéria"
+                            onPress={() => void abrirLink()}
+                            style={[
+                              styles.abrirLink,
+                              {
+                                backgroundColor: theme.backgroundSecundario,
+                                borderColor: `${theme.borda}70`,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name="open-outline"
+                              size={17}
+                              color={theme.textoTerciaria}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <Text
+                          style={{
+                            color:
+                              mostrarMateriaNova && linkAlterado
+                                ? theme.alteracao
+                                : theme.aviso,
+                          }}
+                        >
+                          {mostrarMateriaNova && linkAlterado
+                            ? "Link removido"
+                            : "Sem link cadastrado"}
+                        </Text>
+                      )}
+
+                      {erroLink ? (
+                        <Text accessibilityRole="alert" style={{ color: theme.erro }}>
+                          {erroLink}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View
+                  style={[
+                    styles.blocoDados,
+                    { borderTopColor: `${theme.borda}70` },
+                  ]}
+                >
+                  <View style={styles.rotuloComEstado}>
+                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                      VEÍCULO
+                    </Text>
+                    {dadosVeiculoAlterados ? (
+                      <BotaoAlteracao
+                        cor={theme.alteracao}
+                        aberto={mostrarVeiculoNovo}
+                        plural
+                        onPress={() => setMostrarVeiculoNovo((atual) => !atual)}
+                      />
+                    ) : null}
+                  </View>
+
                   {podeAbrirVeiculo ? (
                     <TouchableOpacity
                       accessibilityRole="link"
-                      accessibilityLabel={`Abrir veículo ${veiculo?.nome ?? ""}`}
+                      accessibilityLabel={`Abrir veículo ${nomeVeiculoExibido}`}
                       onPress={abrirVeiculo}
-                      hitSlop={8}
                       style={styles.linkVeiculo}
                     >
                       <Ionicons
                         name="newspaper-outline"
-                        size={16}
-                        color={theme.textoTerciaria}
+                        size={15}
+                        color={
+                          mostrarVeiculoNovo && veiculoAlterado
+                            ? theme.alteracao
+                            : theme.textoTerciaria
+                        }
                       />
-                      <Text weight="SemiBold" style={{ color: theme.textoTerciaria }}>
-                        {veiculo?.nome?.trim()}
+                      <Text
+                        weight="SemiBold"
+                        style={{
+                          color:
+                            mostrarVeiculoNovo && veiculoAlterado
+                              ? theme.alteracao
+                              : theme.textoTerciaria,
+                        }}
+                      >
+                        {nomeVeiculoExibido || "Veículo sem nome"}
                       </Text>
-                      <Ionicons
-                        name="open-outline"
-                        size={13}
-                        color={theme.textoTerciaria}
-                      />
+                      <Ionicons name="open-outline" size={12} color={theme.textoTerciaria} />
                     </TouchableOpacity>
                   ) : (
-                    <Text style={{ color: veiculo?.nome ? theme.textoSub : theme.aviso }}>
-                      {veiculo?.nome?.trim() || "Sem veículo cadastrado"}
+                    <Text
+                      style={{
+                        color:
+                          mostrarVeiculoNovo && veiculoAlterado
+                            ? theme.alteracao
+                            : nomeVeiculoExibido
+                              ? theme.textoSub
+                              : theme.aviso,
+                      }}
+                    >
+                      {nomeVeiculoExibido || "Sem veículo cadastrado"}
                     </Text>
                   )}
 
-                  <Text style={{ color: theme.textoSub, marginLeft: -8}}>- {data}</Text>
-                </View>
-
-                {endpointImagem ? (
-                <View
-                  style={[
-                    styles.semImagem,
-                    {
-                      borderColor: `${theme.textoTerciaria}80`,
-                      backgroundColor: `${theme.textoTerciaria}10`,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={18}
-                    color={theme.textoTerciaria}
-                  />
-                  <Text weight="SemiBold" style={{ color: theme.textoTerciaria }}>
-                    IMAGEM DEFINIDA
-                  </Text>
-                </View>
-              ) : (
-                <View
-                  style={[
-                    styles.semImagem,
-                    {
-                      borderColor: `${theme.aviso}80`,
-                      backgroundColor: `${theme.aviso}10`,
-                    },
-                  ]}
-                >
-                  <Ionicons name="image-outline" size={18} color={theme.aviso} />
-                  <Text style={{ color: theme.aviso }}>
-                    Sem imagem definida para este slide
-                  </Text>
-                </View>
-              )}
-
-                <View style={styles.campo}>
-                  <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
-                    DESCRIÇÃO DO VEÍCULO
-                  </Text>
-                  {descricao ? (
-                    <Text selectable>{descricao}</Text>
-                  ) : (
-                    <View style={styles.valorAusente}>
-                      <Ionicons name="alert-circle-outline" size={16} color={theme.aviso} />
-                      <Text style={{ color: theme.aviso }}>Sem descrição cadastrada</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.campo}>
-                  <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
-                    ALCANCE
-                  </Text>
-                  {alcance ? (
-                    <Text selectable>{alcance}</Text>
-                  ) : (
-                    <View style={styles.valorAusente}>
-                      <Ionicons name="alert-circle-outline" size={16} color={theme.aviso} />
-                      <Text style={{ color: theme.aviso }}>Sem alcance cadastrado</Text>
-                    </View>
-                  )}
-                </View>
-
-                {link ? (
-                <View style={styles.campo}>
+                  {logoAlterada ? (
                     <Text
-                    weight="SemiBold"
-                    style={[styles.rotulo, { color: theme.textoSub }]}
+                      style={{
+                        color: mostrarVeiculoNovo
+                          ? theme.alteracao
+                          : theme.textoSub,
+                        fontSize: 12,
+                      }}
                     >
-                    LINK DA MATÉRIA
+                      {mostrarVeiculoNovo
+                        ? logoPathAtual
+                          ? "Nova logo exibida na prévia"
+                          : "Logo removida"
+                        : "Logo atual exibida na prévia"}
                     </Text>
+                  ) : null}
 
-                    <View style={styles.linhaLink}>
+                  <View style={styles.campo}>
+                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                      DESCRIÇÃO
+                    </Text>
                     <Text
-                        selectable
-                        style={[
-                        styles.valorLink,
-                        { color: theme.textoTerciaria },
-                        ]}
+                      selectable
+                      style={{
+                        color:
+                          mostrarVeiculoNovo && descricaoAlterada
+                            ? theme.alteracao
+                            : descricaoExibida
+                              ? theme.texto
+                              : theme.aviso,
+                      }}
                     >
-                        {link}
+                      {descricaoExibida ||
+                        (mostrarVeiculoNovo && descricaoAlterada
+                          ? "Descrição removida"
+                          : "Sem descrição cadastrada")}
                     </Text>
+                  </View>
 
-                    <TouchableOpacity
-                        accessibilityRole="link"
-                        accessibilityLabel="Abrir link da matéria"
-                        activeOpacity={0.75}
-                        hitSlop={4}
-                        onPress={() => void abrirLink()}
-                        style={[
-                        styles.abrirLink,
-                        {
-                            backgroundColor: theme.backgroundSecundario,
-                            borderColor: `${theme.borda}70`,
-                        },
-                        ]}
-                    >
-                        <Ionicons
-                        name="open-outline"
-                        size={17}
-                        color={theme.textoTerciaria}
-                        />
-                    </TouchableOpacity>
-                    </View>
-
-                    {erroLink ? (
+                  <View style={styles.campo}>
+                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                      ALCANCE
+                    </Text>
                     <Text
-                        accessibilityRole="alert"
-                        style={[styles.erroLink, { color: theme.erro }]}
+                      selectable
+                      style={{
+                        color:
+                          mostrarVeiculoNovo && alcanceAlterado
+                            ? theme.alteracao
+                            : alcanceExibido
+                              ? theme.texto
+                              : theme.aviso,
+                      }}
                     >
-                        {erroLink}
+                      {alcanceExibido ||
+                        (mostrarVeiculoNovo && alcanceAlterado
+                          ? "Alcance removido"
+                          : "Sem alcance cadastrado")}
                     </Text>
-                    ) : null}
+                  </View>
                 </View>
+
+                {nomesDadosAlterados.length > 0 ? (
+                  <View
+                    style={[
+                      styles.resumoAlteracoes,
+                      { borderTopColor: `${theme.borda}55` },
+                    ]}
+                  >
+                    <Text
+                      weight="SemiBold"
+                      style={[styles.rotulo, { color: theme.textoSub }]}
+                    >
+                      OUTROS DADOS ALTERADOS
+                    </Text>
+                    <Text style={{ color: theme.alteracao, fontSize: 12 }}>
+                      {nomesDadosAlterados.join(" · ")}
+                    </Text>
+                  </View>
                 ) : null}
 
-                    {slide.clipping_id && !podeVerClipping ? (
-                    <Text style={{ color: theme.textoSub }}>
-                        Você não tem permissão para abrir o clipping original.
-                    </Text>
-                    ) : null}
+                {slide.clipping_id && !podeVerClipping ? (
+                  <Text style={{ color: theme.textoSub }}>
+                    Você não tem permissão para abrir o clipping original.
+                  </Text>
+                ) : null}
               </>
             ) : (
               <Text style={{ color: theme.textoSub }}>
@@ -441,7 +829,7 @@ export default function RelatorioSlidePreview({
               </Text>
             )}
 
-            {slide.revisao_pendente ? (
+            {revisaoAtiva ? (
               <View
                 style={[
                   styles.pendencia,
@@ -454,16 +842,31 @@ export default function RelatorioSlidePreview({
                 <View style={styles.pendenciaCabecalho}>
                   <Ionicons name="alert-circle-outline" size={18} color={theme.aviso} />
                   <Text style={{ color: theme.aviso, flex: 1 }}>
-                    Este slide novo precisa de revisão.
+                    {slide.revisao_pendente
+                      ? "Este slide novo precisa de revisão."
+                      : "Confira as alterações antes de decidir."}
                   </Text>
                 </View>
                 {temPermissao("RELATORIOS", "EDITAR") ? (
-                  <Button
-                    title="MARCAR COMO REVISADO"
-                    onPress={() => void concluirRevisao()}
-                    loading={revisando}
-                    style={{ marginTop: 10 }}
-                  />
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                    <Button
+                      title={slide.revisao_pendente ? "INCLUIR" : "ATUALIZAR"}
+                      size="small"
+                      loading={revisando}
+                      onPress={() =>
+                        onDecidir(slide.revisao_pendente ? "INCLUIR" : "ALTERAR")
+                      }
+                      style={{ flex: 1, width: "auto" }}
+                    />
+                    <Button
+                      title="IGNORAR"
+                      variant="outline"
+                      size="small"
+                      disabled={revisando}
+                      onPress={onIgnorar}
+                      style={{ flex: 1, width: "auto" }}
+                    />
+                  </View>
                 ) : (
                   <Text style={{ color: theme.textoSub, marginTop: 8, fontSize: 12 }}>
                     Você não tem permissão para concluir a revisão.
@@ -526,48 +929,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     },
-    atalhoClipping: {
+  acaoHeader: {
     width: 40,
     height: 40,
     borderWidth: 1,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    },
+  },
   conteudo: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
-    gap: 6, // antes: 8
+    gap: 6,
   },
-  cliente: {
-    fontSize: 12,
+  blocoDados: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+    marginTop: 8,
+    gap: 8,
   },
   identificacao: {
-    gap: 3, 
-  },
-  campoResumo: {
-    marginTop: -4,
-    gap: 3,
-  },
-  nomeCliente: {
-    fontSize: 14,
+    gap: 2,
+    marginBottom: 4,
   },
   titulo: {
-    fontSize: 17,
+    fontSize: 16,
+    lineHeight: 21,
   },
   metadados: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 8,
+    columnGap: 6,
+    rowGap: 2,
+    marginTop: 2,
   },
   linkVeiculo: {
-    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 4,
+    gap: 4,
   },
   valorAusente: {
     flexDirection: "row",
@@ -579,13 +980,10 @@ const styles = StyleSheet.create({
     height: 240,
   },
   semImagem: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 5,
+    marginTop: -6
 },
   campo: {
     gap: 5,
@@ -606,6 +1004,35 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
     marginTop: 4,
+  },
+  rotuloComEstado: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  seloAlterado: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  listaAlteracoes: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    gap: 9,
+  },
+  itemAlteracao: {
+    gap: 2,
+  },
+  resumoAlteracoes: {
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 12,
+    gap: 5,
   },
   linhaLink: {
   flexDirection: "row",

@@ -5,6 +5,7 @@ namespace Logos\AssessoriaApi\Controllers;
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\RelatorioService;
 use Logos\AssessoriaApi\Services\RelatorioPptxService;
+use Logos\AssessoriaApi\Services\RelatorioMidiaService;
 
 class RelatorioController
 {
@@ -172,7 +173,22 @@ class RelatorioController
                 )
         );
     }
-
+    
+    public function excluirSlides(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Slides excluídos com sucesso.',
+                ...RelatorioService::excluirSlides(
+                    $assessoriaId,
+                    $usuarioId,
+                    $rota['id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+    
     public function revisarSlide(array $rota): void
     {
         $this->executar(
@@ -188,6 +204,22 @@ class RelatorioController
         );
     }
 
+    public function decidirRevisaoSlide(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Decisão de revisão registrada.',
+                ...RelatorioService::decidirRevisaoSlide(
+                    $assessoriaId,
+                    $usuarioId,
+                    $rota['id'] ?? null,
+                    $rota['slide_id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+    
     public function materiasParaEdicao(array $rota): void
     {
         $this->executar(
@@ -301,4 +333,72 @@ class RelatorioController
         }
     }
     
+    public function arquivoMidia(array $rota): void
+    {
+        $usuario = AuthContext::get();
+
+        if (!$usuario) {
+            $this->responder([
+                'success' => false,
+                'message' => 'Usuário não autenticado.',
+            ], 401);
+            return;
+        }
+
+        $relatorioId = filter_var(
+            $rota['id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        $midiaId = filter_var(
+            $rota['midia_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        if (!is_int($relatorioId) || !is_int($midiaId)) {
+            $this->responder([
+                'success' => false,
+                'message' => 'Identificador de mídia inválido.',
+            ], 400);
+            return;
+        }
+
+        try {
+            $midia = RelatorioMidiaService::localizar(
+                (int) $usuario->assessoria_id,
+                $relatorioId,
+                $midiaId
+            );
+
+            $tamanho = filesize($midia['arquivo']);
+
+            if ($tamanho === false || $tamanho < 1) {
+                throw new \RuntimeException(
+                    'Não foi possível ler a mídia.'
+                );
+            }
+
+            header('Content-Type: ' . $midia['mime_type']);
+            header('Content-Length: ' . $tamanho);
+            header('Content-Disposition: inline');
+            header('Cache-Control: private, no-store');
+            header('X-Content-Type-Options: nosniff');
+
+            readfile($midia['arquivo']);
+            exit;
+        } catch (\OutOfBoundsException $e) {
+            $this->responder([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 404);
+        } catch (\Throwable $e) {
+            error_log('Erro ao abrir mídia do relatório: ' . $e->getMessage());
+
+            $this->responder([
+                'success' => false,
+                'message' => 'Não foi possível abrir a mídia.',
+            ], 500);
+        }
+    }
 }

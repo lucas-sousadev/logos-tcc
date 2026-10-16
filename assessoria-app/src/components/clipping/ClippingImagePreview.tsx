@@ -27,6 +27,7 @@ interface ClippingImagemPreviewProps {
   nome: string;
   style?: StyleProp<ViewStyle>;
   resizeMode?: "cover" | "contain";
+  onDimensions?: (width: number, height: number) => void;
 }
 
 export default function ClippingImagemPreview({
@@ -34,6 +35,7 @@ export default function ClippingImagemPreview({
   nome,
   style,
   resizeMode = "cover",
+  onDimensions,
 }: ClippingImagemPreviewProps) {
   const { theme } = useTheme();
 
@@ -59,7 +61,7 @@ export default function ClippingImagemPreview({
         const url = obterUrlArquivoAnexo(endpoint);
 
         if (Platform.OS === "web") {
-          // No navegador, a autenticação acontece nesta requisição.
+          // no navegador, a autenticação acontece nesta requisição
           const resposta = await authenticatedFetch(url, {
             signal: controller.signal,
           });
@@ -82,7 +84,7 @@ export default function ClippingImagemPreview({
 
           if (!ativo) return;
 
-          // A imagem usa uma URL local temporária, sem token na URL.
+          // a imagem usa uma URL local temporária, sem token na URL
           urlTemporaria = URL.createObjectURL(arquivo);
 
           setFonte({
@@ -92,7 +94,7 @@ export default function ClippingImagemPreview({
           return;
         }
 
-        // No aplicativo nativo, Image aceita os cabeçalhos.
+        // no aplicativo nativo, Image aceita os cabeçalhos
         const token = await getToken();
 
         if (!token) {
@@ -178,11 +180,20 @@ export default function ClippingImagemPreview({
           accessibilityLabel={nome}
           style={styles.imagem}
           resizeMode={resizeMode}
-          onLoad={() => setCarregando(false)}
+          onLoad={({ nativeEvent }) => {
+            setCarregando(false);
+
+            const largura = nativeEvent.source?.width;
+            const altura = nativeEvent.source?.height;
+
+            if (largura && altura) {
+              onDimensions?.(largura, altura);
+            }
+          }}
           onError={() => {
             setErro("Não foi possível exibir esta imagem.");
             setCarregando(false);
-          }}
+          }}  
         />
       ) : null}
 

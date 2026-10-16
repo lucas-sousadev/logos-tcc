@@ -106,23 +106,34 @@ final class RelatorioPptxService
         Slide $slide,
         array $registro,
         int $assessoriaId,
+        int $relatorioId,
         array &$arquivosTemporarios
     ): void {
-        $clippingId = (int) ($registro['clipping_id'] ?? 0);
-        $imagemPath = $registro['imagem_path'] ?? null;
-
-        if ($clippingId < 1 || !is_string($imagemPath)) {
-            throw new \DomainException(
-                'A imagem escolhida para o slide não está disponível.'
-            );
-        }
+        $midiaId = (int) ($registro['imagem_midia_id'] ?? 0);
 
         try {
-            $arquivo = ArquivoClippingService::caminhoImagemRelatorio(
-                $assessoriaId,
-                $clippingId,
-                $imagemPath
-            );
+            if ($midiaId > 0) {
+                $arquivo = RelatorioMidiaService::localizar(
+                    $assessoriaId,
+                    $relatorioId,
+                    $midiaId
+                )['arquivo'];
+            } else {
+                $clippingId = (int) ($registro['clipping_id'] ?? 0);
+                $imagemPath = $registro['imagem_path'] ?? null;
+
+                if ($clippingId < 1 || !is_string($imagemPath)) {
+                    throw new \DomainException(
+                        'A imagem escolhida para o slide não está disponível.'
+                    );
+                }
+
+                $arquivo = ArquivoClippingService::caminhoImagemRelatorio(
+                    $assessoriaId,
+                    $clippingId,
+                    $imagemPath
+                );
+            }
         } catch (\Throwable $e) {
             throw new \DomainException(
                 'A imagem do slide ' . $registro['ordem']
@@ -206,42 +217,55 @@ final class RelatorioPptxService
 
     private static function adicionarLogo(
         Slide $slide,
-        mixed $logoPath,
+        array $registro,
         int $assessoriaId,
+        int $relatorioId,
         array &$arquivosTemporarios
     ): bool {
-        if (
-            !is_string($logoPath)
-            || !preg_match(
-                '~\Auploads/veiculos/'
+        $midiaId = (int) ($registro['logo_midia_id'] ?? 0);
+
+        if ($midiaId > 0) {
+            $arquivo = RelatorioMidiaService::localizar(
+                $assessoriaId,
+                $relatorioId,
+                $midiaId
+            )['arquivo'];
+        } else {
+            $logoPath = $registro['dados_json']['veiculo']['logo_path'] ?? null;
+
+            if (
+                !is_string($logoPath)
+                || !preg_match(
+                    '~\Auploads/veiculos/'
+                    . $assessoriaId
+                    . '/[a-f0-9]{32}\.(?:jpg|png|webp)\z~',
+                    $logoPath
+                )
+            ) {
+                return false;
+            }
+
+            $base = realpath(
+                dirname(__DIR__, 2)
+                . '/public/uploads/veiculos/'
                 . $assessoriaId
-                . '/[a-f0-9]{32}\.(?:jpg|png|webp)\z~',
-                $logoPath
-            )
-        ) {
-            return false;
-        }
+            );
 
-        $base = realpath(
-            dirname(__DIR__, 2)
-            . '/public/uploads/veiculos/'
-            . $assessoriaId
-        );
+            $arquivo = realpath(
+                dirname(__DIR__, 2) . '/public/' . $logoPath
+            );
 
-        $arquivo = realpath(
-            dirname(__DIR__, 2) . '/public/' . $logoPath
-        );
-
-        if (
-            $base === false
-            || $arquivo === false
-            || !is_file($arquivo)
-            || strcasecmp(
-                str_replace('\\', '/', dirname($arquivo)),
-                str_replace('\\', '/', $base)
-            ) !== 0
-        ) {
-            return false;
+            if (
+                $base === false
+                || $arquivo === false
+                || !is_file($arquivo)
+                || strcasecmp(
+                    str_replace('\\', '/', dirname($arquivo)),
+                    str_replace('\\', '/', $base)
+                ) !== 0
+            ) {
+                return false;
+            }
         }
 
         if (
@@ -304,6 +328,7 @@ final class RelatorioPptxService
         Slide $slide,
         array $registro,
         int $assessoriaId,
+        int $relatorioId,
         array &$arquivosTemporarios
     ): void {
         $dados = $registro['dados_json'] ?? [];
@@ -319,8 +344,9 @@ final class RelatorioPptxService
 
         self::adicionarLogo(
             $slide,
-            $veiculo['logo_path'] ?? null,
+            $registro,
             $assessoriaId,
+            $relatorioId,
             $arquivosTemporarios
         );
 
@@ -343,7 +369,7 @@ final class RelatorioPptxService
             ->getAlignment()
             ->setVertical(Alignment::VERTICAL_BOTTOM);
 
-        self::campo($formaDados, 'Título', $nomeVeiculo);
+        self::campo($formaDados, 'Veículo', $nomeVeiculo);
 
         foreach ([
             'Descrição' => $descricao,
@@ -367,11 +393,16 @@ final class RelatorioPptxService
             );
         }
 
-        if (!empty($registro['imagem_anexo_id'])) {
+        if (
+            !empty($registro['imagem_midia_id'])
+            || !empty($registro['imagem_anexo_id'])
+            || !empty($registro['imagem_path'])
+        ) {
             self::adicionarImagem(
                 $slide,
                 $registro,
                 $assessoriaId,
+                $relatorioId,
                 $arquivosTemporarios
             );
         } else {
@@ -496,6 +527,7 @@ final class RelatorioPptxService
                         $slide,
                         $registro,
                         $assessoriaId,
+                        (int) $relatorio['id'],
                         $arquivosTemporarios
                     );
                 } else {

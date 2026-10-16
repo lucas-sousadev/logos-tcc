@@ -182,9 +182,7 @@ class ClippingAnexoService
 
                     $id = ClippingAnexo::criar($a, $c, $u, $salvo);
 
-                    if ($salvo['tipo'] === 'IMAGEM') {
-                        RelatorioService::sincronizarImagemClipping($a, $c);
-                    }
+                    RelatorioService::atualizarRevisoesDoClipping($a, $c);
 
                     return self::registro($a, $c, $id);
                 }
@@ -274,9 +272,9 @@ class ClippingAnexoService
                 ClippingAnexo::atualizar($a, $c, $id, $campos);
 
                 if (array_key_exists('imagem_relatorio', $campos)) {
-                    RelatorioService::sincronizarImagemClipping($a, $c);
+                    RelatorioService::atualizarRevisoesDoClipping($a, $c);
                 }
-                
+
                 return self::registro($a, $c, $id);
             }
         );
@@ -305,6 +303,8 @@ class ClippingAnexoService
                 }
 
                 ClippingAnexo::excluir($a, $c, $id);
+                
+                RelatorioService::atualizarRevisoesDoClipping($a, $c);
 
                 return $atual;
             }

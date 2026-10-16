@@ -30,7 +30,13 @@ export default function RelatorioSlideVisual({ slide }: Props) {
   const clipping = slide.dados_json?.clipping;
   const veiculo = slide.dados_json?.veiculo;
   
-  const logoVeiculo = obterUrlLogoVeiculo(veiculo?.logo_path);  
+  const endpointLogo = slide.logo_midia_id
+    ? `/relatorios/${slide.relatorio_id}/midias/${slide.logo_midia_id}`
+    : null;
+
+  const logoVeiculo = endpointLogo
+    ? null
+    : obterUrlLogoVeiculo(veiculo?.logo_path);
   const [tamanhoLogo, setTamanhoLogo] = useState({
     width: 90,
     height: 90,
@@ -66,8 +72,9 @@ export default function RelatorioSlideVisual({ slide }: Props) {
   const alcance = veiculo?.alcance?.trim();
   const data = dataISOParaBR(clipping?.data_publicacao ?? null);
   const link = slide.link?.trim();
-  const endpointImagem =
-    slide.clipping_id && slide.imagem_anexo_id
+  const endpointImagem = slide.imagem_midia_id
+    ? `/relatorios/${slide.relatorio_id}/midias/${slide.imagem_midia_id}`
+    : slide.clipping_id && slide.imagem_anexo_id
       ? `/clippings/${slide.clipping_id}/anexos/${slide.imagem_anexo_id}/arquivo`
       : null;
 
@@ -86,6 +93,7 @@ export default function RelatorioSlideVisual({ slide }: Props) {
           backgroundColor: "#FFFFFF",
           borderColor: "#D7DEEA",
           borderWidth: 1,
+          marginBottom: 3
         }}
       >
         <View
@@ -108,7 +116,30 @@ export default function RelatorioSlideVisual({ slide }: Props) {
               justifyContent: "center",
             }}
           >
-            {logoVeiculo ? (
+            {endpointLogo ? (
+              <ClippingImagemPreview
+                endpoint={endpointLogo}
+                nome={`Logo do veículo do slide ${slide.ordem}`}
+                resizeMode="contain"
+                onDimensions={(largura, altura) => {
+                  const escala = Math.min(300 / largura, 90 / altura, 1);
+                  const width = Math.max(1, Math.round(largura * escala));
+                  const height = Math.max(1, Math.round(altura * escala));
+
+                  setTamanhoLogo((atual) =>
+                    atual.width === width && atual.height === height
+                      ? atual
+                      : { width, height }
+                  );
+                }}
+                style={{
+                  width: tamanhoLogo.width,
+                  height: tamanhoLogo.height,
+                  borderRadius: 0,
+                  backgroundColor: "transparent",
+                }}
+              />
+            ) : logoVeiculo ? (
               <Image
                 source={{ uri: logoVeiculo }}
                 resizeMode="contain"
@@ -150,7 +181,7 @@ export default function RelatorioSlideVisual({ slide }: Props) {
                   weight="ExtraBold"
                   style={{ color: "#172033", fontSize: 18 }}
                 >
-                  Título:{" "}
+                  Veículo:{" "}
                 </Text>
                 {nomeVeiculo}
               </Text>

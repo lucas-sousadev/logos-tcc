@@ -523,4 +523,9 @@ class ArquivoClippingService
             'arquivo_path' => $arquivoPath,
         ]);
     }
+
+    public static function baseParaRelatorios(): string
+    {
+        return self::base(true);
+    }
 }

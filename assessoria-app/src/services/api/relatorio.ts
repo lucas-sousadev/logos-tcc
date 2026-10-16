@@ -18,6 +18,7 @@ export interface ResumoRelatorio {
   inclusao_automatica: boolean;
   total_materias: number;
   novos_pendentes: number;
+  total_pendentes: number;
   created_at: string;
   updated_at: string;
 }
@@ -38,12 +39,26 @@ export interface SlideRelatorio {
   id: number;
   clipping_id: number | null;
   ordem: number;
+  relatorio_id: number;
+  logo_midia_id: number | null;
+  imagem_midia_id: number | null;
   tipo: "CAPA" | "CLIPPING" | "COMPLEMENTAR" | "ENCERRAMENTO";
   origem_inclusao: "AUTOMATICA" | "MANUAL" | "ESTRUTURA";
-  revisao_pendente: boolean;
-  imagem_anexo_id: number | null;
   titulo: string | null;
   link: string | null;
+  imagem_anexo_id: number | null;
+  revisao_pendente: boolean;
+  revisao_veiculo_pendente: boolean;
+  revisao_clipping_pendente: boolean;
+  revisao_token?: string | null;
+  novos_valores?: {
+    veiculo: Record<string, string | number | string[] | null> | null;
+    clipping: Record<string, string | number | string[] | null> | null;
+  };
+  campos_alterados?: {
+    veiculo: string[];
+    clipping: string[];
+  };
   dados_json: {
     clipping?: {
       pauta?: string | null;
@@ -56,8 +71,14 @@ export interface SlideRelatorio {
       alcance?: string | null;
       logo_path?: string | null;
     };
+    imagem?: {
+      anexo_id?: number | null;
+      arquivo_path?: string | null;
+    };
   } | null;
 }
+
+export type OrigemRevisao = "novo" | "veiculo" | "clipping";
 
 export interface RelatorioDetalhado extends ResumoRelatorio {
   criado_por: number;
@@ -65,6 +86,8 @@ export interface RelatorioDetalhado extends ResumoRelatorio {
   modelo_versao: number;
   configuracao_json: Record<string, unknown> | null;
   total_slides: number;
+  total_pendentes: number;
+  pendentes_por_origem: Record<OrigemRevisao, number>;
 }
 
 export interface DadosNovoRelatorio {
@@ -215,7 +238,8 @@ export async function buscarRelatorio(
   id: number,
   page = 1,
   busca = "",
-  revisao: "todas" | "pendentes" = "todas"
+  revisao: "todas" | "pendentes" = "todas",
+  origens: OrigemRevisao[] = ["novo", "veiculo", "clipping"]
 ): Promise<{
   relatorio: RelatorioDetalhado;
   slides: SlideRelatorio[];
@@ -228,6 +252,9 @@ export async function buscarRelatorio(
     revisao,
   });
 
+  if (revisao === "pendentes") {
+    query.set("origens", origens.join(","));
+  }
   const response = await authenticatedFetch(
     `${API_URL}/api/relatorios/${id}?${query.toString()}`
   );
@@ -235,20 +262,38 @@ export async function buscarRelatorio(
   return lerResposta(response, "Não foi possível abrir o relatório.");
 }
 
-export async function marcarSlideRevisado(
+export type DecisaoRevisaoSlide =
+  | "INCLUIR"
+  | "ALTERAR"
+  | "IGNORAR";
+
+export async function decidirRevisaoSlide(
   relatorioId: number,
-  slideId: number
-): Promise<{ slide_id: number; revisao_pendente: false }> {
+  slideId: number,
+  decisao: DecisaoRevisaoSlide,
+  revisaoToken: string
+): Promise<{
+  slide_id: number;
+  decisao: DecisaoRevisaoSlide;
+  removido: boolean;
+  origens_decididas: Array<"VEICULO" | "CLIPPING">;
+}> {
   const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/revisao`,
+    `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/decisao`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ revisao_pendente: false }),
+      body: JSON.stringify({
+        decisao,
+        revisao_token: revisaoToken,
+      }),
     }
   );
 
-  return lerResposta(response, "Não foi possível concluir a revisão.");
+  return lerResposta(
+    response,
+    "Não foi possível registrar a decisão do slide."
+  );
 }
 
 export interface ClienteSelecaoRelatorio {
@@ -316,6 +361,25 @@ export async function excluirRelatorio(
   return lerResposta(
     response,
     "Não foi possível excluir o relatório."
+  );
+}
+
+export async function excluirSlidesRelatorio(
+  relatorioId: number,
+  slideIds: number[]
+): Promise<{ slides_excluidos: number }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${relatorioId}/slides/excluir-lote`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slide_ids: slideIds }),
+    }
+  );
+
+  return lerResposta(
+    response,
+    "Não foi possível excluir os slides."
   );
 }
 

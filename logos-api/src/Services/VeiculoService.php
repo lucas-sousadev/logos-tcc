@@ -182,6 +182,13 @@ class VeiculoService
             );
         }
 
+        $db = Connection::get();
+        $transacaoPropria = !$db->inTransaction();
+
+        if ($transacaoPropria) {
+            $db->beginTransaction();
+        }
+
         try {
             Veiculo::atualizar(
                 $id,
@@ -195,8 +202,24 @@ class VeiculoService
                     ? self::tier($dados['tier'])
                     : self::tier($veiculo['tier'])
             );
-        } catch (\PDOException $e) {
-            if ((int) $e->errorInfo[1] === 1062) {
+
+            RelatorioService::atualizarRevisoesDoVeiculo(
+                $assessoriaId,
+                $id
+            );
+
+            if ($transacaoPropria) {
+                $db->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($transacaoPropria && $db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            if (
+                $e instanceof \PDOException
+                && (int) ($e->errorInfo[1] ?? 0) === 1062
+            ) {
                 throw new \RuntimeException(
                     'Já existe outro veículo com este nome.'
                 );
@@ -204,7 +227,7 @@ class VeiculoService
 
             throw $e;
         }
-
+        
         return Veiculo::buscarPorId(
             $id,
             $assessoriaId

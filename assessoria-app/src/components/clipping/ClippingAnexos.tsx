@@ -439,7 +439,7 @@ async function removerAnexo() {
                   weight="SemiBold"
                   style={{ color: theme.textoTerciaria, fontSize: 10, marginTop: 6 }}
                 >
-                  IMAGEM USADA NOS RELATÓRIOS
+                  IMAGEM USADA EM RELATÓRIOS
                 </Text>
               ) : null}
 
@@ -448,8 +448,8 @@ async function removerAnexo() {
                   accessibilityRole="button"
                   accessibilityLabel={
                     anexo.imagem_relatorio === 1
-                      ? "Remover imagem dos relatórios"
-                      : "Usar imagem nos relatórios"
+                      ? "Remover dos relatórios"
+                      : "Usar em relatórios"
                   }
                   activeOpacity={0.8}
                   disabled={ocupado}

@@ -687,7 +687,6 @@ CREATE TABLE relatorios (
     )
 ) ENGINE=InnoDB;
 
-
 -- 14. Slides dos relatórios
 --
 -- Cada slide representa uma matéria/clipping.
@@ -709,6 +708,8 @@ CREATE TABLE relatorio_slides (
         NOT NULL DEFAULT 'MANUAL',
     revisao_pendente TINYINT UNSIGNED NOT NULL DEFAULT 0,
     imagem_anexo_id BIGINT UNSIGNED NULL,
+    logo_midia_id BIGINT UNSIGNED NULL,
+    imagem_midia_id BIGINT UNSIGNED NULL,
 
     titulo VARCHAR(255) NULL,
 
@@ -757,13 +758,70 @@ CREATE TABLE relatorio_slides (
         CHECK (edicoes_json IS NULL OR JSON_TYPE(edicoes_json) = 'OBJECT'),
 
     UNIQUE KEY uq_relatorio_ordem (relatorio_id, ordem),
-
+    UNIQUE KEY uq_relatorio_slide_escopo (id, relatorio_id, assessoria_id),
     INDEX idx_relatorio_slides_relatorio (relatorio_id),
     INDEX idx_relatorio_slides_clipping (clipping_id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE relatorio_slide_revisoes (
+    slide_id BIGINT UNSIGNED NOT NULL,
+    relatorio_id BIGINT UNSIGNED NOT NULL,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    origem ENUM('VEICULO', 'CLIPPING') NOT NULL,
+    assinatura_reconhecida CHAR(64) CHARACTER SET ascii
+        COLLATE ascii_bin NOT NULL,
+    assinatura_atual CHAR(64) CHARACTER SET ascii
+        COLLATE ascii_bin NOT NULL,
+    dados_reconhecidos_json JSON NULL,
+    ultima_decisao ENUM('VALIDADO', 'IGNORADO') NULL,
+    decidido_por BIGINT UNSIGNED NULL,
+    decidido_em DATETIME NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
 
--- clippings retirados manualmente não voltam pela inclusão automática
+    PRIMARY KEY (slide_id, origem),
+
+    CONSTRAINT fk_relatorio_revisao_slide
+        FOREIGN KEY (slide_id, relatorio_id, assessoria_id)
+        REFERENCES relatorio_slides(id, relatorio_id, assessoria_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_relatorio_revisao_usuario
+        FOREIGN KEY (decidido_por, assessoria_id)
+        REFERENCES usuarios(id, assessoria_id)
+        ON DELETE RESTRICT,
+
+    INDEX idx_relatorio_revisoes_filtro
+        (relatorio_id, assessoria_id, origem)
+) ENGINE=InnoDB;
+
+CREATE TABLE relatorio_midias (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    relatorio_id BIGINT UNSIGNED NOT NULL,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    tipo ENUM('LOGO_VEICULO', 'IMAGEM_CLIPPING') NOT NULL,
+    arquivo_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(50) NOT NULL,
+    tamanho_bytes BIGINT UNSIGNED NOT NULL,
+    sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_relatorio_midias_relatorio
+        FOREIGN KEY (relatorio_id, assessoria_id)
+        REFERENCES relatorios(id, assessoria_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT chk_relatorio_midias_tamanho
+        CHECK (tamanho_bytes > 0),
+
+    UNIQUE KEY uq_relatorio_midia_conteudo
+        (relatorio_id, tipo, sha256),
+
+    INDEX idx_relatorio_midias_assessoria
+        (assessoria_id, relatorio_id)
+) ENGINE=InnoDB;
+
+-- slides retirados manualmente não voltam pela inclusão automática
 CREATE TABLE relatorio_clippings_excluidos (
     relatorio_id BIGINT UNSIGNED NOT NULL,
     assessoria_id BIGINT UNSIGNED NOT NULL,

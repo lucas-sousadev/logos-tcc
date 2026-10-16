@@ -19,13 +19,14 @@ export const LightTheme = {
   backgroundContainerSecundario: "#5170FF",
   textoContainer: "#FFFAFA",
 
+  alteracao: "#177A57",
   erro: "#A42E4B",
   aviso: "#98671B",
 };
 
 export const DarkTheme = {
   background: "#0F172A",
-  backgroundSecundario: "#121c33",
+  backgroundSecundario: "#121b30",
   surface: "#e6ecf8f3",
   texto: "#FFFFFF",
   textoSub: '#b4b4b4',
@@ -44,6 +45,7 @@ export const DarkTheme = {
   backgroundContainerSecundario: "#58a9eb",
   textoContainer: "#ffffff",
 
+  alteracao: "#49D7A4",
   erro: "#F0A5B2",
   aviso: "#E2BD7E",
 };

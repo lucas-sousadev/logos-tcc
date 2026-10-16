@@ -396,7 +396,7 @@ export default function Funcionarios() {
                   </Text>
 
                   <Text
-                    weight="Medium"
+                    weight="SemiBold"
                     style={[
                       styles.status,
                       {
