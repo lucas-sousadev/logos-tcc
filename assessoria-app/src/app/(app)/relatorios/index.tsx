@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
@@ -31,14 +31,17 @@ const LIMITE_PAGINA = 20;
 
 export default function ListaRelatorios() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ pendencias?: string }>();
+  const pendenciasDaRota = params.pendencias === "com" ? "com" : "todas";
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
-  const [filtros, setFiltros] = useState<FiltrosRelatorios>(
-    novosFiltrosRelatorios
-  );
+  const [filtros, setFiltros] = useState<FiltrosRelatorios>(() => ({
+    ...novosFiltrosRelatorios(),
+    pendencias: pendenciasDaRota,
+  }));
   const [modalAberto, setModalAberto] = useState(false);
 
   const [relatorios, setRelatorios] = useState<ResumoRelatorio[]>([]);
@@ -50,6 +53,15 @@ export default function ListaRelatorios() {
 
   const requisicaoAtual = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    setPagina(1);
+    setFiltros((atual) =>
+      atual.pendencias === pendenciasDaRota
+        ? atual
+        : { ...atual, pendencias: pendenciasDaRota }
+    );
+  }, [pendenciasDaRota]);
 
   const carregar = useCallback(
     async (

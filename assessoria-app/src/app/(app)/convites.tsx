@@ -65,6 +65,24 @@ export default function Convites() {
   const requisicaoAtual = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
 
+  function renderizarDataDestacada(data: string | null) {
+    const [dia, horario] = formatarData(data).split(" às ");
+
+    return (
+      <>
+        <Text style={{ color: theme.textoSecundaria }}>{dia}</Text>
+        {horario !== undefined ? (
+          <>
+            {" às "}
+            <Text style={{ color: theme.textoSecundaria }}>
+              {horario}
+            </Text>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
   function voltar() {
     if (origem === "funcionarios") {
       router.replace("/funcionarios");
@@ -518,7 +536,10 @@ export default function Convites() {
                           fontSize: 11,
                         }}
                       >
-                        Gerado por {item.criado_por}
+                        Gerado por{" "}
+                        <Text style={{ color: theme.textoSecundaria }}>
+                          {item.criado_por}
+                        </Text>
                       </Text>
                     </View>
 
@@ -554,15 +575,15 @@ export default function Convites() {
                     <Ionicons
                       name="calendar-outline"
                       size={15}
-                      color={theme.textoSub}
+                      color={theme.textoTerciaria}
                     />
                     <Text
                       style={[
                         styles.textoDetalhe,
-                        { color: theme.textoSub },
+                        { color: theme.texto },
                       ]}
                     >
-                      Criado em {formatarData(item.created_at)}
+                      Criado em {renderizarDataDestacada(item.created_at)}
                     </Text>
                   </View>
 
@@ -570,15 +591,15 @@ export default function Convites() {
                     <Ionicons
                       name="time-outline"
                       size={15}
-                      color={theme.textoSub}
+                      color={theme.textoTerciaria}
                     />
                     <Text
                       style={[
                         styles.textoDetalhe,
-                        { color: theme.textoSub },
+                        { color: theme.texto },
                       ]}
                     >
-                      Expira em {formatarData(item.expira_em)}
+                      Expira em {renderizarDataDestacada(item.expira_em)}
                     </Text>
                   </View>
 
@@ -587,15 +608,18 @@ export default function Convites() {
                       <Ionicons
                         name="person-outline"
                         size={15}
-                        color={theme.textoSub}
+                        color={theme.textoTerciaria}
                       />
                       <Text
                         style={[
                           styles.textoDetalhe,
-                          { color: theme.textoSub },
+                          { color: theme.texto },
                         ]}
                       >
-                        Utilizado por {item.utilizado_por}
+                        Utilizado por{" "}
+                        <Text style={{ color: theme.textoSecundaria }}>
+                          {item.utilizado_por}
+                        </Text>
                       </Text>
                     </View>
                   ) : null}
@@ -605,16 +629,16 @@ export default function Convites() {
                       <Ionicons
                         name="checkmark-circle-outline"
                         size={15}
-                        color={theme.textoSub}
+                        color={theme.textoTerciaria}
                       />
                       <Text
                         style={[
                           styles.textoDetalhe,
-                          { color: theme.textoSub },
+                          { color: theme.texto },
                         ]}
                       >
                         Utilizado em{" "}
-                        {formatarData(item.utilizado_em)}
+                        {renderizarDataDestacada(item.utilizado_em)}
                       </Text>
                     </View>
                   ) : null}

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import {
   useFocusEffect,
+  useIsFocused,
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
@@ -397,10 +398,14 @@ export default function DetalheRelatorio() {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    origem?: string;
+  }>();
   const id = Number(params.id);
   const scrollRef = useRef<ScrollView>(null);
-
+  const focado = useIsFocused();
+  
   const [pagina, setPagina] = useState(1);
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -494,6 +499,11 @@ export default function DetalheRelatorio() {
 
           setRelatorio(resposta.relatorio);
           setSlides(resposta.slides);
+          setSlideAberto((atual) =>
+            atual
+              ? resposta.slides.find((slide) => slide.id === atual.id) ?? atual
+              : null
+          );
           setPaginacao(resposta.pagination);
         } catch (e) {
           if (!ativo) return;
@@ -884,7 +894,23 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header title="Relatório" showBackButton />
+      <Header
+        title="Relatório"
+        showBackButton
+        onBackPress={() => {
+          if (params.origem === "dashboard") {
+            router.replace("/");
+            return;
+          }
+
+          if (router.canGoBack()) {
+            router.back();
+            return;
+          }
+
+          router.replace("/relatorios");
+        }}
+      />
 
       <ScrollView
         ref={scrollRef}
@@ -1650,19 +1676,17 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           </>
         ) : null}
       </ScrollView>
-      {slideAberto && relatorio ? (
+      {focado && slideAberto && relatorio ? (
         <RelatorioSlidePreview
           slide={slideAberto}
           relatorio={relatorio}
           onClose={() => setSlideAberto(null)}
           onDecidir={(decisao) => {
-            if (decisao === "ALTERAR") {
-              pedirParaAtualizar(slideAberto);
-            } else {
-              void decidirSlide(slideAberto, decisao);
-            }
+            void decidirSlide(slideAberto, decisao);
           }}
-          onIgnorar={() => pedirParaIgnorar(slideAberto)}
+                onIgnorar={() => {
+            void decidirSlide(slideAberto, "IGNORAR");
+          }}
           revisando={slideDecidindoId === slideAberto.id}
           erroRevisao={
             erroSlide?.id === slideAberto.id
@@ -1682,7 +1706,7 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                   );
                 }
               : undefined
-          }
+          } 
         />
       ) : null}
       {edicaoAberta && relatorio ? (

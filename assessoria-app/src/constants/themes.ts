@@ -1,12 +1,13 @@
 export const LightTheme = {
   background: "#FFFAFA",
-  backgroundSecundario: "#ffffff",
+  backgroundSecundario: "#fffcfc",
   surface: "#F5F5F5",
   texto: "#161C29",
   textoInput: "#0F172A",
   textoSub: '#808080',
   textoSecundaria: "#58a9eb",
   textoTerciaria: "#5170FF",
+  textoQuaternaria: "#3c8aff",
   borda: "#6B86FF",
 
   primaria: "#5170FF",
@@ -31,8 +32,9 @@ export const DarkTheme = {
   texto: "#FFFFFF",
   textoSub: '#b4b4b4',
   textoInput: "#0F172A",
-  textoSecundaria: "#6B86FF",
+  textoSecundaria: "#a8b8ff",
   textoTerciaria: "#58a9eb",
+  textoQuaternaria: "#bcc9ff",
   borda: "#6B86FF",
 
   primaria: "#6B86FF",

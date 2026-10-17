@@ -5,17 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
-  Linking
+  Linking,
+  ActivityIndicator
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/contexts/AuthContext";
-import Button from "../ui/Button";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import RelatorioSlideVisual from "@/components/relatorios/RelatorioSlideVisual";
+import FeedbackAlert from "../forms/FeedbackAlert";
 
 import type {
   RelatorioDetalhado,
@@ -86,7 +87,8 @@ export default function RelatorioSlidePreview({
   const [erroLink, setErroLink] = useState("");
   const [mostrarMateriaNova, setMostrarMateriaNova] = useState(false);
   const [mostrarVeiculoNovo, setMostrarVeiculoNovo] = useState(false);
-
+  const [confirmacao, setConfirmacao] = useState<"ALTERAR" | "IGNORAR" | null>(null);
+  
   const podeVerClipping = temPermissao(
     "CLIPPING",
     "VISUALIZAR"
@@ -212,7 +214,7 @@ export default function RelatorioSlidePreview({
     mostrarMateriaNova && imagemAlterada
       ? theme.alteracao
       : imagemExibida
-        ? theme.textoTerciaria
+        ? theme.textoSecundaria
         : theme.aviso;
 
   const logoPathAtual = logoAlterada
@@ -220,76 +222,87 @@ export default function RelatorioSlidePreview({
     : veiculo?.logo_path ?? null;
 
   const slideParaPrevia: SlideRelatorio =
-  mostrarMateriaNova || mostrarVeiculoNovo
-    ? {
-        ...slide,
-        link:
-          mostrarMateriaNova && linkAlterado
-            ? textoAlterado(novosClipping?.link) || null
-            : slide.link,
-        logo_midia_id:
-          mostrarVeiculoNovo && logoAlterada
-            ? null
-            : slide.logo_midia_id,
-        imagem_midia_id:
-          mostrarMateriaNova && imagemAlterada
-            ? null
-            : slide.imagem_midia_id,
-        imagem_anexo_id:
-          mostrarMateriaNova && imagemAlterada
-            ? imagemAnexoAtual
-            : slide.imagem_anexo_id,
-        dados_json: {
-          ...slide.dados_json,
-          clipping: {
-            ...clipping,
-            pauta:
-              mostrarMateriaNova && pautaAlterada
-                ? textoAlterado(novosClipping?.pauta) || null
-                : clipping?.pauta,
-            data_publicacao:
-              mostrarMateriaNova && dataAlterada
-                ? dataNova || null
-                : clipping?.data_publicacao,
+    mostrarMateriaNova || mostrarVeiculoNovo
+      ? {
+          ...slide,
+          link:
+            mostrarMateriaNova && linkAlterado
+              ? textoAlterado(novosClipping?.link) || null
+              : slide.link,
+          logo_midia_id:
+            mostrarVeiculoNovo && logoAlterada
+              ? null
+              : slide.logo_midia_id,
+          imagem_midia_id:
+            mostrarMateriaNova && imagemAlterada
+              ? null
+              : slide.imagem_midia_id,
+          imagem_anexo_id:
+            mostrarMateriaNova && imagemAlterada
+              ? imagemAnexoAtual
+              : slide.imagem_anexo_id,
+          dados_json: {
+            ...slide.dados_json,
+            clipping: {
+              ...clipping,
+              pauta:
+                mostrarMateriaNova && pautaAlterada
+                  ? textoAlterado(novosClipping?.pauta) || null
+                  : clipping?.pauta,
+              data_publicacao:
+                mostrarMateriaNova && dataAlterada
+                  ? dataNova || null
+                  : clipping?.data_publicacao,
+            },
+            veiculo: {
+              ...veiculo,
+              id:
+                mostrarVeiculoNovo && veiculoAlterado
+                  ? novoVeiculoId || null
+                  : veiculo?.id,
+              nome:
+                mostrarVeiculoNovo && veiculoAlterado
+                  ? novoNomeVeiculo || null
+                  : veiculo?.nome,
+              descricao:
+                mostrarVeiculoNovo && descricaoAlterada
+                  ? textoAlterado(novosVeiculo?.descricao) || null
+                  : veiculo?.descricao,
+              alcance:
+                mostrarVeiculoNovo && alcanceAlterado
+                  ? textoAlterado(novosVeiculo?.alcance) || null
+                  : veiculo?.alcance,
+              logo_path:
+                mostrarVeiculoNovo && logoAlterada
+                  ? logoPathAtual
+                  : veiculo?.logo_path,
+            },
+            imagem: {
+              ...slide.dados_json?.imagem,
+              anexo_id:
+                mostrarMateriaNova && imagemAlterada
+                  ? imagemAnexoAtual
+                  : slide.dados_json?.imagem?.anexo_id,
+              arquivo_path:
+                mostrarMateriaNova && imagemAlterada
+                  ? imagemPathAtual
+                  : slide.dados_json?.imagem?.arquivo_path,
+            },
           },
-          veiculo: {
-            ...veiculo,
-            id:
-              mostrarVeiculoNovo && veiculoAlterado
-                ? novoVeiculoId || null
-                : veiculo?.id,
-            nome:
-              mostrarVeiculoNovo && veiculoAlterado
-                ? novoNomeVeiculo || null
-                : veiculo?.nome,
-            descricao:
-              mostrarVeiculoNovo && descricaoAlterada
-                ? textoAlterado(novosVeiculo?.descricao) || null
-                : veiculo?.descricao,
-            alcance:
-              mostrarVeiculoNovo && alcanceAlterado
-                ? textoAlterado(novosVeiculo?.alcance) || null
-                : veiculo?.alcance,
-            logo_path:
-              mostrarVeiculoNovo && logoAlterada
-                ? logoPathAtual
-                : veiculo?.logo_path,
-          },
-          imagem: {
-            ...slide.dados_json?.imagem,
-            anexo_id:
-              mostrarMateriaNova && imagemAlterada
-                ? imagemAnexoAtual
-                : slide.dados_json?.imagem?.anexo_id,
-            arquivo_path:
-              mostrarMateriaNova && imagemAlterada
-                ? imagemPathAtual
-                : slide.dados_json?.imagem?.arquivo_path,
-          },
-        },
-      }
-    : slide;
+        }
+      : slide;
 
+  const logoDefinida = Boolean(
+    slideParaPrevia.logo_midia_id ||
+      slideParaPrevia.dados_json?.veiculo?.logo_path?.trim()
+  );
+
+  const logoEmAlteracao = mostrarVeiculoNovo && logoAlterada;
+
+  const corLogo =
+    logoEmAlteracao || logoDefinida
+      ? theme.textoSecundaria
+      : theme.aviso;
   const camposDadosAlterados = [
     ...camposVeiculo
       .filter(
@@ -316,7 +329,6 @@ export default function RelatorioSlidePreview({
   function abrirVeiculo() {
     if (!podeAbrirVeiculo) return;
 
-    onClose();
     router.push({
       pathname: "/veiculos/[id]",
       params: {
@@ -391,8 +403,6 @@ export default function RelatorioSlidePreview({
   function abrirClipping() {
     if (!slide.clipping_id || !podeVerClipping) return;
 
-    onClose();
-
     router.push({
         pathname: "/clipping/[id]",
         params: {
@@ -409,7 +419,13 @@ export default function RelatorioSlidePreview({
       visible
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (confirmacao) {
+          if (!revisando) setConfirmacao(null);
+          return;
+        }
+        onClose();
+      }}
     >
       <View style={styles.overlay}>
         <View
@@ -466,29 +482,6 @@ export default function RelatorioSlidePreview({
                     <Ionicons name="trash-outline" size={18} color={theme.erro} />
                   </TouchableOpacity>
                 ) : null}
-                {ehMateria && slide.clipping_id && podeVerClipping ? (
-                    <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Abrir clipping original"
-                    accessibilityHint="Abre os detalhes do clipping desta matéria"
-                    activeOpacity={0.8}
-                    onPress={abrirClipping}
-                    style={[
-                        styles.acaoHeader,
-                        {
-                        backgroundColor: theme.backgroundSecundario,
-                        borderColor: `${theme.borda}70`,
-                        },
-                    ]}
-                    >
-                    <Ionicons
-                        name="newspaper-outline"
-                        size={18}
-                        color={theme.textoTerciaria}
-                    />
-                    </TouchableOpacity>
-                ) : null}
-
                 <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Fechar slide"
@@ -545,63 +538,95 @@ export default function RelatorioSlidePreview({
                     ) : null}
                   </View>
 
-                  <View style={styles.campo}>
-                    {pautaExibida ? (
-                      <Text
-                        selectable
-                        weight="Bold"
-                        style={[
-                          styles.titulo,
-                          {
+                  <View style={styles.resumoMateria}>
+                    <View style={[styles.campo, { marginTop: 0 }]}>
+                      {pautaExibida && slide.clipping_id && podeVerClipping ? (
+                        <TouchableOpacity
+                          accessibilityRole="link"
+                          accessibilityLabel={`Abrir clipping: ${pautaExibida}`}
+                          onPress={abrirClipping}
+                          activeOpacity={0.75}
+                          style={styles.linkMateria}
+                        >
+                          <Text
+                            weight="Bold"
+                            style={[
+                              styles.titulo,
+                              {
+                                color:
+                                  mostrarMateriaNova && pautaAlterada
+                                    ? theme.alteracao
+                                    : theme.textoTerciaria,
+                                flexShrink: 1,
+                              },
+                            ]}
+                          >
+                            {pautaExibida}
+                          </Text>
+                          <Ionicons
+                            name="open-outline"
+                            size={14}
+                            color={theme.textoTerciaria}
+                            style={{ marginTop: 4 }}
+                          />
+                        </TouchableOpacity>
+                      ) : pautaExibida ? (
+                        <Text
+                          selectable
+                          weight="Bold"
+                          style={[
+                            styles.titulo,
+                            {
+                              color:
+                                mostrarMateriaNova && pautaAlterada
+                                  ? theme.alteracao
+                                  : theme.texto,
+                            },
+                          ]}
+                        >
+                          {pautaExibida}
+                        </Text>
+                      ) : (
+                        <Text
+                          style={{
                             color:
                               mostrarMateriaNova && pautaAlterada
                                 ? theme.alteracao
-                                : theme.texto,
-                          },
-                        ]}
-                      >
-                        {pautaExibida}
+                                : theme.aviso,
+                          }}
+                        >
+                          {mostrarMateriaNova && pautaAlterada
+                            ? "Pauta removida"
+                            : "Sem pauta cadastrada"}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={[styles.semImagem, {marginTop: -4}]}>
+                      <Ionicons name="image-outline" size={18} color={corImagem} />
+                      <Text weight="SemiBold" style={{ color: corImagem }}>
+                        {imagemExibida
+                          ? "Imagem definida"
+                          : mostrarMateriaNova && imagemAlterada
+                            ? "Imagem removida"
+                            : "Sem imagem definida para este slide"}
                       </Text>
-                    ) : (
+                    </View>
+                    <View style={styles.metadados}>
+                      <Ionicons name="calendar-outline" size={16} color={theme.texto} />
                       <Text
                         style={{
                           color:
-                            mostrarMateriaNova && pautaAlterada
+                            mostrarMateriaNova && dataAlterada
                               ? theme.alteracao
-                              : theme.aviso,
+                              : theme.texto,
                         }}
                       >
-                        {mostrarMateriaNova && pautaAlterada
-                          ? "Pauta removida"
-                          : "Sem pauta cadastrada"}
+                        {dataExibida}
                       </Text>
-                    )}
+                    </View>
+                    
                   </View>
-
-                  <View style={styles.metadados}>
-                    <Ionicons name="calendar-outline" size={15} color={theme.textoSub} />
-                    <Text
-                      style={{
-                        color:
-                          mostrarMateriaNova && dataAlterada
-                            ? theme.alteracao
-                            : theme.textoSub,
-                      }}
-                    >
-                      {dataExibida}
-                    </Text>
-                  </View>
-
-                  <View style={styles.semImagem}>
-                    <Ionicons name="image-outline" size={18} color={corImagem} />
-                    <Text weight="SemiBold" style={{ color: corImagem }}>
-                      {imagemExibida
-                        ? "Imagem definida"
-                        : mostrarMateriaNova && imagemAlterada
-                          ? "Imagem removida"
-                          : "Sem imagem definida para este slide"}
-                    </Text>
-                  </View>
+                  
 
                   {link || linkAlterado ? (
                     <View style={styles.campo}>
@@ -610,9 +635,14 @@ export default function RelatorioSlidePreview({
                       </Text>
 
                       {linkExibido ? (
-                        <View style={styles.linhaLink}>
+                        <TouchableOpacity
+                          accessibilityRole="link"
+                          accessibilityLabel="Abrir link original da matéria"
+                          onPress={() => void abrirLink()}
+                          activeOpacity={0.75}
+                          style={styles.linhaLink}
+                        >
                           <Text
-                            selectable
                             style={[
                               styles.valorLink,
                               {
@@ -625,25 +655,17 @@ export default function RelatorioSlidePreview({
                           >
                             {linkExibido}
                           </Text>
-                          <TouchableOpacity
-                            accessibilityRole="link"
-                            accessibilityLabel="Abrir link da matéria"
-                            onPress={() => void abrirLink()}
-                            style={[
-                              styles.abrirLink,
-                              {
-                                backgroundColor: theme.backgroundSecundario,
-                                borderColor: `${theme.borda}70`,
-                              },
-                            ]}
-                          >
-                            <Ionicons
-                              name="open-outline"
-                              size={17}
-                              color={theme.textoTerciaria}
-                            />
-                          </TouchableOpacity>
-                        </View>
+                          <Ionicons
+                            name="open-outline"
+                            size={14}
+                            color={
+                              mostrarMateriaNova && linkAlterado
+                                ? theme.alteracao
+                                : theme.textoTerciaria
+                            }
+                            style={{ marginTop: 2 }}
+                          />
+                        </TouchableOpacity>
                       ) : (
                         <Text
                           style={{
@@ -697,7 +719,7 @@ export default function RelatorioSlidePreview({
                     >
                       <Ionicons
                         name="newspaper-outline"
-                        size={15}
+                        size={16}
                         color={
                           mostrarVeiculoNovo && veiculoAlterado
                             ? theme.alteracao
@@ -706,12 +728,12 @@ export default function RelatorioSlidePreview({
                       />
                       <Text
                         weight="SemiBold"
-                        style={{
+                        style={[styles.titulo, {
                           color:
                             mostrarVeiculoNovo && veiculoAlterado
                               ? theme.alteracao
                               : theme.textoTerciaria,
-                        }}
+                        }]}
                       >
                         {nomeVeiculoExibido || "Veículo sem nome"}
                       </Text>
@@ -732,22 +754,18 @@ export default function RelatorioSlidePreview({
                     </Text>
                   )}
 
-                  {logoAlterada ? (
-                    <Text
-                      style={{
-                        color: mostrarVeiculoNovo
-                          ? theme.alteracao
-                          : theme.textoSub,
-                        fontSize: 12,
-                      }}
-                    >
-                      {mostrarVeiculoNovo
-                        ? logoPathAtual
-                          ? "Nova logo exibida na prévia"
-                          : "Logo removida"
-                        : "Logo atual exibida na prévia"}
-                    </Text>
-                  ) : null}
+                    <View style={[styles.semImagem, {marginTop: -4}]}>
+                      <Ionicons name="image-outline" size={18} color={corLogo} />
+                      <Text weight="SemiBold" style={{ color: corLogo }}>
+                        {logoEmAlteracao
+                          ? logoDefinida
+                            ? "Nova logo do veículo definida"
+                            : "Logo removida"
+                          : logoDefinida
+                            ? "Logo definida para este slide"
+                            : "Sem logo do veículo"}
+                      </Text>
+                    </View>
 
                   <View style={styles.campo}>
                     <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
@@ -835,7 +853,7 @@ export default function RelatorioSlidePreview({
                   styles.pendencia,
                   {
                     borderColor: `${theme.aviso}80`,
-                    backgroundColor: `${theme.aviso}10`,
+                    backgroundColor: theme.backgroundSecundario,
                   },
                 ]}
               >
@@ -848,24 +866,61 @@ export default function RelatorioSlidePreview({
                   </Text>
                 </View>
                 {temPermissao("RELATORIOS", "EDITAR") ? (
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                    <Button
-                      title={slide.revisao_pendente ? "INCLUIR" : "ATUALIZAR"}
-                      size="small"
-                      loading={revisando}
-                      onPress={() =>
-                        onDecidir(slide.revisao_pendente ? "INCLUIR" : "ALTERAR")
+                  <View style={styles.slideRevisaoAcoes}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        slide.revisao_pendente
+                          ? "Incluir slide no relatório"
+                          : "Aplicar alterações ao slide"
                       }
-                      style={{ flex: 1, width: "auto" }}
-                    />
-                    <Button
-                      title="IGNORAR"
-                      variant="outline"
-                      size="small"
+                      accessibilityState={{ disabled: revisando }}
                       disabled={revisando}
-                      onPress={onIgnorar}
-                      style={{ flex: 1, width: "auto" }}
-                    />
+                      onPress={() => {
+                        if (slide.revisao_pendente) {
+                          onDecidir("INCLUIR");
+                        } else {
+                          setConfirmacao("ALTERAR");
+                        }
+                      }}
+                      style={[
+                        styles.slideRevisaoBotao,
+                        {
+                          borderColor: theme.primaria,
+                          backgroundColor: theme.primaria,
+                        },
+                      ]}
+                    >
+                      {revisando ? (
+                        <ActivityIndicator size="small" color={theme.branco} />
+                      ) : (
+                        <Ionicons name="checkmark-outline" size={16} color={theme.branco} />
+                      )}
+                      <Text weight="Bold" style={{ color: theme.branco, fontSize: 11 }}>
+                        {slide.revisao_pendente ? "INCLUIR" : "ATUALIZAR"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Ignorar revisão do slide"
+                      accessibilityState={{ disabled: revisando }}
+                      disabled={revisando}
+                      onPress={() => setConfirmacao("IGNORAR")}
+                      style={[
+                        styles.slideRevisaoBotao,
+                        {
+                          borderColor: theme.borda,
+                          backgroundColor: theme.background,
+                          opacity: revisando ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="close-outline" size={16} color={theme.textoSub} />
+                      <Text weight="SemiBold" style={{ color: theme.textoSub, fontSize: 11 }}>
+                        IGNORAR
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ) : (
                   <Text style={{ color: theme.textoSub, marginTop: 8, fontSize: 12 }}>
@@ -882,6 +937,46 @@ export default function RelatorioSlidePreview({
             ) : null}
           </ScrollView>
         </View>
+        
+        <FeedbackAlert
+          inline
+          visible={confirmacao !== null}
+          variant="warning"
+          title={
+            confirmacao === "ALTERAR"
+              ? "Atualizar este slide?"
+              : slide.revisao_pendente
+                ? "Ignorar novo slide?"
+                : "Ignorar alterações?"
+          }
+          message={
+            confirmacao === "ALTERAR"
+              ? slide.revisao_veiculo_pendente &&
+                slide.revisao_clipping_pendente
+                ? "Os dados atuais do veículo e do clipping substituirão os dados salvos neste slide. As duas alterações serão confirmadas juntas."
+                : slide.revisao_veiculo_pendente
+                  ? "Os dados atuais do veículo substituirão os dados salvos neste slide."
+                  : "Os dados atuais do clipping substituirão os dados salvos neste slide."
+              : slide.revisao_pendente
+                ? "Este slide será removido do relatório e a matéria não será incluída novamente de forma automática."
+                : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
+          }
+          primaryLabel={confirmacao === "ALTERAR" ? "ATUALIZAR" : "IGNORAR"}
+          secondaryLabel="CANCELAR"
+          primaryDanger={
+            confirmacao === "IGNORAR" && Boolean(slide.revisao_pendente)
+          }
+          loading={revisando}
+          onClose={() => setConfirmacao(null)}
+          onSecondary={() => setConfirmacao(null)}
+          onPrimary={() => {
+            const decisao = confirmacao;
+            setConfirmacao(null);
+
+            if (decisao === "ALTERAR") onDecidir("ALTERAR");
+            if (decisao === "IGNORAR") onIgnorar();
+          }}
+        />
       </View>
     </Modal>
   );
@@ -957,13 +1052,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 21,
   },
+  resumoMateria: {
+    gap: 6,
+  },
   metadados: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
     columnGap: 6,
     rowGap: 2,
-    marginTop: 2,
   },
   linkVeiculo: {
     flexDirection: "row",
@@ -983,11 +1080,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginTop: -6
-},
+  },
   campo: {
     gap: 5,
     marginTop: 4,
+  },
+  linkMateria: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    gap: 6,
   },
   rotulo: {
     fontSize: 11,
@@ -1034,16 +1137,33 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     gap: 5,
   },
+  slideRevisaoAcoes: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 10,
+  },
+  slideRevisaoBotao: {
+    flex: 1,
+    minHeight: 35,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+  },
   linhaLink: {
   flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
+  alignItems: "flex-start",
+  width: "100%",
+  gap: 6,
 },
 valorLink: {
   flex: 1,
   minWidth: 0,
   fontSize: 12,
-  lineHeight: 19,
+  lineHeight: 16,
 },
 abrirLink: {
   width: 40,

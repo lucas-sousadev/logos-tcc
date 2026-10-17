@@ -30,6 +30,7 @@ interface FeedbackAlertProps {
   onSecondary?: () => void;
   primaryDanger?: boolean;
   loading?: boolean;
+  inline?: boolean;
 }
 
 export default function FeedbackAlert({
@@ -44,6 +45,7 @@ export default function FeedbackAlert({
   onSecondary,
   primaryDanger = false,
   loading = false,
+  inline = false,
 }: FeedbackAlertProps) {
   const { theme } = useTheme();
 
@@ -72,13 +74,8 @@ export default function FeedbackAlert({
     }
   }
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={fechar}
-    >
+  const conteudo = (
+
       <View style={styles.overlay}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -183,6 +180,22 @@ export default function FeedbackAlert({
           </View>
         </View>
       </View>
+  );
+
+  if (inline) {
+    return visible ? (
+      <View style={styles.inlineRoot}>{conteudo}</View>
+    ) : null;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={fechar}
+    >
+      {conteudo}
     </Modal>
   );
 }
@@ -194,7 +207,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-
+  inlineRoot: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+    elevation: 100,
+  },
   container: {
     width: "100%",
     maxWidth: 420,
