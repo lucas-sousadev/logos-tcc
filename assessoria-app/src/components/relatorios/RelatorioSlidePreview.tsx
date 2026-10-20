@@ -30,6 +30,7 @@ interface Props {
   onClose: () => void;
   onDecidir: (decisao: "INCLUIR" | "ALTERAR") => void;
   onIgnorar: () => void;
+  onEditar?: () => void;
   onExcluir?: () => void;
   revisando: boolean;
   erroRevisao?: string;
@@ -76,6 +77,7 @@ export default function RelatorioSlidePreview({
   onClose,
   onDecidir,
   onIgnorar,
+  onEditar,
   onExcluir,
   revisando,
   erroRevisao
@@ -118,13 +120,40 @@ export default function RelatorioSlidePreview({
     slide.imagem_midia_id || slide.imagem_anexo_id
   );
   
-  const camposVeiculo = slide.revisao_pendente
-    ? []
-    : (slide.campos_alterados?.veiculo ?? []);
+  const camposVeiculoOrigem = slide.revisao_pendente
+  ? []
+  : (slide.campos_alterados?.veiculo ?? []);
 
-  const camposClipping = slide.revisao_pendente
+  const camposClippingOrigem = slide.revisao_pendente
     ? []
     : (slide.campos_alterados?.clipping ?? []);
+
+  const edicoes = slide.edicoes_json;
+
+  const foiEditadoNoSlide = (
+    objeto: object | null | undefined,
+    campo: string
+  ) => Boolean(
+    objeto && Object.prototype.hasOwnProperty.call(objeto, campo)
+  );
+
+  const camposVeiculo = camposVeiculoOrigem.filter(
+    (campo) =>
+      !foiEditadoNoSlide(edicoes?.veiculo, campo) &&
+      !(
+        campo === "logo_path" &&
+        foiEditadoNoSlide(edicoes, "logo_midia_id")
+      )
+  );
+
+  const camposClipping = camposClippingOrigem.filter(
+    (campo) =>
+      !foiEditadoNoSlide(edicoes?.clipping, campo) &&
+      !(
+        ["imagem_anexo_id", "imagem_path"].includes(campo) &&
+        foiEditadoNoSlide(edicoes, "imagem_midia_id")
+      )
+  );
 
   const novosVeiculo = slide.novos_valores?.veiculo;
   const novosClipping = slide.novos_valores?.clipping;
@@ -303,29 +332,34 @@ export default function RelatorioSlidePreview({
     logoEmAlteracao || logoDefinida
       ? theme.textoSecundaria
       : theme.aviso;
+
   const camposDadosAlterados = [
-    ...camposVeiculo
+    ...camposVeiculoOrigem
       .filter(
         (campo) =>
-          !["id", "nome", "logo_path", "descricao", "alcance"].includes(campo)
+          !["id", "nome", "logo_path", "descricao", "alcance"].includes(campo) ||
+          !camposVeiculo.includes(campo)
       )
       .map((campo) => ({ origem: "veiculo" as const, campo })),
 
-    ...camposClipping
-      .filter(
-        (campo) =>
-          ![
+    ...camposClippingOrigem
+      .filter((campo) => {
+        const usadoNoSlide =
+          [
             "pauta",
             "data_publicacao",
             "veiculo_id",
             "link",
             "imagem_anexo_id",
             "imagem_path",
-          ].includes(campo) &&
-          !(campo === "veiculo_nome_informado" && veiculoAlterado)
-      )
+          ].includes(campo) ||
+          (campo === "veiculo_nome_informado" && veiculoAlterado);
+
+        return !usadoNoSlide || !camposClipping.includes(campo);
+      })
       .map((campo) => ({ origem: "clipping" as const, campo })),
   ];
+
   function abrirVeiculo() {
     if (!podeAbrirVeiculo) return;
 
@@ -460,6 +494,24 @@ export default function RelatorioSlidePreview({
             </View>
 
             <View style={styles.headerAcoes}>
+              {onEditar && ehMateria ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar este slide"
+                  activeOpacity={0.8}
+                  disabled={revisando}
+                  onPress={onEditar}
+                  style={[
+                    styles.acaoHeader,
+                    {
+                      borderColor: `${theme.textoTerciaria}70`,
+                      opacity: revisando ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="create-outline" size={18} color={theme.textoTerciaria} />
+                </TouchableOpacity>
+              ) : null}
               {onExcluir &&
                 slide.tipo !== "CAPA" &&
                 slide.tipo !== "ENCERRAMENTO" ? (
@@ -558,6 +610,7 @@ export default function RelatorioSlidePreview({
                                     ? theme.alteracao
                                     : theme.textoTerciaria,
                                 flexShrink: 1,
+                              
                               },
                             ]}
                           >
@@ -1049,7 +1102,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   titulo: {
-    fontSize: 16,
+    fontSize: 14,
     lineHeight: 21,
   },
   resumoMateria: {

@@ -21,6 +21,7 @@ import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import RelatorioSlidePreview from "@/components/relatorios/RelatorioSlidePreview";
+import RelatorioSlideEdicaoModal from "@/components/relatorios/RelatorioSlideEdicaoModal";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import RelatorioEdicaoModal from "@/components/relatorios/RelatorioEdicaoModal";
 import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
@@ -31,7 +32,6 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   buscarRelatorio,
   excluirSlidesRelatorio,
-  completarDadosVeiculosRelatorio,
   gerarPptxTeste,
   decidirRevisaoSlide,
   type PaginacaoRelatorio,
@@ -425,6 +425,8 @@ export default function DetalheRelatorio() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [slideAberto, setSlideAberto] =useState<SlideRelatorio | null>(null);
+  const [slideParaEditar, setSlideParaEditar] = useState<SlideRelatorio | null>(null);
+  const slideReabrirId = useRef<number | null>(null);
   const [slideDecidindoId, setSlideDecidindoId] = useState<number | null>(null);
   const [slideParaIgnorar, setSlideParaIgnorar] = useState<SlideRelatorio | null>(null);
   const [slideParaAtualizar, setSlideParaAtualizar] = useState<SlideRelatorio | null>(null);
@@ -447,9 +449,6 @@ export default function DetalheRelatorio() {
   const [excluindo, setExcluindo] = useState(false);
   const [erroAcao, setErroAcao] = useState("");
   const [edicaoSalva, setEdicaoSalva] = useState(false);
-  const [confirmarDadosVeiculos, setConfirmarDadosVeiculos] = useState(false);
-  const [atualizandoDadosVeiculos, setAtualizandoDadosVeiculos] = useState(false);
-  const [resultadoDadosVeiculos, setResultadoDadosVeiculos] = useState("");
 
   const [exportandoPptx, setExportandoPptx] = useState(false);
   const [mensagemPptx, setMensagemPptx] = useState("");
@@ -499,11 +498,17 @@ export default function DetalheRelatorio() {
 
           setRelatorio(resposta.relatorio);
           setSlides(resposta.slides);
-          setSlideAberto((atual) =>
-            atual
+          const reabrirId = slideReabrirId.current;
+          slideReabrirId.current = null;
+          setSlideAberto((atual) => {
+            if (reabrirId !== null) {
+              return resposta.slides.find((slide) => slide.id === reabrirId) ?? null;
+            }
+
+            return atual
               ? resposta.slides.find((slide) => slide.id === atual.id) ?? atual
-              : null
-          );
+              : null;
+          });
           setPaginacao(resposta.pagination);
         } catch (e) {
           if (!ativo) return;
@@ -705,42 +710,6 @@ export default function DetalheRelatorio() {
     });
   }
 
-  async function completarDadosVeiculos() {
-    if (!relatorio || atualizandoDadosVeiculos) return;
-
-    setAtualizandoDadosVeiculos(true);
-    setErroAcao("");
-    setResultadoDadosVeiculos("");
-
-    try {
-      const resposta = await completarDadosVeiculosRelatorio(
-        relatorio.id
-      );
-
-      const quantidade = resposta.slides_atualizados; 
-
-      setResultadoDadosVeiculos(
-        quantidade === 0
-          ? "Nenhum slide tinha descrição ou alcance ausente para completar."
-          : `${quantidade} ${
-              quantidade === 1 ? "slide atualizado" : "slides atualizados"
-            } com dados dos veículos.`
-      );
-
-      setConfirmarDadosVeiculos(false);
-      setTentativa((atual) => atual + 1);
-    } catch (error) {
-      setConfirmarDadosVeiculos(false);
-      setErroAcao(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível completar os dados dos veículos."
-      );
-    } finally {
-      setAtualizandoDadosVeiculos(false);
-    }
-  }
-
   async function exportarPptx() {
     if (!relatorio || travaPptx.current) return;
 
@@ -939,18 +908,6 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           excluindo={excluindo}
         />
 
-        {resultadoDadosVeiculos ? (
-          <Text
-            weight="SemiBold"
-            style={[
-              styles.mensagemAcao,
-              { color: theme.textoTerciaria },
-            ]}
-          >
-            {resultadoDadosVeiculos}
-          </Text>
-        ) : null}
-
         {edicaoSalva ? (
           <Text
             weight="SemiBold"
@@ -1043,33 +1000,6 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
               </TouchableOpacity>
               
             ) : null}
-
-          {temPermissao("RELATORIOS", "EDITAR") ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              onPress={() => setConfirmarDadosVeiculos(true)}
-              style={[
-                styles.atalhoPeriodo,
-                { borderColor: theme.borda },
-              ]}
-            >
-              <Ionicons
-                name="sync-outline"
-                size={16}
-                color={theme.textoTerciaria}
-              />
-              <Text
-                weight="SemiBold"
-                style={{
-                  color: theme.textoTerciaria,
-                  fontSize: 12,
-                }}
-              >
-                COMPLETAR DADOS DOS VEÍCULOS
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-
             <View
               style={[
                 styles.resumoNumeros,
@@ -1246,7 +1176,7 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
             placeholder="Buscar pauta, veículo..."
           />
         ) : null}
-
+        
         {relatorio ? (
           <View style={styles.filtrosRevisao}>
             {(["todas", "pendentes"] as const).map((opcao) => {
@@ -1292,84 +1222,96 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
             })}
           </View>
         ) : null}
+        
         {relatorio && filtroRevisao === "pendentes" ? (
-          <View style={styles.opcoesRevisao}>
-            {(["novo", "veiculo", "clipping"] as const).map((origem) => {
-              const quantidade = relatorio.pendentes_por_origem[origem] ?? 0;
-              const marcado = origensRevisao.includes(origem);
-              const unicoMarcado = marcado && origensRevisao.length === 1;
+          <>
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.rotulo,
+                { color: theme.textoSub, marginBottom: 8, marginLeft: 4 },
+              ]}
+            >
+              FILTROS
+            </Text>
+            <View style={styles.opcoesRevisao}>
+              {(["novo", "veiculo", "clipping"] as const).map((origem) => {
+                const quantidade = relatorio.pendentes_por_origem[origem] ?? 0;
+                const marcado = origensRevisao.includes(origem);
+                const unicoMarcado = marcado && origensRevisao.length === 1;
 
-              const principal =
-                origem === "novo"
-                  ? quantidade === 1 ? "NOVO" : "NOVOS"
-                  : origem === "veiculo"
-                    ? quantidade === 1 ? "VEÍCULO" : "VEÍCULOS"
-                    : quantidade === 1 ? "CLIPPING" : "CLIPPINGS";
+                const principal =
+                  origem === "novo"
+                    ? quantidade === 1 ? "NOVO" : "NOVOS"
+                    : origem === "veiculo"
+                      ? quantidade === 1 ? "VEÍCULO" : "VEÍCULOS"
+                      : quantidade === 1 ? "CLIPPING" : "CLIPPINGS";
 
-              const complemento =
-                origem === "novo"
-                  ? quantidade === 1 ? "SLIDE" : "SLIDES"
-                  : quantidade === 1 ? "ALTERADO" : "ALTERADOS";
+                const complemento =
+                  origem === "novo"
+                    ? quantidade === 1 ? "SLIDE" : "SLIDES"
+                    : quantidade === 1 ? "ALTERADO" : "ALTERADOS";
 
-              return (
-                <TouchableOpacity
-                  key={origem}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{
-                    checked: marcado,
-                    disabled: unicoMarcado,
-                  }}
-                  accessibilityLabel={`${principal} ${complemento}: ${quantidade}`}
-                  accessibilityHint={
-                    unicoMarcado
-                      ? "Mantenha pelo menos um tipo de revisão ativo"
-                      : undefined
-                  }
-                  disabled={unicoMarcado}
-                  onPress={() => {
-                    setOrigensRevisao((atuais) =>
-                      atuais.includes(origem)
-                        ? atuais.filter((item) => item !== origem)
-                        : [...atuais, origem]
-                    );
-                    setPagina(1);
-                  }}
-                  style={[
-                    styles.opcaoRevisao,
-                    {
-                      borderColor: marcado ? theme.primaria : theme.borda,
-                      borderWidth: marcado ? 2 : 1,
-                      backgroundColor: marcado
-                        ? theme.primaria
-                        : theme.primaria,
-                      opacity: marcado ? 1 : 0.5,
-                    },
-                  ]}
-                >
-                  <Text
-                    weight="Bold"
-                    style={{
-                      color: theme.branco,
-                      fontSize: 16,
-                      lineHeight: 23,
+                return (
+                  <TouchableOpacity
+                    key={origem}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{
+                      checked: marcado,
+                      disabled: unicoMarcado,
                     }}
-                  >
-                    {quantidade}
-                  </Text>
-                  <Text
-                    weight="SemiBold"
-                    style={{
-                      color: marcado ? theme.branco : theme.branco,
-                      fontSize: 10,
-                      textAlign: "center",
+                    accessibilityLabel={`${principal} ${complemento}: ${quantidade}`}
+                    accessibilityHint={
+                      unicoMarcado
+                        ? "Mantenha pelo menos um tipo de revisão ativo"
+                        : undefined
+                    }
+                    disabled={unicoMarcado}
+                    onPress={() => {
+                      setOrigensRevisao((atuais) =>
+                        atuais.includes(origem)
+                          ? atuais.filter((item) => item !== origem)
+                          : [...atuais, origem]
+                      );
+                      setPagina(1);
                     }}
+                    style={[
+                      styles.opcaoRevisao,
+                      {
+                        borderColor: marcado ? theme.primaria : theme.borda,
+                        borderWidth: marcado ? 2 : 1,
+                        backgroundColor: marcado
+                          ? theme.primaria
+                          : theme.primaria,
+                        opacity: marcado ? 1 : 0.5,
+                      },
+                    ]}
                   >
-                    {principal}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <Text
+                      weight="Bold"
+                      style={{
+                        color: theme.branco,
+                        fontSize: 16,
+                        lineHeight: 23,
+                      }}
+                    >
+                      {quantidade}
+                    </Text>
+                    <Text
+                      weight="SemiBold"
+                      style={{
+                        color: marcado ? theme.branco : theme.branco,
+                        fontSize: 10,
+                        textAlign: "center",
+                      }}
+                    >
+                      {principal}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
         ) : null}
         {relatorio &&
           slidesSelecionaveis.length > 0 &&
@@ -1676,11 +1618,16 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           </>
         ) : null}
       </ScrollView>
-      {focado && slideAberto && relatorio ? (
+      {focado && slideAberto && !slideParaEditar && relatorio ? (
         <RelatorioSlidePreview
           slide={slideAberto}
           relatorio={relatorio}
           onClose={() => setSlideAberto(null)}
+          onEditar={
+            temPermissao("RELATORIOS", "EDITAR") && slideAberto.tipo === "CLIPPING"
+              ? () => setSlideParaEditar(slideAberto)
+              : undefined
+          }
           onDecidir={(decisao) => {
             void decidirSlide(slideAberto, decisao);
           }}
@@ -1707,6 +1654,18 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                 }
               : undefined
           } 
+        />
+      ) : null}
+      {focado && slideParaEditar ? (
+        <RelatorioSlideEdicaoModal
+          slide={slideParaEditar}
+          onClose={() => setSlideParaEditar(null)}
+          onSaved={() => {
+            slideReabrirId.current = slideParaEditar.id;
+            setSlideAberto(null);
+            setSlideParaEditar(null);
+            setTentativa((atual) => atual + 1);
+          }}
         />
       ) : null}
       {edicaoAberta && relatorio ? (
@@ -1793,27 +1752,6 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
         onClose={() => setConfirmarExclusao(false)}
         onSecondary={() => setConfirmarExclusao(false)}
         onPrimary={() => void removerRelatorio()}
-      />
-
-      <FeedbackAlert
-        visible={confirmarDadosVeiculos}
-        variant="info"
-        title="Atualizar os dados nos relatórios?"
-        message={
-          "Descrição e alcance ausentes serão atualizados dos veículos vinculados. " +
-          "O logo será atualizado para o arquivo atual do veículo. " +
-          "Textos já preenchidos no relatório não serão substituídos."
-        }
-        primaryLabel="COMPLETAR"
-        secondaryLabel="CANCELAR"
-        loading={atualizandoDadosVeiculos}
-        onClose={() => {
-          if (!atualizandoDadosVeiculos) {
-            setConfirmarDadosVeiculos(false);
-          }
-        }}
-        onSecondary={() => setConfirmarDadosVeiculos(false)}
-        onPrimary={() => void completarDadosVeiculos()}
       />
 
       <FeedbackAlert

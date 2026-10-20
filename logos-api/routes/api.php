@@ -578,6 +578,20 @@ $router->put(
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 
+$router->put(
+    "/api/relatorios/{id}/slides/{slide_id}",
+    "RelatorioController:atualizarSlide",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/relatorios/{id}/slides/{slide_id}/midias/{tipo}",
+    "RelatorioController:enviarMidiaSlide",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
 $router->post(
     "/api/relatorios/{id}/slides/excluir-lote",
     "RelatorioController:excluirSlides",

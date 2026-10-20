@@ -1,4 +1,7 @@
 import { API_URL } from "@/constants/api";
+import { fetch as expoFetch } from "expo/fetch";
+import { Directory, File as ExpoFile, Paths } from "expo-file-system";
+import { Platform } from "react-native";
 import { authenticatedFetch } from "@/services/api/auth";
 
 export interface PaginacaoRelatorio {
@@ -47,6 +50,12 @@ export interface SlideRelatorio {
   titulo: string | null;
   link: string | null;
   imagem_anexo_id: number | null;
+  edicoes_json?: {
+    clipping?: Partial<Record<"pauta" | "data_publicacao" | "link", string | null>>;
+    veiculo?: Partial<Record<"nome" | "descricao" | "alcance", string | null>>;
+    imagem_midia_id?: number | null;
+    logo_midia_id?: number | null;
+  } | null;
   revisao_pendente: boolean;
   revisao_veiculo_pendente: boolean;
   revisao_clipping_pendente: boolean;
@@ -63,6 +72,7 @@ export interface SlideRelatorio {
     clipping?: {
       pauta?: string | null;
       data_publicacao?: string | null;
+      link?: string | null;
     };
     veiculo?: {
       id?: number | null;
@@ -267,6 +277,105 @@ export type DecisaoRevisaoSlide =
   | "ALTERAR"
   | "IGNORAR";
 
+export interface DadosEdicaoSlide {
+  pauta?: string | null;
+  data_publicacao?: string | null;
+  link?: string | null;
+  veiculo_nome?: string | null;
+  veiculo_descricao?: string | null;
+  veiculo_alcance?: string | null;
+  imagem_midia_id?: number | null;
+  logo_midia_id?: number | null;
+}
+
+export interface ArquivoMidiaSlide {
+  uri: string;
+  nome: string;
+  mimeType: string;
+  file?: File;
+}
+
+export async function atualizarSlideRelatorio(
+  relatorioId: number,
+  slideId: number,
+  dados: DadosEdicaoSlide
+): Promise<{ slide_id: number }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    }
+  );
+
+  return lerResposta(response, "Não foi possível salvar o slide.");
+}
+
+export async function enviarMidiaSlideRelatorio(
+  relatorioId: number,
+  slideId: number,
+  tipo: "imagem" | "logo",
+  arquivo: ArquivoMidiaSlide
+): Promise<number> {
+  const formData = new FormData();
+  let pastaTemporaria: Directory | null = null;
+
+  try {
+    if (Platform.OS === "web") {
+      if (!arquivo.file) {
+        throw new Error("O arquivo selecionado não está disponível.");
+      }
+
+      formData.append("arquivo", arquivo.file, arquivo.nome);
+    } else {
+      const original = new ExpoFile(arquivo.uri);
+
+      if (!original.exists) {
+        throw new Error("O arquivo selecionado não está mais disponível.");
+      }
+
+      const nome = arquivo.nome
+        .split(/[\\/]/)
+        .pop()
+        ?.replace(/[\u0000-\u001f\u007f]/g, "_")
+        .trim() || "imagem";
+      pastaTemporaria = new Directory(
+        Paths.cache,
+        `slide-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      );
+      pastaTemporaria.create();
+      const copia = new ExpoFile(pastaTemporaria, nome);
+      await original.copy(copia);
+      formData.append("arquivo", copia, nome);
+    }
+
+    const response = await authenticatedFetch(
+      `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/midias/${tipo}`,
+      { method: "POST", body: formData },
+      Platform.OS === "web" ? fetch : expoFetch
+    );
+    const dados = await lerResposta<{ midia_id: number }>(
+      response,
+      "Não foi possível enviar a imagem do slide."
+    );
+
+    if (!Number.isSafeInteger(dados.midia_id) || dados.midia_id < 1) {
+      throw new Error("A API não retornou a imagem enviada.");
+    }
+
+    return dados.midia_id;
+  } finally {
+    if (pastaTemporaria?.exists) {
+      try {
+        pastaTemporaria.delete();
+      } catch {
+        // o cache ainda pode ser limpo pelo sistema
+      }
+    }
+  }
+}
+
 export async function decidirRevisaoSlide(
   relatorioId: number,
   slideId: number,
@@ -451,23 +560,6 @@ export async function atualizarPeriodoRelatorio(
   return lerResposta(
     response,
     "Não foi possível atualizar o período."
-  );
-}
-
-export async function completarDadosVeiculosRelatorio(
-  id: number
-): Promise<{
-  message: string;
-  slides_atualizados: number;
-}> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${id}/completar-veiculos`,
-    { method: "POST" }
-  );
-
-  return lerResposta(
-    response,
-    "Não foi possível completar os dados dos veículos."
   );
 }
 

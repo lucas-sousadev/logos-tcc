@@ -240,6 +240,64 @@ class RelatorioMidiaService
         );
     }
 
+    public static function salvarUpload(
+        int $assessoriaId,
+        int $relatorioId,
+        string $tipo
+    ): int {
+        if (!in_array($tipo, ['LOGO_VEICULO', 'IMAGEM_CLIPPING'], true)) {
+            throw new \InvalidArgumentException('Tipo de imagem inválido.');
+        }
+
+        $arquivo = ArquivoClippingService::validarUpload();
+
+        if ($arquivo['tipo'] !== 'IMAGEM') {
+            throw new \InvalidArgumentException(
+                'Selecione uma imagem JPG, PNG ou WEBP.'
+            );
+        }
+
+        if ($arquivo['tamanho_bytes'] > 10 * 1024 * 1024) {
+            throw new \LengthException(
+                'A imagem do slide deve possuir no máximo 10 MB.'
+            );
+        }
+
+        return self::copiar(
+            $assessoriaId,
+            $relatorioId,
+            $tipo,
+            $arquivo['temporario']
+        );
+    }
+
+    public static function validarTipo(
+        int $assessoriaId,
+        int $relatorioId,
+        int $midiaId,
+        string $tipo
+    ): void {
+        $stmt = Connection::get()->prepare(
+            'SELECT 1 FROM relatorio_midias
+             WHERE id = :midia_id
+             AND relatorio_id = :relatorio_id
+             AND assessoria_id = :assessoria_id
+             AND tipo = :tipo'
+        );
+        $stmt->execute([
+            'midia_id' => $midiaId,
+            'relatorio_id' => $relatorioId,
+            'assessoria_id' => $assessoriaId,
+            'tipo' => $tipo,
+        ]);
+
+        if ($stmt->fetchColumn() === false) {
+            throw new \InvalidArgumentException(
+                'A imagem escolhida não pertence a este relatório.'
+            );
+        }
+    }
+
     public static function preencherExistentes(
         int $assessoriaId,
         int $relatorioId

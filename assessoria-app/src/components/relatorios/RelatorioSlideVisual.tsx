@@ -9,12 +9,14 @@ import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 interface Props {
   slide: SlideRelatorio;
+  imagemUri?: string | null;
+  logoUri?: string | null;
 }
 
 const LARGURA_SLIDE = 960;
 const ALTURA_SLIDE = 540;
 
-export default function RelatorioSlideVisual({ slide }: Props) {
+export default function RelatorioSlideVisual({ slide, imagemUri, logoUri }: Props) {
   const { width: larguraJanela } = useWindowDimensions();
   const [alturaEsquerda, setAlturaEsquerda] = useState(0);
   const [alturaDireita, setAlturaDireita] = useState(0);
@@ -116,7 +118,13 @@ export default function RelatorioSlideVisual({ slide }: Props) {
               justifyContent: "center",
             }}
           >
-            {endpointLogo ? (
+            {logoUri ? (
+              <Image
+                source={{ uri: logoUri }}
+                resizeMode="contain"
+                style={{ width: 300, height: 90 }}
+              />
+            ) : endpointLogo ? (
               <ClippingImagemPreview
                 endpoint={endpointLogo}
                 nome={`Logo do veículo do slide ${slide.ordem}`}
@@ -256,7 +264,13 @@ export default function RelatorioSlideVisual({ slide }: Props) {
               height: 275,
             }}
           >
-            {endpointImagem ? (
+            {imagemUri ? (
+              <Image
+                source={{ uri: imagemUri }}
+                resizeMode="contain"
+                style={{ width: 480, height: 275 }}
+              />
+            ) : endpointImagem ? (
               <ClippingImagemPreview
                 endpoint={endpointImagem}
                 nome={`Imagem do slide ${slide.ordem}`}

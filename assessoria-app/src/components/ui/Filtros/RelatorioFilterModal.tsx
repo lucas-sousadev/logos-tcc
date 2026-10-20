@@ -195,7 +195,7 @@ export default function RelatorioFilterModal({
       </View>
 
       <Text weight="SemiBold" style={styles.secao}>
-        SLIDES NOVOS
+        SLIDES
       </Text>
 
       <View style={styles.opcoes}>

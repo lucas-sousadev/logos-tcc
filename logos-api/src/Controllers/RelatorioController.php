@@ -75,6 +75,11 @@ class RelatorioController
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (\LengthException $e) {
+            $this->responder([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 413);
         } catch (\UnexpectedValueException $e) {
             $this->responder([
                 'success' => false,
@@ -217,6 +222,37 @@ class RelatorioController
                     $this->corpo()
                 ),
             ]
+        );
+    }
+
+    public function atualizarSlide(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Slide atualizado com sucesso.',
+                ...RelatorioService::atualizarSlide(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $rota['slide_id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+
+    public function enviarMidiaSlide(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Imagem enviada com sucesso.',
+                ...RelatorioService::enviarMidiaSlide(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $rota['slide_id'] ?? null,
+                    $rota['tipo'] ?? null
+                ),
+            ],
+            201
         );
     }
     

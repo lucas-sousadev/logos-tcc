@@ -1452,7 +1452,7 @@ class RelatorioService
     ): array {
         $slides = self::consultar(
             "
-                SELECT id, clipping_id, dados_json
+                SELECT id, clipping_id, dados_json, edicoes_json
                 FROM relatorio_slides
                 WHERE relatorio_id = :relatorio_id
                 AND assessoria_id = :assessoria_id
@@ -1503,7 +1503,8 @@ class RelatorioService
                 SELECT
                     slide_id,
                     origem,
-                    assinatura_reconhecida
+                    assinatura_reconhecida,
+                    dados_reconhecidos_json
                 FROM relatorio_slide_revisoes
                 WHERE relatorio_id = :relatorio_id
                 AND assessoria_id = :assessoria_id
@@ -1588,31 +1589,92 @@ class RelatorioService
                 512,
                 JSON_THROW_ON_ERROR
             );
+            $edicoes = json_decode(
+                $slide['edicoes_json'] ?? '{}',
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
 
             foreach (['VEICULO', 'CLIPPING'] as $origem) {
+                $chave = strtolower($origem);
                 $valoresSalvos = self::valoresOrigem($salvo, $origem);
                 $valoresAtuais = self::valoresOrigem($atual, $origem);
                 $registro = $historico[$slideId][$origem] ?? null;
 
-                $assinaturaSalva = self::assinaturaOrigem($salvo, $origem);
+                $dadosReconhecidosJson =
+                    $registro['dados_reconhecidos_json'] ?? null;
 
-                $assinaturaReconhecida = $registro === null
-                    ? $assinaturaSalva
-                    : $registro['assinatura_reconhecida'];
+                $valoresReconhecidos = is_string($dadosReconhecidosJson)
+                    ? json_decode(
+                        $dadosReconhecidosJson,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    )
+                    : null;
 
+                if (!is_array($valoresReconhecidos)) {
+                    $valoresReconhecidos = $valoresSalvos;
+                    $camposEditados = $edicoes[$chave] ?? [];
+
+                    foreach (
+                        array_keys(
+                            is_array($camposEditados) ? $camposEditados : []
+                        ) as $campo
+                    ) {
+                        if (array_key_exists($campo, $valoresAtuais)) {
+                            $valoresReconhecidos[$campo] =
+                                $valoresAtuais[$campo];
+                        }
+                    }
+
+                    if (
+                        $origem === 'VEICULO'
+                        && array_key_exists('logo_midia_id', $edicoes)
+                    ) {
+                        $valoresReconhecidos['logo_path'] =
+                            $valoresAtuais['logo_path'];
+                    }
+
+                    if (
+                        $origem === 'CLIPPING'
+                        && array_key_exists('imagem_midia_id', $edicoes)
+                    ) {
+                        $valoresReconhecidos['imagem_anexo_id'] =
+                            $valoresAtuais['imagem_anexo_id'];
+                        $valoresReconhecidos['imagem_path'] =
+                            $valoresAtuais['imagem_path'];
+                    }
+                }
+
+                $assinaturaSalva = $registro !== null
+                    ? (string) $registro['assinatura_reconhecida']
+                    : hash(
+                        'sha256',
+                        json_encode(
+                            $valoresReconhecidos,
+                            JSON_UNESCAPED_UNICODE
+                                | JSON_UNESCAPED_SLASHES
+                                | JSON_THROW_ON_ERROR
+                        )
+                    );
+
+                $assinaturaReconhecida = $assinaturaSalva;
                 $assinaturaAtual = self::assinaturaOrigem($atual, $origem);
-                $chave = strtolower($origem);
+
                 $assinaturas[$chave] = $assinaturaAtual;
                 $camposAlterados[$slideId][$chave] = [];
                 $novosValores[$slideId][$chave] = [];
 
                 if ($assinaturaAtual === $assinaturaSalva) {
                     $assinaturaReconhecida = $assinaturaAtual;
+                    $valoresReconhecidos = $valoresAtuais;
                 }
 
                 if ($assinaturaAtual !== $assinaturaReconhecida) {
                     foreach ($valoresAtuais as $campo => $valor) {
-                        if (($valoresSalvos[$campo] ?? null) !== $valor) {
+                        if (($valoresReconhecidos[$campo] ?? null) !== $valor) {
                             $camposAlterados[$slideId][$chave][] = $campo;
                             $novosValores[$slideId][$chave][$campo] = $valor;
                         }
@@ -1624,11 +1686,10 @@ class RelatorioService
                     'relatorio_id' => $relatorioId,
                     'assessoria_id' => $assessoriaId,
                     'origem' => $origem,
-                    'assinatura_reconhecida' =>
-                        self::assinaturaOrigem($salvo, $origem),
+                    'assinatura_reconhecida' => $assinaturaSalva,
                     'assinatura_atual' => $assinaturaAtual,
                     'dados_reconhecidos_json' => json_encode(
-                        $valoresSalvos,
+                        $valoresReconhecidos,
                         JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
                     ),
                 ]);
@@ -2109,6 +2170,26 @@ class RelatorioService
                     $slide['logo_midia_id'] = null;
                     $slide['imagem_midia_id'] = null;
                 }
+
+                if ($slide['edicoes_json']) {
+                    $editado = self::aplicarEdicoesSlide([
+                        'dados' => $slide['dados_json'] ?? [],
+                        'titulo' => $slide['titulo'],
+                        'link' => $slide['link'],
+                        'imagem_anexo_id' => $slide['imagem_anexo_id'],
+                        'imagem_path' => $slide['imagem_path'],
+                        'logo_midia_id' => $slide['logo_midia_id'],
+                        'imagem_midia_id' => $slide['imagem_midia_id'],
+                    ], $slide['edicoes_json']);
+
+                    $slide['dados_json'] = $editado['dados'];
+                    $slide['titulo'] = $editado['titulo'];
+                    $slide['link'] = $editado['link'];
+                    $slide['imagem_anexo_id'] = $editado['imagem_anexo_id'];
+                    $slide['imagem_path'] = $editado['imagem_path'];
+                    $slide['logo_midia_id'] = $editado['logo_midia_id'];
+                    $slide['imagem_midia_id'] = $editado['imagem_midia_id'];
+                }
             }
         }
 
@@ -2248,7 +2329,7 @@ class RelatorioService
                     SELECT
                         id, clipping_id, ordem, tipo, origem_inclusao,
                         revisao_pendente, titulo, link, observacoes,
-                        imagem_anexo_id, imagem_path, dados_json,
+                        imagem_anexo_id, imagem_path, dados_json, edicoes_json,
                         logo_midia_id, imagem_midia_id
                     FROM relatorio_slides
                     WHERE id = :slide_id
@@ -2519,7 +2600,10 @@ class RelatorioService
                         $nomeInformado;
                 }
 
-                if ($novo || $pendentes['VEICULO']) {
+                if (
+                    ($novo || $pendentes['VEICULO'])
+                    && !array_key_exists('logo_midia_id', $edicoes)
+                ) {
                     $logoAtual = $atual['dados']['veiculo']['logo_path'];
                     $logoMidiaId = RelatorioMidiaService::copiarLogo(
                         $assessoriaId,
@@ -2547,20 +2631,39 @@ class RelatorioService
                     $imagemAnexoId = $atual['imagem_anexo_id'];
                     $imagemPath = $atual['imagem_path'];
 
-                    $imagemMidiaId = RelatorioMidiaService::copiarImagem(
-                        $assessoriaId,
-                        $relatorioId,
-                        $clippingId,
-                        $imagemPath
-                    );
-
-                    if ($imagemPath && $imagemMidiaId === null) {
-                        throw new \DomainException(
-                            'A nova imagem do clipping não está disponível.'
+                    if (!array_key_exists('imagem_midia_id', $edicoes)) {
+                        $imagemMidiaId = RelatorioMidiaService::copiarImagem(
+                            $assessoriaId,
+                            $relatorioId,
+                            $clippingId,
+                            $imagemPath
                         );
+
+                        if ($imagemPath && $imagemMidiaId === null) {
+                            throw new \DomainException(
+                                'A nova imagem do clipping não está disponível.'
+                            );
+                        }
                     }
                 }
             }
+
+            $editado = self::aplicarEdicoesSlide([
+                'dados' => $novosDados,
+                'titulo' => $titulo,
+                'link' => $link,
+                'imagem_anexo_id' => $imagemAnexoId,
+                'imagem_path' => $imagemPath,
+                'logo_midia_id' => $logoMidiaId,
+                'imagem_midia_id' => $imagemMidiaId,
+            ], $edicoes);
+            $novosDados = $editado['dados'];
+            $titulo = $editado['titulo'];
+            $link = $editado['link'];
+            $imagemAnexoId = $editado['imagem_anexo_id'];
+            $imagemPath = $editado['imagem_path'];
+            $logoMidiaId = $editado['logo_midia_id'];
+            $imagemMidiaId = $editado['imagem_midia_id'];
 
             self::consultar(
                 "
@@ -2656,6 +2759,319 @@ class RelatorioService
                 'removido' => false,
                 'origens_decididas' => $origensDecididas,
             ];
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    private static function aplicarEdicoesSlide(
+        array $estado,
+        array $edicoes
+    ): array {
+        foreach (['pauta', 'data_publicacao', 'link'] as $campo) {
+            if (!array_key_exists($campo, $edicoes['clipping'] ?? [])) {
+                continue;
+            }
+
+            $valor = $edicoes['clipping'][$campo];
+            $estado['dados']['clipping'][$campo] = $valor;
+
+            if ($campo === 'pauta') {
+                $estado['titulo'] = $valor === null
+                    ? null
+                    : mb_substr($valor, 0, 255, 'UTF-8');
+            } elseif ($campo === 'link') {
+                $estado['link'] = $valor;
+            }
+        }
+
+        foreach (['nome', 'descricao', 'alcance'] as $campo) {
+            if (array_key_exists($campo, $edicoes['veiculo'] ?? [])) {
+                $estado['dados']['veiculo'][$campo] =
+                    $edicoes['veiculo'][$campo];
+            }
+        }
+
+        if (array_key_exists('imagem_midia_id', $edicoes)) {
+            $estado['imagem_midia_id'] = $edicoes['imagem_midia_id'];
+            $estado['imagem_anexo_id'] = null;
+            $estado['imagem_path'] = null;
+            $estado['dados']['imagem']['anexo_id'] = null;
+            $estado['dados']['imagem']['arquivo_path'] = null;
+        }
+
+        if (array_key_exists('logo_midia_id', $edicoes)) {
+            $estado['logo_midia_id'] = $edicoes['logo_midia_id'];
+            $estado['dados']['veiculo']['logo_path'] = null;
+        }
+
+        return $estado;
+    }
+
+    public static function enviarMidiaSlide(
+        int $assessoriaId,
+        mixed $valorRelatorioId,
+        mixed $valorSlideId,
+        mixed $valorTipo
+    ): array {
+        $relatorioId = self::id($valorRelatorioId, 'Relatório');
+        $slideId = self::id($valorSlideId, 'Slide');
+        $tipos = [
+            'imagem' => 'IMAGEM_CLIPPING',
+            'logo' => 'LOGO_VEICULO',
+        ];
+
+        if (!is_string($valorTipo) || !isset($tipos[$valorTipo])) {
+            throw new \InvalidArgumentException('Tipo de imagem inválido.');
+        }
+
+        $existe = self::consultar(
+            "SELECT 1 FROM relatorio_slides
+             WHERE id = :slide_id
+             AND relatorio_id = :relatorio_id
+             AND assessoria_id = :assessoria_id
+             AND tipo = 'CLIPPING'",
+            [
+                'slide_id' => $slideId,
+                'relatorio_id' => $relatorioId,
+                'assessoria_id' => $assessoriaId,
+            ]
+        )->fetchColumn();
+
+        if ($existe === false) {
+            throw new \OutOfBoundsException(
+                'Slide não encontrado neste relatório.'
+            );
+        }
+
+        return [
+            'midia_id' => RelatorioMidiaService::salvarUpload(
+                $assessoriaId,
+                $relatorioId,
+                $tipos[$valorTipo]
+            ),
+        ];
+    }
+
+    public static function atualizarSlide(
+        int $assessoriaId,
+        mixed $valorRelatorioId,
+        mixed $valorSlideId,
+        array $dados
+    ): array {
+        $relatorioId = self::id($valorRelatorioId, 'Relatório');
+        $slideId = self::id($valorSlideId, 'Slide');
+        $limites = [
+            'pauta' => 2000,
+            'data_publicacao' => 10,
+            'link' => 2048,
+            'veiculo_nome' => 255,
+            'veiculo_descricao' => 3000,
+            'veiculo_alcance' => 1000,
+        ];
+        $permitidos = [
+            ...array_keys($limites),
+            'imagem_midia_id',
+            'logo_midia_id',
+        ];
+
+        if (!$dados || array_diff(array_keys($dados), $permitidos)) {
+            throw new \InvalidArgumentException(
+                'Informe somente campos editáveis do slide.'
+            );
+        }
+
+        foreach ($dados as $campo => &$valor) {
+            if (isset($limites[$campo])) {
+                if ($valor !== null && !is_string($valor)) {
+                    throw new \InvalidArgumentException(
+                        'Valor inválido para ' . $campo . '.'
+                    );
+                }
+
+                $valor = $valor === null ? null : trim($valor);
+                $valor = $valor === '' ? null : $valor;
+
+                if (
+                    $valor !== null
+                    && mb_strlen($valor, 'UTF-8') > $limites[$campo]
+                ) {
+                    throw new \InvalidArgumentException(
+                        'O campo ' . $campo . ' excede o limite permitido.'
+                    );
+                }
+            } elseif ($valor !== null && (!is_int($valor) || $valor < 1)) {
+                throw new \InvalidArgumentException(
+                    'Identificador de imagem inválido.'
+                );
+            }
+        }
+        unset($valor);
+
+        if ($dados['data_publicacao'] ?? null) {
+            $data = $dados['data_publicacao'];
+
+            if (
+                !preg_match('/\A(\d{4})-(\d{2})-(\d{2})\z/D', $data, $partes)
+                || !checkdate(
+                    (int) $partes[2],
+                    (int) $partes[3],
+                    (int) $partes[1]
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'Informe uma data válida em AAAA-MM-DD.'
+                );
+            }
+        }
+
+        if ($dados['link'] ?? null) {
+            $link = $dados['link'];
+
+            if (
+                !filter_var($link, FILTER_VALIDATE_URL)
+                || !in_array(
+                    strtolower((string) parse_url($link, PHP_URL_SCHEME)),
+                    ['http', 'https'],
+                    true
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'Informe um link HTTP ou HTTPS válido.'
+                );
+            }
+        }
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $slide = self::consultar(
+                "SELECT tipo, titulo, link, imagem_anexo_id, imagem_path,
+                        imagem_midia_id, logo_midia_id, dados_json, edicoes_json
+                 FROM relatorio_slides
+                 WHERE id = :slide_id
+                 AND relatorio_id = :relatorio_id
+                 AND assessoria_id = :assessoria_id
+                 LIMIT 1 FOR UPDATE",
+                [
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$slide || $slide['tipo'] !== 'CLIPPING') {
+                throw new \OutOfBoundsException(
+                    'Slide não encontrado neste relatório.'
+                );
+            }
+
+            foreach ([
+                'imagem_midia_id' => 'IMAGEM_CLIPPING',
+                'logo_midia_id' => 'LOGO_VEICULO',
+            ] as $campo => $tipo) {
+                if (isset($dados[$campo])) {
+                    RelatorioMidiaService::validarTipo(
+                        $assessoriaId,
+                        $relatorioId,
+                        $dados[$campo],
+                        $tipo
+                    );
+                }
+            }
+
+            $edicoes = json_decode(
+                $slide['edicoes_json'] ?? '{}',
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+            $clipping = [
+                'pauta' => 'pauta',
+                'data_publicacao' => 'data_publicacao',
+                'link' => 'link',
+            ];
+            $veiculo = [
+                'veiculo_nome' => 'nome',
+                'veiculo_descricao' => 'descricao',
+                'veiculo_alcance' => 'alcance',
+            ];
+
+            foreach ($clipping as $entrada => $campo) {
+                if (array_key_exists($entrada, $dados)) {
+                    $edicoes['clipping'][$campo] = $dados[$entrada];
+                }
+            }
+
+            foreach ($veiculo as $entrada => $campo) {
+                if (array_key_exists($entrada, $dados)) {
+                    $edicoes['veiculo'][$campo] = $dados[$entrada];
+                }
+            }
+
+            foreach (['imagem_midia_id', 'logo_midia_id'] as $campo) {
+                if (array_key_exists($campo, $dados)) {
+                    $edicoes[$campo] = $dados[$campo];
+                }
+            }
+
+            $editado = self::aplicarEdicoesSlide([
+                'dados' => json_decode(
+                    $slide['dados_json'] ?? '{}',
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR
+                ),
+                'titulo' => $slide['titulo'],
+                'link' => $slide['link'],
+                'imagem_anexo_id' => $slide['imagem_anexo_id'],
+                'imagem_path' => $slide['imagem_path'],
+                'logo_midia_id' => $slide['logo_midia_id'],
+                'imagem_midia_id' => $slide['imagem_midia_id'],
+            ], $edicoes);
+
+            self::consultar(
+                "UPDATE relatorio_slides
+                 SET titulo = :titulo,
+                     link = :link,
+                     imagem_anexo_id = :imagem_anexo_id,
+                     imagem_path = :imagem_path,
+                     logo_midia_id = :logo_midia_id,
+                     imagem_midia_id = :imagem_midia_id,
+                     dados_json = :dados_json,
+                     edicoes_json = :edicoes_json
+                 WHERE id = :slide_id
+                 AND relatorio_id = :relatorio_id
+                 AND assessoria_id = :assessoria_id",
+                [
+                    'titulo' => $editado['titulo'],
+                    'link' => $editado['link'],
+                    'imagem_anexo_id' => $editado['imagem_anexo_id'],
+                    'imagem_path' => $editado['imagem_path'],
+                    'logo_midia_id' => $editado['logo_midia_id'],
+                    'imagem_midia_id' => $editado['imagem_midia_id'],
+                    'dados_json' => json_encode(
+                        $editado['dados'],
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'edicoes_json' => json_encode(
+                        $edicoes,
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'slide_id' => $slideId,
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            );
+
+            $db->commit();
+
+            return ['slide_id' => $slideId];
         } catch (\Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();

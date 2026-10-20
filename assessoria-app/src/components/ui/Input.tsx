@@ -20,6 +20,7 @@ interface InputProps extends TextInputProps {
   clearable?: boolean;
   onClear?: () => void;
   showChanged?: boolean;
+  onUndo?: () => void;
   showPasswordToggle?: boolean;
 }
 
@@ -33,6 +34,7 @@ export default function Input({
   onChangeText,
   clearable = false,
   onClear,
+  onUndo,
   secureTextEntry,
   showPasswordToggle = false,
   ...props
@@ -54,20 +56,43 @@ export default function Input({
     <View style={[styles.container, containerStyle]}>
       {label ? (
         <View style={styles.labelRow}>
-          <Text
-            weight="Medium"
-            style={styles.label}
-          >
-            {label}
-          </Text>
+          <View style={styles.labelTitle}>
+            <Text weight="Medium" style={styles.label}>
+              {label}
+            </Text>
 
-          {showChanged && (
-            <Ionicons
-              name="create-outline"
-              size={15}
-              color={theme.primaria}
-            />
-          )}
+            {showChanged ? (
+              <Ionicons
+                name="create-outline"
+                size={15}
+                color={theme.primaria}
+              />
+            ) : null}
+          </View>
+
+          {showChanged && onUndo ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Desfazer alteração em ${label}`}
+              disabled={props.editable === false}
+              activeOpacity={0.75}
+              hitSlop={6}
+              onPress={onUndo}
+              style={styles.undoButton}
+            >
+              <Ionicons
+                name="arrow-undo-outline"
+                size={14}
+                color={theme.textoTerciaria}
+              />
+              <Text
+                weight="SemiBold"
+                style={[styles.undoText, { color: theme.textoTerciaria }]}
+              >
+                DESFAZER
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
@@ -163,17 +188,33 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: 20,
   },
-
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 8,
     marginBottom: 8,
   },
-
+  labelTitle: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
   label: {
     fontSize: 15,
+    flexShrink: 1,
   },
+  undoButton: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 6,
+  },
+undoText: {
+  fontSize: 10,
+},
   inputWrapper: {
   position: "relative",
   },
