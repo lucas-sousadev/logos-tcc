@@ -1673,8 +1673,16 @@ class RelatorioService
                 }
 
                 if ($assinaturaAtual !== $assinaturaReconhecida) {
+                    $veiculoTrocado =
+                        $origem === 'VEICULO'
+                        && ($valoresReconhecidos['id'] ?? null)
+                            !== ($valoresAtuais['id'] ?? null);
+
                     foreach ($valoresAtuais as $campo => $valor) {
-                        if (($valoresReconhecidos[$campo] ?? null) !== $valor) {
+                        if (
+                            $veiculoTrocado
+                            || ($valoresReconhecidos[$campo] ?? null) !== $valor
+                        ) {
                             $camposAlterados[$slideId][$chave][] = $campo;
                             $novosValores[$slideId][$chave][$campo] = $valor;
                         }
@@ -2491,9 +2499,9 @@ class RelatorioService
                 ];
             }
 
-            $reconhecidas = self::consultar(
+            $revisoes = self::consultar(
                 "
-                    SELECT origem, assinatura_reconhecida
+                    SELECT origem, assinatura_reconhecida, dados_reconhecidos_json
                     FROM relatorio_slide_revisoes
                     WHERE slide_id = :slide_id
                     AND relatorio_id = :relatorio_id
@@ -2505,7 +2513,13 @@ class RelatorioService
                     'relatorio_id' => $relatorioId,
                     'assessoria_id' => $assessoriaId,
                 ]
-            )->fetchAll(PDO::FETCH_KEY_PAIR);
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+            $reconhecidas = [];
+
+            foreach ($revisoes as $revisao) {
+                $reconhecidas[$revisao['origem']] = $revisao;
+            }
 
             if (!$novo && (
                 !isset($reconhecidas['VEICULO'])
@@ -2520,14 +2534,14 @@ class RelatorioService
                 'VEICULO' => $novo || (
                     isset($reconhecidas['VEICULO'])
                     && !hash_equals(
-                        $reconhecidas['VEICULO'],
+                        $reconhecidas['VEICULO']['assinatura_reconhecida'],
                         $assinaturas['VEICULO']
                     )
                 ),
                 'CLIPPING' => $novo || (
                     isset($reconhecidas['CLIPPING'])
                     && !hash_equals(
-                        $reconhecidas['CLIPPING'],
+                        $reconhecidas['CLIPPING']['assinatura_reconhecida'],
                         $assinaturas['CLIPPING']
                     )
                 ),
@@ -2546,6 +2560,13 @@ class RelatorioService
                 JSON_THROW_ON_ERROR
             );
 
+            $edicoes = json_decode(
+                $slide['edicoes_json'] ?? '{}',
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+
             $novosDados = $salvo;
             $titulo = $slide['titulo'];
             $link = $slide['link'];
@@ -2554,6 +2575,64 @@ class RelatorioService
             $imagemPath = $slide['imagem_path'];
             $logoMidiaId = $slide['logo_midia_id'];
             $imagemMidiaId = $slide['imagem_midia_id'];
+
+            if ($decisao === 'ALTERAR' && !$novo) {
+                foreach (['VEICULO', 'CLIPPING'] as $origem) {
+                    if (!$pendentes[$origem]) {
+                        continue;
+                    }
+
+                    $jsonReconhecido =
+                        $reconhecidas[$origem]['dados_reconhecidos_json'] ?? null;
+
+                    $reconhecido = is_string($jsonReconhecido)
+                        ? json_decode($jsonReconhecido, true, 512, JSON_THROW_ON_ERROR)
+                        : null;
+
+                    if (!is_array($reconhecido)) {
+                        throw new \DomainException(
+                            'Dados da revisão indisponíveis. Reabra o relatório.'
+                        );
+                    }
+
+                    $valoresAtuais = self::valoresOrigem($atual['dados'], $origem);
+
+                    $mudou = static fn(string $campo): bool =>
+                        ($reconhecido[$campo] ?? null)
+                            !== ($valoresAtuais[$campo] ?? null);
+
+                    if ($origem === 'VEICULO') {
+                        foreach (['nome', 'descricao', 'alcance'] as $campo) {
+                            if ($mudou('id') || $mudou($campo)) {
+                                unset($edicoes['veiculo'][$campo]);
+                            }
+                        }
+
+                        if ($mudou('id') || $mudou('logo_path')) {
+                            unset($edicoes['logo_midia_id']);
+                        }
+
+                        continue;
+                    }
+
+                    foreach (['pauta', 'data_publicacao', 'link'] as $campo) {
+                        if ($mudou($campo)) {
+                            unset($edicoes['clipping'][$campo]);
+                        }
+                    }
+
+                    if ($mudou('imagem_anexo_id') || $mudou('imagem_path')) {
+                        unset($edicoes['imagem_midia_id']);
+                    }
+
+                    if (
+                        $mudou('veiculo_nome_informado')
+                        && ($valoresAtuais['veiculo_id'] ?? null) === null
+                    ) {
+                        unset($edicoes['veiculo']['nome']);
+                    }
+                }
+            }
 
             if ($decisao === 'IGNORAR') {
                 $logoSalvo = $salvo['veiculo']['logo_path'] ?? null;
@@ -2676,7 +2755,8 @@ class RelatorioService
                         imagem_path = :imagem_path,
                         logo_midia_id = :logo_midia_id,
                         imagem_midia_id = :imagem_midia_id,
-                        dados_json = :dados_json
+                        dados_json = :dados_json,
+                        edicoes_json = :edicoes_json
                     WHERE id = :slide_id
                     AND relatorio_id = :relatorio_id
                     AND assessoria_id = :assessoria_id
@@ -2691,6 +2771,10 @@ class RelatorioService
                     'imagem_midia_id' => $imagemMidiaId,
                     'dados_json' => json_encode(
                         $novosDados,
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'edicoes_json' => json_encode(
+                        (object) $edicoes,
                         JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
                     ),
                     'slide_id' => $slideId,
@@ -2855,6 +2939,176 @@ class RelatorioService
                 $tipos[$valorTipo]
             ),
         ];
+    }
+
+    public static function moverSlide(
+        int $assessoriaId,
+        mixed $valorRelatorioId,
+        mixed $valorSlideId,
+        array $dados
+    ): array {
+        if (
+            array_keys($dados) !== ['nova_ordem']
+        ) {
+            throw new \InvalidArgumentException(
+                'Informe apenas a nova posição do slide.'
+            );
+        }
+
+        $relatorioId = self::id($valorRelatorioId, 'Relatório');
+        $slideId = self::id($valorSlideId, 'Slide');
+        $novaOrdem = self::id($dados['nova_ordem'], 'Nova posição');
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $relatorio = self::consultar(
+                "SELECT id FROM relatorios
+                WHERE id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+                LIMIT 1 FOR UPDATE",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchColumn();
+
+            if ($relatorio === false) {
+                throw new \OutOfBoundsException(
+                    'Relatório não encontrado nesta assessoria.'
+                );
+            }
+
+            $slides = self::consultar(
+                "SELECT id, ordem, tipo
+                FROM relatorio_slides
+                WHERE relatorio_id = :relatorio_id
+                AND assessoria_id = :assessoria_id
+                ORDER BY ordem ASC
+                FOR UPDATE",
+                [
+                    'relatorio_id' => $relatorioId,
+                    'assessoria_id' => $assessoriaId,
+                ]
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+            $total = count($slides);
+            $slideAtual = null;
+
+            foreach ($slides as $indice => $slide) {
+                if ((int) $slide['ordem'] !== $indice + 1) {
+                    throw new \DomainException(
+                        'A ordem dos slides precisa ser revisada antes de movê-los.'
+                    );
+                }
+
+                if ((int) $slide['id'] === $slideId) {
+                    $slideAtual = $slide;
+                }
+            }
+
+            if ($slideAtual === null) {
+                throw new \OutOfBoundsException(
+                    'Slide não encontrado neste relatório.'
+                );
+            }
+
+            if (!in_array(
+                $slideAtual['tipo'],
+                ['CLIPPING', 'COMPLEMENTAR'],
+                true
+            )) {
+                throw new \DomainException(
+                    'Capa e encerramento não podem ser movidos.'
+                );
+            }
+
+            if ($novaOrdem < 2 || $novaOrdem >= $total) {
+                throw new \InvalidArgumentException(
+                    "Escolha uma posição entre 2 e " . ($total - 1) . "."
+                );
+            }
+
+            $ordemAtual = (int) $slideAtual['ordem'];
+
+            if ($novaOrdem !== $ordemAtual) {
+                self::consultar(
+                    "UPDATE relatorio_slides
+                    SET ordem = :ordem
+                    WHERE id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id",
+                    [
+                        'ordem' => $total + 1,
+                        'slide_id' => $slideId,
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                );
+
+                if ($novaOrdem < $ordemAtual) {
+                    self::consultar(
+                        "UPDATE relatorio_slides
+                        SET ordem = ordem + 1
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                        AND ordem >= :inicio
+                        AND ordem < :fim
+                        ORDER BY ordem DESC",
+                        [
+                            'relatorio_id' => $relatorioId,
+                            'assessoria_id' => $assessoriaId,
+                            'inicio' => $novaOrdem,
+                            'fim' => $ordemAtual,
+                        ]
+                    );
+                } else {
+                    self::consultar(
+                        "UPDATE relatorio_slides
+                        SET ordem = ordem - 1
+                        WHERE relatorio_id = :relatorio_id
+                        AND assessoria_id = :assessoria_id
+                        AND ordem > :inicio
+                        AND ordem <= :fim
+                        ORDER BY ordem ASC",
+                        [
+                            'relatorio_id' => $relatorioId,
+                            'assessoria_id' => $assessoriaId,
+                            'inicio' => $ordemAtual,
+                            'fim' => $novaOrdem,
+                        ]
+                    );
+                }
+
+                self::consultar(
+                    "UPDATE relatorio_slides
+                    SET ordem = :ordem
+                    WHERE id = :slide_id
+                    AND relatorio_id = :relatorio_id
+                    AND assessoria_id = :assessoria_id",
+                    [
+                        'ordem' => $novaOrdem,
+                        'slide_id' => $slideId,
+                        'relatorio_id' => $relatorioId,
+                        'assessoria_id' => $assessoriaId,
+                    ]
+                );
+            }
+
+            $db->commit();
+
+            return [
+                'slide_id' => $slideId,
+                'ordem' => $novaOrdem,
+            ];
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public static function atualizarSlide(
@@ -3060,7 +3314,7 @@ class RelatorioService
                         JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
                     ),
                     'edicoes_json' => json_encode(
-                        $edicoes,
+                        (object) $edicoes,
                         JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
                     ),
                     'slide_id' => $slideId,

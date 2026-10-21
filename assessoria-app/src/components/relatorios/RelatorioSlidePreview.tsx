@@ -128,32 +128,8 @@ export default function RelatorioSlidePreview({
     ? []
     : (slide.campos_alterados?.clipping ?? []);
 
-  const edicoes = slide.edicoes_json;
-
-  const foiEditadoNoSlide = (
-    objeto: object | null | undefined,
-    campo: string
-  ) => Boolean(
-    objeto && Object.prototype.hasOwnProperty.call(objeto, campo)
-  );
-
-  const camposVeiculo = camposVeiculoOrigem.filter(
-    (campo) =>
-      !foiEditadoNoSlide(edicoes?.veiculo, campo) &&
-      !(
-        campo === "logo_path" &&
-        foiEditadoNoSlide(edicoes, "logo_midia_id")
-      )
-  );
-
-  const camposClipping = camposClippingOrigem.filter(
-    (campo) =>
-      !foiEditadoNoSlide(edicoes?.clipping, campo) &&
-      !(
-        ["imagem_anexo_id", "imagem_path"].includes(campo) &&
-        foiEditadoNoSlide(edicoes, "imagem_midia_id")
-      )
-  );
+  const camposVeiculo = camposVeiculoOrigem;
+  const camposClipping = camposClippingOrigem;
 
   const novosVeiculo = slide.novos_valores?.veiculo;
   const novosClipping = slide.novos_valores?.clipping;
@@ -602,6 +578,8 @@ export default function RelatorioSlidePreview({
                         >
                           <Text
                             weight="Bold"
+                            numberOfLines={3}
+                            ellipsizeMode="tail"
                             style={[
                               styles.titulo,
                               {
@@ -609,8 +587,8 @@ export default function RelatorioSlidePreview({
                                   mostrarMateriaNova && pautaAlterada
                                     ? theme.alteracao
                                     : theme.textoTerciaria,
-                                flexShrink: 1,
-                              
+                                flex: 1,
+                                minWidth: 0,                          
                               },
                             ]}
                           >
@@ -620,13 +598,15 @@ export default function RelatorioSlidePreview({
                             name="open-outline"
                             size={14}
                             color={theme.textoTerciaria}
-                            style={{ marginTop: 4 }}
+                            style={{ marginTop: 4, flexShrink: 0 }}
                           />
                         </TouchableOpacity>
                       ) : pautaExibida ? (
                         <Text
                           selectable
                           weight="Bold"
+                          numberOfLines={3}
+                          ellipsizeMode="tail"
                           style={[
                             styles.titulo,
                             {
@@ -1006,10 +986,10 @@ export default function RelatorioSlidePreview({
             confirmacao === "ALTERAR"
               ? slide.revisao_veiculo_pendente &&
                 slide.revisao_clipping_pendente
-                ? "Os dados atuais do veículo e do clipping substituirão os dados salvos neste slide. As duas alterações serão confirmadas juntas."
+                ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
                 : slide.revisao_veiculo_pendente
-                  ? "Os dados atuais do veículo substituirão os dados salvos neste slide."
-                  : "Os dados atuais do clipping substituirão os dados salvos neste slide."
+                  ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+                  : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
               : slide.revisao_pendente
                 ? "Este slide será removido do relatório e a matéria não será incluída novamente de forma automática."
                 : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
@@ -1141,9 +1121,9 @@ const styles = StyleSheet.create({
   linkMateria: {
     flexDirection: "row",
     alignItems: "flex-start",
-    alignSelf: "flex-start",
-    maxWidth: "100%",
+    width: "100%",
     gap: 6,
+    paddingRight: 2,
   },
   rotulo: {
     fontSize: 11,

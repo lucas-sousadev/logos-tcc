@@ -607,6 +607,13 @@ $router->put(
 );
 
 $router->put(
+    "/api/relatorios/{id}/slides/{slide_id}/ordem",
+    "RelatorioController:moverSlide",
+    "RELATORIOS.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
     "/api/relatorios/{id}",
     "RelatorioController:atualizar",
     "RELATORIOS.EDITAR",

@@ -5,7 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  TouchableOpacity
+  TouchableOpacity,
+  Modal
 } from "react-native";
 import {
   useFocusEffect,
@@ -17,6 +18,7 @@ import { Platform } from "react-native";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
+import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -34,6 +36,7 @@ import {
   excluirSlidesRelatorio,
   gerarPptxTeste,
   decidirRevisaoSlide,
+  moverSlideRelatorio,
   type PaginacaoRelatorio,
   type RelatorioDetalhado,
   type SlideRelatorio,
@@ -109,6 +112,7 @@ function CartaoSlide({
   podeEditar,
   erro,
   modoSelecao,
+  modoOrdenacao,
   selecionavel,
   selecionado,
 }: {
@@ -120,6 +124,7 @@ function CartaoSlide({
   podeEditar: boolean;
   erro?: string;
   modoSelecao: boolean;
+  modoOrdenacao: boolean;
   selecionavel: boolean;
   selecionado: boolean;
   onSelecionar: () => void;
@@ -152,10 +157,13 @@ function CartaoSlide({
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel={
-          modoSelecao && selecionavel
-            ? `${selecionado ? "Desmarcar" : "Selecionar"} slide ${slide.ordem}`
-            : `Abrir slide ${slide.ordem}`
+          modoOrdenacao
+            ? `Mover slide ${slide.ordem}`
+            : modoSelecao && selecionavel
+              ? `${selecionado ? "Desmarcar" : "Selecionar"} slide ${slide.ordem}`
+              : `Abrir slide ${slide.ordem}`
         }
+        disabled={modoOrdenacao && !selecionavel}
         accessibilityState={
           modoSelecao && selecionavel
             ? { selected: selecionado }
@@ -306,8 +314,8 @@ function CartaoSlide({
           </>
         ) : null}
       </TouchableOpacity>
-        {aviso && !modoSelecao ? (
-        <View
+      {aviso && !modoSelecao && !modoOrdenacao ? (
+          <View
           style={[
             styles.slideRevisaoRodape,
             { borderTopColor: `${theme.aviso}60` },
@@ -435,6 +443,12 @@ export default function DetalheRelatorio() {
     mensagem: string;
   } | null>(null);
   
+  const [modoOrdenacao, setModoOrdenacao] = useState(false);
+  const [slideParaMover, setSlideParaMover] =
+    useState<SlideRelatorio | null>(null);
+  const [destinoOrdem, setDestinoOrdem] = useState("");
+  const [movendoSlide, setMovendoSlide] = useState(false);
+  const [erroOrdenacao, setErroOrdenacao] = useState("");
   const [modoSelecaoSlides, setModoSelecaoSlides] = useState(false);
   const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
   const [acaoSlides, setAcaoSlides] = useState<{
@@ -575,6 +589,69 @@ export default function DetalheRelatorio() {
     setErroAcao("");
     setMensagemAcaoSlides("");
     setAcaoSlides({ tipo, slides: alvos });
+  }
+
+  function abrirMoverSlide(slide: SlideRelatorio) {
+  if (
+    slide.tipo !== "CLIPPING" &&
+    slide.tipo !== "COMPLEMENTAR"
+  ) {
+    return;
+  }
+
+  setSlideParaMover(slide);
+  setDestinoOrdem(String(slide.ordem));
+  setErroOrdenacao("");
+}
+
+  async function confirmarMoverSlide() {
+    if (!relatorio || !slideParaMover || movendoSlide) return;
+
+    const novaOrdem = Number(destinoOrdem);
+
+    if (
+      !/^[1-9]\d*$/.test(destinoOrdem) ||
+      novaOrdem < 2 ||
+      novaOrdem >= relatorio.total_slides
+    ) {
+      setErroOrdenacao(
+        `Escolha uma posição entre 2 e ${relatorio.total_slides - 1}.`
+      );
+      return;
+    }
+
+    if (novaOrdem === slideParaMover.ordem) {
+      setSlideParaMover(null);
+      return;
+    }
+
+    setMovendoSlide(true);
+    setErroOrdenacao("");
+
+    try {
+      const ordemAnterior = slideParaMover.ordem;
+
+      await moverSlideRelatorio(
+        relatorio.id,
+        slideParaMover.id,
+        novaOrdem
+      );
+
+      setSlideParaMover(null);
+      setMensagemAcaoSlides(
+        `Slide ${ordemAnterior} movido para a posição ${novaOrdem}.`
+      );
+      mudarPagina(Math.ceil(novaOrdem / 20));
+      setTentativa((atual) => atual + 1);
+    } catch (error) {
+      setErroOrdenacao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível mover o slide."
+      );
+    } finally {
+      setMovendoSlide(false);
+    }
   }
 
   async function executarAcaoSlides() {
@@ -814,9 +891,46 @@ export default function DetalheRelatorio() {
         slide.revisao_token
       );
 
-      setSlideAberto(null);
       setSlideParaAtualizar(null);
       setSlideParaIgnorar(null);
+
+      if (resultado.removido) {
+        // só fecha quando IGNORAR realmente exclui um slide novo.
+        setSlideAberto((atual) =>
+          atual?.id === slide.id ? null : atual
+        );
+      } else {
+        // busca o slide sem o filtro "A revisar", pois ele deixa de aparecer nesse filtro após a decisão
+        try {
+          const paginaDoSlide = Math.max(1, Math.ceil(slide.ordem / 20));
+          const resposta = await buscarRelatorio(
+            relatorio.id,
+            paginaDoSlide
+          );
+          const atualizado = resposta.slides.find(
+            (item) => item.id === slide.id
+          );
+
+          if (atualizado) {
+            setSlideAberto((atual) =>
+              atual?.id === slide.id ? atualizado : atual
+            );
+          } else {
+            setErroSlide({
+              id: slide.id,
+              mensagem:
+                "Decisão registrada, mas não foi possível recarregar a prévia.",
+            });
+          }
+        } catch {
+          setErroSlide({
+            id: slide.id,
+            mensagem:
+              "Decisão registrada, mas não foi possível recarregar a prévia.",
+          });
+        }
+      }
+
       recarregarAposRevisao(resultado.removido);
     } catch (error) {
       setSlideParaAtualizar(null);
@@ -1098,13 +1212,25 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
         {relatorio && temPermissao("RELATORIOS", "GERAR") ? (
           <>
             <Button
-              title="EXPORTAR PPTX DE TESTE"
+              title="EXPORTAR PPTX"
               onPress={() => void exportarPptx()}
               loading={exportandoPptx}
-              disabled={excluindo}
+              disabled={excluindo || modoOrdenacao || movendoSlide}
               style={{marginTop: 15}}
             />
-
+            {modoOrdenacao || movendoSlide ? (
+              <Text
+                style={{
+                  color: theme.aviso,
+                  fontSize: 12,
+                  marginTop: 6,
+                }}
+              >
+                {movendoSlide
+                  ? "Aguarde a nova posição ser salva para exportar."
+                  : "Saia do modo de ordenação para exportar o relatório."}
+              </Text>
+            ) : null}
             {mensagemPptx ? (
               <Text
                 style={{
@@ -1163,11 +1289,13 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                 { color: theme.textoSub },
               ]}
             >
-              Capa, matérias e encerramento na ordem do relatório.
+              {modoOrdenacao
+                ? "Toque em um slide para escolher a nova posição. Capa e encerramento ficam fixos."
+                : "Capa, matérias e encerramento na ordem definida do relatório."}
             </Text>
           </View>
         ) : null}
-        {relatorio ? (
+        {relatorio && !modoOrdenacao ? (
           <SearchBar
             value={busca}
             onChangeText={setBusca}
@@ -1177,7 +1305,7 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           />
         ) : null}
         
-        {relatorio ? (
+        {relatorio && !modoOrdenacao ? (
           <View style={styles.filtrosRevisao}>
             {(["todas", "pendentes"] as const).map((opcao) => {
               const selecionado = filtroRevisao === opcao;
@@ -1223,7 +1351,7 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           </View>
         ) : null}
         
-        {relatorio && filtroRevisao === "pendentes" ? (
+        {relatorio && !modoOrdenacao && filtroRevisao === "pendentes" ? (
           <>
             <Text
               weight="SemiBold"
@@ -1314,7 +1442,14 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
           </>
         ) : null}
         {relatorio &&
-          slidesSelecionaveis.length > 0 &&
+          (
+            modoOrdenacao ||
+            slidesSelecionaveis.length > 0 ||
+            (
+              temPermissao("RELATORIOS", "EDITAR") &&
+              relatorio.total_slides > 3
+            )
+          ) &&
           (temPermissao("RELATORIOS", "EDITAR") ||
             temPermissao("RELATORIOS", "EXCLUIR")) ? (
             modoSelecaoSlides ? (
@@ -1463,36 +1598,93 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                 ) : null}
               </>
             ) : (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Selecionar slides"
-                activeOpacity={0.8}
-                onPress={() => setModoSelecaoSlides(true)}
-                style={[
-                  styles.selecaoInicioBotao,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={19}
-                  color={theme.texto}
-                />
-                <Text
-                  weight="SemiBold"
-                  style={{ color: theme.texto, fontSize: 12 }}
-                >
-                  SELECIONAR SLIDES
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.modosSlides}>
+              {!modoOrdenacao && slidesSelecionaveis.length > 0 ? (
+                    <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Selecionar slides"
+                    activeOpacity={0.8}
+                    onPress={() => setModoSelecaoSlides(true)}
+                    style={[
+                      styles.selecaoInicioBotao,
+                      styles.modoSlidesBotao,
+                      { borderColor: theme.borda },
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color={theme.texto}
+                    />
+                    <Text weight="SemiBold" style={{ color: theme.texto, fontSize: 11 }}>
+                      SELECIONAR
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {temPermissao("RELATORIOS", "EDITAR") &&
+                relatorio.total_slides > 3 ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      modoOrdenacao
+                        ? "Concluir reordenação"
+                        : "Reordenar slides"
+                    }
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (!modoOrdenacao) {
+                        setBusca("");
+                        setBuscaAplicada("");
+                        setFiltroRevisao("todas");
+                        setPagina(1);
+                        setMensagemAcaoSlides("");
+                      } else {
+                        setSlideParaMover(null);
+                      }
+
+                      setModoOrdenacao((atual) => !atual);
+                    }}
+                    style={[
+                      styles.selecaoInicioBotao,
+                      styles.modoSlidesBotao,
+                      {
+                        borderColor: modoOrdenacao
+                          ? theme.borda
+                          : theme.borda
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={modoOrdenacao ? "checkmark-outline" : "swap-vertical-outline"}
+                      size={18}
+                      color={modoOrdenacao ? theme.texto : theme.texto}
+                    />
+                    <Text
+                      weight="SemiBold"
+                      style={{
+                        color: modoOrdenacao ? theme.texto : theme.texto,
+                        fontSize: 11,
+                      }}
+                    >
+                      {modoOrdenacao ? "CONCLUIR ORDEM" : "REORDENAR"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             )
           ) : null}
 
           {mensagemAcaoSlides ? (
-            <Text style={{ color: theme.textoTerciaria, fontSize: 12 }}>
-              {mensagemAcaoSlides}
-            </Text>
-          ) : null}
+          <Text
+            style={[
+              styles.mensagemAcao,
+              { color: theme.textoTerciaria },
+            ]}
+          >
+            {mensagemAcaoSlides}
+          </Text>
+        ) : null}
         {carregando ? (
           <ActivityIndicator
             size="small"
@@ -1554,7 +1746,12 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                   <CartaoSlide
                     key={slide.id}
                     slide={slide}
-                    onPress={() => setSlideAberto(slide)}
+                    modoOrdenacao={modoOrdenacao}
+                    onPress={() =>
+                      modoOrdenacao
+                        ? abrirMoverSlide(slide)
+                        : setSlideAberto(slide)
+                    }
                     onDecidir={() => {
                       if (slide.revisao_pendente) {
                         void decidirSlide(slide, "INCLUIR");
@@ -1688,10 +1885,10 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
         message={
           slideParaAtualizar?.revisao_veiculo_pendente &&
           slideParaAtualizar?.revisao_clipping_pendente
-            ? "Os dados atuais do veículo e do clipping substituirão os dados salvos neste slide. As duas alterações serão confirmadas juntas."
+            ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
             : slideParaAtualizar?.revisao_veiculo_pendente
-              ? "Os dados atuais do veículo substituirão os dados salvos neste slide."
-              : "Os dados atuais do clipping substituirão os dados salvos neste slide."
+              ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+              : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
         }
         primaryLabel="ATUALIZAR"
         secondaryLabel="CANCELAR"
@@ -1781,6 +1978,69 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
         onSecondary={() => setAcaoSlides(null)}
         onPrimary={() => void executarAcaoSlides()}
       />
+      <Modal
+        visible={slideParaMover !== null && relatorio !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!movendoSlide) setSlideParaMover(null);
+        }}
+      >
+        <View style={styles.ordemModalOverlay}>
+          <View
+            style={[
+              styles.ordemModalCard,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+              },
+            ]}
+          >
+            <Text weight="Bold" style={{ fontSize: 18 }}>
+              Mover slide {slideParaMover?.ordem}
+            </Text>
+
+            <Text style={{ color: theme.textoSub, marginTop: 8 }}>
+              Escolha uma posição entre 2 e{" "}
+              {(relatorio?.total_slides ?? 1) - 1}. A capa e o
+              encerramento ficam fixos.
+            </Text>
+
+            <Input
+              label="NOVA POSIÇÃO"
+              value={destinoOrdem}
+              onChangeText={(texto) => {
+                setDestinoOrdem(texto.replace(/\D/g, ""));
+                setErroOrdenacao("");
+              }}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={String(relatorio?.total_slides ?? 0).length}
+              editable={!movendoSlide}
+              error={erroOrdenacao || undefined}
+              containerStyle={{ marginTop: 20 }}
+            />
+
+            <View style={styles.ordemModalAcoes}>
+              <Button
+                title="CANCELAR"
+                variant="outline"
+                size="small"
+                disabled={movendoSlide}
+                onPress={() => setSlideParaMover(null)}
+                style={styles.ordemModalBotao}
+              />
+              <Button
+                title="MOVER"
+                size="small"
+                loading={movendoSlide}
+                onPress={() => void confirmarMoverSlide()}
+                style={styles.ordemModalBotao}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1975,6 +2235,39 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
+  modosSlides: {
+  flexDirection: "row",
+  gap: 8,
+  marginBottom: 12,
+},
+modoSlidesBotao: {
+  flex: 1,
+  minWidth: 0,
+  marginBottom: 0,
+},
+ordemModalOverlay: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "rgba(0, 0, 0, 0.65)",
+  padding: 20,
+},
+ordemModalCard: {
+  width: "100%",
+  maxWidth: 400,
+  borderWidth: 1,
+  borderRadius: 18,
+  padding: 20,
+},
+ordemModalAcoes: {
+  flexDirection: "row",
+  gap: 8,
+  marginTop: 18,
+},
+ordemModalBotao: {
+  flex: 1,
+  width: "auto",
+},
   slideGrupo: {
   borderWidth: 1.5,
   borderRadius: 13,

@@ -64,6 +64,14 @@ export default function RelatorioSlideEdicaoModal({
   const [arquivoLogo, setArquivoLogo] = useState<ArquivoMidiaSlide | null>(null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [errosCampos, setErrosCampos] = useState<{
+    data?: string;
+    link?: string;
+  }>({}); 
+  function limparErroCampo(campo: "data" | "link") {
+    setErrosCampos((atuais) => ({ ...atuais, [campo]: undefined }));
+    setErro("");
+  }
 
   const dataISO = data.trim() ? dataBRParaISO(data) : null;
   const imagemDefinida = estadoImagem === "manter" ? imagemAtual : estadoImagem === "trocar";
@@ -143,13 +151,20 @@ export default function RelatorioSlideEdicaoModal({
   async function salvar() {
     if (salvando) return;
 
+    const novosErros: { data?: string; link?: string } = {};
+
     if (data.trim() && !dataISO) {
-      setErro("Informe uma data válida em DD/MM/AAAA.");
-      return;
+      novosErros.data = "Informe uma data válida em DD/MM/AAAA.";
     }
 
     if (valor(link) && !/^https?:\/\/\S+$/i.test(link.trim())) {
-      setErro("Informe um link HTTP ou HTTPS válido.");
+      novosErros.link = "Informe um link HTTP ou HTTPS válido.";
+    }
+
+    setErrosCampos(novosErros);
+
+    if (Object.keys(novosErros).length > 0) {
+      setErro("");
       return;
     }
 
@@ -259,12 +274,17 @@ export default function RelatorioSlideEdicaoModal({
                 label="PAUTA"
                 value={pauta}
                 onChangeText={setPauta}
-                maxLength={2000}
+                maxLength={250}
                 editable={!salvando}
                 showChanged={pauta !== (clipping?.pauta ?? "")}
                 onUndo={() => setPauta(clipping?.pauta ?? "")}
                 containerStyle={styles.campo}
               />
+              {pauta.length >= 75 ? (
+                <Text style={{ color: theme.aviso, fontSize: 12 }}>
+                  {Math.max(0, 250 - pauta.length)} caracteres restantes
+                </Text>
+              ) : null}
               <View style={styles.midia}>
                 <View style={styles.linhaRotuloMidia}>
                   <Text weight="Medium" style={styles.rotuloCampo}>
@@ -357,26 +377,40 @@ export default function RelatorioSlideEdicaoModal({
               <Input
                 label="DATA DE PUBLICAÇÃO"
                 value={data}
-                onChangeText={(texto) => setData(mascararData(texto))}
+                onChangeText={(texto) => {
+                  setData(mascararData(texto));
+                  limparErroCampo("data");
+                }}
                 placeholder="DD/MM/AAAA"
                 keyboardType="number-pad"
                 maxLength={10}
                 editable={!salvando}
                 showChanged={data !== dataISOParaBR(clipping?.data_publicacao ?? null)}
-                onUndo={() => setData(dataISOParaBR(clipping?.data_publicacao ?? null))}
+                onUndo={() => {
+                  setData(dataISOParaBR(clipping?.data_publicacao ?? null));
+                  limparErroCampo("data");
+                }}                
                 containerStyle={styles.campo}
+                error={errosCampos.data}
               />
               <Input 
                 label="LINK" 
                 value={link} 
-                onChangeText={setLink} 
+                onChangeText={(texto) => {
+                  setLink(texto);
+                  limparErroCampo("link");
+                }}
                 autoCapitalize="none" 
                 keyboardType="url" 
                 maxLength={2048} 
                 editable={!salvando} 
                 showChanged={link !== (slide.link ?? "")}
-                onUndo={() => setLink(slide.link ?? "")}
+                onUndo={() => {
+                  setLink(slide.link ?? "");
+                  limparErroCampo("link");
+                }}
                 containerStyle={styles.campo}
+                error={errosCampos.link}
               />
             </View>
 
@@ -462,7 +496,7 @@ export default function RelatorioSlideEdicaoModal({
                     disabled={salvando || !logoDefinida}
                     activeOpacity={0.8}
                     onPress={() => {
-                      setEstadoLogo("remover");
+                      setEstadoLogo(logoAtual ? "remover" : "manter");
                       setArquivoLogo(null);
                     }}
                     style={[

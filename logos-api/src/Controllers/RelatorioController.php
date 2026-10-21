@@ -225,6 +225,21 @@ class RelatorioController
         );
     }
 
+    public function moverSlide(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId, int $usuarioId) => [
+                'message' => 'Ordem do slide atualizada.',
+                ...RelatorioService::moverSlide(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $rota['slide_id'] ?? null,
+                    $this->corpo()
+                ),
+            ]
+        );
+    }
+    
     public function atualizarSlide(array $rota): void
     {
         $this->executar(

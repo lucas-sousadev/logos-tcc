@@ -312,6 +312,23 @@ export async function atualizarSlideRelatorio(
   return lerResposta(response, "Não foi possível salvar o slide.");
 }
 
+export async function moverSlideRelatorio(
+  relatorioId: number,
+  slideId: number,
+  novaOrdem: number
+): Promise<{ slide_id: number; ordem: number }> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/ordem`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nova_ordem: novaOrdem }),
+    }
+  );
+
+  return lerResposta(response, "Não foi possível mover o slide.");
+}
+
 export async function enviarMidiaSlideRelatorio(
   relatorioId: number,
   slideId: number,
