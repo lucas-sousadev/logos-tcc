@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 import { useRouter } from "expo-router";
 
+import EnderecosVeiculoCadastro, { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -16,7 +17,7 @@ import LogoPicker from "@/components/forms/LogoPicker";
 import TierSelector from "@/components/forms/TierSelector";
 import type { Tier } from "@/constants/tier";
 
-import { ArquivoLogoVeiculo, criarVeiculo } from "@/services/api/veiculo";
+import { ArquivoLogoVeiculo, criarVeiculo, NovoEnderecoVeiculo } from "@/services/api/veiculo";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function NovoVeiculo() {
@@ -31,7 +32,16 @@ export default function NovoVeiculo() {
   const [erroGeral, setErroGeral] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [logo, setLogo] =useState<ArquivoLogoVeiculo | null>(null);
-  
+  const [enderecos, setEnderecos] = useState<
+    NovoEnderecoVeiculo[]
+  >([
+    {
+      host: "",
+      caminho_prefixo: "",
+      incluir_subdominios: false,
+    },
+  ]);
+
   async function cadastrar() {
     const nomeFormatado = nome.trim();
     setErroNome("");
@@ -50,6 +60,7 @@ export default function NovoVeiculo() {
         alcance: alcance.trim() || undefined,
         tier,
         ativo,
+        enderecos: prepararEnderecosCadastro(enderecos),
       },
         logo ?? undefined
     );
@@ -125,7 +136,11 @@ export default function NovoVeiculo() {
           onRemove={() => setLogo(null)}
           disabled={salvando}
         />
-
+        <EnderecosVeiculoCadastro
+          value={enderecos}
+          onChange={setEnderecos}
+          disabled={salvando}
+        />
         <View style={[styles.statusRow, { borderColor: theme.borda }]}>
           <View style={styles.statusInfo}>
             <Text weight="SemiBold" style={styles.statusTitle}>
@@ -173,18 +188,34 @@ export default function NovoVeiculo() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 40 },
+  container: { 
+    flex: 1 
+  },
+  content: { 
+    padding: 20, 
+    paddingBottom: 40 
+  },
   intro: {
     borderWidth: 1.5,
     borderRadius: 18,
     padding: 16,
     marginBottom: 25,
   },
-  introTitle: { fontSize: 17 },
-  introText: { fontSize: 12, marginTop: 5 },
-  sectionTitle: { fontSize: 13, marginBottom: 14 },
-  textArea: { height: 100, paddingTop: 14 },
+  introTitle: { 
+    fontSize: 17 
+  },
+  introText: { 
+    fontSize: 12, 
+    marginTop: 5 
+  },
+  sectionTitle: { 
+    fontSize: 13, 
+    marginBottom: 14 
+  },
+  textArea: { 
+    height: 100, 
+    paddingTop: 14 
+  },
   statusRow: {
     minHeight: 68,
     borderWidth: 1.5,
@@ -195,10 +226,28 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 22,
   },
-  statusInfo: { flex: 1, marginRight: 10 },
-  statusTitle: { fontSize: 12 },
-  statusDescription: { fontSize: 11, marginTop: 3 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 5 },
-  actionButton: { flex: 1 },
-  errorGeral: { fontSize: 13, textAlign: "center", marginBottom: 10 },
+  statusInfo: { 
+    flex: 1, 
+    marginRight: 10 
+  },
+  statusTitle: {
+    fontSize: 12 
+  },
+  statusDescription: { 
+    fontSize: 11, 
+    marginTop: 3 
+  },
+  actions: { 
+    flexDirection: "row", 
+    gap: 10, 
+    marginTop: 5 
+  },
+  actionButton: { 
+    flex: 1 
+  },
+  errorGeral: { 
+    fontSize: 13, 
+    textAlign: "center", 
+    marginBottom: 10 
+  },
 });

@@ -4,12 +4,12 @@ import {
   TouchableOpacity,
   View,
   Keyboard,
-  Platform
+  Platform,
+  ActivityIndicator
 } from "react-native";
 
 import { useEffect, useRef, useState } from "react";
 import { useIsFocused, useNavigation,useRouter, useLocalSearchParams,} from "expo-router";
-
 
 import { CommonActions, usePreventRemove,} from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +20,8 @@ import Text from "@/components/ui/Text";
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
+import PreviaDadosLink from
+  "@/components/clipping/PreviaDadosLink";
 import ClippingContexto from "@/components/clipping/ClippingContexto";
 import TierSelector from "@/components/forms/TierSelector";
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
@@ -44,11 +46,13 @@ import type { Tier } from "@/constants/tier";
 import {
   type DadosClipping,
   type Clipping,
+  type ExtracaoLink,
   criarClipping,
   listarPautas,
   ErroApiClipping,
   enviarAnexo,
-  atualizarClipping
+  atualizarClipping,
+  extrairDadosDoLink,
 } from "@/services/api/clipping"; 
 
 const CATEGORIAS_SUGERIDAS = [
@@ -277,7 +281,23 @@ const [tier, setTier] = useState<Tier | null>(
     
   const [destinoAposSalvar, setDestinoAposSalvar] =
     useState<Clipping | null>(null);
+  const [previaLink, setPreviaLink] = useState<ExtracaoLink | null>(null);
+  const [buscandoLink, setBuscandoLink] = useState(false);
+  const [erroBuscaLink, setErroBuscaLink] = useState("");
+  const [previaAberta, setPreviaAberta] = useState(false);
+  const [
+    enderecoCadastroVeiculo,
+    setEnderecoCadastroVeiculo,
+  ] = useState("");
+  const [enderecoPendente, setEnderecoPendente] =
+    useState<{
+      veiculoId: number;
+      host: string;
+      caminho_prefixo: string;
+      incluir_subdominios: boolean;
+    } | null>(null);
 
+  const linkAtualRef = useRef(link);
   const navegacaoIniciada = useRef(false);
 
   const [confirmarDescarte, setConfirmarDescarte] = useState(false);
@@ -288,6 +308,7 @@ const [tier, setTier] = useState<Tier | null>(
     destinoAposSalvar === null;
 
   const bloqueado =
+    buscandoLink ||
     salvando ||
     selecionandoArquivos ||
     destinoAposSalvar !== null ||
@@ -476,6 +497,135 @@ const [tier, setTier] = useState<Tier | null>(
     limparErro("categorias");
   }
 
+  async function buscarDadosDoLink() {
+  const url = link.trim();
+
+  if (bloqueado || buscandoLink) return;
+
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    setErroBuscaLink(
+      "Informe um link completo com http:// ou https://."
+    );
+    return;
+  }
+
+  setBuscandoLink(true);
+  setErroBuscaLink("");
+
+  try {
+    const dados = await extrairDadosDoLink(url);
+
+    if (linkAtualRef.current.trim() === url) {
+      setPreviaLink(dados);
+      setPreviaAberta(true);
+      setEnderecoPendente(null);
+    }
+  } catch (erro) {
+    if (linkAtualRef.current.trim() === url) {
+      setErroBuscaLink(
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível consultar o link."
+      );
+    }
+  } finally {
+    setBuscandoLink(false);
+  }
+}
+
+  function aplicarDadosDoLink(
+    modo: "tudo" | "vazios"
+  ) {
+    if (!previaLink) return;
+
+    const tudo = modo === "tudo";
+
+    if (
+      previaLink.pauta &&
+      Array.from(previaLink.pauta).length <= 250 &&
+      (tudo || !pauta.trim())
+    ) {
+      setPauta(previaLink.pauta);
+      setPautasSugeridas([]);
+      limparErro("pauta");
+    }
+
+    if (
+      previaLink.data_publicacao &&
+      (tudo || !dataPublicacao.trim())
+    ) {
+      setDataPublicacao(
+        dataISOParaBR(
+          previaLink.data_publicacao
+        )
+      );
+      setAnoReferencia(
+        Number(
+          previaLink.data_publicacao.slice(0, 4)
+        )
+      );
+      limparErro(
+        "dataPublicacao",
+        "anoReferencia"
+      );
+    }
+
+    if (
+      previaLink.veiculo_sugerido &&
+      (
+        tudo ||
+        (
+          veiculo.id === null &&
+          !veiculo.nome.trim()
+        )
+      )
+    ) {
+      const tierAnterior = tier;
+
+      alterarVeiculo(previaLink.veiculo_sugerido);
+
+      if (
+        previaLink.associar_endereco_ao_salvar &&
+        previaLink.endereco_associavel
+      ) {
+        setEnderecoPendente({
+          veiculoId:
+            previaLink.veiculo_sugerido.id,
+          ...previaLink.endereco_sugerido,
+        });
+      }
+
+      if (modo === "vazios" && tierAnterior !== null) {
+        setTier(tierAnterior);
+      }
+    }
+
+    if (
+      previaLink.duracao_segundos !== null &&
+      (
+        tudo ||
+        (
+          !inicioSegundos.trim() &&
+          !fimSegundos.trim()
+        )
+      )
+    ) {
+      setInicioSegundos("00:00");
+      setFimSegundos(
+        segundosParaTempo(
+          previaLink.duracao_segundos
+        )
+      );
+      limparErro(
+        "inicioSegundos",
+        "fimSegundos"
+      );
+    }
+
+    setPreviaAberta(false);
+    setPreviaLink(null);
+  }
+
   function limparErro(
     ...campos: (keyof ErrosClipping)[]
   ) {
@@ -497,6 +647,7 @@ const [tier, setTier] = useState<Tier | null>(
     const mudouVeiculo = selecao.id !== veiculo.id;
     const limpouCampo = !selecao.nome.trim();
 
+    setEnderecoPendente(null)
     setVeiculo(selecao);
 
     if (mudouVeiculo || limpouCampo) {
@@ -541,6 +692,11 @@ const [tier, setTier] = useState<Tier | null>(
     setProgramaSecao("");
     setCategoriasTexto("");
     setLink("");
+    linkAtualRef.current = "";
+    setPreviaLink(null);
+    setErroBuscaLink("");
+    setEnderecoPendente(null);
+    setPreviaAberta(false);
     setObservacoes("");
     setInicioSegundos("");
     setFimSegundos("");
@@ -721,6 +877,19 @@ const [tier, setTier] = useState<Tier | null>(
       fim_segundos: tempoParaSegundos(fimSegundos),
     };
 
+    if (
+      enderecoPendente &&
+      enderecoPendente.veiculoId === veiculo.id
+    ) {
+      dados.associar_endereco_veiculo = {
+        host: enderecoPendente.host,
+        caminho_prefixo:
+          enderecoPendente.caminho_prefixo,
+        incluir_subdominios:
+          enderecoPendente.incluir_subdominios,
+      };
+    }
+    
     if (
       clippingInicial?.veiculo_nome_informado != null &&
       veiculo.id === null
@@ -1021,6 +1190,74 @@ const [tier, setTier] = useState<Tier | null>(
           DADOS DA PUBLICAÇÃO
         </Text>
 
+        <Input
+          label="LINK"
+          value={link}
+          onChangeText={(texto) => {
+            linkAtualRef.current = texto;
+            setLink(texto);
+            setPreviaLink(null);
+            setErroBuscaLink("");
+            limparErro("link");
+            setEnderecoPendente(null);
+          }}
+          placeholder="https://..."
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          error={erros.link}
+          editable={!bloqueado}
+          showChanged={campoAlterado("link")}
+          clearable
+        />
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Buscar dados do link"
+          disabled={bloqueado || !link.trim()}
+          onPress={() => void buscarDadosDoLink()}
+          style={[
+            styles.buscarDadosLink,
+            {
+              borderColor: theme.borda,
+              backgroundColor: theme.background,
+              opacity:
+                (!buscandoLink && bloqueado) || !link.trim()
+                  ? 0.5
+                  : 1,
+            },
+          ]}
+        >
+          {buscandoLink ? (
+            <ActivityIndicator size="small" color={theme.textoSub} />
+          ) : (
+            <Ionicons
+              name="search-outline"
+              size={15}
+              color={theme.textoSub}
+            />
+          )}
+          <Text
+            weight="SemiBold"
+            style={[
+              styles.buscarDadosLinkTexto,
+              { color: theme.textoSub },
+            ]}
+          >
+            {buscandoLink ? "BUSCANDO..." : "BUSCAR DADOS DO LINK"}
+          </Text>
+        </TouchableOpacity>
+        {erroBuscaLink ? (
+          <Text
+            style={{
+              color: theme.erro,
+              fontSize: 12,
+              marginTop: -10,
+              marginBottom: 16,
+            }}
+          >
+            {erroBuscaLink}
+          </Text>
+        ) : null}
         <ClippingDataInput
           value={dataPublicacao}
           anoReferencia={ano}
@@ -1040,7 +1277,7 @@ const [tier, setTier] = useState<Tier | null>(
           disabled={bloqueado}
           showChanged={campoAlterado("dataPublicacao")}
         />
-
+        
         <Input
           label="PAUTA"
           value={pauta}
@@ -1214,22 +1451,6 @@ const [tier, setTier] = useState<Tier | null>(
           showFimChanged={campoAlterado("fimSegundos")}
         />
 
-        <Input
-          label="LINK"
-          value={link}
-          onChangeText={(texto) => {
-            setLink(texto);
-            limparErro("link");
-          }}
-          placeholder="https://..."
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          error={erros.link}
-          editable={!bloqueado}
-          showChanged={campoAlterado("link")}
-          clearable
-        />
         {!editando ? (
             <ClippingArquivosInput
                 arquivos={arquivos}
@@ -1318,8 +1539,24 @@ const [tier, setTier] = useState<Tier | null>(
       {nomeCadastroVeiculo !== null ? (
         <ClippingVeiculoCadastro
           nomeInicial={nomeCadastroVeiculo}
-          onClose={() => setNomeCadastroVeiculo(null)}
+          onClose={() => {
+            setNomeCadastroVeiculo(null);
+            setEnderecoCadastroVeiculo("");
+            if (previaLink) setPreviaAberta(true);
+          }}
           onCriado={(criado) => {
+            if (previaLink) {
+              setPreviaLink({
+                ...previaLink,
+                veiculo_sugerido: criado,
+                associar_endereco_ao_salvar: false,
+              });
+              setNomeCadastroVeiculo(null);
+              setEnderecoCadastroVeiculo("");
+              setPreviaAberta(true);
+              return;
+            }
+
             alterarVeiculo(criado);
             setNomeCadastroVeiculo(null);
 
@@ -1327,8 +1564,51 @@ const [tier, setTier] = useState<Tier | null>(
               "Veículo cadastrado e selecionado. Salve o clipping para concluir."
             );
           }}
+          enderecoInicial={enderecoCadastroVeiculo}
         />
       ) : null}
+      <PreviaDadosLink
+        dados={previaLink}
+        onFechar={() => {
+          setPreviaAberta(false);
+          setPreviaLink(null);
+        }}
+        onAplicar={aplicarDadosDoLink}
+        visible={previaAberta}
+        podeCriarVeiculo={podeCriarVeiculo}
+        onSelecionarVeiculo={(escolhido) => {
+          setPreviaLink((atual) =>
+            atual
+              ? {
+                  ...atual,
+                  veiculo_sugerido: escolhido,
+                  associar_endereco_ao_salvar:
+                    atual.endereco_associavel &&
+                    temPermissao(
+                      "VEICULOS",
+                      "EDITAR"
+                    ),
+                }
+              : null
+          );
+        }}
+        onCadastroRapido={(nome, host) => {
+          setPreviaAberta(false);
+          setEnderecoCadastroVeiculo(host);
+          setNomeCadastroVeiculo(nome);
+        }}
+        onDesfazerVeiculo={() => {
+          setPreviaLink((atual) =>
+            atual
+              ? {
+                  ...atual,
+                  veiculo_sugerido: null,
+                  associar_endereco_ao_salvar: false,
+                }
+              : null
+          );
+        }}
+      />
 
       <FeedbackAlert
         visible={falha !== null}
@@ -1455,7 +1735,22 @@ const styles = StyleSheet.create({
   addAnotherButton: {
     marginTop: 10,
   },
-
+  buscarDadosLink: {
+    alignSelf: "flex-start",
+    minHeight: 35,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginTop: -8,
+    marginBottom: 18,
+  },
+  buscarDadosLinkTexto: {
+    fontSize: 11,
+  },
   permissionBox: {
     margin: 20,
     borderWidth: 1.5,

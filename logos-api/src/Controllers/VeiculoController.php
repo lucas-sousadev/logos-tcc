@@ -122,6 +122,26 @@ class VeiculoController
         $logoNovo = null;
 
         try {
+            if (
+                array_key_exists('enderecos', $dados) &&
+                is_string($dados['enderecos'])
+            ) {
+                try {
+                    $dados['enderecos'] = json_decode(
+                        $dados['enderecos'],
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    );
+                } catch (\JsonException $e) {
+                    throw new \InvalidArgumentException(
+                        'A lista de endereços é inválida.',
+                        0,
+                        $e
+                    );
+                }
+            }
+
             if (isset($_FILES['logo'])) {
                 $logoNovo = LogoVeiculoService::salvar(
                     $_FILES['logo'],
@@ -153,6 +173,15 @@ class VeiculoController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
+        } catch (\DomainException $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
+            http_response_code(409);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]); 
         } catch (\RuntimeException $e) {
             LogoVeiculoService::excluir($logoNovo);
 
@@ -245,6 +274,13 @@ class VeiculoController
                 'success' => false,
                 'message' => $e->getMessage()
             ]);
+        } catch (\DomainException $e) {
+            http_response_code(409);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
         } catch (\RuntimeException $e) {
             http_response_code(
                 str_contains(
@@ -300,6 +336,26 @@ class VeiculoController
         $logoNovo = null;
 
         try {
+            if (
+                array_key_exists('enderecos', $dados) &&
+                is_string($dados['enderecos'])
+            ) {
+                try {
+                    $dados['enderecos'] = json_decode(
+                        $dados['enderecos'],
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    );
+                } catch (\JsonException $e) {
+                    throw new \InvalidArgumentException(
+                        'A lista de endereços é inválida.',
+                        0,
+                        $e
+                    );
+                }
+            }
+            
             $anterior = VeiculoService::buscarPorId(
                 $id,
                 (int) $usuario->assessoria_id
@@ -365,6 +421,15 @@ class VeiculoController
             LogoVeiculoService::excluir($logoNovo);
 
             http_response_code(422);
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\DomainException $e) {
+            LogoVeiculoService::excluir($logoNovo);
+
+            http_response_code(409);
 
             echo json_encode([
                 'success' => false,

@@ -216,6 +216,46 @@ $router->get(
 );
 
 $router->get(
+    "/api/veiculos/{id}/enderecos",
+    "VeiculoEnderecoController:listar",
+    "VEICULOS.VISUALIZAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->post(
+    "/api/veiculos/{id}/enderecos",
+    "VeiculoEnderecoController:adicionar",
+    "VEICULOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->put(
+    "/api/veiculos/{id}/enderecos/{enderecoId}",
+    "VeiculoEnderecoController:atualizar",
+    "VEICULOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->delete(
+    "/api/veiculos/{id}/enderecos/{enderecoId}",
+    "VeiculoEnderecoController:remover",
+    "VEICULOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware
+    ]
+);
+
+$router->get(
     "/api/veiculos/{id}",
     "VeiculoController:buscar",
     "VEICULOS.VISUALIZAR",
@@ -433,6 +473,16 @@ $router->post(
     "/api/clippings",
     "ClippingController:criar",
     "CLIPPING.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
+$router->post(
+    "/api/clippings/extrair-link",
+    "ClippingController:extrairLink",
+    "CLIPPING.VISUALIZAR",
     middleware: [
         $authMiddleware,
         $permissionMiddleware,

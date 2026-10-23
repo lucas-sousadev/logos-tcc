@@ -906,18 +906,25 @@ class ClippingService
         int $usuarioId,
         array $dados
     ): array {
+        $associacao =
+        $dados['associar_endereco_veiculo'] ?? null;
+
+        unset($dados['associar_endereco_veiculo']);
+
         return self::transacao(
-            function () use (
-                $assessoriaId,
-                $usuarioId,
-                $dados
-            ) {
+            function () use ($assessoriaId, $usuarioId, $dados, $associacao) {
                 $campos = self::validarDados(
                     $assessoriaId,
                     $dados,
                     null
                 );
-                
+
+                self::associarEnderecoDoClipping(
+                    $assessoriaId,
+                    $campos,
+                    $associacao
+                );
+
                 $bloquearCliente = Connection::get()->prepare(
                     "
                         SELECT id
@@ -968,12 +975,17 @@ class ClippingService
             $id,
             'ID do clipping'
         );
+        $associacao =
+        $dados['associar_endereco_veiculo'] ?? null;
+
+        unset($dados['associar_endereco_veiculo']);
 
         return self::transacao(
             function () use (
                 $id,
                 $assessoriaId,
-                $dados
+                $dados,
+                $associacao
             ) {
                 $atual = Clipping::buscarPorId(
                     $id,
@@ -999,6 +1011,12 @@ class ClippingService
                     $assessoriaId,
                     $dados,
                     $atual
+                );
+
+                self::associarEnderecoDoClipping(
+                    $assessoriaId,
+                    $campos,
+                    $associacao
                 );
 
                 Clipping::atualizar(
@@ -1175,5 +1193,145 @@ class ClippingService
             $clienteEmCriacao
         );
     }
+    private static function associarEnderecoDoClipping(
+        int $assessoriaId,
+        array $campos,
+        mixed $associacao
+    ): void {
+        if ($associacao === null) {
+            return;
+        }
 
+        if (
+            !is_array($associacao) ||
+            !is_string($associacao['host'] ?? null) ||
+            !isset($campos['veiculo_id']) ||
+            !$campos['link']
+        ) {
+            throw new \InvalidArgumentException(
+                'A associação do endereço é inválida.'
+            );
+        }
+
+        $usuario = AuthContext::get();
+
+        if (
+            !$usuario ||
+            !PermissaoService::usuarioTemPermissao(
+                (int) $usuario->sub,
+                (string) $usuario->perfil,
+                'VEICULOS',
+                'EDITAR'
+            )
+        ) {
+            throw new \LogicException(
+                'Você não possui permissão para associar o endereço ao veículo.'
+            );
+        }
+
+        $host = strtolower(trim($associacao['host']));
+        $hostLink = strtolower(
+            (string) parse_url(
+                $campos['link'],
+                PHP_URL_HOST
+            )
+        );
+
+        $semWww = static fn(string $valor): string =>
+            preg_replace('/^www\./', '', $valor);
+
+        if (
+            filter_var(
+                $host,
+                FILTER_VALIDATE_DOMAIN,
+                FILTER_FLAG_HOSTNAME
+            ) === false ||
+            $semWww($host) !== $semWww($hostLink)
+        ) {
+            throw new \InvalidArgumentException(
+                'O domínio sugerido não corresponde ao link do clipping.'
+            );
+        }
+
+        $prefixo =
+            $associacao['caminho_prefixo'] ?? '';
+
+        if (!is_string($prefixo)) {
+            throw new \InvalidArgumentException(
+                'A seção do endereço é inválida.'
+            );
+        }
+
+        $caminho = (string) (
+            parse_url($campos['link'], PHP_URL_PATH)
+            ?: '/'
+        );
+
+        if (
+            $prefixo !== '' &&
+            $caminho !== $prefixo &&
+            !str_starts_with(
+                $caminho,
+                rtrim($prefixo, '/') . '/'
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'A seção não corresponde ao link do clipping.'
+            );
+        }
+
+        $veiculoId = (int) $campos['veiculo_id'];
+
+        VeiculoEnderecoService::alterarDiretamente(
+            $assessoriaId,
+            $veiculoId,
+            function () use (
+                $assessoriaId,
+                $veiculoId,
+                $host,
+                $prefixo,
+                $associacao
+            ): void {
+                $stmt = Connection::get()->prepare("
+                    SELECT veiculo_id
+                    FROM veiculo_enderecos
+                    WHERE assessoria_id = :assessoria_id
+                    AND host = :host
+                    AND caminho_prefixo = :prefixo
+                    FOR UPDATE
+                ");
+
+                $stmt->execute([
+                    'assessoria_id' => $assessoriaId,
+                    'host' => $host,
+                    'prefixo' => $prefixo,
+                ]);
+
+                $dono = $stmt->fetchColumn();
+
+                if ($dono !== false) {
+                    if ((int) $dono !== $veiculoId) {
+                        throw new \DomainException(
+                            'Este endereço já pertence a outro veículo.'
+                        );
+                    }
+
+                    return;
+                }
+
+                VeiculoEnderecoService::adicionar(
+                    $assessoriaId,
+                    $veiculoId,
+                    [
+                        'host' => $host,
+                        'caminho_prefixo' => $prefixo,
+                        'incluir_subdominios' =>
+                            $associacao[
+                                'incluir_subdominios'
+                            ] ?? false,
+                    ]
+                );
+            }
+        );
+    }
 }

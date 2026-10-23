@@ -590,23 +590,39 @@ function Atalho({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { 
+    flex: 1 
+  },
   conteudo: {
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 30,
     gap: 20,
   },
-  tituloPagina: { fontSize: 20, lineHeight: 26 },
-  subtitulo: { fontSize: 12, lineHeight: 18 },
-  secao: { gap: 8 },
+  tituloPagina: { 
+    fontSize: 20, 
+    lineHeight: 26 
+  },
+  subtitulo: { 
+    fontSize: 12, 
+    lineHeight: 18 
+  },
+  secao: { 
+    gap: 8 
+  },
   secaoTopo: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  tituloSecao: { fontSize: 16, lineHeight: 22 },
-  textoMenor: { fontSize: 11, lineHeight: 16 },
+  tituloSecao: { 
+    fontSize: 16, 
+    lineHeight: 22 
+  },
+  textoMenor: { 
+    fontSize: 11, 
+    lineHeight: 16 
+  },
   revisoesCard: {
     borderWidth: 1.5,
     borderRadius: 16,
@@ -635,8 +651,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  resumoRevisoesTexto: { flex: 1 },
-  numeroRevisoes: { fontSize: 25, lineHeight: 29 },
+  resumoRevisoesTexto: {
+    flex: 1 
+  },
+  numeroRevisoes: { 
+    fontSize: 25, 
+    lineHeight: 29 
+  },
   relatorioPendente: {
     minHeight: 58,
     flexDirection: "row",
@@ -644,7 +665,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: 8,
   },
-  relatorioPendenteTexto: { flex: 1, gap: 3 },
+  relatorioPendenteTexto: { 
+    flex: 1, 
+    gap: 3 
+  },
   verRelatorios: {
     minHeight: 44,
     flexDirection: "row",
@@ -669,8 +693,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  cartaoNumero: { fontSize: 26, lineHeight: 30, marginTop: 3 },
-  cartaoTitulo: { fontSize: 13, lineHeight: 17 },
+  cartaoNumero: { 
+    fontSize: 26, 
+    lineHeight: 30, 
+    marginTop: 3 
+  },
+  cartaoTitulo: { 
+    fontSize: 13, 
+    lineHeight: 17 
+  },
   atalhos: {
     borderWidth: 1.5,
     borderRadius: 14,
@@ -691,7 +722,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  atalhoTexto: { flex: 1, gap: 2 },
+  atalhoTexto: { 
+    flex: 1, 
+    gap: 2 
+  },
   avisoErro: {
     flexDirection: "row",
     alignItems: "center",

@@ -99,6 +99,10 @@ export default function Input({
       <View style={styles.inputWrapper}>
         <TextInput
           {...props}
+          placeholderTextColor={
+            props.placeholderTextColor ??
+            `${theme.textoInput}80`
+          }
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={

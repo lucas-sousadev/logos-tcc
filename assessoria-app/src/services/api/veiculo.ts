@@ -27,6 +27,8 @@ export interface DadosVeiculo {
   alcance?: string;
   tier?: Tier | null;
   ativo?: boolean;
+  enderecos_versao?: number;
+  enderecos?: NovoEnderecoVeiculo[];
 }
 
 export interface ArquivoLogoVeiculo {
@@ -422,6 +424,19 @@ function criarFormDataVeiculo(
     formData.append("tier", dados.tier === null ? "" : String(dados.tier));
   }
 
+  if (dados.enderecos !== undefined) {
+    formData.append(
+      "enderecos",
+      JSON.stringify(dados.enderecos)
+    );
+  }
+  if (dados.enderecos_versao !== undefined) {
+    formData.append(
+      "enderecos_versao",
+      String(dados.enderecos_versao)
+    );
+  }
+
   if (logo) {
     const arquivo = logo.file ?? {
       uri: logo.uri,
@@ -469,4 +484,157 @@ async function lerRespostaVeiculo(
   }
 
   return data.veiculo;
+}
+
+export interface EnderecoVeiculo {
+  id: number;
+  assessoria_id: number;
+  veiculo_id: number;
+  host: string;
+  protocolo: "http" | "https";
+  caminho_prefixo: string;
+  incluir_subdominios: boolean;
+  created_at: string;
+}
+
+export interface NovoEnderecoVeiculo {
+  id?: number;
+  host: string;
+  caminho_prefixo: string;
+  incluir_subdominios: boolean;
+}
+
+interface RespostaEnderecoVeiculo {
+  success: boolean;
+  enderecos?: EnderecoVeiculo[];
+  endereco?: EnderecoVeiculo;
+  versao?: number;
+  message?: string;
+}
+
+async function lerRespostaEnderecoVeiculo(
+  response: Response
+): Promise<RespostaEnderecoVeiculo> {
+  const texto = await response.text();
+  let dados: RespostaEnderecoVeiculo;
+
+  try {
+    dados = JSON.parse(texto);
+  } catch {
+    throw new Error(
+      "A API retornou uma resposta inválida."
+    );
+  }
+
+  if (!response.ok || !dados.success) {
+    throw new Error(
+      dados.message ||
+        "Não foi possível processar o endereço."
+    );
+  }
+
+  return dados;
+}
+
+export async function carregarEnderecosVeiculoComVersao(
+  veiculoId: number
+): Promise<{
+  enderecos: EnderecoVeiculo[];
+  versao: number;
+}> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/${veiculoId}/enderecos`,
+    { method: "GET" }
+  );
+
+  const dados = await lerRespostaEnderecoVeiculo(response);
+
+  if (
+    !Array.isArray(dados.enderecos) ||
+    !Number.isSafeInteger(dados.versao) ||
+    dados.versao! < 0
+  ) {
+    throw new Error(
+      "A API não retornou os endereços e sua versão."
+    );
+  }
+
+  return {
+    enderecos: dados.enderecos,
+    versao: dados.versao!,
+  };
+}
+
+export async function listarEnderecosVeiculo(
+  veiculoId: number
+): Promise<EnderecoVeiculo[]> {
+  const snapshot =
+    await carregarEnderecosVeiculoComVersao(veiculoId);
+
+  return snapshot.enderecos;
+}
+
+export async function adicionarEnderecoVeiculo(
+  veiculoId: number,
+  endereco: NovoEnderecoVeiculo
+): Promise<EnderecoVeiculo> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/${veiculoId}/enderecos`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(endereco),
+    }
+  );
+
+  const dados = await lerRespostaEnderecoVeiculo(response);
+
+  if (!dados.endereco) {
+    throw new Error(
+      "A API não retornou o endereço cadastrado."
+    );
+  }
+
+  return dados.endereco;
+}
+
+export async function atualizarEnderecoVeiculo(
+  veiculoId: number,
+  enderecoId: number,
+  endereco: NovoEnderecoVeiculo
+): Promise<EnderecoVeiculo> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/${veiculoId}/enderecos/${enderecoId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(endereco),
+    }
+  );
+
+  const dados = await lerRespostaEnderecoVeiculo(response);
+
+  if (!dados.endereco) {
+    throw new Error(
+      "A API não retornou o endereço atualizado."
+    );
+  }
+
+  return dados.endereco;
+}
+
+export async function removerEnderecoVeiculo(
+  veiculoId: number,
+  enderecoId: number
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos/${veiculoId}/enderecos/${enderecoId}`,
+    { method: "DELETE" }
+  );
+
+  await lerRespostaEnderecoVeiculo(response);
 }

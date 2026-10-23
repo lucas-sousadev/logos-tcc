@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import EnderecosVeiculoCadastro, { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { Tier } from "@/constants/tier";
 import {
   criarVeiculo,
+  NovoEnderecoVeiculo,
   type Veiculo,
 } from "@/services/api/veiculo";
 import {
@@ -37,12 +38,14 @@ interface ClippingVeiculoCadastroProps {
   nomeInicial: string;
   onClose: () => void;
   onCriado: (veiculo: Veiculo) => void;
+  enderecoInicial?: string;
 }
 
 export default function ClippingVeiculoCadastro({
   nomeInicial,
   onClose,
   onCriado,
+  enderecoInicial,
 }: ClippingVeiculoCadastroProps) {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
@@ -52,6 +55,15 @@ export default function ClippingVeiculoCadastro({
   const [descricao, setDescricao] = useState("");
   const [alcance, setAlcance] = useState("");
   const [tier, setTier] = useState<Tier | null>(null);
+  const [enderecos, setEnderecos] = useState<
+    NovoEnderecoVeiculo[]
+  >([
+    {
+      host: enderecoInicial ?? "",
+      caminho_prefixo: "",
+      incluir_subdominios: false,
+    },
+  ]);
 
   const [erros, setErros] = useState<ErrosCadastro>({});
   const [erroGeral, setErroGeral] = useState("");
@@ -102,6 +114,20 @@ export default function ClippingVeiculoCadastro({
 
     if (Object.keys(validacao).length > 0) return;
 
+    let enderecosParaSalvar: NovoEnderecoVeiculo[];
+
+    try {
+      enderecosParaSalvar =
+        prepararEnderecosCadastro(enderecos);
+    } catch (error) {
+      setErroGeral(
+        error instanceof Error
+          ? error.message
+          : "Confira os endereços do site."
+      );
+      return;
+    }
+
     trava.current = true;
     setSalvando(true);
     Keyboard.dismiss();
@@ -115,6 +141,7 @@ export default function ClippingVeiculoCadastro({
         alcance: alcance.trim(),
         tier,
         ativo: true,
+        enderecos: enderecosParaSalvar,
       });
     } catch (error) {
       const mensagem =
@@ -275,7 +302,12 @@ export default function ClippingVeiculoCadastro({
             {erros.tier ? (
               <Text style={styles.erro}>{erros.tier}</Text>
             ) : null}
-
+            
+            <EnderecosVeiculoCadastro
+              value={enderecos}
+              onChange={setEnderecos}
+              disabled={salvando}
+            />
             {erroGeral ? (
               <Text
                 accessibilityRole="alert"

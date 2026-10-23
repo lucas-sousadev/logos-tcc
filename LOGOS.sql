@@ -183,6 +183,7 @@ CREATE TABLE veiculos (
 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     tier TINYINT UNSIGNED NULL,
+    enderecos_versao INT UNSIGNED NOT NULL DEFAULT 0,
 
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -199,6 +200,41 @@ CREATE TABLE veiculos (
 	UNIQUE KEY uq_veiculo_id_assessoria (id, assessoria_id),
     UNIQUE KEY uq_veiculo_nome_assessoria (assessoria_id, nome),
     INDEX idx_veiculos_assessoria (assessoria_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE veiculo_enderecos (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    assessoria_id BIGINT UNSIGNED NOT NULL,
+    veiculo_id BIGINT UNSIGNED NOT NULL,
+
+    -- Domínio normalizado, sem protocolo: noticias.r7.com
+    host VARCHAR(253)
+        CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    
+    protocolo ENUM('http', 'https')
+        NOT NULL DEFAULT 'https',
+    
+    -- Vazio para todo o domínio; /agro para uma seção específica.
+    caminho_prefixo VARCHAR(300)
+        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+        NOT NULL DEFAULT '',
+
+    incluir_subdominios BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_veiculo_enderecos_veiculo
+        FOREIGN KEY (veiculo_id, assessoria_id)
+        REFERENCES veiculos (id, assessoria_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT chk_veiculo_enderecos_host
+        CHECK (host <> ''),
+
+    UNIQUE KEY uq_veiculo_endereco
+        (assessoria_id, host, caminho_prefixo),
+
+    INDEX idx_veiculo_enderecos_veiculo
+        (veiculo_id, assessoria_id)
 ) ENGINE=InnoDB;
 
 -- 8. Contatos / mailing

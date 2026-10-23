@@ -8,6 +8,7 @@ use Logos\AssessoriaApi\Services\ClippingAnexoService;
 use Logos\AssessoriaApi\Services\ClippingCsvService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoCsv;
+use Logos\AssessoriaApi\Services\ExtracaoLinkService;
 
 class ClippingController
 {
@@ -115,6 +116,11 @@ class ClippingController
                 ],
                 409
             );
+        } catch (\LogicException $e) {
+            $this->responder([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 403); 
         } catch (\UnexpectedValueException $e) {
             $this->responder(
                 [
@@ -438,6 +444,17 @@ class ClippingController
                     $assessoriaId,
                     $usuarioId,
                     $this->corpo()
+                )
+        );
+    }
+
+    public function extrairLink(): void
+    {
+        $this->executar(
+            fn(int $a, int $u) =>
+                ExtracaoLinkService::extrair(
+                    $a,
+                    $this->corpo()['link'] ?? null
                 )
         );
     }

@@ -13,6 +13,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import EnderecosVeiculo from
+  "@/components/veiculos/EnderecosVeiculo";
+import EnderecosVeiculoRascunho from "@/components/veiculos/EnderecosVeiculoRascunho";
+import { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Header from "@/components/layout/Header";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -21,26 +25,35 @@ import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import LogoPicker from "@/components/forms/LogoPicker";
 import TierSelector from "@/components/forms/TierSelector";
 import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
+import ContatosVinculados from "@/components/veiculos/ContatosVinculados";
+import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
+
 import { DESCRICOES_TIER, rotuloTier, Tier } from "@/constants/tier";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+
 import {
   atualizarVeiculo,
   atualizarVeiculoComLogo,
+  listarEnderecosVeiculo,
   buscarVeiculo,
   excluirVeiculo,
   obterUrlLogoVeiculo,
   Veiculo,
+  carregarEnderecosVeiculoComVersao,
 } from "@/services/api/veiculo";
 import type {
   ArquivoLogoVeiculo,
+  EnderecoVeiculo,
+  NovoEnderecoVeiculo,
+  DadosVeiculo
 } from "@/services/api/veiculo";
 import {
   ErrosVeiculo,
   validarFormularioVeiculo,
 } from "@/utils/validarVeiculo";
-import ContatosVinculados from "@/components/veiculos/ContatosVinculados";
-import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
+
 
 interface Formulario {
   nome: string;
@@ -61,7 +74,19 @@ function dadosFormulario(dados: Veiculo): Formulario {
       ativo: dados.ativo === 1,
     };
   }
-  
+
+  function enderecosParaEdicao(
+    lista: EnderecoVeiculo[]
+  ): NovoEnderecoVeiculo[] {
+    return lista.map((endereco) => ({
+      id: endereco.id,
+      host: `${endereco.protocolo}://${endereco.host}`,
+      caminho_prefixo:
+        endereco.caminho_prefixo,
+      incluir_subdominios:
+        endereco.incluir_subdominios,
+    }));
+  }
 export default function VeiculoDetalhes() {
   const router = useRouter();
   const { theme } = useTheme();
@@ -95,6 +120,10 @@ export default function VeiculoDetalhes() {
   const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
   const [logoRemovido, setLogoRemovido] = useState(false);
+  const [enderecosOriginais, setEnderecosOriginais] = useState<NovoEnderecoVeiculo[]>([]);
+  const [enderecosRascunho, setEnderecosRascunho] = useState<NovoEnderecoVeiculo[]>([]);
+  const [versaoEnderecos, setVersaoEnderecos] = useState<number | null>(null);
+  const [erroEnderecos, setErroEnderecos] = useState("");
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -135,14 +164,25 @@ export default function VeiculoDetalhes() {
 
       try {
         setCarregando(true);
+        
+        const [dados, enderecos] = await Promise.all([
+          buscarVeiculo(id),
+          listarEnderecosVeiculo(id),
+        ]);
 
-        const dados = await buscarVeiculo(id);
-        const novoFormulario =
-          dadosFormulario(dados);
+        const listaFormulario =
+          enderecosParaEdicao(enderecos);
+
+        const novoFormulario = dadosFormulario(dados);
 
         setVeiculo(dados);
         setFormulario(novoFormulario);
         setFormularioOriginal(novoFormulario);
+        setEnderecosOriginais(listaFormulario);
+        setEnderecosRascunho(
+          listaFormulario.map((item) => ({ ...item }))
+        );
+        setErroEnderecos("");
       } catch (error) {
         Alert.alert(
           "Erro",
@@ -201,6 +241,35 @@ export default function VeiculoDetalhes() {
       : false;
   }
 
+  async function iniciarEdicao() {
+    if (!veiculo) return;
+
+    try {
+      const snapshot =
+        await carregarEnderecosVeiculoComVersao(
+          veiculo.id
+        );
+
+      const lista =
+        enderecosParaEdicao(snapshot.enderecos);
+
+      setVersaoEnderecos(snapshot.versao);
+      setEnderecosOriginais(lista);
+      setEnderecosRascunho(
+        lista.map((item) => ({ ...item }))
+      );
+      setErroEnderecos("");
+      setModoEdicao(true);
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os endereços."
+      );
+    }
+  }
+
   function cancelarEdicao() {
     if (!veiculo) return;
     const original = dadosFormulario(veiculo);
@@ -210,27 +279,38 @@ export default function VeiculoDetalhes() {
     setErroGeral("");
     setNovoLogo(null);
     setLogoRemovido(false);
+    setEnderecosRascunho(
+      enderecosOriginais.map((item) => ({ ...item }))
+    );
+    setErroEnderecos("");
     setModoEdicao(false);
   }
 
-  function camposAlterados(): (keyof Formulario)[] {
-    if (!formularioOriginal) {
-      return [];
-    }
+  function camposAlterados():
+    Array<keyof Formulario | "enderecos"> {
+    if (!formularioOriginal) return [];
 
-    const campos = (
-      Object.keys(formulario) as (keyof Formulario)[]
-    ).filter(
-      (campo) =>
-        formulario[campo] !==
-        formularioOriginal[campo]
-    );
+    const campos:
+      Array<keyof Formulario | "enderecos"> =
+      (Object.keys(formulario) as
+        (keyof Formulario)[]).filter(
+          (campo) =>
+            formulario[campo] !==
+            formularioOriginal[campo]
+        );
 
     if (
       (novoLogo !== null || logoRemovido) &&
       !campos.includes("logo_path")
     ) {
       campos.push("logo_path");
+    }
+
+    if (
+      JSON.stringify(enderecosRascunho) !==
+      JSON.stringify(enderecosOriginais)
+    ) {
+      campos.push("enderecos");
     }
 
     return campos;
@@ -260,6 +340,14 @@ export default function VeiculoDetalhes() {
 
     let campo: keyof ErrosVeiculo | null = null;
 
+    if (
+      texto.includes("endereço") ||
+      texto.includes("domínio") ||
+      texto.includes("subdomínio")
+    ) {
+      setErroEnderecos(mensagem);
+      return;
+    }
     if (texto.includes("nome")) {
       campo = "nome";
     } else if (texto.includes("descrição")) {
@@ -301,21 +389,60 @@ export default function VeiculoDetalhes() {
       return;
     }
 
+    const enderecosMudaram =
+      JSON.stringify(enderecosRascunho) !==
+      JSON.stringify(enderecosOriginais);
+
+    let enderecosParaSalvar:
+      NovoEnderecoVeiculo[] | undefined;
+
+    try {
+      if (enderecosMudaram) {
+        enderecosParaSalvar =
+          prepararEnderecosCadastro(
+            enderecosRascunho
+          );
+      }
+    } catch (error) {
+      setErroEnderecos(
+        error instanceof Error
+          ? error.message
+          : "Verifique os endereços."
+      );
+      return;
+    }
+
+    setErroEnderecos("");
+
+    const dadosAtualizacao: DadosVeiculo = {
+      nome: formulario.nome.trim(),
+      descricao:
+        formulario.descricao.trim() || undefined,
+      logo_path: logoRemovido
+        ? null
+        : formulario.logo_path.trim() || undefined,
+      alcance:
+        formulario.alcance.trim() || undefined,
+      ativo: formulario.ativo,
+      tier: formulario.tier,
+    };
+
+    if (enderecosParaSalvar !== undefined) {
+      if (versaoEnderecos === null) {
+        setErroEnderecos(
+          "Reabra a edição para carregar a versão dos endereços."
+        );
+        return;
+      }
+
+      dadosAtualizacao.enderecos =
+        enderecosParaSalvar;
+      dadosAtualizacao.enderecos_versao =
+        versaoEnderecos;
+    }
+
     try {
       setSalvando(true);
-
-      const dadosAtualizacao = {
-        nome: formulario.nome.trim(),
-        descricao:
-          formulario.descricao.trim() || undefined,
-        logo_path: logoRemovido
-          ? null
-          : formulario.logo_path.trim() || undefined,
-        alcance:
-          formulario.alcance.trim() || undefined,
-        ativo: formulario.ativo,
-        tier: formulario.tier,
-      };
 
       const atualizado =
         novoLogo !== null || logoRemovido
@@ -338,6 +465,18 @@ export default function VeiculoDetalhes() {
       setLogoRemovido(false);
       setFormulario(novoFormulario);
       setFormularioOriginal(novoFormulario);
+      if (enderecosParaSalvar !== undefined) {
+        setEnderecosOriginais(
+          enderecosParaSalvar.map((item) => ({
+            ...item,
+          }))
+        );
+        setEnderecosRascunho(
+          enderecosParaSalvar.map((item) => ({
+            ...item,
+          }))
+        );
+      }
       setModoEdicao(false);
 
       Alert.alert(
@@ -355,7 +494,7 @@ export default function VeiculoDetalhes() {
       setSalvando(false);
     }
   }
-
+  
   function confirmarExclusao() {
     if (!veiculo) return;
 
@@ -450,7 +589,7 @@ export default function VeiculoDetalhes() {
        <AcoesDetalhes
           onEditar={
             temPermissao("VEICULOS", "EDITAR")
-              ? () => setModoEdicao(true)
+              ? () => void iniciarEdicao() 
               : undefined
           }
           onExcluir={
@@ -607,7 +746,15 @@ export default function VeiculoDetalhes() {
               error={erros.logo_path}
               showChanged={campoAlterado("logo_path")}
             />
-
+            <EnderecosVeiculoRascunho
+              value={enderecosRascunho}
+              onChange={(lista) => {
+                setEnderecosRascunho(lista);
+                setErroEnderecos("");
+              }}
+              disabled={salvando}
+              error={erroEnderecos}
+            />
             <View
               style={[styles.statusRow, { borderColor: theme.borda }]}
             >
@@ -644,6 +791,7 @@ export default function VeiculoDetalhes() {
                 title="CANCELAR"
                 variant="outline"
                 onPress={cancelarEdicao}
+                disabled={salvando}
                 style={styles.actionButton}
               />
               <Button
@@ -692,14 +840,9 @@ export default function VeiculoDetalhes() {
                   : "Não informado"
               }
             />
-            <InfoRow
-              icon="people-outline"
-              label="CONTATOS VINCULADOS"
-              value={`${veiculo.contatos_vinculados} ${
-                veiculo.contatos_vinculados === 1
-                  ? "contato"
-                  : "contatos"
-              }`}
+            <EnderecosVeiculo
+              veiculoId={veiculo.id}
+              editavel={false}
             />
             {podeVerContatos || podeVerClippings ? (
               <View style={styles.vinculos}>

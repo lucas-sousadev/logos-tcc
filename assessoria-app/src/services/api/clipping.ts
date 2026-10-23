@@ -110,6 +110,11 @@ export interface DadosClipping {
   link?: string | null;
   observacoes?: string | null;
   veiculo_nome_informado?: string | null;
+  associar_endereco_veiculo?: {
+    host: string;
+    caminho_prefixo: string;
+    incluir_subdominios: boolean;
+  };
 }
 
 export type DadosAtualizacaoClipping =
@@ -949,4 +954,62 @@ export async function confirmarImportacaoClipping(
     response,
     "Não foi possível confirmar a importação."
   );
+}
+
+export interface ExtracaoLink {
+  url_consultada: string;
+  pauta: string | null;
+  data_publicacao: string | null;
+  duracao_segundos: number | null;
+  veiculo_sugerido: {
+    id: number;
+    nome: string;
+    descricao: string | null;
+    alcance: string | null;
+    logo_path: string | null;
+    tier: Tier | null;
+    ativo: number;
+  } | null;
+  veiculo_ambiguo: boolean;
+  nome_portal: string;
+  endereco_sugerido: {
+    host: string;
+    caminho_prefixo: string;
+    incluir_subdominios: boolean;
+  };
+  endereco_associavel: boolean;
+  sugestoes_veiculos: NonNullable<
+    ExtracaoLink["veiculo_sugerido"]
+  >[];
+  associar_endereco_ao_salvar?: boolean;
+}
+
+export async function extrairDadosDoLink(
+  link: string
+): Promise<ExtracaoLink> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/clippings/extrair-link`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ link }),
+    }
+  );
+
+  const dados = await lerResposta<{
+    extracao?: ExtracaoLink;
+  }>(
+    response,
+    "Não foi possível consultar o link."
+  );
+
+  if (!dados.extracao) {
+    throw new Error(
+      "A API não retornou os dados da página."
+    );
+  }
+
+  return dados.extracao;
 }

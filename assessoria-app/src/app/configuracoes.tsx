@@ -189,16 +189,26 @@ export default function Configuracoes() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1 
+  },
   conteudo: {
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 30,
     gap: 22,
   },
-  introducao: { gap: 4 },
-  tituloPagina: { fontSize: 20, lineHeight: 26 },
-  descricaoPagina: { fontSize: 12, lineHeight: 18 },
+  introducao: { 
+    gap: 4 
+  },
+  tituloPagina: { 
+    fontSize: 20, 
+    lineHeight: 26 
+  },
+  descricaoPagina: { 
+    fontSize: 12, 
+    lineHeight: 18 
+  },
   contaCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -214,12 +224,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  contaTexto: { flex: 1, gap: 2 },
-  nome: { fontSize: 15, lineHeight: 20 },
-  email: { fontSize: 12, lineHeight: 17 },
-  perfil: { fontSize: 11, lineHeight: 16 },
-  secao: { gap: 9 },
-  tituloSecao: { fontSize: 16, lineHeight: 22 },
+  contaTexto: { 
+    flex: 1, 
+    gap: 2 
+  },
+  nome: { 
+    fontSize: 15, 
+    lineHeight: 20 
+  },
+  email: { 
+    fontSize: 12, 
+    lineHeight: 17 
+  },
+  perfil: { 
+    fontSize: 11, 
+    lineHeight: 16 
+  },
+  secao: { 
+    gap: 9 
+  },
+  tituloSecao: { 
+    fontSize: 16, 
+    lineHeight: 22 
+  },
   opcaoCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -237,8 +264,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  opcaoTexto: { flex: 1, gap: 2 },
-  nomeOpcao: { fontSize: 13, lineHeight: 18 },
-  descricaoOpcao: { fontSize: 11, lineHeight: 16 },
-  ajuda: { fontSize: 11, lineHeight: 16 },
+  opcaoTexto: {
+    flex: 1, 
+    gap: 2 
+  },
+  nomeOpcao: { 
+    fontSize: 13, 
+    lineHeight: 18 
+  },
+  descricaoOpcao: { 
+    fontSize: 11, 
+    lineHeight: 16 
+  },
+  ajuda: { 
+    fontSize: 11, 
+    lineHeight: 16 
+  },
 });

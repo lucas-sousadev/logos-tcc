@@ -83,14 +83,12 @@ class VeiculoService
             self::MAX_DESCRICAO,
             'A descrição'
         );
-
         $logoPath = self::campo(
             $dados,
             'logo_path',
             self::MAX_LOGO_PATH,
             'O logo ou caminho'
         );
-
         $alcance = self::campo(
             $dados,
             'alcance',
@@ -98,33 +96,106 @@ class VeiculoService
             'O alcance'
         );
 
+        $enderecos = array_key_exists('enderecos', $dados)
+            ? $dados['enderecos']
+            : [];
+
+        if (
+            !is_array($enderecos) ||
+            !array_is_list($enderecos) ||
+            count($enderecos) > 20
+        ) {
+            throw new \InvalidArgumentException(
+                'Informe uma lista de até 20 endereços.'
+            );
+        }
+
+        foreach ($enderecos as $endereco) {
+            if (!is_array($endereco)) {
+                throw new \InvalidArgumentException(
+                    'Há um endereço inválido na lista.'
+                );
+            }
+        }
+
         if (Veiculo::buscarPorNome($nome, $assessoriaId)) {
             throw new \RuntimeException(
                 'Este veículo já está cadastrado.'
             );
         }
 
+        $db = Connection::get();
+        $transacaoPropria = !$db->inTransaction();
+
+        if ($transacaoPropria) {
+            $db->beginTransaction();
+        }
+
         try {
-            $id = Veiculo::criar(
-                $assessoriaId,
-                $nome,
-                $descricao,
-                $logoPath,
-                $alcance,
-                self::ativo($dados),
-                self::tier($dados['tier'] ?? null)
-            );
-        } catch (\PDOException $e) {
-            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                throw new \RuntimeException(
-                    'Este veículo já está cadastrado.'
+            try {
+                $id = Veiculo::criar(
+                    $assessoriaId,
+                    $nome,
+                    $descricao,
+                    $logoPath,
+                    $alcance,
+                    self::ativo($dados),
+                    self::tier($dados['tier'] ?? null)
                 );
+            } catch (\PDOException $e) {
+                if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                    throw new \RuntimeException(
+                        'Este veículo já está cadastrado.'
+                    );
+                }
+
+                throw $e;
+            }
+
+            foreach ($enderecos as $indice => $endereco) {
+                try {
+                    VeiculoEnderecoService::adicionar(
+                        $assessoriaId,
+                        $id,
+                        $endereco
+                    );
+                } catch (\InvalidArgumentException $e) {
+                    throw new \InvalidArgumentException(
+                        'Endereço ' . ($indice + 1) . ': ' .
+                        $e->getMessage(),
+                        0,
+                        $e
+                    );
+                } catch (\DomainException $e) {
+                    throw new \DomainException(
+                        'Endereço ' . ($indice + 1) . ': ' .
+                        $e->getMessage(),
+                        0,
+                        $e
+                    );
+                }
+            }
+
+            $veiculo = self::buscarPorId(
+                $id,
+                $assessoriaId
+            );
+
+            if ($transacaoPropria) {
+                $db->commit();
+            }
+
+            return $veiculo;
+        } catch (\Throwable $e) {
+            if (
+                $transacaoPropria &&
+                $db->inTransaction()
+            ) {
+                $db->rollBack();
             }
 
             throw $e;
         }
-
-        return self::buscarPorId($id, $assessoriaId);
     }
 
     public static function atualizar(
@@ -190,6 +261,46 @@ class VeiculoService
         }
 
         try {
+            if (array_key_exists('enderecos', $dados)) {
+                $versaoInformada =
+                    $dados['enderecos_versao'] ?? null;
+
+                if (
+                    !is_int($versaoInformada) &&
+                    !is_string($versaoInformada)
+                ) {
+                    throw new \InvalidArgumentException(
+                        'Informe a versão dos endereços.'
+                    );
+                }
+
+                $versaoInformada = filter_var(
+                    $versaoInformada,
+                    FILTER_VALIDATE_INT,
+                    ['options' => ['min_range' => 0]]
+                );
+
+                if ($versaoInformada === false) {
+                    throw new \InvalidArgumentException(
+                        'A versão dos endereços é inválida.'
+                    );
+                }
+
+                $versaoAtual =
+                    VeiculoEnderecoService::bloquearVersao(
+                        $assessoriaId,
+                        $id
+                    );
+
+                if ($versaoInformada !== $versaoAtual) {
+                    throw new \DomainException(
+                        'Os endereços foram alterados em outra sessão. ' .
+                        'Nenhuma mudança foi salva. Confira os endereços ' .
+                        'atuais antes de tentar novamente.'
+                    );
+                }
+            }
+
             Veiculo::atualizar(
                 $id,
                 $assessoriaId,
@@ -202,6 +313,25 @@ class VeiculoService
                     ? self::tier($dados['tier'])
                     : self::tier($veiculo['tier'])
             );
+
+            if (array_key_exists('enderecos', $dados)) {
+                if (!is_array($dados['enderecos'])) {
+                    throw new \InvalidArgumentException(
+                        'A lista de endereços é inválida.'
+                    );
+                }
+
+                VeiculoEnderecoService::sincronizar(
+                    $assessoriaId,
+                    $id,
+                    $dados['enderecos']
+                );
+
+                VeiculoEnderecoService::incrementarVersao(
+                    $assessoriaId,
+                    $id
+                );
+            }
 
             RelatorioService::atualizarRevisoesDoVeiculo(
                 $assessoriaId,
