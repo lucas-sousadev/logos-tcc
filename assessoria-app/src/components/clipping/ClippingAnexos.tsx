@@ -1,34 +1,62 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
-
 import * as DocumentPicker from "expo-document-picker";
-import { useCallback, useEffect, useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useFocusEffect,
-} from "expo-router";
+import { useFocusEffect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import Text from "@/components/ui/Text";
-import Button from "@/components/ui/Button";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ClippingImagemPreview from "@/components/clipping/ClippingImagePreview";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  AnexoClipping,
+  type AnexoClipping,
   atualizarAnexo,
   enviarAnexo,
   excluirAnexo,
   listarAnexos,
 } from "@/services/api/clipping";
 
+const MAX_BYTES = 30 * 1024 * 1024;
+
 interface ClippingAnexosProps {
   clippingId: number;
   disabled?: boolean;
   onOcupadoChange?: (ocupado: boolean) => void;
+}
+
+interface Feedback {
+  titulo: string;
+  mensagem: string;
+  aviso?: boolean;
+}
+
+function tamanhoArquivo(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function tipoArquivo(anexo: AnexoClipping): string {
+  switch (anexo.tipo) {
+    case "IMAGEM":
+      return "IMAGEM";
+    case "VIDEO":
+      return "VÍDEO";
+    case "AUDIO":
+      return "ÁUDIO";
+    default:
+      return "DOCUMENTO";
+  }
 }
 
 export default function ClippingAnexos({
@@ -38,26 +66,26 @@ export default function ClippingAnexos({
 }: ClippingAnexosProps) {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
-
-  const [anexos, setAnexos] = useState<
-    AnexoClipping[]
-  >([]);
-
-  const [carregando, setCarregando] = useState(true);
-  const [enviando, setEnviando] = useState(false);
-  const [processandoId, setProcessandoId] =
-    useState<number | null>(null);
+  const tela = useWindowDimensions();
 
   const travaAcao = useRef(false);
 
+  const [anexos, setAnexos] = useState<AnexoClipping[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [processandoId, setProcessandoId] = useState<number | null>(null);
+  const [erro, setErro] = useState("");
+
+  const [anexoAberto, setAnexoAberto] = useState<AnexoClipping | null>(null);
+  const [zoom, setZoom] = useState(1);
+
   const [anexoParaExcluir, setAnexoParaExcluir] =
     useState<AnexoClipping | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const [feedback, setFeedback] = useState<{
-    titulo: string;
-    mensagem: string;
-    aviso?: boolean;
-  } | null>(null);
+  const podeAnexar = temPermissao("CLIPPING", "ANEXAR");
+  const podeEditar = temPermissao("CLIPPING", "EDITAR");
+  const podeExcluir = temPermissao("CLIPPING", "EXCLUIR");
 
   const ocupado =
     disabled ||
@@ -69,41 +97,21 @@ export default function ClippingAnexos({
     onOcupadoChange?.(enviando || processandoId !== null);
   }, [enviando, processandoId, onOcupadoChange]);
 
-  const [erro, setErro] = useState("");
-
-  const podeAnexar = temPermissao(
-    "CLIPPING",
-    "ANEXAR"
-  );
-
-  const podeEditar = temPermissao(
-    "CLIPPING",
-    "EDITAR"
-  );
-
-  const podeExcluir = temPermissao(
-    "CLIPPING",
-    "EXCLUIR"
-  );
-
   const carregarAnexos = useCallback(async () => {
     try {
       setCarregando(true);
       setErro("");
 
-      const resposta = await listarAnexos(
-        clippingId,
-        {
-          page: 1,
-          limit: 50,
-        }
-      );
+      const resposta = await listarAnexos(clippingId, {
+        page: 1,
+        limit: 50,
+      });
 
       setAnexos(resposta.anexos);
-    } catch (error) {
+    } catch (falha) {
       setErro(
-        error instanceof Error
-          ? error.message
+        falha instanceof Error
+          ? falha.message
           : "Não foi possível carregar os anexos."
       );
     } finally {
@@ -113,240 +121,278 @@ export default function ClippingAnexos({
 
   useFocusEffect(
     useCallback(() => {
-        const timer = setTimeout(() => {
+      const timer = setTimeout(() => {
         void carregarAnexos();
-        }, 0);
+      }, 0);
 
-        return () => {
-        clearTimeout(timer);
-        };
+      return () => clearTimeout(timer);
     }, [carregarAnexos])
-    );
+  );
 
   function informarFalha(
-  titulo: string,
-  error: unknown,
-  mensagemPadrao: string
-) {
-  setFeedback({
-    titulo,
-    mensagem:
-      error instanceof Error
-        ? error.message
-        : mensagemPadrao,
-  });
-}
-
-async function selecionarArquivo() {
-  if (ocupado || travaAcao.current || !podeAnexar) return;
-
-  travaAcao.current = true;
-  setEnviando(true);
-
-  try {
-    const resultado = await DocumentPicker.getDocumentAsync({
-      type: [
-        "image/*",
-        "video/*",
-        "audio/*",
-        "application/pdf",
-      ],
-      multiple: false,
-      copyToCacheDirectory: true,
-    });
-
-    if (resultado.canceled) return;
-
-    const arquivo = resultado.assets[0];
-
-    if (!arquivo) {
-      throw new Error("Nenhum arquivo foi selecionado.");
-    }
-
-    const criado = await enviarAnexo(clippingId, {
-      uri: arquivo.uri,
-      nome: arquivo.name,
-      mimeType:
-        arquivo.mimeType || "application/octet-stream",
-      file: arquivo.file,
-    });
-
-    // Mantém o envio confirmado visível mesmo se a consulta seguinte falhar.
-    setAnexos((atuais) => [
-      ...atuais.filter((anexo) => anexo.id !== criado.id),
-      criado,
-    ]);
-
-    await carregarAnexos();
-  } catch (error) {
-    informarFalha(
-      "Não foi possível enviar",
-      error,
-      "Verifique o arquivo selecionado."
-    );
-  } finally {
-    travaAcao.current = false;
-    setEnviando(false);
-  }
-}
-
-async function alterarMarcador(
-  anexo: AnexoClipping,
-  campo: "principal" | "imagem_relatorio"
-) {
-  if (
-    ocupado ||
-    travaAcao.current ||
-    !podeEditar ||
-    (campo === "imagem_relatorio" && anexo.tipo !== "IMAGEM")
+    titulo: string,
+    falha: unknown,
+    mensagemPadrao: string
   ) {
-    return;
+    setFeedback({
+      titulo,
+      mensagem:
+        falha instanceof Error ? falha.message : mensagemPadrao,
+    });
   }
 
-  travaAcao.current = true;
-  setProcessandoId(anexo.id);
+  async function selecionarArquivo() {
+    if (ocupado || travaAcao.current || !podeAnexar) return;
 
-  try {
-    const atualizado = await atualizarAnexo(
-      clippingId,
-      anexo.id,
-      {
-        [campo]: anexo[campo] === 1 ? null : true,
-      }
-    );
+    travaAcao.current = true;
+    setEnviando(true);
 
-    setAnexos((atuais) =>
-      atuais.map((item) => {
-        if (item.id === atualizado.id) return atualizado;
-
-        // O servidor permite apenas um principal e uma imagem de relatório.
-        if (atualizado[campo] === 1) {
-          return {
-            ...item,
-            [campo]: null,
-          };
-        }
-
-        return item;
-      })
-    );
-
-    await carregarAnexos();
-  } catch (error) {
-    informarFalha(
-      "Não foi possível atualizar",
-      error,
-      "Tente novamente."
-    );
-  } finally {
-    travaAcao.current = false;
-    setProcessandoId(null);
-  }
-}
-
-function marcarImagemRelatorio(anexo: AnexoClipping) {
-  return alterarMarcador(anexo, "imagem_relatorio");
-}
-
-function confirmarExclusao(anexo: AnexoClipping) {
-  if (ocupado || travaAcao.current || !podeExcluir) return;
-
-  setAnexoParaExcluir(anexo);
-}
-
-async function removerAnexo() {
-  if (
-    !anexoParaExcluir ||
-    ocupado ||
-    travaAcao.current ||
-    !podeExcluir
-  ) {
-    return;
-  }
-
-  const anexo = anexoParaExcluir;
-
-  travaAcao.current = true;
-  setProcessandoId(anexo.id);
-
-  try {
-    const resultado = await excluirAnexo(
-      clippingId,
-      anexo.id
-    );
-
-    setAnexos((atuais) =>
-      atuais.filter((item) => item.id !== anexo.id)
-    );
-
-    setAnexoParaExcluir(null);
-
-    await carregarAnexos();
-
-    if (resultado.limpeza_pendente) {
-      setFeedback({
-        titulo: "Anexo removido",
-        mensagem: resultado.message,
-        aviso: true,
+    try {
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "application/pdf",
+          "video/mp4",
+          "video/webm",
+          "video/quicktime",
+          "audio/mpeg",
+          "audio/wav",
+          "audio/x-wav",
+          "audio/vnd.wave",
+        ],
+        multiple: false,
+        copyToCacheDirectory: true,
       });
-    }
-  } catch (error) {
-    setAnexoParaExcluir(null);
 
-    informarFalha(
-      "Não foi possível excluir",
-      error,
-      "Tente novamente."
-    );
-  } finally {
-    travaAcao.current = false;
-    setProcessandoId(null);
+      if (resultado.canceled) return;
+
+      const arquivo = resultado.assets[0];
+
+      if (!arquivo) {
+        throw new Error("Nenhum arquivo foi selecionado.");
+      }
+
+      if (
+        arquivo.size !== undefined &&
+        (arquivo.size <= 0 || arquivo.size > MAX_BYTES)
+      ) {
+        throw new Error(
+          `"${arquivo.name}" está vazio ou ultrapassa 30 MB.`
+        );
+      }
+
+      const criado = await enviarAnexo(clippingId, {
+        uri: arquivo.uri,
+        nome: arquivo.name,
+        mimeType: arquivo.mimeType || "application/octet-stream",
+        file: arquivo.file,
+      });
+
+      // Mantém o anexo visível mesmo se a atualização da lista falhar.
+      setAnexos((atuais) => [
+        ...atuais.filter((anexo) => anexo.id !== criado.id),
+        criado,
+      ]);
+
+      await carregarAnexos();
+    } catch (falha) {
+      informarFalha(
+        "Não foi possível enviar",
+        falha,
+        "Verifique o arquivo selecionado."
+      );
+    } finally {
+      travaAcao.current = false;
+      setEnviando(false);
+    }
   }
-}
 
-  function tamanhoArquivo(bytes: number) {
-    if (bytes < 1024) {
-      return `${bytes} B`;
+  async function alternarUsoRelatorio(anexo: AnexoClipping) {
+    if (
+      ocupado ||
+      travaAcao.current ||
+      !podeEditar ||
+      anexo.tipo !== "IMAGEM"
+    ) {
+      return;
     }
 
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
-    }
+    travaAcao.current = true;
+    setProcessandoId(anexo.id);
 
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    try {
+      const atualizado = await atualizarAnexo(clippingId, anexo.id, {
+        imagem_relatorio:
+          anexo.imagem_relatorio === 1 ? null : true,
+      });
+
+      setAnexos((atuais) =>
+        atuais.map((item) => {
+          if (item.id === atualizado.id) return atualizado;
+
+          if (atualizado.imagem_relatorio === 1) {
+            return { ...item, imagem_relatorio: null };
+          }
+
+          return item;
+        })
+      );
+
+      await carregarAnexos();
+    } catch (falha) {
+      informarFalha(
+        "Não foi possível atualizar",
+        falha,
+        "Tente novamente."
+      );
+    } finally {
+      travaAcao.current = false;
+      setProcessandoId(null);
+    }
   }
+
+  function confirmarExclusao(anexo: AnexoClipping) {
+    if (ocupado || travaAcao.current || !podeExcluir) return;
+    setAnexoParaExcluir(anexo);
+  }
+
+  async function removerAnexo() {
+    if (
+      !anexoParaExcluir ||
+      ocupado ||
+      travaAcao.current ||
+      !podeExcluir
+    ) {
+      return;
+    }
+
+    const anexo = anexoParaExcluir;
+
+    travaAcao.current = true;
+    setProcessandoId(anexo.id);
+
+    try {
+      const resultado = await excluirAnexo(clippingId, anexo.id);
+
+      setAnexos((atuais) =>
+        atuais.filter((item) => item.id !== anexo.id)
+      );
+      setAnexoParaExcluir(null);
+
+      await carregarAnexos();
+
+      if (resultado.limpeza_pendente) {
+        setFeedback({
+          titulo: "Anexo removido",
+          mensagem: resultado.message,
+          aviso: true,
+        });
+      }
+    } catch (falha) {
+      setAnexoParaExcluir(null);
+      informarFalha(
+        "Não foi possível excluir",
+        falha,
+        "Tente novamente."
+      );
+    } finally {
+      travaAcao.current = false;
+      setProcessandoId(null);
+    }
+  }
+
+  function abrirImagem(anexo: AnexoClipping) {
+    if (anexo.tipo !== "IMAGEM") return;
+    setZoom(1);
+    setAnexoAberto(anexo);
+  }
+
+  function fecharImagem() {
+    setAnexoAberto(null);
+    setZoom(1);
+  }
+
+  const larguraBase = Math.max(100, tela.width - 32);
+  const alturaBase = Math.max(120, tela.height - 210);
+  const larguraImagem = larguraBase * zoom;
+  const alturaImagem = alturaBase * zoom;
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerInfo}>
-          <Text weight="Bold" style={styles.title}>
+      <View style={styles.cabecalho}>
+        <View style={styles.tituloGrupo}>
+          <Text weight="Bold" style={styles.titulo}>
             ANEXOS
           </Text>
 
+          {anexos.length > 0 ? (
+            <View
+              style={[
+                styles.contador,
+                { backgroundColor: theme.primaria },
+              ]}
+            >
+              <Text
+                weight="Bold"
+                style={[styles.contadorTexto, { color: theme.branco }]}
+              >
+                {anexos.length}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {podeAnexar ? (
-          <Button
-            title="ADICIONAR ANEXO"
-            size="small"
-            loading={enviando}
-            onPress={() => void selecionarArquivo()}
-            style={styles.uploadButton}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar anexo ao clipping"
             disabled={ocupado}
-          />
+            onPress={() => void selecionarArquivo()}
+            style={[
+              styles.botaoAdicionar,
+              {
+                borderColor: theme.borda,
+                opacity: ocupado ? 0.5 : 1,
+              },
+            ]}
+          >
+            {enviando ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.textoTerciaria}
+              />
+            ) : (
+              <Ionicons
+                name="add-outline"
+                size={17}
+                color={theme.textoTerciaria}
+              />
+            )}
+
+            <Text
+              weight="Bold"
+              style={[
+                styles.botaoAdicionarTexto,
+                { color: theme.textoTerciaria },
+              ]}
+            >
+              {enviando ? "ENVIANDO..." : "ADICIONAR"}
+            </Text>
+          </TouchableOpacity>
         ) : null}
       </View>
 
       {carregando ? (
         <ActivityIndicator
           color={theme.primaria}
-          style={styles.loading}
+          style={styles.carregando}
         />
       ) : null}
 
       {erro ? (
-        <Text style={styles.errorText}>
+        <Text style={[styles.erro, { color: theme.erro }]}>
           {erro}
         </Text>
       ) : null}
@@ -354,134 +400,200 @@ async function removerAnexo() {
       {!carregando && !erro && anexos.length === 0 ? (
         <View
           style={[
-            styles.empty,
-            { borderColor: theme.borda },
+            styles.vazio,
+            {
+              borderColor: theme.borda,
+              backgroundColor: theme.backgroundSecundario,
+            },
           ]}
         >
           <Ionicons
-            name="attach-outline"
-            size={30}
+            name="images-outline"
+            size={20}
             color={theme.textoSub}
           />
-
-          <Text
-            style={[
-              styles.emptyText,
-              { color: theme.textoSub },
-            ]}
-          >
-            Nenhum arquivo anexado.
+          <Text style={[styles.vazioTexto, { color: theme.textoSub }]}>
+            Nenhum anexo adicionado
           </Text>
         </View>
       ) : null}
 
-      {anexos.map((anexo) => {
-        const imagem = anexo.tipo === "IMAGEM";
+      <View style={styles.lista}>
+        {anexos.map((anexo) => {
+          const imagem = anexo.tipo === "IMAGEM";
+          const processando = processandoId === anexo.id;
 
-        const processando =
-          processandoId === anexo.id;
-
-        return (
-          <View
-            key={anexo.id}
-            style={[
-              styles.card,
-              {
-                borderColor: theme.borda,
-                backgroundColor: theme.background,
-              },
-            ]}
-          >
-            {imagem ? (
-              <ClippingImagemPreview
-                endpoint={anexo.arquivo_endpoint}
-                nome={anexo.nome_original}
-              />
-            ) : (
-              <View
-                style={[
-                  styles.fileIcon,
-                  {
-                    backgroundColor:
-                      theme.backgroundContainer,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="document-outline"
-                  size={25}
-                  color={theme.textoContainer}
+          const conteudoArquivo = (
+            <>
+              {imagem ? (
+                <ClippingImagemPreview
+                  endpoint={anexo.arquivo_endpoint}
+                  nome={anexo.nome_original}
+                  style={styles.miniatura}
                 />
-              </View>
-            )}
+              ) : (
+                <View
+                  style={[
+                    styles.iconeArquivo,
+                    { backgroundColor: theme.background },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      anexo.tipo === "VIDEO"
+                        ? "videocam-outline"
+                        : anexo.tipo === "AUDIO"
+                          ? "musical-notes-outline"
+                          : "document-text-outline"
+                    }
+                    size={25}
+                    color={theme.textoTerciaria}
+                  />
+                </View>
+              )}
 
-            <View style={styles.fileInfo}>
-              <Text
-                weight="SemiBold"
-                style={styles.fileName}
-                numberOfLines={2}
-              >
-                {anexo.nome_original}
-              </Text>
-
-              <Text
-                style={[
-                  styles.fileMeta,
-                  { color: theme.textoSub },
-                ]}
-              >
-                {anexo.tipo} •{" "}
-                {tamanhoArquivo(anexo.tamanho_bytes)}
-              </Text>
-              
-              {imagem && anexo.imagem_relatorio === 1 ? (
+              <View style={styles.dadosArquivo}>
                 <Text
                   weight="SemiBold"
-                  style={{ color: theme.textoTerciaria, fontSize: 10, marginTop: 6 }}
+                  numberOfLines={2}
+                  style={styles.nomeArquivo}
                 >
-                  IMAGEM USADA EM RELATÓRIOS
+                  {anexo.nome_original}
                 </Text>
+
+                <Text
+                  style={[
+                    styles.detalhesArquivo,
+                    { color: theme.textoSub },
+                  ]}
+                >
+                  {tipoArquivo(anexo)} ·{" "}
+                  {tamanhoArquivo(anexo.tamanho_bytes)}
+                </Text>
+
+                {imagem ? (
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.ampliarTexto,
+                      { color: theme.textoTerciaria },
+                    ]}
+                  >
+                    TOQUE PARA AMPLIAR
+                  </Text>
+                ) : null}
+              </View>
+
+              {imagem ? (
+                <Ionicons
+                  name="expand-outline"
+                  size={18}
+                  color={theme.textoTerciaria}
+                />
               ) : null}
+            </>
+          );
+
+          return (
+            <View
+              key={anexo.id}
+              style={[
+                styles.cartao,
+                {
+                  borderColor: theme.borda,
+                  backgroundColor: theme.backgroundSecundario,
+                },
+              ]}
+            >
+              <View style={styles.linhaArquivo}>
+                {imagem ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ampliar imagem ${anexo.nome_original}`}
+                    onPress={() => abrirImagem(anexo)}
+                    style={styles.arquivoPrincipal}
+                  >
+                    {conteudoArquivo}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.arquivoPrincipal}>
+                    {conteudoArquivo}
+                  </View>
+                )}
+
+                {podeExcluir ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Excluir ${anexo.nome_original}`}
+                    disabled={ocupado}
+                    onPress={() => confirmarExclusao(anexo)}
+                    style={[
+                      styles.botaoExcluir,
+                      { opacity: ocupado ? 0.5 : 1 },
+                    ]}
+                  >
+                    {processando ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.erro}
+                      />
+                    ) : (
+                      <Ionicons
+                        name="trash-outline"
+                        size={20}
+                        color={theme.erro}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+              </View>
 
               {imagem && podeEditar ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={
                     anexo.imagem_relatorio === 1
-                      ? "Remover dos relatórios"
-                      : "Usar em relatórios"
+                      ? "Remover imagem dos relatórios"
+                      : "Usar imagem nos relatórios"
                   }
-                  activeOpacity={0.8}
                   disabled={ocupado}
-                  onPress={() => void marcarImagemRelatorio(anexo)}
+                  onPress={() => void alternarUsoRelatorio(anexo)}
                   style={[
-                    styles.botaoUsoRelatorio,
+                    styles.acaoRelatorio,
                     {
-                      borderColor: theme.borda,
-                      backgroundColor:
+                      borderColor:
                         anexo.imagem_relatorio === 1
-                          ? `${theme.textoTerciaria}18`
-                          : theme.backgroundSecundario,
+                          ? theme.alteracao
+                          : theme.borda,
                       opacity: ocupado ? 0.5 : 1,
                     },
                   ]}
                 >
-                  {processando ? (
-                    <ActivityIndicator size="small" color={theme.textoTerciaria} />
-                  ) : (
-                    <Ionicons
-                      name={
-                        anexo.imagem_relatorio === 1
-                          ? "checkmark-circle-outline"
-                          : "image-outline"
-                      }
-                      size={16}
-                      color={theme.textoTerciaria}
-                    />
-                  )}
+                  <Ionicons
+                    name={
+                      anexo.imagem_relatorio === 1
+                        ? "checkmark-circle-outline"
+                        : "image-outline"
+                    }
+                    size={15}
+                    color={
+                      anexo.imagem_relatorio === 1
+                        ? theme.alteracao
+                        : theme.textoTerciaria
+                    }
+                  />
+
                   <Text
                     weight="SemiBold"
-                    style={{ color: theme.textoTerciaria, fontSize: 10, flexShrink: 1 }}
+                    style={[
+                      styles.acaoRelatorioTexto,
+                      {
+                        color:
+                          anexo.imagem_relatorio === 1
+                            ? theme.alteracao
+                            : theme.textoTerciaria,
+                      },
+                    ]}
                   >
                     {anexo.imagem_relatorio === 1
                       ? "REMOVER DOS RELATÓRIOS"
@@ -489,32 +601,137 @@ async function removerAnexo() {
                   </Text>
                 </TouchableOpacity>
               ) : null}
+
+              {imagem &&
+              !podeEditar &&
+              anexo.imagem_relatorio === 1 ? (
+                <View style={styles.indicadorRelatorio}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={15}
+                    color={theme.alteracao}
+                  />
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.indicadorRelatorioTexto,
+                      { color: theme.alteracao },
+                    ]}
+                  >
+                    USADA NOS RELATÓRIOS
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <Modal
+        visible={anexoAberto !== null}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={fecharImagem}
+      >
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalCabecalho}>
+            <View style={styles.modalTituloGrupo}>
+              <Text
+                weight="SemiBold"
+                numberOfLines={1}
+                style={styles.modalNome}
+              >
+                {anexoAberto?.nome_original}
+              </Text>
+
+              {anexoAberto ? (
+                <Text style={styles.modalDetalhe}>
+                  IMAGEM ·{" "}
+                  {tamanhoArquivo(anexoAberto.tamanho_bytes)}
+                </Text>
+              ) : null}
             </View>
 
-            {!processando && podeExcluir ? (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() =>
-                  confirmarExclusao(anexo)
-                }
-                style={[
-                  styles.deleteButton,
-                  { borderColor: "#EF4444" },
-                ]}
-                disabled={ocupado}
-                accessibilityRole="button"
-                accessibilityLabel={`Excluir ${anexo.nome_original}`}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Fechar imagem ampliada"
+              onPress={fecharImagem}
+              style={styles.modalFechar}
+            >
+              <Ionicons name="close" size={27} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.visualizador}>
+            {anexoAberto ? (
+              <ScrollView
+                horizontal
+                bounces={false}
+                showsHorizontalScrollIndicator={zoom > 1}
+                contentContainerStyle={styles.rolagemHorizontal}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={17}
-                  color="#EF4444"
-                />
-              </TouchableOpacity>
+                <ScrollView
+                  nestedScrollEnabled
+                  bounces={false}
+                  showsVerticalScrollIndicator={zoom > 1}
+                  style={{
+                    width: larguraImagem,
+                    maxHeight: alturaBase,
+                  }}
+                  contentContainerStyle={styles.rolagemVertical}
+                >
+                  <ClippingImagemPreview
+                    endpoint={anexoAberto.arquivo_endpoint}
+                    nome={anexoAberto.nome_original}
+                    resizeMode="contain"
+                    style={{
+                      width: larguraImagem,
+                      height: alturaImagem,
+                    }}
+                  />
+                </ScrollView>
+              </ScrollView>
             ) : null}
           </View>
-        );
-      })}
+
+          <View style={styles.controlesZoom}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Diminuir zoom"
+              disabled={zoom <= 1}
+              onPress={() =>
+                setZoom((atual) => Math.max(1, atual - 0.5))
+              }
+              style={[
+                styles.botaoZoom,
+                { opacity: zoom <= 1 ? 0.4 : 1 },
+              ]}
+            >
+              <Ionicons name="remove" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <Text weight="SemiBold" style={styles.valorZoom}>
+              {Math.round(zoom * 100)}%
+            </Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar zoom"
+              disabled={zoom >= 3}
+              onPress={() =>
+                setZoom((atual) => Math.min(3, atual + 0.5))
+              }
+              style={[
+                styles.botaoZoom,
+                { opacity: zoom >= 3 ? 0.4 : 1 },
+              ]}
+            >
+              <Ionicons name="add" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       <FeedbackAlert
         visible={anexoParaExcluir !== null}
         variant="warning"
@@ -547,110 +764,200 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 25,
   },
-
-  headerRow: {
+  cabecalho: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
-    marginBottom: 13,
+    marginBottom: 12,
   },
-
-  headerInfo: {
-    flex: 1,
-  },
-
-  title: {
-    fontSize: 13,
-  },
-
-  subtitle: {
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 4,
-  },
-
-  uploadButton: {
-    width: "auto",
-    padding: 10,
-  },
-
-  loading: {
-    marginVertical: 18,
-  },
-
-  errorText: {
-    color: "#EF4444",
-    fontSize: 12,
-    marginBottom: 10,
-  },
-
-  empty: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-  },
-
-  emptyText: {
-    fontSize: 12,
-    marginTop: 7,
-  },
-
-  card: {
-    minHeight: 82,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    padding: 10,
-    marginBottom: 9,
+  tituloGrupo: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 7,
   },
-
-  preview: {
-    width: 58,
-    height: 58,
-    borderRadius: 10,
-    backgroundColor: "#E5E7EB",
+  titulo: {
+    fontSize: 12,
   },
-
-  fileIcon: {
-    width: 58,
-    height: 58,
+  contador: {
+    minWidth: 20,
+    height: 20,
     borderRadius: 10,
+    paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  fileInfo: {
-    flex: 1,
-  },
-
-  fileName: {
-    fontSize: 12,
-  },
-
-  fileMeta: {
+  contadorTexto: {
     fontSize: 10,
-    marginTop: 4,
   },
-  botaoUsoRelatorio: {
-    alignSelf: "flex-start",
+  botaoAdicionar: {
     minHeight: 34,
-    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
     borderWidth: 1,
     borderRadius: 9,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
+  },
+  botaoAdicionarTexto: {
+    fontSize: 11,
+  },
+  carregando: {
+    marginVertical: 16,
+  },
+  erro: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  vazio: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  vazioTexto: {
+    fontSize: 12,
+  },
+  lista: {
+    gap: 8,
+  },
+  cartao: {
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  linhaArquivo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  arquivoPrincipal: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingVertical: 2,
+  },
+  miniatura: {
+    width: 56,
+    height: 56,
+    borderRadius: 7,
+  },
+  iconeArquivo: {
+    width: 56,
+    height: 56,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dadosArquivo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nomeArquivo: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  detalhesArquivo: {
+    fontSize: 10,
+    marginTop: 3,
+  },
+  ampliarTexto: {
+    fontSize: 9,
+    marginTop: 4,
+  },
+  botaoExcluir: {
+    width: 40,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  acaoRelatorio: {
+    alignSelf: "flex-start",
+    minHeight: 29,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-  },
-  deleteButton: {
-    width: 44,
-    height: 44,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    marginTop: 8,
+  },
+  acaoRelatorioTexto: {
+    fontSize: 10,
+  },
+  indicadorRelatorio: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+  indicadorRelatorioTexto: {
+    fontSize: 10,
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: "#080B13",
+    paddingHorizontal: 16,
+  },
+  modalCabecalho: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  modalTituloGrupo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  modalNome: {
+    color: "#FFFFFF",
+    fontSize: 13,
+  },
+  modalDetalhe: {
+    color: "#AAB2C0",
+    fontSize: 10,
+    marginTop: 3,
+  },
+  modalFechar: {
+    width: 42,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
+  },
+  visualizador: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  rolagemHorizontal: {
+    alignItems: "center",
+  },
+  rolagemVertical: {
+    justifyContent: "center",
+  },
+  controlesZoom: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 22,
+  },
+  botaoZoom: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  valorZoom: {
+    minWidth: 48,
+    color: "#FFFFFF",
+    fontSize: 13,
+    textAlign: "center",
   },
 });

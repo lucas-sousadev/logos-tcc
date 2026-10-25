@@ -6,8 +6,20 @@ final class CapturaPaginaService
 {
     private const LIMITE_IMAGEM = 4_194_304;
 
-    public static function capturar(mixed $link): array
-    {
+    public static function capturar(
+        mixed $link,
+        mixed $trecho = 0
+    ): array {
+        if (
+            !is_int($trecho) ||
+            $trecho < 0 ||
+            $trecho > 36
+        ) {
+            throw new \InvalidArgumentException(
+                'Trecho da página inválido.'
+            );
+        }
+
         if (!is_string($link) || trim($link) === '') {
             throw new \InvalidArgumentException(
                 'Informe o link da página.'
@@ -27,7 +39,10 @@ final class CapturaPaginaService
         }
 
         $corpo = json_encode(
-            ['link' => trim($link)],
+        [
+                'link' => trim($link),
+                'trecho' => $trecho,
+            ],
             JSON_THROW_ON_ERROR
         );
 
@@ -43,13 +58,15 @@ final class CapturaPaginaService
             );
         }
 
+        $cabecalhosCaptura = [];
+
         curl_setopt_array($curl, [
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $corpo,
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_CONNECTTIMEOUT_MS => 1000,
-            CURLOPT_TIMEOUT_MS => 25000,
+            CURLOPT_TIMEOUT_MS => 37000,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP,
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
@@ -73,6 +90,24 @@ final class CapturaPaginaService
 
                     $resposta .= $trecho;
                     return strlen($trecho);
+                },
+            CURLOPT_HEADERFUNCTION =>
+                static function ($ch, string $linha) use (
+                    &$cabecalhosCaptura
+                ): int {
+                    if (str_contains($linha, ':')) {
+                        [$nome, $valor] = explode(':', $linha, 2);
+                        $nome = strtolower(trim($nome));
+
+                        if (
+                            $nome === 'x-captura-incompleta' ||
+                            $nome === 'x-captura-tem-proxima'
+                        ) {
+                            $cabecalhosCaptura[$nome] = trim($valor);
+                        }
+                    }
+
+                    return strlen($linha);
                 },
         ]);
 
@@ -144,6 +179,10 @@ final class CapturaPaginaService
             'imagem' => $resposta,
             'largura' => (int) $dimensoes[0],
             'altura' => (int) $dimensoes[1],
+            'incompleta' =>
+                ($cabecalhosCaptura['x-captura-incompleta'] ?? '0') === '1',
+            'tem_proxima' =>
+                ($cabecalhosCaptura['x-captura-tem-proxima'] ?? '0') === '1',
         ];
     }
 }

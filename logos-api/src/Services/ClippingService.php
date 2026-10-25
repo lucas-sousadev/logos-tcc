@@ -1201,6 +1201,9 @@ class ClippingService
         if ($associacao === null) {
             return;
         }
+        if ($associacao instanceof \stdClass) {
+            $associacao = get_object_vars($associacao);
+        }
 
         if (
             !is_array($associacao) ||

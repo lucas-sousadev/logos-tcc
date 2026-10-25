@@ -37,7 +37,7 @@ export const DarkTheme = {
   textoQuaternaria: "#bcc9ff",
   borda: "#6B86FF",
 
-  primaria: "#6B86FF",
+  primaria: "#5170FF",
   secundaria: "#D4AF37",
   terciaria: "#58a9eb",
 

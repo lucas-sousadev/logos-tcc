@@ -492,7 +492,7 @@ $router->post(
 $router->post(
     "/api/clippings/capturar-pagina",
     "CapturaPaginaController:capturar",
-    "CLIPPING.CRIAR",
+    "CLIPPING.ANEXAR",
     middleware: [
         $authMiddleware,
         $permissionMiddleware,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -7,13 +7,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Platform,
   ActivityIndicator
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { File as ExpoFile } from "expo-file-system";
 
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import RelatorioSlideVisual from "@/components/relatorios/RelatorioSlideVisual";
+import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
+
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   atualizarSlideRelatorio,
@@ -58,16 +62,45 @@ export default function RelatorioSlideEdicaoModal({
   const [nomeVeiculo, setNomeVeiculo] = useState(veiculo?.nome ?? "");
   const [descricao, setDescricao] = useState(veiculo?.descricao ?? "");
   const [alcance, setAlcance] = useState(veiculo?.alcance ?? "");
+
   const [estadoImagem, setEstadoImagem] = useState<EstadoMidia>("manter");
   const [estadoLogo, setEstadoLogo] = useState<EstadoMidia>("manter");
-  const [arquivoImagem, setArquivoImagem] = useState<ArquivoMidiaSlide | null>(null);
+  const [arquivoImagem, setArquivoImagem] = useState<ArquivoImagemRascunho | null>(null);
   const [arquivoLogo, setArquivoLogo] = useState<ArquivoMidiaSlide | null>(null);
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [errosCampos, setErrosCampos] = useState<{
-    data?: string;
-    link?: string;
-  }>({}); 
+    type ArquivoImagemRascunho = ArquivoMidiaSlide & {
+    geradoPelaCaptura?: boolean;
+  };
+  const [capturaAberta, setCapturaAberta] = useState(false);
+  const podeCapturarPagina =
+    /^https?:\/\/\S+$/i.test(link.trim());
+
+    const [erro, setErro] = useState("");
+    const [salvando, setSalvando] = useState(false);
+    const [errosCampos, setErrosCampos] = useState<{
+      data?: string;
+      link?: string;
+    }>({}); 
+
+  useEffect(() => {
+    return () => {
+      if (!arquivoImagem?.geradoPelaCaptura) return;
+
+      if (Platform.OS === "web") {
+        if (arquivoImagem.uri.startsWith("blob:")) {
+          URL.revokeObjectURL(arquivoImagem.uri);
+        }
+        return;
+      }
+
+      try {
+        const arquivo = new ExpoFile(arquivoImagem.uri);
+        if (arquivo.exists) arquivo.delete();
+      } catch {
+        // O sistema também pode limpar arquivos de cache.
+      }
+    };
+  }, [arquivoImagem]);
+
   function limparErroCampo(campo: "data" | "link") {
     setErrosCampos((atuais) => ({ ...atuais, [campo]: undefined }));
     setErro("");
@@ -227,376 +260,429 @@ export default function RelatorioSlideEdicaoModal({
       visible
       transparent
       animationType="slide"
-      onRequestClose={() => { if (!salvando) onClose(); }}
+      onRequestClose={() => {
+        if (capturaAberta) setCapturaAberta(false);
+        else if (!salvando) onClose();
+      }}
     >
-      <View style={styles.overlay}>
-        <View
-          style={[
-            styles.container,
-            {
-              backgroundColor: theme.background,
-              borderColor: theme.borda,
-              paddingBottom: Math.max(insets.bottom, 12),
-            },
-          ]}
-        >
-          <View style={[styles.cabecalho, { borderBottomColor: theme.borda }]}>
-            <View>
-              <Text weight="Bold" style={styles.titulo}>Editar slide {slide.ordem}</Text>
-              <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-                As mudanças ficam somente neste relatório
-              </Text>
-            </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Fechar edição"
-              disabled={salvando}
-              onPress={onClose}
-              style={styles.fechar}
-            >
-              <Ionicons name="close" size={24} color={theme.texto} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.conteudo}>
-            <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
-              PRÉVIA
-            </Text>
-            <RelatorioSlideVisual
-              slide={previa}
-              imagemUri={estadoImagem === "trocar" ? arquivoImagem?.uri : null}
-              logoUri={estadoLogo === "trocar" ? arquivoLogo?.uri : null}
-            />
-
-            <View style={[styles.secao, { borderTopColor: theme.borda }]}>
-              <Text weight="Bold">MATÉRIA</Text>
-              <Input
-                label="PAUTA"
-                value={pauta}
-                onChangeText={setPauta}
-                maxLength={250}
-                editable={!salvando}
-                showChanged={pauta !== (clipping?.pauta ?? "")}
-                onUndo={() => setPauta(clipping?.pauta ?? "")}
-                containerStyle={styles.campo}
-              />
-              {pauta.length >= 75 ? (
-                <Text style={{ color: theme.aviso, fontSize: 12 }}>
-                  {Math.max(0, 250 - pauta.length)} caracteres restantes
+      {capturaAberta ? (
+        <CapturaPaginaModal
+          embutido
+          visivel
+          link={link.trim()}
+          origem="relatorio"
+          onFechar={() => setCapturaAberta(false)}
+          onConfirmar={(imagem) => {
+            setArquivoImagem({
+              uri: imagem.uri,
+              nome: imagem.nome,
+              mimeType: imagem.mimeType,
+              file: imagem.file,
+              geradoPelaCaptura: true,
+            });
+            setEstadoImagem("trocar");
+            setErro("");
+            setCapturaAberta(false);
+          }}
+        />
+      ) : (
+        <View style={styles.overlay}>
+          <View
+            style={[
+              styles.container,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={[styles.cabecalho, { borderBottomColor: theme.borda }]}>
+              <View>
+                <Text weight="Bold" style={styles.titulo}>Editar slide {slide.ordem}</Text>
+                <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+                  As mudanças ficam somente neste relatório
                 </Text>
-              ) : null}
-              <View style={styles.midia}>
-                <View style={styles.linhaRotuloMidia}>
-                  <Text weight="Medium" style={styles.rotuloCampo}>
-                    IMAGEM DO SLIDE
+              </View>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Fechar edição"
+                disabled={salvando}
+                onPress={onClose}
+                style={styles.fechar}
+              >
+                <Ionicons name="close" size={24} color={theme.texto} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.conteudo}>
+              <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                PRÉVIA
+              </Text>
+              <RelatorioSlideVisual
+                slide={previa}
+                imagemUri={estadoImagem === "trocar" ? arquivoImagem?.uri : null}
+                logoUri={estadoLogo === "trocar" ? arquivoLogo?.uri : null}
+              />
+
+              <View style={[styles.secao, { borderTopColor: theme.borda }]}>
+                <Text weight="Bold">MATÉRIA</Text>
+                <Input
+                  label="PAUTA"
+                  value={pauta}
+                  onChangeText={setPauta}
+                  maxLength={250}
+                  editable={!salvando}
+                  showChanged={pauta !== (clipping?.pauta ?? "")}
+                  onUndo={() => setPauta(clipping?.pauta ?? "")}
+                  containerStyle={styles.campo}
+                />
+                {pauta.length >= 75 ? (
+                  <Text style={{ color: theme.aviso, fontSize: 12 }}>
+                    {Math.max(0, 250 - pauta.length)} caracteres restantes
                   </Text>
-          
-                  {estadoImagem !== "manter" ? (
+                ) : null}
+                <View style={styles.midia}>
+                  <View style={styles.linhaRotuloMidia}>
+                    <Text weight="Medium" style={styles.rotuloCampo}>
+                      IMAGEM DO SLIDE
+                    </Text>
+            
+                    {estadoImagem !== "manter" ? (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Desfazer alteração da imagem do slide"
+                        disabled={salvando}
+                        activeOpacity={0.75}
+                        hitSlop={6}
+                        onPress={() => {
+                          setEstadoImagem("manter");
+                          setArquivoImagem(null);
+                        }}
+                        style={styles.desfazerNoRotulo}
+                      >
+                        <Ionicons
+                          name="arrow-undo-outline"
+                          size={14}
+                          color={theme.textoTerciaria}
+                        />
+                        <Text
+                          weight="SemiBold"
+                          style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
+                        >
+                          DESFAZER
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  <Text style={{ color: imagemDefinida ? theme.textoSecundaria : theme.textoSub }}>
+                    {estadoImagem === "trocar"
+                      ? arquivoImagem?.nome
+                      : imagemDefinida
+                        ? "Imagem definida"
+                        : "Sem imagem"}
+                  </Text>
+
+                  <View style={styles.acoesMidia}>
                     <TouchableOpacity
                       accessibilityRole="button"
-                      accessibilityLabel="Desfazer alteração da imagem do slide"
+                      accessibilityLabel="Escolher imagem do slide"
                       disabled={salvando}
-                      activeOpacity={0.75}
-                      hitSlop={6}
+                      activeOpacity={0.8}
+                      onPress={() => void escolherMidia("imagem")}
+                      style={[
+                        styles.botaoMidia,
+                        {
+                          backgroundColor: theme.primaria,
+                          borderColor: theme.primaria,
+                          opacity: salvando ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="image-outline" size={16} color={theme.branco} />
+                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
+                        ESCOLHER IMAGEM
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Remover imagem do slide"
+                      disabled={salvando || !imagemDefinida}
+                      activeOpacity={0.8}
                       onPress={() => {
-                        setEstadoImagem("manter");
+                        setEstadoImagem(imagemAtual ? "remover" : "manter");
                         setArquivoImagem(null);
                       }}
-                      style={styles.desfazerNoRotulo}
+                      style={[
+                        styles.botaoMidia,
+                        {
+                          backgroundColor: theme.erro,
+                          borderColor: theme.erro,
+                          opacity: salvando || !imagemDefinida ? 0.5 : 1,
+                        },
+                      ]}
                     >
-                      <Ionicons
-                        name="arrow-undo-outline"
-                        size={14}
-                        color={theme.textoTerciaria}
-                      />
-                      <Text
-                        weight="SemiBold"
-                        style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
-                      >
-                        DESFAZER
+                      <Ionicons name="trash-outline" size={16} color={theme.background} />
+                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
+                        REMOVER
                       </Text>
                     </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                <Text style={{ color: imagemDefinida ? theme.textoSecundaria : theme.textoSub }}>
-                  {estadoImagem === "trocar"
-                    ? arquivoImagem?.nome
-                    : imagemDefinida
-                      ? "Imagem definida"
-                      : "Sem imagem"}
-                </Text>
-
-                <View style={styles.acoesMidia}>
+                  </View>
                   <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel="Escolher imagem do slide"
-                    disabled={salvando}
-                    activeOpacity={0.8}
-                    onPress={() => void escolherMidia("imagem")}
+                    accessibilityLabel="Capturar imagem da página"
+                    disabled={salvando || !podeCapturarPagina}
+                    onPress={() => setCapturaAberta(true)}
                     style={[
-                      styles.botaoMidia,
+                      styles.botaoCapturaPagina,
                       {
-                        backgroundColor: theme.primaria,
-                        borderColor: theme.primaria,
-                        opacity: salvando ? 0.5 : 1,
+                        borderColor: theme.borda,
+                        opacity:
+                          salvando || !podeCapturarPagina ? 0.5 : 1,
                       },
                     ]}
                   >
-                    <Ionicons name="image-outline" size={16} color={theme.branco} />
-                    <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
-                      ESCOLHER IMAGEM
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Remover imagem do slide"
-                    disabled={salvando || !imagemDefinida}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setEstadoImagem(imagemAtual ? "remover" : "manter");
-                      setArquivoImagem(null);
-                    }}
-                    style={[
-                      styles.botaoMidia,
-                      {
-                        backgroundColor: theme.erro,
-                        borderColor: theme.erro,
-                        opacity: salvando || !imagemDefinida ? 0.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={theme.background} />
-                    <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
-                      REMOVER
+                    <Ionicons
+                      name="image-outline"
+                      size={15}
+                      color={theme.textoTerciaria}
+                    />
+                    <Text
+                      weight="SemiBold"
+                      style={[
+                        styles.textoCapturaPagina,
+                        { color: theme.textoTerciaria },
+                      ]}
+                    >
+                      CAPTURAR IMAGEM DO LINK
                     </Text>
                   </TouchableOpacity>
                 </View>
+                <Input
+                  label="DATA DE PUBLICAÇÃO"
+                  value={data}
+                  onChangeText={(texto) => {
+                    setData(mascararData(texto));
+                    limparErroCampo("data");
+                  }}
+                  placeholder="DD/MM/AAAA"
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  editable={!salvando}
+                  showChanged={data !== dataISOParaBR(clipping?.data_publicacao ?? null)}
+                  onUndo={() => {
+                    setData(dataISOParaBR(clipping?.data_publicacao ?? null));
+                    limparErroCampo("data");
+                  }}                
+                  containerStyle={styles.campo}
+                  error={errosCampos.data}
+                />
+                <Input 
+                  label="LINK" 
+                  value={link} 
+                  onChangeText={(texto) => {
+                    setLink(texto);
+                    limparErroCampo("link");
+                  }}
+                  autoCapitalize="none" 
+                  keyboardType="url" 
+                  maxLength={2048} 
+                  editable={!salvando} 
+                  showChanged={link !== (slide.link ?? "")}
+                  onUndo={() => {
+                    setLink(slide.link ?? "");
+                    limparErroCampo("link");
+                  }}
+                  containerStyle={styles.campo}
+                  error={errosCampos.link}
+                />
               </View>
-              <Input
-                label="DATA DE PUBLICAÇÃO"
-                value={data}
-                onChangeText={(texto) => {
-                  setData(mascararData(texto));
-                  limparErroCampo("data");
-                }}
-                placeholder="DD/MM/AAAA"
-                keyboardType="number-pad"
-                maxLength={10}
-                editable={!salvando}
-                showChanged={data !== dataISOParaBR(clipping?.data_publicacao ?? null)}
-                onUndo={() => {
-                  setData(dataISOParaBR(clipping?.data_publicacao ?? null));
-                  limparErroCampo("data");
-                }}                
-                containerStyle={styles.campo}
-                error={errosCampos.data}
-              />
-              <Input 
-                label="LINK" 
-                value={link} 
-                onChangeText={(texto) => {
-                  setLink(texto);
-                  limparErroCampo("link");
-                }}
-                autoCapitalize="none" 
-                keyboardType="url" 
-                maxLength={2048} 
-                editable={!salvando} 
-                showChanged={link !== (slide.link ?? "")}
-                onUndo={() => {
-                  setLink(slide.link ?? "");
-                  limparErroCampo("link");
-                }}
-                containerStyle={styles.campo}
-                error={errosCampos.link}
-              />
-            </View>
+              <View style={[styles.secao, { borderTopColor: theme.borda }]}>
+                <Text weight="Bold">VEÍCULO NO SLIDE</Text>
+                <Input 
+                  label="NOME EXIBIDO" 
+                  value={nomeVeiculo} 
+                  onChangeText={setNomeVeiculo} 
+                  maxLength={255} 
+                  editable={!salvando} 
+                  showChanged={nomeVeiculo !== (veiculo?.nome ?? "")}
+                  onUndo={() => setNomeVeiculo(veiculo?.nome ?? "")}
+                  containerStyle={styles.campo}
+                />
+                  <View style={styles.midia}>
+                  <View style={styles.linhaRotuloMidia}>
+                    <Text weight="Medium" style={styles.rotuloCampo}>
+                      LOGO DO VEÍCULO
+                    </Text>
 
-            <View style={[styles.secao, { borderTopColor: theme.borda }]}>
-              <Text weight="Bold">VEÍCULO NO SLIDE</Text>
-              <Input 
-                label="NOME EXIBIDO" 
-                value={nomeVeiculo} 
-                onChangeText={setNomeVeiculo} 
-                maxLength={255} 
-                editable={!salvando} 
-                showChanged={nomeVeiculo !== (veiculo?.nome ?? "")}
-                onUndo={() => setNomeVeiculo(veiculo?.nome ?? "")}
-                containerStyle={styles.campo}
-              />
-                <View style={styles.midia}>
-                <View style={styles.linhaRotuloMidia}>
-                  <Text weight="Medium" style={styles.rotuloCampo}>
-                    LOGO DO VEÍCULO
+                    {estadoLogo !== "manter" ? (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Desfazer alteração da logo do slide"
+                        disabled={salvando}
+                        activeOpacity={0.75}
+                        hitSlop={6}
+                        onPress={() => {
+                          setEstadoLogo("manter");
+                          setArquivoLogo(null);
+                        }}
+                        style={styles.desfazerNoRotulo}
+                      >
+                        <Ionicons
+                          name="arrow-undo-outline"
+                          size={14}
+                          color={theme.textoTerciaria}
+                        />
+                        <Text
+                          weight="SemiBold"
+                          style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
+                        >
+                          DESFAZER
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  <Text style={{ color: logoDefinida ? theme.textoSecundaria : theme.textoSub }}>
+                    {estadoLogo === "trocar"
+                      ? arquivoLogo?.nome
+                      : logoDefinida
+                        ? "Logo definida"
+                        : "Sem logo"}
                   </Text>
 
-                  {estadoLogo !== "manter" ? (
+                  <View style={styles.acoesMidia}>
                     <TouchableOpacity
                       accessibilityRole="button"
-                      accessibilityLabel="Desfazer alteração da logo do slide"
+                      accessibilityLabel="Escolher logo do slide"
                       disabled={salvando}
-                      activeOpacity={0.75}
-                      hitSlop={6}
-                      onPress={() => {
-                        setEstadoLogo("manter");
-                        setArquivoLogo(null);
-                      }}
-                      style={styles.desfazerNoRotulo}
+                      activeOpacity={0.8}
+                      onPress={() => void escolherMidia("logo")}
+                      style={[
+                        styles.botaoMidia,
+                        {
+                          backgroundColor: theme.primaria,
+                          borderColor: theme.primaria,
+                          opacity: salvando ? 0.5 : 1,
+                        },
+                      ]}
                     >
-                      <Ionicons
-                        name="arrow-undo-outline"
-                        size={14}
-                        color={theme.textoTerciaria}
-                      />
-                      <Text
-                        weight="SemiBold"
-                        style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
-                      >
-                        DESFAZER
+                      <Ionicons name="image-outline" size={16} color={theme.branco} />
+                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
+                        ESCOLHER LOGO
                       </Text>
                     </TouchableOpacity>
-                  ) : null}
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Remover logo do slide"
+                      disabled={salvando || !logoDefinida}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setEstadoLogo(logoAtual ? "remover" : "manter");
+                        setArquivoLogo(null);
+                      }}
+                      style={[
+                        styles.botaoMidia,
+                        {
+                          backgroundColor: theme.erro,
+                          borderColor: theme.erro,
+                          opacity: salvando || !logoDefinida ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={theme.background} />
+                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
+                        REMOVER
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                <Text style={{ color: logoDefinida ? theme.textoSecundaria : theme.textoSub }}>
-                  {estadoLogo === "trocar"
-                    ? arquivoLogo?.nome
-                    : logoDefinida
-                      ? "Logo definida"
-                      : "Sem logo"}
-                </Text>
-
-                <View style={styles.acoesMidia}>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Escolher logo do slide"
-                    disabled={salvando}
-                    activeOpacity={0.8}
-                    onPress={() => void escolherMidia("logo")}
-                    style={[
-                      styles.botaoMidia,
-                      {
-                        backgroundColor: theme.primaria,
-                        borderColor: theme.primaria,
-                        opacity: salvando ? 0.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="image-outline" size={16} color={theme.branco} />
-                    <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
-                      ESCOLHER LOGO
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Remover logo do slide"
-                    disabled={salvando || !logoDefinida}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setEstadoLogo(logoAtual ? "remover" : "manter");
-                      setArquivoLogo(null);
-                    }}
-                    style={[
-                      styles.botaoMidia,
-                      {
-                        backgroundColor: theme.erro,
-                        borderColor: theme.erro,
-                        opacity: salvando || !logoDefinida ? 0.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={theme.background} />
-                    <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
-                      REMOVER
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <Input 
+                  label="DESCRIÇÃO" 
+                  value={descricao} 
+                  onChangeText={setDescricao} 
+                  multiline maxLength={3000} 
+                  style={styles.multilinha} 
+                  editable={!salvando} 
+                  showChanged={descricao !== (veiculo?.descricao ?? "")}
+                  onUndo={() => setDescricao(veiculo?.descricao ?? "")}
+                  containerStyle={styles.campo}
+                />
+                <Input 
+                  label="ALCANCE" 
+                  value={alcance} 
+                  onChangeText={setAlcance} 
+                  multiline maxLength={1000} 
+                  style={styles.multilinha} 
+                  editable={!salvando} 
+                  showChanged={alcance !== (veiculo?.alcance ?? "")}
+                  onUndo={() => setAlcance(veiculo?.alcance ?? "")}
+                  containerStyle={styles.campo}
+                />
+              
               </View>
 
-              <Input 
-                label="DESCRIÇÃO" 
-                value={descricao} 
-                onChangeText={setDescricao} 
-                multiline maxLength={3000} 
-                style={styles.multilinha} 
-                editable={!salvando} 
-                showChanged={descricao !== (veiculo?.descricao ?? "")}
-                onUndo={() => setDescricao(veiculo?.descricao ?? "")}
-                containerStyle={styles.campo}
-              />
-              <Input 
-                label="ALCANCE" 
-                value={alcance} 
-                onChangeText={setAlcance} 
-                multiline maxLength={1000} 
-                style={styles.multilinha} 
-                editable={!salvando} 
-                showChanged={alcance !== (veiculo?.alcance ?? "")}
-                onUndo={() => setAlcance(veiculo?.alcance ?? "")}
-                containerStyle={styles.campo}
-              />
-            
-            </View>
+              {erro ? <Text accessibilityRole="alert" style={{ color: theme.erro }}>{erro}</Text> : null}
+              <View style={styles.acoes}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancelar edição do slide"
+                  disabled={salvando}
+                  activeOpacity={0.8}
+                  onPress={onClose}
+                  style={[
+                    styles.botaoMidia,
+                    {
+                      backgroundColor: theme.background,
+                      borderColor: theme.borda,
+                      opacity: salvando ? 0.5 : 1,
+                      padding: 12,
+                    },
+                  ]}
+                >
+                  <Ionicons name="close-outline" size={16} color={theme.textoSub} />
+                  <Text weight="SemiBold" style={[styles.textoBotaoMidia, { color: theme.textoSub }]}>
+                    CANCELAR
+                  </Text>
+                </TouchableOpacity>
 
-            {erro ? <Text accessibilityRole="alert" style={{ color: theme.erro }}>{erro}</Text> : null}
-            <View style={styles.acoes}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Cancelar edição do slide"
-                disabled={salvando}
-                activeOpacity={0.8}
-                onPress={onClose}
-                style={[
-                  styles.botaoMidia,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
-                    opacity: salvando ? 0.5 : 1,
-                    padding: 12,
-                  },
-                ]}
-              >
-                <Ionicons name="close-outline" size={16} color={theme.textoSub} />
-                <Text weight="SemiBold" style={[styles.textoBotaoMidia, { color: theme.textoSub }]}>
-                  CANCELAR
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Salvar slide"
-                disabled={salvando}
-                activeOpacity={0.8}
-                onPress={() => void salvar()}
-                style={[
-                  styles.botaoMidia,
-                  {
-                    backgroundColor: theme.primaria,
-                    borderColor: theme.primaria,
-                    opacity: salvando ? 0.5 : 1,
-                    padding: 12,
-                  },
-                ]}
-              >
-                {salvando ? (
-                  <ActivityIndicator size="small" color={theme.branco} />
-                ) : (
-                  <Ionicons name="checkmark-outline" size={16} color={theme.branco} />
-                )}
-                <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
-                  SALVAR SLIDE
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text weight="Medium" style={[styles.textoBotaoMidia, { color: theme.textoSub }]}>
-                Você pode conferir as alterações na prévia acima!
-            </Text>
-          </ScrollView>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Salvar slide"
+                  disabled={salvando}
+                  activeOpacity={0.8}
+                  onPress={() => void salvar()}
+                  style={[
+                    styles.botaoMidia,
+                    {
+                      backgroundColor: theme.primaria,
+                      borderColor: theme.primaria,
+                      opacity: salvando ? 0.5 : 1,
+                      padding: 12,
+                    },
+                  ]}
+                >
+                  {salvando ? (
+                    <ActivityIndicator size="small" color={theme.branco} />
+                  ) : (
+                    <Ionicons name="checkmark-outline" size={16} color={theme.branco} />
+                  )}
+                  <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
+                    SALVAR SLIDE
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text weight="Medium" style={[styles.textoBotaoMidia, { color: theme.textoSub }]}>
+                  Você pode conferir as alterações na prévia acima!
+              </Text>
+            </ScrollView>
+          </View>
         </View>
-      </View>
+      )}
     </Modal>
   );
 }
@@ -673,6 +759,21 @@ const styles = StyleSheet.create({
   textoBotaoMidia: { 
     fontSize: 11, 
     textAlign: "center" 
+  },
+  botaoCapturaPagina: {
+    alignSelf: "flex-start",
+    minHeight: 35,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 5,
+  },
+  textoCapturaPagina: {
+    fontSize: 11,
   },
   acoes: {
   flexDirection: "row",

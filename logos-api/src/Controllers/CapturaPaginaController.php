@@ -40,7 +40,8 @@ final class CapturaPaginaController
             }
 
             $captura = CapturaPaginaService::capturar(
-                $dados['link'] ?? null
+                $dados['link'] ?? null,
+                $dados['trecho'] ?? 0
             );
 
             http_response_code(200);
@@ -57,6 +58,14 @@ final class CapturaPaginaController
             header(
                 'X-Captura-Altura: ' .
                 $captura['altura']
+            );
+            header(
+                'X-Captura-Incompleta: ' .
+                ($captura['incompleta'] ? '1' : '0')
+            );
+            header(
+                'X-Captura-Tem-Proxima: ' .
+                ($captura['tem_proxima'] ? '1' : '0')
             );
 
             echo $captura['imagem'];

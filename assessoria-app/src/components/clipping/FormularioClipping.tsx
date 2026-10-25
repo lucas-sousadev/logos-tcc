@@ -33,6 +33,7 @@ import ClippingArquivosInput, {
   type ArquivoRascunho,
 } from "@/components/clipping/ClippingArquivosInput";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
 
 import { dataBRParaISO,tempoParaSegundos, dataISOParaBR, segundosParaTempo} from "@/utils/clippingFormatacao";
 import { type ErrosClipping, identificarCampoErroClipping, normalizarCategorias,obterAnoDaPublicacao, validarFormularioClipping,} from "@/utils/validarClipping";
@@ -275,6 +276,10 @@ const [tier, setTier] = useState<Tier | null>(
       adicionarOutro: boolean;
       falhas: string[];
     } | null>(null);
+  const [ultimaCapturaChave, setUltimaCapturaChave] = useState<string | null>(null);
+  const imagemCapturadaPendente =
+    ultimaCapturaChave !== null &&
+    arquivos.some((arquivo) => arquivo.chave === ultimaCapturaChave);
 
   const [ultimoCriado, setUltimoCriado] =
   useState<Clipping | null>(null);
@@ -296,6 +301,7 @@ const [tier, setTier] = useState<Tier | null>(
       caminho_prefixo: string;
       incluir_subdominios: boolean;
     } | null>(null);
+  const [capturaAberta, setCapturaAberta] = useState(false);
 
   const linkAtualRef = useRef(link);
   const navegacaoIniciada = useRef(false);
@@ -304,7 +310,7 @@ const [tier, setTier] = useState<Tier | null>(
   const [permitirSaida, setPermitirSaida] = useState(false);
   const saidaPendente = useRef<(() => void) | null>(null);
   const temAlteracoesPendentes =
-    quantidadeAlteracoes > 0 &&
+    (quantidadeAlteracoes > 0 || arquivos.length > 0) &&
     destinoAposSalvar === null;
 
   const bloqueado =
@@ -919,16 +925,11 @@ const [tier, setTier] = useState<Tier | null>(
       return;
     }
 
-    if (editando) {
-        setMensagemEnvio("");
-        setDestinoAposSalvar(clipping);
-        setSalvando(false);
-        return;
-    }
-
-    marcarNovo(clipping.id);
+    if (!editando) marcarNovo(clipping.id);
 
     const falhas: string[] = [];
+
+    const pendentes: ArquivoRascunho[] = [];
 
     for (let indice = 0; indice < arquivos.length; indice += 1) {
       const arquivo = arquivos[indice];
@@ -944,12 +945,32 @@ const [tier, setTier] = useState<Tier | null>(
           error instanceof Error
             ? error.message
             : "Não foi possível confirmar o envio.";
-
+        
         falhas.push(`${arquivo.nome}: ${motivo}`);
+        pendentes.push(arquivo);
       }
     }
 
     setMensagemEnvio("");
+
+    if (editando) {
+      if (falhas.length > 0) {
+        setArquivos(pendentes);
+        setErroGeral(
+          "Os dados do clipping foram salvos, mas alguns anexos " +
+          `não foram enviados: ${falhas.join("; ")}. ` +
+          "Salve novamente para tentar enviar apenas os pendentes."
+        );
+        travaSalvar.current = false;
+        setSalvando(false);
+        return;
+      }
+
+      setArquivos([]);
+      setDestinoAposSalvar(clipping);
+      setSalvando(false);
+      return;
+    }
 
     if (falhas.length > 0) {
       setConclusaoComFalhas({
@@ -1210,54 +1231,116 @@ const [tier, setTier] = useState<Tier | null>(
           showChanged={campoAlterado("link")}
           clearable
         />
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Buscar dados do link"
-          disabled={bloqueado || !link.trim()}
-          onPress={() => void buscarDadosDoLink()}
+        <View
           style={[
-            styles.buscarDadosLink,
-            {
-              borderColor: theme.borda,
-              backgroundColor: theme.background,
-              opacity:
-                (!buscandoLink && bloqueado) || !link.trim()
-                  ? 0.5
-                  : 1,
-            },
+            styles.acoesLink,
+            { marginBottom: erroBuscaLink ? 8 : 18 },
           ]}
         >
-          {buscandoLink ? (
-            <ActivityIndicator size="small" color={theme.textoSub} />
-          ) : (
-            <Ionicons
-              name="search-outline"
-              size={15}
-              color={theme.textoSub}
-            />
-          )}
-          <Text
-            weight="SemiBold"
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Buscar dados do link"
+            disabled={bloqueado || !link.trim()}
+            onPress={() => void buscarDadosDoLink()}
             style={[
-              styles.buscarDadosLinkTexto,
-              { color: theme.textoSub },
+              styles.botaoAcaoLink,
+              {
+                backgroundColor: theme.primaria,
+                opacity:
+                  (!buscandoLink && bloqueado) || !link.trim() ? 0.5 : 1,
+              },
             ]}
           >
-            {buscandoLink ? "BUSCANDO..." : "BUSCAR DADOS DO LINK"}
-          </Text>
-        </TouchableOpacity>
+            {buscandoLink ? (
+              <ActivityIndicator size="small" color={theme.textoInput} />
+            ) : (
+              <Ionicons
+                name="search-outline"
+                size={15}
+                color={theme.branco}
+              />
+            )}
+            <Text
+              weight="SemiBold"
+              numberOfLines={1}
+              style={[
+                styles.botaoAcaoLinkTexto,
+                { color: theme.branco },
+              ]}
+            >
+              {buscandoLink ? "BUSCANDO..." : "BUSCAR DADOS"}
+            </Text>
+          </TouchableOpacity>
+
+          {podeAnexar ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Capturar imagem do link"
+              disabled={bloqueado || !link.trim()}
+              onPress={() => setCapturaAberta(true)}
+              style={[
+                styles.botaoAcaoLink,
+                {
+                  backgroundColor: theme.primaria,
+                  opacity: bloqueado || !link.trim() ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name="image-outline"
+                size={15}
+                color={theme.branco}
+              />
+              <Text
+                weight="SemiBold"
+                numberOfLines={1}
+                style={[
+                  styles.botaoAcaoLinkTexto,
+                  { color: theme.branco },
+                ]}
+              >
+                CAPTURAR IMAGEM
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         {erroBuscaLink ? (
           <Text
             style={{
               color: theme.erro,
               fontSize: 12,
-              marginTop: -10,
               marginBottom: 16,
             }}
           >
             {erroBuscaLink}
           </Text>
         ) : null}
+        {imagemCapturadaPendente ? (
+        <View
+          accessibilityLiveRegion="polite"
+          style={[
+            styles.avisoCaptura,
+            { borderColor: theme.alteracao },
+          ]}
+        >
+          <Ionicons
+            name="checkmark-circle-outline"
+            size={18}
+            color={theme.alteracao}
+          />
+          <Text
+            style={{
+              flex: 1,
+              color: theme.alteracao,
+              fontSize: 12,
+              lineHeight: 18,
+            }}
+          >
+            Captura adicionada aos anexos abaixo.
+          </Text>
+        </View>
+      ) : null}
         <ClippingDataInput
           value={dataPublicacao}
           anoReferencia={ano}
@@ -1450,16 +1533,13 @@ const [tier, setTier] = useState<Tier | null>(
           showInicioChanged={campoAlterado("inicioSegundos")}
           showFimChanged={campoAlterado("fimSegundos")}
         />
-
-        {!editando ? (
-            <ClippingArquivosInput
-                arquivos={arquivos}
-                disabled={bloqueado}
-                podeSelecionar={podeAnexar}
-                onChange={setArquivos}
-                onOcupadoChange={setSelecionandoArquivos}
-            />
-        ) : null}
+        <ClippingArquivosInput
+          arquivos={arquivos}
+          disabled={bloqueado}
+          podeSelecionar={podeAnexar}
+          onChange={setArquivos}
+          onOcupadoChange={setSelecionandoArquivos}
+        />
         <Input
           label="OBSERVAÇÕES"
           value={observacoes}
@@ -1495,13 +1575,14 @@ const [tier, setTier] = useState<Tier | null>(
           </Text>
         ) : null}
 
-        {editando && quantidadeAlteracoes > 0 ? (
+        {editando &&
+        (quantidadeAlteracoes > 0 || arquivos.length > 0) ? (
             <UnsavedChanges
-                visible
-                saving={bloqueado}
-                alterations={quantidadeAlteracoes}
-                onSave={() => void salvar(false)}
-                onDiscard={cancelarCadastro}
+              visible
+              saving={bloqueado}
+              alterations={quantidadeAlteracoes + arquivos.length}
+              onSave={() => void salvar(false)}
+              onDiscard={cancelarCadastro}
             />
             ) : (
             <View style={styles.actions}>
@@ -1622,6 +1703,31 @@ const [tier, setTier] = useState<Tier | null>(
                 }
               : null
           );
+        }}
+      />
+
+      <CapturaPaginaModal
+        visivel={capturaAberta}
+        link={link.trim()}
+        origem="clipping"
+        onFechar={() => setCapturaAberta(false)}
+        onConfirmar={(imagem) => {
+          const chave = `captura-${Date.now()}-${Math.random()}`;
+
+          setArquivos((atuais) => [
+            ...atuais,
+            {
+              chave,
+              uri: imagem.uri,
+              nome: imagem.nome,
+              mimeType: imagem.mimeType,
+              file: imagem.file,
+              tamanhoBytes: imagem.tamanhoBytes,
+            },
+          ]);
+
+          setUltimaCapturaChave(chave);
+          setCapturaAberta(false);
         }}
       />
 
@@ -1750,21 +1856,26 @@ const styles = StyleSheet.create({
   addAnotherButton: {
     marginTop: 10,
   },
-  buscarDadosLink: {
-    alignSelf: "flex-start",
-    minHeight: 35,
+  acoesLink: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: -8,
+  },
+  botaoAcaoLink: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    borderWidth: 1,
+    gap: 4,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    marginTop: -8,
-    marginBottom: 18,
+    paddingHorizontal: 6,
   },
-  buscarDadosLinkTexto: {
-    fontSize: 11,
+  botaoAcaoLinkTexto: {
+    flexShrink: 1,
+    fontSize: 10,
+    textAlign: "center",
   },
   permissionBox: {
     margin: 20,
@@ -1791,7 +1902,15 @@ const styles = StyleSheet.create({
     marginTop: -12,
     marginBottom: 14,
   },
-
+  avisoCaptura: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+  },
   generalError: {
     color: "#EF4444",
     fontSize: 13,
