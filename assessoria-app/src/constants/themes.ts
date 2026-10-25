@@ -26,8 +26,8 @@ export const LightTheme = {
 };
 
 export const DarkTheme = {
-  background: "#0F172A",
-  backgroundSecundario: "#121b30",
+  background: "#070b14",
+  backgroundSecundario: "#070b14",
   surface: "#e6ecf8f3",
   texto: "#FFFFFF",
   textoSub: '#b4b4b4',

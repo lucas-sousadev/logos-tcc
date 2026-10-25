@@ -383,7 +383,7 @@ export default function EditarPeriodoRelatorio() {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header title="Período do relatório" showBackButton />
+      <Header title="Editar período" showBackButton />
 
       <ScrollView
         keyboardShouldPersistTaps="handled"

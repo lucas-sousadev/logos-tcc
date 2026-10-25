@@ -25,7 +25,8 @@ yarn-error.*
 .env
 .env.*
 !.env.example
-
+/logos-api/public/uploads/*
+!/logos-api/public/uploads/.htaccess
 
 *.pem
 *.key

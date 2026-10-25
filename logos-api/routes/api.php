@@ -489,6 +489,16 @@ $router->post(
     ]
 );
 
+$router->post(
+    "/api/clippings/capturar-pagina",
+    "CapturaPaginaController:capturar",
+    "CLIPPING.CRIAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
+
 $router->put(
     "/api/clippings/{id}",
     "ClippingController:atualizar",
@@ -564,6 +574,15 @@ $router->delete(
 
 // relatorios
 
+$router->post(
+    "/api/relatorios/capturar-pagina",
+    "CapturaPaginaController:capturar",
+    "RELATORIOS.EDITAR",
+    middleware: [
+        $authMiddleware,
+        $permissionMiddleware,
+    ]
+);
 
 $router->get(
     "/api/relatorios",

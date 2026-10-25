@@ -37,8 +37,11 @@ type ErrosCadastro = ErrosVeiculo & {
 interface ClippingVeiculoCadastroProps {
   nomeInicial: string;
   onClose: () => void;
-  onCriado: (veiculo: Veiculo) => void;
-  enderecoInicial?: string;
+  onCriado: (
+    veiculo: Veiculo,
+    enderecosSalvos: NovoEnderecoVeiculo[]
+  ) => void;
+  enderecoInicial?: NovoEnderecoVeiculo | null;
 }
 
 export default function ClippingVeiculoCadastro({
@@ -55,11 +58,9 @@ export default function ClippingVeiculoCadastro({
   const [descricao, setDescricao] = useState("");
   const [alcance, setAlcance] = useState("");
   const [tier, setTier] = useState<Tier | null>(null);
-  const [enderecos, setEnderecos] = useState<
-    NovoEnderecoVeiculo[]
-  >([
-    {
-      host: enderecoInicial ?? "",
+  const [enderecos, setEnderecos] = useState<NovoEnderecoVeiculo[]>([
+    enderecoInicial ?? {
+      host: "",
       caminho_prefixo: "",
       incluir_subdominios: false,
     },
@@ -176,7 +177,7 @@ export default function ClippingVeiculoCadastro({
     }
 
     if (criado) {
-      onCriado(criado);
+      onCriado(criado, enderecosParaSalvar);
     }
   }
 

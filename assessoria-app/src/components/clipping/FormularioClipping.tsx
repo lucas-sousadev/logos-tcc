@@ -288,7 +288,7 @@ const [tier, setTier] = useState<Tier | null>(
   const [
     enderecoCadastroVeiculo,
     setEnderecoCadastroVeiculo,
-  ] = useState("");
+  ] = useState<ExtracaoLink["endereco_sugerido"] | null>(null);
   const [enderecoPendente, setEnderecoPendente] =
     useState<{
       veiculoId: number;
@@ -1541,25 +1541,42 @@ const [tier, setTier] = useState<Tier | null>(
           nomeInicial={nomeCadastroVeiculo}
           onClose={() => {
             setNomeCadastroVeiculo(null);
-            setEnderecoCadastroVeiculo("");
+            setEnderecoCadastroVeiculo(null);
             if (previaLink) setPreviaAberta(true);
           }}
-          onCriado={(criado) => {
+          onCriado={(criado, enderecosSalvos) => {
             if (previaLink) {
+              const sugerido = previaLink.endereco_sugerido;
+
+              const enderecoFoiSalvo =
+                Boolean(sugerido.host) &&
+                enderecosSalvos.some(
+                  (endereco) =>
+                    endereco.host.trim().toLowerCase() ===
+                      sugerido.host.trim().toLowerCase() &&
+                    endereco.caminho_prefixo.trim() ===
+                      sugerido.caminho_prefixo.trim() &&
+                    endereco.incluir_subdominios ===
+                      sugerido.incluir_subdominios
+                );
+
               setPreviaLink({
                 ...previaLink,
                 veiculo_sugerido: criado,
                 associar_endereco_ao_salvar: false,
+                endereco_associado_veiculo_id: enderecoFoiSalvo
+                  ? criado.id
+                  : null,
               });
+
               setNomeCadastroVeiculo(null);
-              setEnderecoCadastroVeiculo("");
+              setEnderecoCadastroVeiculo(null);
               setPreviaAberta(true);
               return;
             }
 
             alterarVeiculo(criado);
             setNomeCadastroVeiculo(null);
-
             setSucesso(
               "Veículo cadastrado e selecionado. Salve o clipping para concluir."
             );
@@ -1583,18 +1600,16 @@ const [tier, setTier] = useState<Tier | null>(
                   ...atual,
                   veiculo_sugerido: escolhido,
                   associar_endereco_ao_salvar:
+                    atual.endereco_associado_veiculo_id == null &&
                     atual.endereco_associavel &&
-                    temPermissao(
-                      "VEICULOS",
-                      "EDITAR"
-                    ),
+                    temPermissao("VEICULOS", "EDITAR"),
                 }
               : null
           );
         }}
-        onCadastroRapido={(nome, host) => {
+        onCadastroRapido={(nome, endereco) => {
           setPreviaAberta(false);
-          setEnderecoCadastroVeiculo(host);
+          setEnderecoCadastroVeiculo(endereco);
           setNomeCadastroVeiculo(nome);
         }}
         onDesfazerVeiculo={() => {

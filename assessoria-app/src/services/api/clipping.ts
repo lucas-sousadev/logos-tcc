@@ -982,6 +982,9 @@ export interface ExtracaoLink {
     ExtracaoLink["veiculo_sugerido"]
   >[];
   associar_endereco_ao_salvar?: boolean;
+  portal_confiavel: boolean;
+  aviso_metadados?: string | null;
+  endereco_associado_veiculo_id?: number | null;
 }
 
 export async function extrairDadosDoLink(

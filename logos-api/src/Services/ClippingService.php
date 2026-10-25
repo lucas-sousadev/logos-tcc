@@ -1231,30 +1231,9 @@ class ClippingService
 
         $host = strtolower(trim($associacao['host']));
         $hostLink = strtolower(
-            (string) parse_url(
-                $campos['link'],
-                PHP_URL_HOST
-            )
+            (string) parse_url($campos['link'], PHP_URL_HOST)
         );
-
-        $semWww = static fn(string $valor): string =>
-            preg_replace('/^www\./', '', $valor);
-
-        if (
-            filter_var(
-                $host,
-                FILTER_VALIDATE_DOMAIN,
-                FILTER_FLAG_HOSTNAME
-            ) === false ||
-            $semWww($host) !== $semWww($hostLink)
-        ) {
-            throw new \InvalidArgumentException(
-                'O domínio sugerido não corresponde ao link do clipping.'
-            );
-        }
-
-        $prefixo =
-            $associacao['caminho_prefixo'] ?? '';
+        $prefixo = $associacao['caminho_prefixo'] ?? '';
 
         if (!is_string($prefixo)) {
             throw new \InvalidArgumentException(
@@ -1262,24 +1241,70 @@ class ClippingService
             );
         }
 
+        $semWww = static fn(string $valor): string =>
+            preg_replace('/^www\./', '', $valor);
+
         $caminho = (string) (
-            parse_url($campos['link'], PHP_URL_PATH)
-            ?: '/'
+            parse_url($campos['link'], PHP_URL_PATH) ?: '/'
         );
 
+        $ehCanalYoutube =
+            $host === 'youtube.com' &&
+            ExtracaoLinkService::ehVideoYoutube(
+                (string) $campos['link']
+            ) &&
+            preg_match(
+                '~^/(?:channel/UC[A-Za-z0-9_-]{22}|@[\pL\pN._-]{1,100}|user/[A-Za-z0-9._-]{1,100}|c/[A-Za-z0-9._-]{1,100})$~uD',
+                $prefixo
+            ) === 1 &&
+            ($associacao['incluir_subdominios'] ?? false) === false;
+
         if (
-            $prefixo !== '' &&
-            $caminho !== $prefixo &&
-            !str_starts_with(
-                $caminho,
-                rtrim($prefixo, '/') . '/'
-            )
+            filter_var(
+                $host,
+                FILTER_VALIDATE_DOMAIN,
+                FILTER_FLAG_HOSTNAME
+            ) === false
         ) {
             throw new \InvalidArgumentException(
-                'A seção não corresponde ao link do clipping.'
+                'O domínio sugerido é inválido.'
             );
         }
 
+        if (
+            in_array(
+                $semWww($host),
+                ['youtube.com', 'youtu.be', 'instagram.com'],
+                true
+            ) &&
+            !$ehCanalYoutube
+        ) {
+            throw new \InvalidArgumentException(
+                'Associe o canal ou perfil, não a plataforma inteira.'
+            );
+        }
+
+        if (!$ehCanalYoutube) {
+            if ($semWww($host) !== $semWww($hostLink)) {
+                throw new \InvalidArgumentException(
+                    'O domínio sugerido não corresponde ao link do clipping.'
+                );
+            }
+
+            if (
+                $prefixo !== '' &&
+                $caminho !== $prefixo &&
+                !str_starts_with(
+                    $caminho,
+                    rtrim($prefixo, '/') . '/'
+                )
+            ) {
+                throw new \InvalidArgumentException(
+                    'A seção não corresponde ao link do clipping.'
+                );
+            }
+        }
+        
         $veiculoId = (int) $campos['veiculo_id'];
 
         VeiculoEnderecoService::alterarDiretamente(
