@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { lookup } from "node:dns/promises";
+import { criarProxyCaptura, validarUrlCaptura as validarUrl } from "./proxyCaptura.mjs";
 import { chromium } from "playwright";
 
 const porta = Number(process.env.CAPTURA_PORTA || 3777);
@@ -23,75 +23,6 @@ function erroEntrada(mensagem) {
   const erro = new Error(mensagem);
   erro.status = 422;
   return erro;
-}
-
-function ipPublico(ip) {
-  const partes = ip.split(".").map(Number);
-
-  if (partes.length !== 4 || partes.some((parte) => parte < 0 || parte > 255)) {
-    return false;
-  }
-
-  const [a, b, c] = partes;
-
-  if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
-  if (a === 100 && b >= 64 && b <= 127) return false;
-  if (a === 169 && b === 254) return false;
-  if (a === 172 && b >= 16 && b <= 31) return false;
-  if (a === 192 && (b === 0 || b === 168)) return false;
-  if (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) {
-    return false;
-  }
-  if (a === 203 && b === 0 && c === 113) return false;
-
-  return true;
-}
-
-async function validarUrl(valor) {
-  let url;
-
-  try {
-    url = new URL(valor);
-  } catch {
-    throw erroEntrada("Informe um link válido.");
-  }
-
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    !url.hostname ||
-    url.username ||
-    url.password ||
-    url.port ||
-    valor.length > 2048
-  ) {
-    throw erroEntrada("Este endereço não pode ser capturado.");
-  }
-
-  const host = url.hostname.toLowerCase();
-
-  if (
-    host === "localhost" ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal") ||
-    /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
-    host.includes(":")
-  ) {
-    throw erroEntrada("Este endereço não pode ser capturado.");
-  }
-
-  const enderecos = await lookup(host, {
-    all: true,
-    family: 4,
-  });
-
-  if (
-    enderecos.length === 0 ||
-    enderecos.some(({ address }) => !ipPublico(address))
-  ) {
-    throw erroEntrada("Este endereço não pode ser capturado.");
-  }
-
-  return url;
 }
 
 async function dispensarAvisoCookies(pagina) {
@@ -179,12 +110,32 @@ async function capturar(link, trecho = 0) {
     host === "youtube.com" ||
     host.endsWith(".youtube.com");
 
-  const navegador = await chromium.launch({ headless: true });
+  let navegador = null;
+  let proxy = null;
+  let erroExecucao = null;
   const limite = setTimeout(() => {
-    void navegador.close();
+    erroExecucao = erroEntrada("A captura excedeu o tempo de processamento. Tente novamente.");
+    proxy?.interromper(erroExecucao);
+    void navegador?.close().catch(() => {});
   }, 32_000);
 
   try {
+    proxy = await criarProxyCaptura({
+      aoFalhar: () => { void navegador?.close().catch(() => {}); },
+    });
+    await proxy.validarDestino(link);
+    navegador = await chromium.launch({
+      headless: true,
+      chromiumSandbox: true,
+      timeout: 8000,
+      proxy: proxy.configuracao,
+      args: [
+        "--disable-quic",
+        "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+      ],
+    });
+    if (proxy.falha || erroExecucao) throw proxy.falha ?? erroExecucao;
     const contexto = await navegador.newContext({
       viewport: { width: 1280, height: ALTURA_CAPTURA },
       deviceScaleFactor: 1,
@@ -193,6 +144,7 @@ async function capturar(link, trecho = 0) {
     });
 
     let requisicoes = 0;
+    let recursosBloqueados = false;
 
     await contexto.route("**/*", async (rota) => {
       try {
@@ -205,6 +157,7 @@ async function capturar(link, trecho = 0) {
         requisicoes += 1;
 
         if (requisicoes > 250) {
+          recursosBloqueados = true;
           await rota.abort();
           return;
         }
@@ -212,7 +165,8 @@ async function capturar(link, trecho = 0) {
         await validarUrl(rota.request().url());
         await rota.continue();
       } catch {
-        await rota.abort();
+        recursosBloqueados = true;
+        await rota.abort().catch(() => {});
       }
     });
 
@@ -237,6 +191,7 @@ async function capturar(link, trecho = 0) {
     });
 
     function verificarBloqueio403() {
+      if (proxy.falha || erroExecucao) throw proxy.falha ?? erroExecucao;
       if (statusDocumento === 403) {
         throw erroEntrada(MENSAGEM_BLOQUEIO_403);
       }
@@ -475,14 +430,19 @@ async function capturar(link, trecho = 0) {
       imagem,
       largura: 1280,
       altura,
-      incompleta,
+      incompleta: incompleta || recursosBloqueados || proxy.restricoes,
       temProxima:
         trecho < MAX_TRECHO &&
         alturaFinalPagina > inicio + altura + 50,
     };
+  } catch (erro) {
+    throw proxy?.falha ?? erroExecucao ?? erro;
   } finally {
     clearTimeout(limite);
-    await navegador.close().catch(() => {});
+    await Promise.allSettled([
+      proxy?.fechar(),
+      navegador?.close(),
+    ]);
   }
 }
 

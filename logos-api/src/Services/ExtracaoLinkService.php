@@ -30,7 +30,7 @@ final class ExtracaoLinkService
         [$urlFinal, $html] = self::baixar($link);
 
         [$titulo, $data, $duracao, $nomePortal] =
-            self::lerMetadados($html);
+            self::lerMetadados($html, $urlFinal);
 
         $host = strtolower(
             (string) parse_url($urlFinal, PHP_URL_HOST)
@@ -183,7 +183,8 @@ final class ExtracaoLinkService
         ?int $prazoMs = null,
         bool $somenteCabecalho = false
     ): array {
-        $inicio = microtime(true);
+        $inicio = hrtime(true);
+        $orcamentoMs = $prazoMs ?? 10_000;
         $maxSaltos = $somenteCabecalho
             ? 1
             : self::MAX_REDIRECIONAMENTOS;
@@ -230,11 +231,11 @@ final class ExtracaoLinkService
                 }
             }
 
-            $restanteMs = $prazoMs === null
-                ? 10000
-                : $prazoMs - (int) (
-                    (microtime(true) - $inicio) * 1000
-                );
+            $decorridoMs = (int) ceil(
+                (hrtime(true) - $inicio) / 1_000_000
+            );
+
+            $restanteMs = $orcamentoMs - $decorridoMs;
 
             if ($restanteMs <= 0) {
                 throw new \RuntimeException(
@@ -431,30 +432,21 @@ final class ExtracaoLinkService
         return $origem . $diretorio . $destino;
     }
 
-    private static function lerMetadados(
-        string $html
-    ): array {
+    private static function lerMetadados(string $html, string $urlPagina): array
+    {
         $codificacao = mb_detect_encoding(
             $html,
             ['UTF-8', 'Windows-1252', 'ISO-8859-1'],
             true
         ) ?: 'UTF-8';
-
-        $html = mb_convert_encoding(
-            $html,
-            'UTF-8',
-            $codificacao
-        );
-
+        $html = mb_convert_encoding($html, 'UTF-8', $codificacao);
         $anterior = libxml_use_internal_errors(true);
         $documento = new DOMDocument();
 
         try {
             $documento->loadHTML(
                 '<?xml encoding="UTF-8"?>' . $html,
-                LIBXML_NONET |
-                    LIBXML_NOERROR |
-                    LIBXML_NOWARNING
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING
             );
         } finally {
             libxml_clear_errors();
@@ -462,151 +454,182 @@ final class ExtracaoLinkService
         }
 
         $metas = [];
-
-        foreach (
-            $documento->getElementsByTagName('meta') as $meta
-        ) {
+        foreach ($documento->getElementsByTagName('meta') as $meta) {
             $chave = strtolower(trim(
                 $meta->getAttribute('property') ?:
                 $meta->getAttribute('name') ?:
                 $meta->getAttribute('itemprop')
             ));
             $valor = trim($meta->getAttribute('content'));
-
-            if (
-                $chave !== '' &&
-                $valor !== '' &&
-                !isset($metas[$chave])
-            ) {
-                $metas[$chave] = $valor;
+            if ($chave !== '' && $valor !== '' && count($metas[$chave] ?? []) < 8) {
+                $metas[$chave][] = $valor;
             }
         }
 
-        $estruturados = [
-            'titulo' => null,
-            'data' => null,
-            'duracao' => null,
-            'portal' => null,
+        $urls = [self::normalizarUrlMetadado($urlPagina, $urlPagina)];
+        $hostPagina = parse_url($urls[0] ?? '', PHP_URL_HOST);
+        foreach ($documento->getElementsByTagName('link') as $link) {
+            $rel = preg_split('/\s+/', strtolower(trim($link->getAttribute('rel'))));
+            if (!in_array('canonical', $rel ?: [], true)) continue;
+            $canonical = self::normalizarUrlMetadado($link->getAttribute('href'), $urlPagina);
+            if ($canonical !== null && parse_url($canonical, PHP_URL_HOST) === $hostPagina) {
+                $urls[] = $canonical;
+                break;
+            }
+        }
+        $urls = array_values(array_unique(array_filter($urls)));
+
+        $nos = [];
+        $visitados = 0;
+        foreach ($documento->getElementsByTagName('script') as $script) {
+            if ($visitados >= 300) break;
+            if (!str_contains(strtolower($script->getAttribute('type')), 'application/ld+json')) continue;
+            $json = json_decode($script->textContent, true, 64);
+            if (is_array($json)) self::lerJsonLd($json, $nos, $visitados);
+        }
+
+        $artigo = self::selecionarJsonLd($nos, $urls, 'artigo', $urlPagina);
+        $video = self::selecionarJsonLd($nos, $urls, 'video', $urlPagina);
+        $urlRaiz = self::normalizarUrlMetadado('/', $urlPagina);
+        $site = self::selecionarJsonLd($nos, [$urlRaiz], 'site', $urlPagina);
+        $principal = $artigo ?? $video ?? [];
+
+        return [
+            self::primeiroMetadadoValido('texto', [
+                $principal['headline'] ?? null,
+                ...($metas['og:title'] ?? []),
+                ...($metas['twitter:title'] ?? []),
+                $principal['name'] ?? null,
+                $documento->getElementsByTagName('title')->item(0)?->textContent,
+            ]),
+            self::primeiroMetadadoValido('data', [
+                $principal['datePublished'] ?? null,
+                ...($metas['article:published_time'] ?? []),
+                ...($metas['datepublished'] ?? []),
+                ...($metas['pubdate'] ?? []),
+                ...($metas['date'] ?? []),
+            ]),
+            self::primeiroMetadadoValido('duracao', [
+                $video['duration'] ?? null,
+                ...($metas['video:duration'] ?? []),
+                ...($metas['duration'] ?? []),
+            ]),
+            self::primeiroMetadadoValido('texto', [
+                ...($metas['og:site_name'] ?? []),
+                ...($metas['application-name'] ?? []),
+                $principal['publisher']['name'] ?? null,
+                $site['name'] ?? null,
+                $site['publisher']['name'] ?? null,
+            ]),
         ];
-
-        foreach (
-            $documento->getElementsByTagName('script') as $script
-        ) {
-            if (
-                !str_contains(
-                    strtolower($script->getAttribute('type')),
-                    'application/ld+json'
-                )
-            ) {
-                continue;
-            }
-
-            $json = json_decode(
-                $script->textContent,
-                true,
-                64
-            );
-
-            if (is_array($json)) {
-                self::lerJsonLd($json, $estruturados);
-                
-            }
-        }
-
-        $tituloDocumento =
-            $documento->getElementsByTagName('title')
-                ->item(0)?->textContent;
-
-        $titulo = self::texto(
-            $estruturados['titulo'] ??
-            $metas['og:title'] ??
-            $metas['twitter:title'] ??
-            $tituloDocumento
-        );
-
-        $data = self::data(
-            $estruturados['data'] ??
-            $metas['article:published_time'] ??
-            $metas['datepublished'] ??
-            $metas['pubdate'] ??
-            $metas['date'] ??
-            null
-        );
-
-        $duracao = self::duracao(
-            $estruturados['duracao'] ??
-            $metas['video:duration'] ??
-            $metas['duration'] ??
-            null
-        );
-
-        $nomePortal = self::texto(
-            $metas['og:site_name'] ??
-            $metas['application-name'] ??
-            $estruturados['portal'] ??
-            null
-        );
-
-        return [$titulo, $data, $duracao, $nomePortal];
     }
 
-    private static function lerJsonLd(
-        array $no,
-        array &$resultado
-    ): void {
-        if (
-            $resultado['portal'] === null &&
-            isset($no['publisher']['name']) &&
-            is_string($no['publisher']['name'])
-        ) {
-            $resultado['portal'] = $no['publisher']['name'];
+    private static function primeiroMetadadoValido(string $tipo, array $valores): string|int|null
+    {
+        foreach ($valores as $valor) {
+            $validado = match ($tipo) {
+                'texto' => self::texto($valor),
+                'data' => self::data($valor),
+                'duracao' => self::duracao($valor),
+            };
+            if ($validado !== null) return $validado;
         }
+        return null;
+    }
 
-        if (
-            $resultado['titulo'] === null &&
-            isset($no['headline']) &&
-            is_string($no['headline'])
-        ) {
-            $resultado['titulo'] = $no['headline'];
-        }
-
-        if (
-            $resultado['data'] === null &&
-            isset($no['datePublished']) &&
-            is_string($no['datePublished'])
-        ) {
-            $resultado['data'] = $no['datePublished'];
-        }
-
-        $tipo = $no['@type'] ?? '';
-        $tipos = is_array($tipo) ? $tipo : [$tipo];
-        $ehVideo = false;
-
-        foreach ($tipos as $item) {
-            if (
-                is_string($item) &&
-                str_contains(
-                    strtolower($item),
-                    'videoobject'
-                )
-            ) {
-                $ehVideo = true;
+    private static function lerJsonLd(array $no, array &$nos, int &$visitados, int $profundidade = 0): void
+    {
+        if ($visitados >= 300 || $profundidade > 32) return;
+        $visitados++;
+        $tipos = $no['@type'] ?? [];
+        if (!is_array($tipos)) $tipos = [$tipos];
+        foreach ($tipos as $tipo) {
+            if (!is_string($tipo)) continue;
+            $tipo = strtolower((string) preg_replace('~^.*[/#]~', '', $tipo));
+            $grupo = match (true) {
+                str_ends_with($tipo, 'article'),
+                in_array($tipo, ['blogposting', 'liveblogposting', 'socialmediaposting'], true) => 'artigo',
+                $tipo === 'videoobject' => 'video',
+                $tipo === 'website' => 'site',
+                default => null,
+            };
+            if ($grupo !== null) {
+                $nos[] = ['grupo' => $grupo, 'dados' => $no];
+                break;
             }
         }
-
-        if (
-            $ehVideo &&
-            $resultado['duracao'] === null &&
-            isset($no['duration'])
-        ) {
-            $resultado['duracao'] = $no['duration'];
+        foreach ($no as $chave => $filho) {
+            if (!is_array($filho)) continue;
+            if (in_array(strtolower((string) $chave), [
+                'itemlistelement', 'isrelatedto', 'relatedlink',
+                'related', 'mentions', 'citation', 'comment', 'review',
+            ], true)) continue;
+            self::lerJsonLd($filho, $nos, $visitados, $profundidade + 1);
+            if ($visitados >= 300) break;
         }
+    }
 
-        foreach ($no as $filho) {
-            if (is_array($filho)) {
-                self::lerJsonLd($filho, $resultado);
+    private static function selecionarJsonLd(array $nos, array $urls, string $grupo, string $urlPagina): ?array
+    {
+        $melhor = null;
+        $melhorPontuacao = -1;
+        $semEndereco = [];
+        foreach ($nos as $item) {
+            if ($item['grupo'] !== $grupo) continue;
+            $no = $item['dados'];
+            $referencias = [];
+            foreach ([$no['mainEntityOfPage'] ?? null, $no['url'] ?? null, $no['@id'] ?? null] as $referencia) {
+                $url = self::normalizarUrlMetadado($referencia, $urlPagina);
+                if ($url !== null) $referencias[] = $url;
+            }
+            if ($referencias === []) {
+                $semEndereco[] = $no;
+                continue;
+            }
+            foreach ($urls as $indice => $url) {
+                if ($url !== null && in_array($url, $referencias, true)) {
+                    $pontuacao = 100 - $indice;
+                    if ($pontuacao > $melhorPontuacao) {
+                        $melhor = $no;
+                        $melhorPontuacao = $pontuacao;
+                    }
+                    break;
+                }
             }
         }
+        return $melhor ?? (count($semEndereco) === 1 ? $semEndereco[0] : null);
+    }
+
+    private static function normalizarUrlMetadado(mixed $valor, string $base): ?string
+    {
+        if (is_array($valor)) $valor = $valor['@id'] ?? $valor['url'] ?? null;
+        if (!is_string($valor) || trim($valor) === '') return null;
+        $valor = trim($valor);
+        $valor = str_starts_with($valor, '#')
+            ? preg_replace('/#.*$/', '', $base) . $valor
+            : self::resolverRedirecionamento($base, $valor);
+        $partes = parse_url($valor);
+        if (!is_array($partes) || empty($partes['host']) ||
+            !in_array(strtolower($partes['scheme'] ?? ''), ['http', 'https'], true) ||
+            isset($partes['user']) || isset($partes['pass'])) return null;
+
+        $videoId = self::idVideoYoutube($valor);
+        if ($videoId !== null) return 'https://youtube.com/watch?v=' . $videoId;
+
+        $host = preg_replace('/^www\./', '', strtolower($partes['host']));
+        $esquema = strtolower($partes['scheme']);
+        $porta = $partes['port'] ?? ($esquema === 'https' ? 443 : 80);
+        $portaTexto = $porta === ($esquema === 'https' ? 443 : 80) ? '' : ':' . $porta;
+        $caminho = rtrim($partes['path'] ?? '/', '/') ?: '/';
+        parse_str($partes['query'] ?? '', $consulta);
+        foreach (array_keys($consulta) as $chave) {
+            $chaveNormalizada = strtolower((string) $chave);
+            if (str_starts_with($chaveNormalizada, 'utm_') ||
+                in_array($chaveNormalizada, ['fbclid', 'gclid'], true)) unset($consulta[$chave]);
+        }
+        ksort($consulta);
+        $query = http_build_query($consulta, '', '&', PHP_QUERY_RFC3986);
+        return $esquema . '://' . $host . $portaTexto . $caminho . ($query !== '' ? '?' . $query : '');
     }
 
     private static function texto(mixed $valor): ?string
@@ -736,7 +759,7 @@ final class ExtracaoLinkService
 
                 if (in_array($hostPagina, ['youtube.com', 'youtu.be'], true)) {
                     [$tituloPagina, $dataPagina, $duracaoPagina] =
-                        self::lerMetadados($html);
+                        self::lerMetadados($html, $urlPagina);
 
                     if ($titulo === null) {
                         $titulo = $tituloPagina;
@@ -771,7 +794,7 @@ final class ExtracaoLinkService
                     )
                 ) {
                     [$titulo, $data, $duracao] =
-                        self::lerMetadados($html);
+                        self::lerMetadados($html, $urlFinal);
 
                     if (
                         $titulo !== null &&
@@ -1330,7 +1353,7 @@ final class ExtracaoLinkService
 
             if ($hostInicial === $host) {
                 [$tituloInicial, , , $portalInicial] =
-                    self::lerMetadados($htmlInicial);
+                    self::lerMetadados($htmlInicial, $urlInicial);
 
                 foreach ([$portalInicial, $tituloInicial] as $candidato) {
                     if (!$candidato) {
