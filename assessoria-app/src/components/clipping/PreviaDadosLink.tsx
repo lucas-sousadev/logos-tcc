@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -14,6 +15,12 @@ import VeiculoSelector, {
   type SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
 import Text from "@/components/ui/Text";
+import Input from "@/components/ui/Input";
+import CorrecaoAssociacaoLink from "@/components/clipping/CorrecaoAssociacaoLink";
+import {
+  normalizarSecaoAssociacao,
+  validarSecaoAssociacao,
+} from "@/utils/associacaoEnderecoLink";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { ExtracaoLink } from "@/services/api/clipping";
 import {
@@ -22,9 +29,17 @@ import {
 } from "@/utils/clippingFormatacao";
 
 type Modo = "tudo" | "vazios";
+type EscopoAssociacao = NonNullable<ExtracaoLink["escopo_associacao"]>;
 type VeiculoEncontrado = NonNullable<
   ExtracaoLink["veiculo_sugerido"]
 >;
+
+const NOMES_CAMPOS_TEMPO = {
+  pauta: "pauta",
+  data_publicacao: "data da publicação",
+  duracao_segundos: "duração do vídeo",
+  nome_portal: "identificação do veículo",
+};
 
 interface Props {
   dados: ExtracaoLink | null;
@@ -35,9 +50,16 @@ interface Props {
   onDesfazerVeiculo: () => void;
   onCadastroRapido: (
     nome: string,
-    endereco: ExtracaoLink["endereco_sugerido"]
+    endereco: ExtracaoLink["endereco_sugerido"] | null
   ) => void;
   podeCriarVeiculo: boolean;
+  podeAssociarEndereco: boolean;
+  veiculoAtualPreenchido: boolean;
+  onConfigurarAssociacao: (
+    escopo: EscopoAssociacao,
+    caminho: string
+  ) => void;
+  onConfigurarTransferencia: (confirmada: boolean) => void;
 }
 
 export default function PreviaDadosLink({
@@ -49,14 +71,24 @@ export default function PreviaDadosLink({
   onDesfazerVeiculo,
   onCadastroRapido,
   podeCriarVeiculo,
+  podeAssociarEndereco,
+  veiculoAtualPreenchido,
+  onConfigurarAssociacao,
+  onConfigurarTransferencia,
 }: Props) {
   const { theme } = useTheme();
   const [buscaVeiculo, setBuscaVeiculo] =
     useState<SelecaoVeiculo>({ id: null, nome: "" });
+  const [confirmandoTransferencia, setConfirmandoTransferencia] =
+    useState(false);
 
   useEffect(() => {
     setBuscaVeiculo({ id: null, nome: "" });
   }, [visible, dados?.url_consultada]);
+
+  useEffect(() => {
+    setConfirmandoTransferencia(false);
+  }, [visible, dados?.url_consultada, dados?.veiculo_sugerido?.id]);
 
   if (!dados || !visible) return null;
 
@@ -74,19 +106,91 @@ export default function PreviaDadosLink({
     Boolean(dados.data_publicacao) ||
     dados.duracao_segundos !== null;
 
+  const temDadosEncontrados =
+    Boolean(dados.pauta) ||
+    temMetadados ||
+    dados.portal_confiavel ||
+    dados.veiculo_sugerido !== null;
+    
   const linkInstagram =
     /^https?:\/\/(?:www\.|m\.)?instagram\.com(?:[\/:?#]|$)/i.test(
       dados.url_consultada
     );
-  const avisoMetadados = linkInstagram
-    ? dados.data_publicacao === null
-      ? "Não foi possível identificar automaticamente a data da publicação."
-      : null
-    : dados.aviso_metadados;
+  const avisoTempo = dados.aviso_tempo;
+
+  const camposSemIdentificacao = avisoTempo?.campos_nao_identificados
+    .map((campo) => NOMES_CAMPOS_TEMPO[campo])
+    .join(", ");
+
+  const tituloAvisoTempo =
+    avisoTempo?.tipo === "prazo_total"
+      ? `A busca atingiu o limite de ${avisoTempo.limite_total_segundos} segundos`
+      : "Uma consulta atingiu o limite de espera";
+
+  const avisoMetadados = avisoTempo
+    ? null
+    : linkInstagram
+      ? dados.data_publicacao === null
+        ? "Não foi possível identificar automaticamente a data da publicação."
+        : null
+      : dados.aviso_metadados;
 
   const enderecoAssociado =
     dados.endereco_sugerido.host +
     dados.endereco_sugerido.caminho_prefixo;
+
+  const plataforma = ["youtube.com", "youtu.be", "instagram.com"].includes(
+    dados.endereco_sugerido.host.toLowerCase().replace(/^(www|m)\./, "")
+  );
+
+  const podeConfigurarAssociacao =
+    dados.endereco_associavel &&
+    dados.endereco_associado_veiculo_id == null &&
+    !plataforma &&
+    (podeAssociarEndereco || (podeCriarVeiculo && !dados.veiculo_sugerido));
+
+  const escopo =
+    dados.escopo_associacao ??
+    (dados.endereco_sugerido.caminho_prefixo ? "secao" : "site");
+
+  const erroSecao =
+    podeConfigurarAssociacao && escopo === "secao"
+      ? validarSecaoAssociacao(
+          dados.endereco_sugerido.caminho_prefixo,
+          dados.url_consultada
+        )
+      : null;
+
+  const bloquearAplicacao = Boolean(
+    confirmandoTransferencia ||
+    (
+      dados.veiculo_sugerido &&
+      dados.associar_endereco_ao_salvar &&
+      erroSecao
+    )
+  );
+
+  const transferenciaPendente = Boolean(dados.transferir_endereco_ao_salvar);
+  const bloquearSoVazios =
+    confirmandoTransferencia ||
+    (bloquearAplicacao && !veiculoAtualPreenchido) ||
+    (transferenciaPendente && veiculoAtualPreenchido);
+
+  const caminhoSecao = normalizarSecaoAssociacao(
+    dados.endereco_sugerido.caminho_prefixo
+  );
+
+  const enderecoParaCadastro =
+    escopo === "nenhum" || dados.endereco_associado_veiculo_id != null
+      ? null
+      : {
+          ...dados.endereco_sugerido,
+          caminho_prefixo: caminhoSecao,
+        };
+
+  const descricaoAssociacao = escopo === "site"
+    ? `Reconhece links de qualquer seção de ${dados.endereco_sugerido.host}.`
+    : `Reconhece apenas ${dados.endereco_sugerido.host}${caminhoSecao} e suas subseções.`;
 
   function selecionarVeiculo(veiculo: VeiculoEncontrado) {
     setBuscaVeiculo({ id: null, nome: "" });
@@ -170,6 +274,45 @@ export default function PreviaDadosLink({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {avisoTempo ? (
+              <View
+                style={[
+                  styles.caixaAvisoTempo,
+                  { borderColor: theme.aviso },
+                ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Ionicons
+                  name="timer-outline"
+                  size={20}
+                  color={theme.aviso}
+                />
+                <View style={styles.conteudoAvisoTempo}>
+                  <Text
+                    weight="SemiBold"
+                    style={[
+                      styles.tituloAvisoTempo,
+                      { color: theme.aviso },
+                    ]}
+                  >
+                    {tituloAvisoTempo}
+                  </Text>
+                  <Text style={styles.textoAvisoTempo}>
+                    {temDadosEncontrados
+                      ? "Os dados encontrados continuam disponíveis. Confira antes de aplicar."
+                      : "Não foi possível identificar dados no link. Tente novamente ou preencha os campos manualmente."}
+                  </Text>
+                  {camposSemIdentificacao ? (
+                    <Text style={styles.textoAvisoTempo}>
+                      Sem identificação: {camposSemIdentificacao}.
+                      Complete manualmente o que for necessário.
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.tituloSecao}>
               <Ionicons
                 name="document-text-outline"
@@ -227,9 +370,9 @@ export default function PreviaDadosLink({
                     styles.metadados,
                     dados.pauta
                       ? {
-                          borderTopWidth: 1,
-                          borderTopColor: theme.borda,
-                        }
+                        borderTopWidth: 1,
+                        borderTopColor: theme.borda,
+                      }
                       : null,
                   ]}
                 >
@@ -352,16 +495,110 @@ export default function PreviaDadosLink({
                 </View>
               )}
 
-              {dados.veiculo_sugerido ? (
+              {podeConfigurarAssociacao ? (
                 <View
                   style={[
-                    styles.veiculoSelecionado,
-                    {
-                      backgroundColor: theme.background,
-                      borderColor: theme.alteracao,
-                    },
+                    styles.associacao,
+                    { borderTopColor: theme.borda },
                   ]}
                 >
+                  <View style={styles.linhaAssociacao}>
+                    <Text weight="SemiBold" style={styles.tituloAssociacao}>
+                      Reconhecer próximos links
+                    </Text>
+                    <Switch
+                      accessibilityLabel="Salvar endereço para reconhecer próximos links"
+                      value={escopo !== "nenhum"}
+                      onValueChange={(lembrar) => {
+                        onConfigurarAssociacao(
+                          lembrar
+                            ? dados.endereco_sugerido.caminho_prefixo
+                              ? "secao"
+                              : "site"
+                            : "nenhum",
+                          dados.endereco_sugerido.caminho_prefixo
+                        );
+                      }}
+                      trackColor={{ false: theme.borda, true: theme.primaria }}
+                      thumbColor={theme.branco}
+                    />
+                  </View>
+
+                  {escopo !== "nenhum" ? (
+                    <>
+                      <View style={styles.opcoesAssociacao}>
+                        {(["site", "secao"] as const).map((opcao) => (
+                          <TouchableOpacity
+                            key={opcao}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: escopo === opcao }}
+                            onPress={() =>
+                              onConfigurarAssociacao(
+                                opcao,
+                                dados.endereco_sugerido.caminho_prefixo
+                              )
+                            }
+                            style={styles.opcaoAssociacao}
+                          >
+                            <Ionicons
+                              name={
+                                escopo === opcao
+                                  ? "radio-button-on"
+                                  : "radio-button-off"
+                              }
+                              size={18}
+                              color={
+                                escopo === opcao
+                                  ? theme.primaria
+                                  : theme.textoSub
+                              }
+                            />
+                            <Text style={styles.textoOpcaoAssociacao}>
+                              {opcao === "site" ? "Site inteiro" : "Uma seção"}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {escopo === "secao" ? (
+                        <Input
+                          label="SEÇÃO DO SITE"
+                          placeholder="Ex.: /agro"
+                          value={dados.endereco_sugerido.caminho_prefixo}
+                          onChangeText={(caminho) =>
+                            onConfigurarAssociacao("secao", caminho)
+                          }
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          maxLength={300}
+                          error={erroSecao ?? undefined}
+                        />
+                      ) : null}
+
+                      <Text
+                        style={[
+                          styles.descricaoAssociacao,
+                          { color: theme.textoSub },
+                        ]}
+                      >
+                        {descricaoAssociacao}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.descricaoAssociacao,
+                        { color: theme.textoSub },
+                      ]}
+                    >
+                      A escolha será usada apenas neste clipping.
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+
+              {dados.veiculo_sugerido ? (
+                <View style={styles.veiculoSelecionado}>
                   <View style={styles.linhaSelecionado}>
                     <Ionicons
                       name="checkmark-circle"
@@ -416,38 +653,66 @@ export default function PreviaDadosLink({
 
                   {dados.endereco_associado_veiculo_id ===
                     dados.veiculo_sugerido.id ? (
-                      <Text
-                        style={[
-                          styles.avisoAssociacao,
-                          { color: theme.alteracao },
-                        ]}
-                      >
-                        O endereço {enderecoAssociado} já foi associado
-                        a este veículo no cadastro.
-                      </Text>
-                    ) : dados.associar_endereco_ao_salvar ? (
+                    <Text
+                      style={[
+                        styles.avisoAssociacao,
+                        { color: theme.alteracao },
+                      ]}
+                    >
+                      O endereço {enderecoAssociado} já foi associado
+                      a este veículo no cadastro.
+                    </Text>
+                  ) : dados.endereco_associado ? (
+                    <CorrecaoAssociacaoLink
+                      associacao={dados.endereco_associado}
+                      destinoNome={dados.veiculo_sugerido.nome}
+                      podeEditar={podeAssociarEndereco}
+                      enderecoCompativel={dados.endereco_associavel}
+                      confirmando={confirmandoTransferencia}
+                      pendente={transferenciaPendente}
+                      onEditar={() => setConfirmandoTransferencia(true)}
+                      onCancelar={() => setConfirmandoTransferencia(false)}
+                      onConfirmar={() => {
+                        setConfirmandoTransferencia(false);
+                        onConfigurarTransferencia(true);
+                      }}
+                      onDesfazer={() => onConfigurarTransferencia(false)}
+                    />
+                  ) : dados.associar_endereco_ao_salvar ? (
+                    <Text
+                      style={[
+                        styles.avisoAssociacao,
+                        { color: theme.textoSub },
+                      ]}
+                    >
+                      Se este veículo for aplicado, o endereço{" "}
+                      {enderecoAssociado} será associado a ele
+                      quando você salvar o clipping.
+                    </Text>
+                  ) : dados.endereco_associado_veiculo_id ? (
+                    <Text
+                      style={[
+                        styles.avisoAssociacao,
+                        { color: theme.aviso },
+                      ]}
+                    >
+                      Este endereço já pertence a outro veículo.
+                      Trocar o veículo deste clipping não altera
+                      aquela associação.
+                      {podeAssociarEndereco
+                        ? " Busque os dados do link novamente para carregar a associação atual e poder corrigi-la."
+                        : ""}
+                    </Text>
+                  ) : dados.escopo_associacao === "nenhum" ? (
                       <Text
                         style={[
                           styles.avisoAssociacao,
                           { color: theme.textoSub },
                         ]}
                       >
-                        Ao salvar o clipping, o endereço{" "}
-                        {enderecoAssociado} será associado
-                        a este veículo.
-                      </Text>
-                    ) : dados.endereco_associado_veiculo_id ? (
-                      <Text
-                        style={[
-                          styles.avisoAssociacao,
-                          { color: theme.aviso },
-                        ]}
-                      >
-                        Este endereço já foi salvo no veículo
-                        recém-cadastrado. Trocar o veículo do clipping
-                        não altera aquele cadastro.
-                      </Text>
-                    ) : null}
+                      Este veículo será usado apenas neste clipping.
+                    </Text>
+                  ) : null}
                 </View>
               ) : (
                 <>
@@ -532,7 +797,7 @@ export default function PreviaDadosLink({
                           { color: theme.textoSub },
                         ]}
                       >
-                        OU BUSQUE OUTRO 
+                        OU BUSQUE OUTRO
                       </Text>
                       <View
                         style={[
@@ -555,15 +820,21 @@ export default function PreviaDadosLink({
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel="Cadastrar novo veículo"
-                      onPress={() =>
+                      disabled={Boolean(erroSecao)}
+                      onPress={() => {
+                        if (erroSecao) return;
+
                         onCadastroRapido(
                           dados.portal_confiavel
                             ? dados.nome_portal
                             : "",
-                          dados.endereco_sugerido
-                        )
-                      }
-                      style={styles.cadastrar}
+                          enderecoParaCadastro
+                        );
+                      }}
+                      style={[
+                        styles.cadastrar,
+                        { opacity: erroSecao ? 0.5 : 1 },
+                      ]}
                     >
                       <Ionicons
                         name="add-circle-outline"
@@ -623,12 +894,14 @@ export default function PreviaDadosLink({
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Inserir tudo e substituir os campos preenchidos"
+                  disabled={bloquearAplicacao}
                   onPress={() => onAplicar("tudo")}
                   style={[
                     styles.acao,
                     {
                       backgroundColor:
                         theme.backgroundContainer,
+                      opacity: bloquearAplicacao ? 0.5 : 1,
                     },
                   ]}
                 >
@@ -654,6 +927,7 @@ export default function PreviaDadosLink({
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Preencher somente os campos vazios"
+                  disabled={bloquearSoVazios}
                   onPress={() => onAplicar("vazios")}
                   style={[
                     styles.acao,
@@ -661,6 +935,7 @@ export default function PreviaDadosLink({
                     {
                       backgroundColor: theme.background,
                       borderColor: theme.borda,
+                      opacity: bloquearSoVazios ? 0.5 : 1,
                     },
                   ]}
                 >
@@ -683,6 +958,17 @@ export default function PreviaDadosLink({
                   </Text>
                 </TouchableOpacity>
               </View>
+              {transferenciaPendente && veiculoAtualPreenchido ? (
+                <Text
+                  style={[
+                    styles.avisoAssociacao,
+                    { color: theme.aviso },
+                  ]}
+                >
+                  Use INSERIR TUDO para aplicar o veículo e a correção.
+                  SÓ VAZIOS preserva o veículo já preenchido.
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -825,6 +1111,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
   },
+  caixaAvisoTempo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+  },
+  conteudoAvisoTempo: {
+    flex: 1,
+    gap: 6,
+  },
+  tituloAvisoTempo: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  textoAvisoTempo: {
+    fontSize: 11,
+    lineHeight: 17,
+  },
   origem: {
     marginBottom: 13,
   },
@@ -833,9 +1140,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   veiculoSelecionado: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    gap: 4,
   },
   linhaSelecionado: {
     flexDirection: "row",
@@ -861,6 +1166,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     marginTop: 9,
+  },
+  associacao: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  linhaAssociacao: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tituloAssociacao: {
+    flex: 1,
+    fontSize: 12,
+  },
+  opcoesAssociacao: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+  },
+  opcaoAssociacao: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 40,
+    gap: 6,
+  },
+  textoOpcaoAssociacao: {
+    fontSize: 12,
+  },
+  descricaoAssociacao: {
+    fontSize: 11,
+    lineHeight: 17,
   },
   sugestoes: {
     gap: 7,

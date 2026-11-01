@@ -95,6 +95,23 @@ export interface Clipping {
   total_anexos: number;
 }
 
+export interface TransferenciaEnderecoVeiculo {
+  endereco_id: number;
+  veiculo_origem_id: number;
+  versao_origem: number;
+}
+
+export interface AssociacaoEnderecoExistente {
+  id: number;
+  veiculo_id: number;
+  veiculo_nome: string;
+  versao: number;
+  host: string;
+  protocolo: "http" | "https";
+  caminho_prefixo: string;
+  incluir_subdominios: boolean;
+}
+
 export interface DadosClipping {
   cliente_id: number;
   ano_referencia: number;
@@ -115,6 +132,7 @@ export interface DadosClipping {
     caminho_prefixo: string;
     incluir_subdominios: boolean;
   };
+  transferir_endereco_veiculo?: TransferenciaEnderecoVeiculo;
 }
 
 export type DadosAtualizacaoClipping =
@@ -982,9 +1000,22 @@ export interface ExtracaoLink {
     ExtracaoLink["veiculo_sugerido"]
   >[];
   associar_endereco_ao_salvar?: boolean;
+  escopo_associacao?: "site" | "secao" | "nenhum";
   portal_confiavel: boolean;
   aviso_metadados?: string | null;
+  aviso_tempo?: {
+    tipo: "prazo_total" | "consulta_lenta";
+    limite_total_segundos: number;
+    campos_nao_identificados: (
+      | "pauta"
+      | "data_publicacao"
+      | "duracao_segundos"
+      | "nome_portal"
+    )[];
+  } | null;
   endereco_associado_veiculo_id?: number | null;
+  endereco_associado?: AssociacaoEnderecoExistente | null;
+  transferir_endereco_ao_salvar?: boolean;
 }
 
 export async function extrairDadosDoLink(

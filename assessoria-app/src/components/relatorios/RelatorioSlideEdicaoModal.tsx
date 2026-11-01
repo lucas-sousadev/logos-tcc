@@ -336,6 +336,7 @@ export default function RelatorioSlideEdicaoModal({
                   showChanged={pauta !== (clipping?.pauta ?? "")}
                   onUndo={() => setPauta(clipping?.pauta ?? "")}
                   containerStyle={styles.campo}
+                  clearable
                 />
                 {pauta.length >= 75 ? (
                   <Text style={{ color: theme.aviso, fontSize: 12 }}>
@@ -478,6 +479,7 @@ export default function RelatorioSlideEdicaoModal({
                   }}                
                   containerStyle={styles.campo}
                   error={errosCampos.data}
+                  clearable
                 />
                 <Input 
                   label="LINK" 
@@ -497,6 +499,7 @@ export default function RelatorioSlideEdicaoModal({
                   }}
                   containerStyle={styles.campo}
                   error={errosCampos.link}
+                  clearable
                 />
               </View>
               <View style={[styles.secao, { borderTopColor: theme.borda }]}>
@@ -510,6 +513,7 @@ export default function RelatorioSlideEdicaoModal({
                   showChanged={nomeVeiculo !== (veiculo?.nome ?? "")}
                   onUndo={() => setNomeVeiculo(veiculo?.nome ?? "")}
                   containerStyle={styles.campo}
+                  clearable
                 />
                   <View style={styles.midia}>
                   <View style={styles.linhaRotuloMidia}>
@@ -611,6 +615,7 @@ export default function RelatorioSlideEdicaoModal({
                   showChanged={descricao !== (veiculo?.descricao ?? "")}
                   onUndo={() => setDescricao(veiculo?.descricao ?? "")}
                   containerStyle={styles.campo}
+                  clearable
                 />
                 <Input 
                   label="ALCANCE" 
@@ -622,6 +627,7 @@ export default function RelatorioSlideEdicaoModal({
                   showChanged={alcance !== (veiculo?.alcance ?? "")}
                   onUndo={() => setAlcance(veiculo?.alcance ?? "")}
                   containerStyle={styles.campo}
+                  clearable
                 />
               
               </View>

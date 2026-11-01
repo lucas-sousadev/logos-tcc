@@ -531,6 +531,242 @@ class VeiculoEnderecoService
         return $registro;
     }
 
+    public static function transferirDoClipping(
+        int $assessoriaId,
+        ?int $veiculoDestinoId,
+        ?string $link,
+        mixed $transferencia
+    ): void {
+        if ($transferencia instanceof \stdClass) {
+            $transferencia = get_object_vars($transferencia);
+        }
+
+        if (!is_array($transferencia)) {
+            throw new InvalidArgumentException(
+                'A correção da associação é inválida.'
+            );
+        }
+
+        $enderecoId = $transferencia['endereco_id'] ?? null;
+        $veiculoOrigemId = $transferencia['veiculo_origem_id'] ?? null;
+        $versaoOrigem = $transferencia['versao_origem'] ?? null;
+
+        if (
+            !is_int($enderecoId) || $enderecoId <= 0 ||
+            !is_int($veiculoOrigemId) || $veiculoOrigemId <= 0 ||
+            !is_int($versaoOrigem) || $versaoOrigem < 0 ||
+            $veiculoDestinoId === null || $veiculoDestinoId <= 0 ||
+            $veiculoOrigemId === $veiculoDestinoId ||
+            !$link
+        ) {
+            throw new InvalidArgumentException(
+                'Confira o endereço e os veículos da correção.'
+            );
+        }
+
+        $usuario = AuthContext::get();
+
+        if (
+            !$usuario ||
+            (int) $usuario->assessoria_id !== $assessoriaId ||
+            !PermissaoService::usuarioTemPermissao(
+                (int) $usuario->sub,
+                (string) $usuario->perfil,
+                'VEICULOS',
+                'EDITAR'
+            )
+        ) {
+            throw new \LogicException(
+                'Você não possui permissão para corrigir a associação do endereço.'
+            );
+        }
+
+        $db = Connection::get();
+        $transacaoPropria = !$db->inTransaction();
+
+        if ($transacaoPropria) {
+            $db->beginTransaction();
+        }
+
+        try {
+            // bloqueia na mesma ordem pra duas correções não disputarem os veículos ao contrário
+            $veiculos = [$veiculoOrigemId, $veiculoDestinoId];
+            sort($veiculos, SORT_NUMERIC);
+            $versoes = [];
+
+            foreach ($veiculos as $veiculoId) {
+                $versoes[$veiculoId] = self::bloquearVersao(
+                    $assessoriaId,
+                    $veiculoId
+                );
+            }
+
+            if ($versoes[$veiculoOrigemId] !== $versaoOrigem) {
+                throw new DomainException(
+                    'Os endereços foram alterados em outra sessão. ' .
+                    'Busque os dados do link novamente antes de corrigir a associação.'
+                );
+            }
+
+            $destino = $db->prepare("
+                SELECT ativo
+                FROM veiculos
+                WHERE id = :id
+                AND assessoria_id = :assessoria_id
+                FOR UPDATE
+            ");
+            $destino->execute([
+                'id' => $veiculoDestinoId,
+                'assessoria_id' => $assessoriaId,
+            ]);
+
+            if ((int) $destino->fetchColumn() !== 1) {
+                throw new InvalidArgumentException(
+                    'Selecione um veículo ativo para receber o endereço.'
+                );
+            }
+
+            $consulta = $db->prepare("
+                SELECT id, veiculo_id, host, caminho_prefixo,
+                       incluir_subdominios
+                FROM veiculo_enderecos
+                WHERE id = :id
+                AND assessoria_id = :assessoria_id
+                FOR UPDATE
+            ");
+            $consulta->execute([
+                'id' => $enderecoId,
+                'assessoria_id' => $assessoriaId,
+            ]);
+            $endereco = $consulta->fetch(PDO::FETCH_ASSOC);
+
+            if (
+                !$endereco ||
+                (int) $endereco['veiculo_id'] !== $veiculoOrigemId
+            ) {
+                throw new DomainException(
+                    'Esta associação mudou desde a consulta. ' .
+                    'Busque os dados do link novamente.'
+                );
+            }
+
+            self::conferirEnderecoDoLink($endereco, $link);
+
+            // confere a lista atual com o destino bloqueado pra não passar de 20 endereços
+            $enderecosDestino = $db->prepare("
+                SELECT id
+                FROM veiculo_enderecos
+                WHERE assessoria_id = :assessoria_id
+                AND veiculo_id = :veiculo_id
+                ORDER BY id
+                LIMIT 20
+                FOR UPDATE
+            ");
+
+            $enderecosDestino->execute([
+                'assessoria_id' => $assessoriaId,
+                'veiculo_id' => $veiculoDestinoId,
+            ]);
+
+            if (
+                count(
+                    $enderecosDestino->fetchAll(PDO::FETCH_COLUMN)
+                ) >= 20
+            ) {
+                throw new DomainException(
+                    'Este veículo já possui 20 endereços. ' .
+                    'Remova um endereço do cadastro dele antes de transferir esta associação.'
+                );
+            }
+            
+            // muda só o dono desse endereço e mantém domínio, seção e demais opções
+            $alterar = $db->prepare("
+                UPDATE veiculo_enderecos
+                SET veiculo_id = :destino_id
+                WHERE id = :id
+                AND assessoria_id = :assessoria_id
+                AND veiculo_id = :origem_id
+            ");
+            $alterar->execute([
+                'destino_id' => $veiculoDestinoId,
+                'id' => $enderecoId,
+                'assessoria_id' => $assessoriaId,
+                'origem_id' => $veiculoOrigemId,
+            ]);
+
+            if ($alterar->rowCount() !== 1) {
+                throw new DomainException(
+                    'A associação mudou. Busque os dados do link novamente.'
+                );
+            }
+
+            foreach ($veiculos as $veiculoId) {
+                self::incrementarVersao($assessoriaId, $veiculoId);
+            }
+
+            if ($transacaoPropria) {
+                $db->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($transacaoPropria && $db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
+    private static function conferirEnderecoDoLink(
+        array $endereco,
+        string $link
+    ): void {
+        $host = strtolower($endereco['host']);
+        $hostLink = strtolower((string) parse_url($link, PHP_URL_HOST));
+        $prefixo = rawurldecode($endereco['caminho_prefixo']);
+
+        $semWww = static fn(string $valor): string =>
+            preg_replace('/^www\./', '', $valor);
+
+        if (in_array($semWww($host), ['youtube.com', 'youtu.be', 'instagram.com'], true)) {
+            if (
+                $semWww($host) === 'youtube.com' &&
+                !(bool) $endereco['incluir_subdominios'] &&
+                ExtracaoLinkService::ehVideoYoutube($link) &&
+                preg_match(
+                    '~^/(?:channel/UC[A-Za-z0-9_-]{22}|@[\pL\pN._-]{1,100}|user/[A-Za-z0-9._-]{1,100}|c/[A-Za-z0-9._-]{1,100})$~uD',
+                    $prefixo
+                ) === 1
+            ) {
+                return;
+            }
+
+            throw new InvalidArgumentException(
+                'Corrija apenas a associação do canal, nunca da plataforma inteira.'
+            );
+        }
+
+        $hostExato = $semWww($host) === $semWww($hostLink);
+        $subdominio = (bool) $endereco['incluir_subdominios'] &&
+            str_ends_with($hostLink, '.' . $host);
+
+        $caminho = rawurldecode(
+            (string) (parse_url($link, PHP_URL_PATH) ?: '/')
+        );
+
+        if (
+            (!$hostExato && !$subdominio) ||
+            (
+                $prefixo !== '' &&
+                $caminho !== $prefixo &&
+                !str_starts_with($caminho, $prefixo . '/')
+            )
+        ) {
+            throw new InvalidArgumentException(
+                'O endereço da correção não corresponde ao link do clipping.'
+            );
+        }
+    }
+
     public static function bloquearVersao(
         int $assessoriaId,
         int $veiculoId
@@ -653,4 +889,4 @@ class VeiculoEnderecoService
             throw $e;
         }
     }
-}
+} 

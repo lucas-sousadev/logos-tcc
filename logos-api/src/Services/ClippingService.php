@@ -907,22 +907,35 @@ class ClippingService
         array $dados
     ): array {
         $associacao =
-        $dados['associar_endereco_veiculo'] ?? null;
+            $dados['associar_endereco_veiculo'] ?? null;
 
-        unset($dados['associar_endereco_veiculo']);
+        $transferencia =
+            $dados['transferir_endereco_veiculo'] ?? null;
+
+        unset(
+            $dados['associar_endereco_veiculo'],
+            $dados['transferir_endereco_veiculo']
+        );
 
         return self::transacao(
-            function () use ($assessoriaId, $usuarioId, $dados, $associacao) {
+            function () use (
+                $assessoriaId,
+                $usuarioId,
+                $dados,
+                $associacao,
+                $transferencia
+            ) {
                 $campos = self::validarDados(
                     $assessoriaId,
                     $dados,
                     null
                 );
 
-                self::associarEnderecoDoClipping(
+                self::salvarAssociacaoDoClipping(
                     $assessoriaId,
                     $campos,
-                    $associacao
+                    $associacao,
+                    $transferencia
                 );
 
                 $bloquearCliente = Connection::get()->prepare(
@@ -976,16 +989,23 @@ class ClippingService
             'ID do clipping'
         );
         $associacao =
-        $dados['associar_endereco_veiculo'] ?? null;
+            $dados['associar_endereco_veiculo'] ?? null;
 
-        unset($dados['associar_endereco_veiculo']);
+        $transferencia =
+            $dados['transferir_endereco_veiculo'] ?? null;
+
+        unset(
+            $dados['associar_endereco_veiculo'],
+            $dados['transferir_endereco_veiculo']
+        );
 
         return self::transacao(
             function () use (
                 $id,
                 $assessoriaId,
                 $dados,
-                $associacao
+                $associacao,
+                $transferencia
             ) {
                 $atual = Clipping::buscarPorId(
                     $id,
@@ -1013,10 +1033,11 @@ class ClippingService
                     $atual
                 );
 
-                self::associarEnderecoDoClipping(
+                self::salvarAssociacaoDoClipping(
                     $assessoriaId,
                     $campos,
-                    $associacao
+                    $associacao,
+                    $transferencia
                 );
 
                 Clipping::atualizar(
@@ -1193,6 +1214,36 @@ class ClippingService
             $clienteEmCriacao
         );
     }
+    private static function salvarAssociacaoDoClipping(
+        int $assessoriaId,
+        array $campos,
+        mixed $associacao,
+        mixed $transferencia
+    ): void {
+        if ($associacao !== null && $transferencia !== null) {
+            throw new InvalidArgumentException(
+                'Escolha entre associar um endereço novo ou corrigir uma associação.'
+            );
+        }
+
+        if ($transferencia !== null) {
+            VeiculoEnderecoService::transferirDoClipping(
+                $assessoriaId,
+                $campos['veiculo_id'],
+                $campos['link'],
+                $transferencia
+            );
+
+            return;
+        }
+
+        self::associarEnderecoDoClipping(
+            $assessoriaId,
+            $campos,
+            $associacao
+        );
+    }
+
     private static function associarEnderecoDoClipping(
         int $assessoriaId,
         array $campos,

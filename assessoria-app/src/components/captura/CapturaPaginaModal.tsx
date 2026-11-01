@@ -88,27 +88,41 @@ export default function CapturaPaginaModal({
   const [erroTrecho, setErroTrecho] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [carregando, setCarregando] = useState(false);
+  const [mensagemCaptura, setMensagemCaptura] = useState("Solicitando captura...");
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
 
   useEffect(() => {
     if (!visivel) {
-        setCaptura(null);
-        setTrecho(0);
-        setTrechoDigitado("1");
-        setErroTrecho("");
-        return;
+      setCaptura(null);
+      setTrecho(0);
+      setTrechoDigitado("1");
+      setErroTrecho("");
+      return;
     }
 
     let ativo = true;
+    const controlador = new AbortController();
 
     setCaptura(null);
     setArea(null);
     setModo("recortar");
     setErro("");
     setCarregando(true);
+    setMensagemCaptura("Solicitando captura...");
 
-    capturarPagina(link, origem, trecho)
+    capturarPagina(link, origem, trecho, {
+      signal: controlador.signal,
+      onProgresso: (estado) => {
+        if (ativo) {
+          setMensagemCaptura(
+            estado === "aguardando"
+              ? "Aguardando uma vaga para capturar..."
+              : "Carregando a página para captura..."
+          );
+        }
+      },
+    })
       .then((resultado) => {
         if (ativo) {
           setCaptura(resultado);
@@ -131,6 +145,7 @@ export default function CapturaPaginaModal({
 
     return () => {
       ativo = false;
+      controlador.abort();
     };
   }, [visivel, link, origem, tentativa, trecho]);
 
@@ -161,11 +176,11 @@ export default function CapturaPaginaModal({
     body.style.overscrollBehaviorX = "none";
 
     return () => {
-        html.style.overscrollBehaviorX = anteriorHtml;
-        body.style.overscrollBehaviorX = anteriorBody;
+      html.style.overscrollBehaviorX = anteriorHtml;
+      body.style.overscrollBehaviorX = anteriorBody;
     };
   }, [visivel]);
-  
+
   function irParaTrecho() {
     if (carregando || processando) return;
 
@@ -287,477 +302,477 @@ export default function CapturaPaginaModal({
       setProcessando(false);
     }
   }
-    
-    const conteudo = (
-        <SafeAreaView
-            style={[
-            styles.container,
-            { backgroundColor: theme.background },
-            ]}
-        >
-            <View style={styles.cabecalho}>
-            <View style={styles.cabecalhoTexto}>
-                <Text weight="Bold" style={styles.titulo}>
-                Capturar imagem
-                </Text>
-                <Text
-                style={[
-                    styles.subtitulo,
-                    { color: theme.textoSub },
-                ]}
-                >
-                Escolha a parte da página que deseja usar.
-                </Text>
-            </View>
 
-            <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Fechar captura"
-                disabled={processando}
-                onPress={onFechar}
-                style={styles.fechar}
-            >
-                <Text weight="Bold">✕</Text>
-            </TouchableOpacity>
-            </View>
-
-            {captura ? (
-            <>
-                <View style={styles.controles}>
-                {(["recortar", "navegar"] as const).map((opcao) => (
-                    <TouchableOpacity
-                    key={opcao}
-                    accessibilityRole="button"
-                    onPress={() => setModo(opcao)}
-                    style={[
-                        styles.botaoModo,
-                        {
-                        borderColor: theme.borda,
-                        backgroundColor:
-                            modo === opcao
-                            ? theme.primaria
-                            : theme.background,
-                        },
-                    ]}
-                    >
-                    <Text
-                        weight="SemiBold"
-                        style={[
-                        styles.textoBotaoModo,
-                        {
-                            color:
-                            modo === opcao
-                                ? theme.branco
-                                : theme.texto,
-                        },
-                        ]}
-                    >
-                        {opcao === "recortar"
-                        ? "RECORTAR"
-                        : "NAVEGAR"}
-                    </Text>
-                    </TouchableOpacity>
-                ))}
-
-                <View style={styles.espacador} />
-
-                <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Diminuir zoom"
-                    disabled={zoom <= ZOOM_MIN}
-                    onPress={() =>
-                    setZoom((atual) => Math.max(ZOOM_MIN, atual - ZOOM_PASSO))
-                    }
-                    style={styles.botaoZoom}
-                >
-                    <Text weight="Bold" style={styles.simboloZoom}>
-                    −
-                    </Text>
-                </TouchableOpacity>
-
-                <Text style={styles.valorZoom}>
-                    {Math.round(zoom * 100)}%
-                </Text>
-
-                <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Aumentar zoom"
-                    disabled={zoom >= ZOOM_MAX}
-                    onPress={() =>
-                    setZoom((atual) => Math.min(ZOOM_MAX, atual + ZOOM_PASSO))
-                    }
-                    style={styles.botaoZoom}
-                >
-                    <Text weight="Bold" style={styles.simboloZoom}>
-                    +
-                    </Text>
-                </TouchableOpacity>
-                </View>
-
-                <Text
-                style={[
-                    styles.instrucao,
-                    { color: theme.textoSub },
-                ]}
-                >
-                {modo === "recortar"
-                    ? "Arraste sobre a imagem para marcar o recorte."
-                    : "Deslize para navegar pela imagem ampliada."}
-                </Text>
-
-                <ScrollView
-                horizontal
-                style={[
-                    styles.visualizador,
-                    { borderColor: theme.borda },
-                    Platform.OS === "web"
-                        ? ({ overscrollBehaviorX: "contain" } as any)
-                        : null,
-                ]}
-                >
-                <ScrollView
-                    nestedScrollEnabled
-                    contentContainerStyle={{ alignItems: "center" }}
-                    style={{
-                    width: Math.max(larguraBase, larguraImagem),
-                    maxHeight: Math.min(tela.height * 0.58, 650),
-                    }}
-                >
-                    <View
-                    style={[
-                        styles.areaImagem,
-                        {
-                        width: larguraImagem,
-                        height: alturaImagem,
-                        },
-                    ]}
-                    >
-                    <Image
-                        source={{ uri: captura.uri }}
-                        resizeMode="stretch"
-                        style={{
-                        width: larguraImagem,
-                        height: alturaImagem,
-                        }}
-                    />
-
-                    {area ? (
-                        <View
-                        pointerEvents="none"
-                        style={[
-                            styles.selecao,
-                            {
-                            left: area.x * larguraImagem,
-                            top: area.y * alturaImagem,
-                            width: area.largura * larguraImagem,
-                            height: area.altura * alturaImagem,
-                            borderColor: theme.primaria,
-                            },
-                        ]}
-                        />
-                    ) : null}
-
-                    <View
-                        pointerEvents={
-                        modo === "recortar" ? "auto" : "none"
-                        }
-                        onStartShouldSetResponder={() =>
-                        modo === "recortar"
-                        }
-                        onResponderTerminationRequest={() => false}
-                        onResponderGrant={iniciarRecorte}
-                        onResponderMove={moverRecorte}
-                        onResponderRelease={moverRecorte}
-                        onResponderTerminate={() => setArea(null)}
-                        style={[
-                            styles.camadaDeRecorte,
-                            Platform.OS === "web" && modo === "recortar"
-                                ? ({ touchAction: "none" } as any)
-                                : null,
-                        ]}
-                    />
-                </View>
-                </ScrollView>
-                </ScrollView>
-
-                <TouchableOpacity
-                accessibilityRole="button"
-                disabled={processando}
-                onPress={() =>
-                    setTentativa((atual) => atual + 1)
-                }
-                style={styles.refazer}
-                >
-                <Text
-                    weight="SemiBold"
-                    style={{ color: theme.textoTerciaria }}
-                >
-                    Refazer captura
-                </Text>
-                </TouchableOpacity>
-            </>
-            ) : (
-            <View style={styles.estadoCentral}>
-                {carregando ? (
-                    <>
-                    <ActivityIndicator color={theme.primaria} />
-                    <Text style={styles.textoCarregando}>
-                        Capturando a página...
-                    </Text>
-                    </>
-                ) : (
-                    <>
-                    {erro ? (
-                        <View
-                        style={[
-                            styles.caixaErroCaptura,
-                            { borderColor: theme.erro },
-                        ]}
-                        >
-                        <Ionicons
-                            name="alert-circle-outline"
-                            size={19}
-                            color={theme.erro}
-                        />
-                        <Text
-                            style={{
-                            flex: 1,
-                            color: theme.erro,
-                            fontSize: 12,
-                            lineHeight: 18,
-                            }}
-                        >
-                            {erro}
-                        </Text>
-                        </View>
-                    ) : null}
-
-                    <TouchableOpacity
-                        accessibilityRole="button"
-                        onPress={() => setTentativa((atual) => atual + 1)}
-                    >
-                        <Text
-                        weight="SemiBold"
-                        style={{ color: theme.textoTerciaria }}
-                        >
-                        Tentar novamente
-                        </Text>
-                    </TouchableOpacity>
-                    </>
-                )}
-                </View>
-            )}
-
-            <View style={styles.navegacaoTrechos}>
-                <Text
-                    weight="SemiBold"
-                    style={[styles.rotuloTrecho, { color: theme.textoSub }]}
-                >
-                    IR PARA TRECHO
-                </Text>
-                <View style={styles.linhaTrechos}>
-                <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Capturar trecho anterior da página"
-                    disabled={trecho === 0 || carregando || processando}
-                    onPress={() => {
-                    Keyboard.dismiss();
-                    setTrecho((atual) => Math.max(0, atual - 1));
-                    }}
-                    style={[
-                    styles.botaoTrecho,
-                    {
-                        borderColor: theme.borda,
-                        backgroundColor: theme.backgroundSecundario,
-                        opacity:
-                        trecho === 0 || carregando || processando
-                            ? 0.45
-                            : 1,
-                    },
-                    ]}
-                >
-                    <Ionicons
-                        name="chevron-back"
-                        size={14}
-                        color={theme.textoTerciaria}
-                    />
-                    <Text
-                    weight="SemiBold"
-                    style={[
-                        styles.botaoTrechoTexto,
-                        { color: theme.textoTerciaria },
-                    ]}
-                    >
-                    ANTERIOR
-                    </Text>
-                </TouchableOpacity>
-
-                <View style={styles.seletorTrecho}>
-                        <TextInput
-                            accessibilityLabel={`Número do trecho, de 1 a ${TOTAL_TRECHOS}`}
-                            value={trechoDigitado}
-                            onChangeText={(texto) => {
-                                setTrechoDigitado(texto.replace(/\D/g, "").slice(0, 2));
-                                setErroTrecho("");
-                            }}
-                            onSubmitEditing={irParaTrecho}
-                            editable={!carregando && !processando}
-                            keyboardType="number-pad"
-                            returnKeyType="go"
-                            selectTextOnFocus
-                            maxLength={2}
-                            style={[
-                                styles.campoTrecho,
-                                {
-                                    borderColor: theme.borda,
-                                    backgroundColor: theme.backgroundSecundario,
-                                    color: theme.texto,
-                                },
-                            ]}
-                        />
-                        <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="Ir para o trecho informado"
-                            disabled={carregando || processando}
-                            onPress={irParaTrecho}
-                            style={[
-                                styles.botaoIrTrecho,
-                                {
-                                    backgroundColor: theme.primaria,
-                                    opacity: carregando || processando ? 0.5 : 1,
-                                },
-                            ]}
-                        >
-                            <Text
-                                weight="Bold"
-                                style={[styles.textoIrTrecho, { color: theme.branco }]}
-                            >
-                                IR
-                            </Text>
-                        </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Capturar próximo trecho da página"
-                    disabled={
-                    !captura?.temProxima || carregando || processando
-                    }
-                    onPress={() => {
-                    Keyboard.dismiss();
-                    setTrecho((atual) => Math.min(TOTAL_TRECHOS - 1, atual + 1));
-                    }}
-                    style={[
-                    styles.botaoTrecho,
-                    {
-                        borderColor: theme.borda,
-                        backgroundColor: theme.backgroundSecundario,
-                        opacity:
-                        !captura?.temProxima || carregando || processando
-                            ? 0.45
-                            : 1,
-                    },
-                    ]}
-                >
-                    <Text
-                    weight="SemiBold"
-                    style={[
-                        styles.botaoTrechoTexto,
-                        { color: theme.textoTerciaria },
-                    ]}
-                    >
-                    PRÓXIMO
-                    </Text>
-                    <Ionicons
-                        name="chevron-forward"
-                        size={14}
-                        color={theme.textoTerciaria}
-                    />
-                </TouchableOpacity>
-                </View>
-            </View>
-
-            {erroTrecho ? (
-            <Text style={[styles.erroTrecho, { color: theme.erro }]}>
-                {erroTrecho}
-            </Text>
-            ) : null}
-
-            {captura?.incompleta ? (
-            <Text
-                style={[
-                styles.avisoCarregamento,
-                { color: theme.aviso },
-                ]}
-            >
-                Alguns elementos podem não ter carregado. Você pode
-                refazer esta captura ou tentar outro trecho.
-            </Text>
-            ) : null}
-
-            {erro && captura ? (
-                <Text style={[styles.erro, { color: theme.erro }]}>
-                    {erro}
-                </Text>
-            ) : null}
-
-            <View style={styles.acoes}>
-            <TouchableOpacity
-                accessibilityRole="button"
-                disabled={processando}
-                onPress={onFechar}
-                style={[
-                styles.botaoAcao,
-                styles.botaoCancelar,
-                { borderColor: theme.borda },
-                ]}
-            >
-                <Text weight="Bold">CANCELAR</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                accessibilityRole="button"
-                disabled={!area || !captura || processando}
-                onPress={() => void confirmar()}
-                style={[
-                styles.botaoAcao,
-                {
-                    backgroundColor: theme.primaria,
-                    opacity:
-                    !area || !captura || processando
-                        ? 0.5
-                        : 1,
-                },
-                ]}
-            >
-                <Text
-                weight="Bold"
-                style={{ color: theme.branco }}
-                >
-                {processando
-                    ? "RECORTANDO..."
-                    : "USAR RECORTE"}
-                </Text>
-            </TouchableOpacity>
-            </View>
-        </SafeAreaView> 
-    );
-
-    if (embutido) {
-    return visivel ? conteudo : null;
-    }
-
-    return (
-    <Modal
-        visible={visivel}
-        animationType="slide"
-        onRequestClose={() => {
-        if (!processando) onFechar();
-        }}
+  const conteudo = (
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.background },
+      ]}
     >
-        {conteudo}
+      <View style={styles.cabecalho}>
+        <View style={styles.cabecalhoTexto}>
+          <Text weight="Bold" style={styles.titulo}>
+            Capturar imagem
+          </Text>
+          <Text
+            style={[
+              styles.subtitulo,
+              { color: theme.textoSub },
+            ]}
+          >
+            Escolha a parte da página que deseja usar.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Fechar captura"
+          disabled={processando}
+          onPress={onFechar}
+          style={styles.fechar}
+        >
+          <Text weight="Bold">✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {captura ? (
+        <>
+          <View style={styles.controles}>
+            {(["recortar", "navegar"] as const).map((opcao) => (
+              <TouchableOpacity
+                key={opcao}
+                accessibilityRole="button"
+                onPress={() => setModo(opcao)}
+                style={[
+                  styles.botaoModo,
+                  {
+                    borderColor: theme.borda,
+                    backgroundColor:
+                      modo === opcao
+                        ? theme.primaria
+                        : theme.background,
+                  },
+                ]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.textoBotaoModo,
+                    {
+                      color:
+                        modo === opcao
+                          ? theme.branco
+                          : theme.texto,
+                    },
+                  ]}
+                >
+                  {opcao === "recortar"
+                    ? "RECORTAR"
+                    : "NAVEGAR"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.espacador} />
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Diminuir zoom"
+              disabled={zoom <= ZOOM_MIN}
+              onPress={() =>
+                setZoom((atual) => Math.max(ZOOM_MIN, atual - ZOOM_PASSO))
+              }
+              style={styles.botaoZoom}
+            >
+              <Text weight="Bold" style={styles.simboloZoom}>
+                −
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.valorZoom}>
+              {Math.round(zoom * 100)}%
+            </Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar zoom"
+              disabled={zoom >= ZOOM_MAX}
+              onPress={() =>
+                setZoom((atual) => Math.min(ZOOM_MAX, atual + ZOOM_PASSO))
+              }
+              style={styles.botaoZoom}
+            >
+              <Text weight="Bold" style={styles.simboloZoom}>
+                +
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            style={[
+              styles.instrucao,
+              { color: theme.textoSub },
+            ]}
+          >
+            {modo === "recortar"
+              ? "Arraste sobre a imagem para marcar o recorte."
+              : "Deslize para navegar pela imagem ampliada."}
+          </Text>
+
+          <ScrollView
+            horizontal
+            style={[
+              styles.visualizador,
+              { borderColor: theme.borda },
+              Platform.OS === "web"
+                ? ({ overscrollBehaviorX: "contain" } as any)
+                : null,
+            ]}
+          >
+            <ScrollView
+              nestedScrollEnabled
+              contentContainerStyle={{ alignItems: "center" }}
+              style={{
+                width: Math.max(larguraBase, larguraImagem),
+                maxHeight: Math.min(tela.height * 0.58, 650),
+              }}
+            >
+              <View
+                style={[
+                  styles.areaImagem,
+                  {
+                    width: larguraImagem,
+                    height: alturaImagem,
+                  },
+                ]}
+              >
+                <Image
+                  source={{ uri: captura.uri }}
+                  resizeMode="stretch"
+                  style={{
+                    width: larguraImagem,
+                    height: alturaImagem,
+                  }}
+                />
+
+                {area ? (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.selecao,
+                      {
+                        left: area.x * larguraImagem,
+                        top: area.y * alturaImagem,
+                        width: area.largura * larguraImagem,
+                        height: area.altura * alturaImagem,
+                        borderColor: theme.primaria,
+                      },
+                    ]}
+                  />
+                ) : null}
+
+                <View
+                  pointerEvents={
+                    modo === "recortar" ? "auto" : "none"
+                  }
+                  onStartShouldSetResponder={() =>
+                    modo === "recortar"
+                  }
+                  onResponderTerminationRequest={() => false}
+                  onResponderGrant={iniciarRecorte}
+                  onResponderMove={moverRecorte}
+                  onResponderRelease={moverRecorte}
+                  onResponderTerminate={() => setArea(null)}
+                  style={[
+                    styles.camadaDeRecorte,
+                    Platform.OS === "web" && modo === "recortar"
+                      ? ({ touchAction: "none" } as any)
+                      : null,
+                  ]}
+                />
+              </View>
+            </ScrollView>
+          </ScrollView>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={processando}
+            onPress={() =>
+              setTentativa((atual) => atual + 1)
+            }
+            style={styles.refazer}
+          >
+            <Text
+              weight="SemiBold"
+              style={{ color: theme.textoTerciaria }}
+            >
+              Refazer captura
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.estadoCentral}>
+          {carregando ? (
+            <>
+              <ActivityIndicator color={theme.primaria} />
+              <Text style={styles.textoCarregando}>
+                {mensagemCaptura}
+              </Text>
+            </>
+          ) : (
+            <>
+              {erro ? (
+                <View
+                  style={[
+                    styles.caixaErroCaptura,
+                    { borderColor: theme.erro },
+                  ]}
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={19}
+                    color={theme.erro}
+                  />
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: theme.erro,
+                      fontSize: 12,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {erro}
+                  </Text>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setTentativa((atual) => atual + 1)}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={{ color: theme.textoTerciaria }}
+                >
+                  Tentar novamente
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      <View style={styles.navegacaoTrechos}>
+        <Text
+          weight="SemiBold"
+          style={[styles.rotuloTrecho, { color: theme.textoSub }]}
+        >
+          IR PARA TRECHO
+        </Text>
+        <View style={styles.linhaTrechos}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Capturar trecho anterior da página"
+            disabled={trecho === 0 || carregando || processando}
+            onPress={() => {
+              Keyboard.dismiss();
+              setTrecho((atual) => Math.max(0, atual - 1));
+            }}
+            style={[
+              styles.botaoTrecho,
+              {
+                borderColor: theme.borda,
+                backgroundColor: theme.backgroundSecundario,
+                opacity:
+                  trecho === 0 || carregando || processando
+                    ? 0.45
+                    : 1,
+              },
+            ]}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={14}
+              color={theme.textoTerciaria}
+            />
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.botaoTrechoTexto,
+                { color: theme.textoTerciaria },
+              ]}
+            >
+              ANTERIOR
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.seletorTrecho}>
+            <TextInput
+              accessibilityLabel={`Número do trecho, de 1 a ${TOTAL_TRECHOS}`}
+              value={trechoDigitado}
+              onChangeText={(texto) => {
+                setTrechoDigitado(texto.replace(/\D/g, "").slice(0, 2));
+                setErroTrecho("");
+              }}
+              onSubmitEditing={irParaTrecho}
+              editable={!carregando && !processando}
+              keyboardType="number-pad"
+              returnKeyType="go"
+              selectTextOnFocus
+              maxLength={2}
+              style={[
+                styles.campoTrecho,
+                {
+                  borderColor: theme.borda,
+                  backgroundColor: theme.backgroundSecundario,
+                  color: theme.texto,
+                },
+              ]}
+            />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Ir para o trecho informado"
+              disabled={carregando || processando}
+              onPress={irParaTrecho}
+              style={[
+                styles.botaoIrTrecho,
+                {
+                  backgroundColor: theme.primaria,
+                  opacity: carregando || processando ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text
+                weight="Bold"
+                style={[styles.textoIrTrecho, { color: theme.branco }]}
+              >
+                IR
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Capturar próximo trecho da página"
+            disabled={
+              !captura?.temProxima || carregando || processando
+            }
+            onPress={() => {
+              Keyboard.dismiss();
+              setTrecho((atual) => Math.min(TOTAL_TRECHOS - 1, atual + 1));
+            }}
+            style={[
+              styles.botaoTrecho,
+              {
+                borderColor: theme.borda,
+                backgroundColor: theme.backgroundSecundario,
+                opacity:
+                  !captura?.temProxima || carregando || processando
+                    ? 0.45
+                    : 1,
+              },
+            ]}
+          >
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.botaoTrechoTexto,
+                { color: theme.textoTerciaria },
+              ]}
+            >
+              PRÓXIMO
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={14}
+              color={theme.textoTerciaria}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {erroTrecho ? (
+        <Text style={[styles.erroTrecho, { color: theme.erro }]}>
+          {erroTrecho}
+        </Text>
+      ) : null}
+
+      {captura?.incompleta ? (
+        <Text
+          style={[
+            styles.avisoCarregamento,
+            { color: theme.aviso },
+          ]}
+        >
+          Alguns elementos podem não ter carregado. Você pode
+          refazer esta captura ou tentar outro trecho.
+        </Text>
+      ) : null}
+
+      {erro && captura ? (
+        <Text style={[styles.erro, { color: theme.erro }]}>
+          {erro}
+        </Text>
+      ) : null}
+
+      <View style={styles.acoes}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={processando}
+          onPress={onFechar}
+          style={[
+            styles.botaoAcao,
+            styles.botaoCancelar,
+            { borderColor: theme.borda },
+          ]}
+        >
+          <Text weight="Bold">CANCELAR</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={!area || !captura || processando}
+          onPress={() => void confirmar()}
+          style={[
+            styles.botaoAcao,
+            {
+              backgroundColor: theme.primaria,
+              opacity:
+                !area || !captura || processando
+                  ? 0.5
+                  : 1,
+            },
+          ]}
+        >
+          <Text
+            weight="Bold"
+            style={{ color: theme.branco }}
+          >
+            {processando
+              ? "RECORTANDO..."
+              : "USAR RECORTE"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+
+  if (embutido) {
+    return visivel ? conteudo : null;
+  }
+
+  return (
+    <Modal
+      visible={visivel}
+      animationType="slide"
+      onRequestClose={() => {
+        if (!processando) onFechar();
+      }}
+    >
+      {conteudo}
     </Modal>
-    );
+  );
 }
 
 const styles = StyleSheet.create({
@@ -790,66 +805,66 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
   },
-linhaTrechos: {
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-},
-botaoTrecho: {
-  flex: 1,
-  minWidth: 0,
-  height: 38,
-  borderWidth: 1,
-  borderRadius: 8,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 3,
-  paddingHorizontal: 4,
-},
-botaoTrechoTexto: {
-  fontSize: 10,
-},
-seletorTrecho: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 5,
-},
-rotuloTrecho: {
-  fontSize: 11,
-  textAlign: "center",
-},
-campoTrecho: {
-  width: 46,
-  height: 38,
-  borderWidth: 1,
-  borderRadius: 8,
-  paddingHorizontal: 4,
-  fontSize: 12,
-  textAlign: "center",
-},
-botaoIrTrecho: {
-  width: 38,
-  height: 38,
-  borderRadius: 8,
-  alignItems: "center",
-  justifyContent: "center",
-},
-textoIrTrecho: {
-  fontSize: 10,
-},
-erroTrecho: {
-  fontSize: 11,
-  marginBottom: 8,
-  textAlign: "center",
-},
-avisoCarregamento: {
-  fontSize: 11,
-  lineHeight: 16,
-  marginBottom: 10,
-},
+  linhaTrechos: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  botaoTrecho: {
+    flex: 1,
+    minWidth: 0,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    paddingHorizontal: 4,
+  },
+  botaoTrechoTexto: {
+    fontSize: 10,
+  },
+  seletorTrecho: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  rotuloTrecho: {
+    fontSize: 11,
+    textAlign: "center",
+  },
+  campoTrecho: {
+    width: 46,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    fontSize: 12,
+    textAlign: "center",
+  },
+  botaoIrTrecho: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textoIrTrecho: {
+    fontSize: 10,
+  },
+  erroTrecho: {
+    fontSize: 11,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  avisoCarregamento: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
   controles: {
     flexDirection: "row",
     alignItems: "center",

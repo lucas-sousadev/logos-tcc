@@ -3,6 +3,7 @@
 namespace Logos\AssessoriaApi\Services;
 
 use DOMDocument;
+use Logos\AssessoriaApi\Exceptions\TempoConsultaLinkException;
 use Logos\AssessoriaApi\Database\Connection;
 use PDO;
 
@@ -10,9 +11,20 @@ final class ExtracaoLinkService
 {
     private const LIMITE_HTML = 2_000_000;
     private const MAX_REDIRECIONAMENTOS = 3;
+    private const PRAZO_EXTRACAO_MS = 10_000;
 
-    public static function extrair(int $assessoriaId, mixed $link): array
-    {   
+    public static function extrair(
+        int $assessoriaId,
+        mixed $link
+    ): array {
+        $limiteNs = hrtime(true)
+            + self::PRAZO_EXTRACAO_MS * 1_000_000;
+
+        $estadoTempo = [
+            'interrompida' => false,
+            'prazo_total' => false,
+        ];
+
         if (!is_string($link) || trim($link) === '') {
             throw new \InvalidArgumentException(
                 'Informe um link HTTP ou HTTPS válido.'
@@ -24,10 +36,28 @@ final class ExtracaoLinkService
         $hostDoLink = preg_replace('/^(www|m)\./', '', $hostDoLink);
 
         if (in_array($hostDoLink, ['youtube.com', 'youtu.be', 'instagram.com'], true)) {
-            return ['extracao' => self::extrairLinkSocial($assessoriaId, $link)];
+            $extracao = self::extrairLinkSocial(
+                $assessoriaId,
+                $link,
+                $limiteNs,
+                $estadoTempo
+            );
+
+            return [
+                'extracao' => self::incluirAvisoTempo(
+                    $extracao,
+                    $estadoTempo,
+                    self::ehVideoYoutube($link)
+                ),
+            ];
         }
 
-        [$urlFinal, $html] = self::baixar($link);
+        [$urlFinal, $html] = self::baixar(
+            $link,
+            null,
+            false,
+            $limiteNs
+        );
 
         [$titulo, $data, $duracao, $nomePortal] =
             self::lerMetadados($html, $urlFinal);
@@ -42,7 +72,12 @@ final class ExtracaoLinkService
             $host
         );
 
-        [$veiculo, $ambiguo] = self::sugerirVeiculo(
+        [
+            $veiculo,
+            $ambiguo,
+            $enderecoCadastrado,
+            $associacaoExistente,
+        ] = self::sugerirVeiculo(
             $assessoriaId,
             $urlFinal
         );
@@ -54,7 +89,9 @@ final class ExtracaoLinkService
             [$nomePortal, $portalConfiavel] = self::resolverNomePortal(
                 $urlFinal,
                 $hostCadastro,
-                $nomePortal
+                $nomePortal,
+                $limiteNs,
+                $estadoTempo
             );
         }
 
@@ -89,24 +126,30 @@ final class ExtracaoLinkService
         );
 
         return [
-            'extracao' => [
-                'url_consultada' => $urlFinal,
-                'pauta' => $titulo,
-                'data_publicacao' => $data,
-                'duracao_segundos' => $duracao,
-                'veiculo_sugerido' => $veiculo,
-                'veiculo_ambiguo' => $ambiguo,
-                'nome_portal' => $nomePortal,
-                'portal_confiavel' => $portalConfiavel,
-                'endereco_sugerido' => [
-                    'host' => $hostCadastro,
-                    'caminho_prefixo' => '',
-                    'incluir_subdominios' => false,
+            'extracao' => self::incluirAvisoTempo(
+                [
+                    'url_consultada' => $urlFinal,
+                    'pauta' => $titulo,
+                    'data_publicacao' => $data,
+                    'duracao_segundos' => $duracao,
+                    'veiculo_sugerido' => $veiculo,
+                    'veiculo_ambiguo' => $ambiguo,
+                    'nome_portal' => $nomePortal,
+                    'portal_confiavel' => $portalConfiavel,
+                    'endereco_sugerido' => $enderecoCadastrado ?? [
+                        'host' => $hostCadastro,
+                        'caminho_prefixo' => '',
+                        'incluir_subdominios' => false,
+                    ],
+                    'endereco_associado_veiculo_id' => $veiculo['id'] ?? null,
+                    'endereco_associado' => $associacaoExistente,
+                    'endereco_associavel' =>
+                        $hostOriginal === $hostCadastro,
+                    'sugestoes_veiculos' => $sugestoes,
                 ],
-                'endereco_associavel' =>
-                    $hostOriginal === $hostCadastro,
-                'sugestoes_veiculos' => $sugestoes,
-            ],
+                $estadoTempo,
+                false
+            ),
         ];
     }
 
@@ -178,13 +221,85 @@ final class ExtracaoLinkService
         return [$esquema, $host];
     }
 
+    private static function incluirAvisoTempo(
+        array $extracao,
+        array $estadoTempo,
+        bool $ehVideo
+    ): array {
+        $extracao['aviso_tempo'] = null;
+
+        if (!$estadoTempo['interrompida']) {
+            return $extracao;
+        }
+
+        $campos = [];
+
+        if ($extracao['pauta'] === null) {
+            $campos[] = 'pauta';
+        }
+
+        if ($extracao['data_publicacao'] === null) {
+            $campos[] = 'data_publicacao';
+        }
+
+        if ($ehVideo && $extracao['duracao_segundos'] === null) {
+            $campos[] = 'duracao_segundos';
+        }
+
+        if (!$extracao['portal_confiavel']) {
+            $campos[] = 'nome_portal';
+        }
+
+        // lista o que ficou sem identificação sem atribuir tudo ao prazo
+        $extracao['aviso_tempo'] = [
+            'tipo' => $estadoTempo['prazo_total']
+                ? 'prazo_total'
+                : 'consulta_lenta',
+            'limite_total_segundos' => (int) ceil(self::PRAZO_EXTRACAO_MS / 1000),
+            'campos_nao_identificados' => $campos,
+        ];
+
+        return $extracao;
+    }
+
+    private static function registrarLimiteTempo(
+        array &$estadoTempo,
+        TempoConsultaLinkException $erro
+    ): void {
+        $estadoTempo['interrompida'] = true;
+        $estadoTempo['prazo_total'] =
+            $estadoTempo['prazo_total'] || $erro->prazoTotal;
+    }
+
+    private static function tempoRestante(
+        int $limiteNs,
+        ?int $limiteTotalNs = null
+    ): int {
+        $restanteMs = intdiv($limiteNs - hrtime(true), 1_000_000);
+
+        if ($restanteMs <= 0) {
+            throw new TempoConsultaLinkException(
+                $limiteTotalNs === null || $limiteNs === $limiteTotalNs,
+                self::PRAZO_EXTRACAO_MS
+            );
+        }
+
+        return $restanteMs;
+    }
+
     private static function baixar(
         string $url,
         ?int $prazoMs = null,
-        bool $somenteCabecalho = false
+        bool $somenteCabecalho = false,
+        ?int $limiteConsultaNs = null
     ): array {
-        $inicio = hrtime(true);
         $orcamentoMs = $prazoMs ?? 10_000;
+        $limiteNs = hrtime(true) + $orcamentoMs * 1_000_000;
+
+        if ($limiteConsultaNs !== null) {
+            $limiteNs = min($limiteNs, $limiteConsultaNs);
+        }
+
         $maxSaltos = $somenteCabecalho
             ? 1
             : self::MAX_REDIRECIONAMENTOS;
@@ -205,9 +320,13 @@ final class ExtracaoLinkService
                 );
             }
 
-            // Nesta primeira versão usamos IPv4. Todos os IPs resolvidos
-            // precisam ser públicos; o IP aprovado é fixado no cURL.
+            // não começa outra consulta se o prazo já acabou
+            self::tempoRestante($limiteNs, $limiteConsultaNs);
+
+            // usa IPv4 e fixa o IP aprovado no cURL depois de conferir se todos são públicos
             $ips = gethostbynamel($host);
+
+            $restanteMs = self::tempoRestante($limiteNs, $limiteConsultaNs);
 
             if (!$ips) {
                 throw new \InvalidArgumentException(
@@ -229,18 +348,6 @@ final class ExtracaoLinkService
                         'Este endereço não pode ser consultado.'
                     );
                 }
-            }
-
-            $decorridoMs = (int) ceil(
-                (hrtime(true) - $inicio) / 1_000_000
-            );
-
-            $restanteMs = $orcamentoMs - $decorridoMs;
-
-            if ($restanteMs <= 0) {
-                throw new \RuntimeException(
-                    'Tempo limite da consulta atingido.'
-                );
             }
 
             $limiteBytes = $somenteCabecalho
@@ -325,7 +432,7 @@ final class ExtracaoLinkService
                                 $corpo = substr($novoCorpo, 0, $fim + 7);
                                 $cabecalhoCompleto = true;
 
-                                // Interrompe o download após os metadados.
+                                // para o download depois de encontrar os metadados
                                 return 0;
                             }
                         }
@@ -345,7 +452,17 @@ final class ExtracaoLinkService
                 $curl,
                 CURLINFO_RESPONSE_CODE
             );
+            $codigoCurl = curl_errno($curl);
             curl_close($curl);
+
+            // prioriza o erro HTTP que o site já informou
+            if ($status >= 400) {
+                throw new \InvalidArgumentException(
+                    $status === 403
+                        ? 'O site bloqueou a consulta automática (HTTP 403).'
+                        : "O site respondeu com HTTP {$status}."
+                );
+            }
 
             if ($excedeuLimite) {
                 throw new \LengthException(
@@ -354,6 +471,14 @@ final class ExtracaoLinkService
             }
 
             if ($ok === false && !$cabecalhoCompleto) {
+                if ($codigoCurl === CURLE_OPERATION_TIMEDOUT) {
+                    throw new TempoConsultaLinkException(
+                        $limiteConsultaNs !== null &&
+                            $limiteConsultaNs - hrtime(true) <= 1_000_000,
+                        self::PRAZO_EXTRACAO_MS
+                    );
+                }
+
                 throw new \InvalidArgumentException(
                     'Não foi possível carregar esta página.'
                 );
@@ -704,7 +829,9 @@ final class ExtracaoLinkService
 
     private static function extrairLinkSocial(
         int $assessoriaId,
-        string $link
+        string $link,
+        int $limiteNs,
+        array &$estadoTempo
     ): array {
         self::validarUrl($link);
 
@@ -725,9 +852,15 @@ final class ExtracaoLinkService
 
         if (in_array($host, ['youtube.com', 'youtu.be'], true)) {
             $videoId = self::idVideoYoutube($link);
-            $dados = $videoId === null
-                ? null
-                : self::consultarOEmbedYoutube($videoId);
+            $dados = null;
+
+            try {
+                if ($videoId !== null) {
+                    $dados = self::consultarOEmbedYoutube($videoId, $limiteNs);
+                }
+            } catch (TempoConsultaLinkException $erro) {
+                self::registrarLimiteTempo($estadoTempo, $erro);
+            }
 
             if ($dados !== null) {
                 $titulo = self::texto($dados['title'] ?? null);
@@ -744,9 +877,14 @@ final class ExtracaoLinkService
                     ];
                 }
             }
-            // complementa o oEmbed com data e duração da página. Mantem o título e o canal já confirmados pelo oEmbed
+            // busca data e duração na página sem trocar o título e o canal que o oEmbed já confirmou
             try {
-                [$urlPagina, $html] = self::baixar($link, 5000);
+                [$urlPagina, $html] = self::baixar(
+                    $link,
+                    5000,
+                    false,
+                    $limiteNs
+                );
 
                 $hostPagina = strtolower(
                     (string) parse_url($urlPagina, PHP_URL_HOST)
@@ -771,12 +909,19 @@ final class ExtracaoLinkService
                         $duracao = $duracaoPagina;
                     }
                 }
+            } catch (TempoConsultaLinkException $erro) {
+                self::registrarLimiteTempo($estadoTempo, $erro);
             } catch (\Exception $erro) {
                 $avisoMetadados = 'Não foi possível consultar a página para obter data e duração.';
             }
         } else {
             try {
-                [$urlFinal, $html] = self::baixar($link, 5000);
+                [$urlFinal, $html] = self::baixar(
+                    $link,
+                    5000,
+                    false,
+                    $limiteNs
+                );
                 $hostFinal = strtolower(
                     (string) parse_url($urlFinal, PHP_URL_HOST)
                 );
@@ -804,8 +949,7 @@ final class ExtracaoLinkService
                         $titulo = null;
                     }
 
-                    // Apenas uma URL direta de perfil identifica a conta.
-                    // /reel/CODIGO e /p/CODIGO não identificam o autor.
+                    // só identifica a conta pelo link do perfil porque o código do post não informa o autor
                     $perfil = self::perfilInstagram($link);
 
                     if ($perfil !== null) {
@@ -819,8 +963,10 @@ final class ExtracaoLinkService
                         ];
                     }
                 }
+            } catch (TempoConsultaLinkException $erro) {
+                self::registrarLimiteTempo($estadoTempo, $erro);
             } catch (\Exception $erro) {
-                // Página bloqueada ou indisponível: resultado incerto.
+                // deixa como incerto se a página estiver bloqueada ou fora do ar
             }
         }
 
@@ -837,9 +983,16 @@ final class ExtracaoLinkService
         $veiculo = null;
         $ambiguo = false;
         $sugestoes = [];
+        $enderecoCadastrado = null;
+        $associacaoExistente = null;
 
         if ($urlConta !== null) {
-            [$veiculo, $ambiguo] = self::sugerirVeiculo(
+            [
+                $veiculo,
+                $ambiguo,
+                $enderecoCadastrado,
+                $associacaoExistente,
+            ] = self::sugerirVeiculo(
                 $assessoriaId,
                 $urlConta,
                 true
@@ -871,13 +1024,13 @@ final class ExtracaoLinkService
             'veiculo_ambiguo' => $ambiguo,
             'nome_portal' => $nomePortal,
             'portal_confiavel' => $nomePortal !== '',
-            'endereco_sugerido' => $endereco,
-            // O salvamento atual compara o endereço à URL do post/vídeo.
-            // Não pode associar automaticamente uma URL de conta aqui.
+            'endereco_sugerido' => $enderecoCadastrado ?? $endereco,
+            'endereco_associado_veiculo_id' => $veiculo['id'] ?? null,
+            'endereco_associado' => $associacaoExistente,
+            // só permite associar o canal confirmado, nunca a plataforma inteira
             'endereco_associavel' =>
                 in_array($host, ['youtube.com', 'youtu.be'], true) &&
-                $urlConta !== null &&
-                $veiculo === null,
+                $urlConta !== null,
             'sugestoes_veiculos' => $sugestoes,
             'aviso_metadados' => $avisoMetadados
         ];
@@ -920,8 +1073,11 @@ final class ExtracaoLinkService
     }
 
     private static function consultarOEmbedYoutube(
-        string $videoId
+        string $videoId,
+        int $limiteNs
     ): ?array {
+        $restanteMs = self::tempoRestante($limiteNs);
+
         $videoUrl = 'https://www.youtube.com/watch?v=' . $videoId;
         $url = 'https://www.youtube.com/oembed?format=json&url=' .
             rawurlencode($videoUrl);
@@ -936,8 +1092,8 @@ final class ExtracaoLinkService
         curl_setopt_array($curl, [
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_CONNECTTIMEOUT_MS => 1500,
-            CURLOPT_TIMEOUT_MS => 3500,
+            CURLOPT_CONNECTTIMEOUT_MS => min(1500, $restanteMs),
+            CURLOPT_TIMEOUT_MS => min(3500, $restanteMs),
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
@@ -957,7 +1113,20 @@ final class ExtracaoLinkService
 
         $ok = curl_exec($curl);
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $codigoCurl = curl_errno($curl);
         curl_close($curl);
+
+        // deixa a leitura da página tentar recuperar os dados
+        if ($status >= 400) {
+            return null;
+        }
+        
+        if ($ok === false && $codigoCurl === CURLE_OPERATION_TIMEDOUT) {
+            throw new TempoConsultaLinkException(
+                $limiteNs - hrtime(true) <= 1_000_000,
+                self::PRAZO_EXTRACAO_MS
+            );
+        }
 
         if ($ok === false || $status !== 200) {
             return null;
@@ -1054,7 +1223,8 @@ final class ExtracaoLinkService
 
         $stmt = Connection::get()->prepare("
             SELECT v.id, v.nome, v.descricao, v.alcance,
-                   v.logo_path, v.tier, v.ativo,
+                   v.logo_path, v.tier, v.ativo, v.enderecos_versao,
+                   e.id AS endereco_id, e.protocolo,
                    e.host, e.caminho_prefixo,
                    e.incluir_subdominios
             FROM veiculo_enderecos e
@@ -1087,7 +1257,7 @@ final class ExtracaoLinkService
                 continue;
             }
 
-            $prefixo = $linha['caminho_prefixo'];
+            $prefixo = rawurldecode($linha['caminho_prefixo']);
 
             if ($exigirCaminho && $prefixo === '') {
                 continue;
@@ -1126,20 +1296,38 @@ final class ExtracaoLinkService
         }
 
         if ($melhor === null || $empatou) {
-            return [null, $empatou];
+            return [null, $empatou, null, null];
         }
 
-        return [[
-            'id' => (int) $melhor['id'],
-            'nome' => $melhor['nome'],
-            'descricao' => $melhor['descricao'],
-            'alcance' => $melhor['alcance'],
-            'logo_path' => $melhor['logo_path'],
-            'tier' => $melhor['tier'] === null
-                ? null
-                : (int) $melhor['tier'],
-            'ativo' => 1,
-        ], false];
+        return [
+            [
+                'id' => (int) $melhor['id'],
+                'nome' => $melhor['nome'],
+                'descricao' => $melhor['descricao'],
+                'alcance' => $melhor['alcance'],
+                'logo_path' => $melhor['logo_path'],
+                'tier' => $melhor['tier'] === null
+                    ? null
+                    : (int) $melhor['tier'],
+                'ativo' => 1,
+            ],
+            false,
+            [
+                'host' => $melhor['host'],
+                'caminho_prefixo' => $melhor['caminho_prefixo'],
+                'incluir_subdominios' => (bool) $melhor['incluir_subdominios'],
+            ],
+            [
+                'id' => (int) $melhor['endereco_id'],
+                'veiculo_id' => (int) $melhor['id'],
+                'veiculo_nome' => $melhor['nome'],
+                'versao' => (int) $melhor['enderecos_versao'],
+                'host' => $melhor['host'],
+                'protocolo' => $melhor['protocolo'],
+                'caminho_prefixo' => $melhor['caminho_prefixo'],
+                'incluir_subdominios' => (bool) $melhor['incluir_subdominios'],
+            ],
+        ];
     }
 
     private static function chaveNome(string $nome): string
@@ -1324,7 +1512,9 @@ final class ExtracaoLinkService
     private static function resolverNomePortal(
         string $url,
         string $host,
-        ?string $nomeArtigo
+        ?string $nomeArtigo,
+        int $limiteNs,
+        array &$estadoTempo
     ): array {
         $nomeArtigo = $nomeArtigo
             ? self::nomePrincipalDoPortal($nomeArtigo, $host)
@@ -1342,7 +1532,8 @@ final class ExtracaoLinkService
             [$urlInicial, $htmlInicial] = self::baixar(
                 $partes['scheme'] . '://' . $partes['host'] . '/',
                 2500,
-                true
+                true,
+                $limiteNs
             );
 
             $hostInicial = preg_replace(
@@ -1370,8 +1561,10 @@ final class ExtracaoLinkService
                     }
                 }
             }
+        } catch (TempoConsultaLinkException $erro) {
+            self::registrarLimiteTempo($estadoTempo, $erro);
         } catch (\Exception $erro) {
-            // A matéria permanece disponível se a consulta extra falhar.
+            // mantém os dados da matéria mesmo se essa consulta extra falhar
         }
 
         return [

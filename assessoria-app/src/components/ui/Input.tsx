@@ -65,7 +65,7 @@ export default function Input({
               <Ionicons
                 name="create-outline"
                 size={15}
-                color={theme.primaria}
+                color={theme.textoTerciaria}
               />
             ) : null}
           </View>

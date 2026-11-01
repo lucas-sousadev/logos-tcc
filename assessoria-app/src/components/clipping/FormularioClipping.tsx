@@ -34,6 +34,10 @@ import ClippingArquivosInput, {
 } from "@/components/clipping/ClippingArquivosInput";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
+import {
+  normalizarSecaoAssociacao,
+  validarSecaoAssociacao,
+} from "@/utils/associacaoEnderecoLink";
 
 import { dataBRParaISO,tempoParaSegundos, dataISOParaBR, segundosParaTempo} from "@/utils/clippingFormatacao";
 import { type ErrosClipping, identificarCampoErroClipping, normalizarCategorias,obterAnoDaPublicacao, validarFormularioClipping,} from "@/utils/validarClipping";
@@ -48,6 +52,8 @@ import {
   type DadosClipping,
   type Clipping,
   type ExtracaoLink,
+  type AssociacaoEnderecoExistente,
+  type TransferenciaEnderecoVeiculo,
   criarClipping,
   listarPautas,
   ErroApiClipping,
@@ -302,6 +308,17 @@ const [tier, setTier] = useState<Tier | null>(
       incluir_subdominios: boolean;
     } | null>(null);
   const [capturaAberta, setCapturaAberta] = useState(false);
+  const [transferenciaPendente, setTransferenciaPendente] =
+    useState<{
+      veiculoId: number;
+      veiculoNome: string;
+      link: string;
+      associacao: AssociacaoEnderecoExistente;
+      dados: TransferenciaEnderecoVeiculo;
+    } | null>(null);
+
+  const quantidadePendencias =
+    quantidadeAlteracoes + arquivos.length + Number(transferenciaPendente !== null);
 
   const linkAtualRef = useRef(link);
   const navegacaoIniciada = useRef(false);
@@ -310,7 +327,7 @@ const [tier, setTier] = useState<Tier | null>(
   const [permitirSaida, setPermitirSaida] = useState(false);
   const saidaPendente = useRef<(() => void) | null>(null);
   const temAlteracoesPendentes =
-    (quantidadeAlteracoes > 0 || arquivos.length > 0) &&
+    quantidadePendencias > 0 &&
     destinoAposSalvar === null;
 
   const bloqueado =
@@ -524,7 +541,6 @@ const [tier, setTier] = useState<Tier | null>(
     if (linkAtualRef.current.trim() === url) {
       setPreviaLink(dados);
       setPreviaAberta(true);
-      setEnderecoPendente(null);
     }
   } catch (erro) {
     if (linkAtualRef.current.trim() === url) {
@@ -545,6 +561,33 @@ const [tier, setTier] = useState<Tier | null>(
     if (!previaLink) return;
 
     const tudo = modo === "tudo";
+
+    const vaiAplicarVeiculo =
+      previaLink.veiculo_sugerido !== null &&
+      (tudo || (veiculo.id === null && !veiculo.nome.trim()));
+
+    if (
+      previaLink.transferir_endereco_ao_salvar &&
+      (!vaiAplicarVeiculo || !temPermissao("VEICULOS", "EDITAR"))
+    ) {
+      return;
+    }
+
+    if (
+      vaiAplicarVeiculo &&
+      previaLink.associar_endereco_ao_salvar &&
+      previaLink.escopo_associacao === "secao"
+    ) {
+      const erroSecao = validarSecaoAssociacao(
+        previaLink.endereco_sugerido.caminho_prefixo,
+        previaLink.url_consultada
+      );
+
+      if (erroSecao) {
+        setErroGeral(erroSecao);
+        return;
+      }
+    }
 
     if (
       previaLink.pauta &&
@@ -591,6 +634,25 @@ const [tier, setTier] = useState<Tier | null>(
       alterarVeiculo(previaLink.veiculo_sugerido);
 
       if (
+        previaLink.transferir_endereco_ao_salvar &&
+        previaLink.endereco_associado &&
+        previaLink.endereco_associado.veiculo_id !==
+          previaLink.veiculo_sugerido.id
+      ) {
+        const associacao = previaLink.endereco_associado;
+
+        setTransferenciaPendente({
+          veiculoId: previaLink.veiculo_sugerido.id,
+          veiculoNome: previaLink.veiculo_sugerido.nome,
+          link: link.trim(),
+          associacao,
+          dados: {
+            endereco_id: associacao.id,
+            veiculo_origem_id: associacao.veiculo_id,
+            versao_origem: associacao.versao,
+          },
+        });
+      } else if (
         previaLink.associar_endereco_ao_salvar &&
         previaLink.endereco_associavel
       ) {
@@ -598,6 +660,9 @@ const [tier, setTier] = useState<Tier | null>(
           veiculoId:
             previaLink.veiculo_sugerido.id,
           ...previaLink.endereco_sugerido,
+          caminho_prefixo: normalizarSecaoAssociacao(
+            previaLink.endereco_sugerido.caminho_prefixo
+          ),
         });
       }
 
@@ -653,7 +718,10 @@ const [tier, setTier] = useState<Tier | null>(
     const mudouVeiculo = selecao.id !== veiculo.id;
     const limpouCampo = !selecao.nome.trim();
 
-    setEnderecoPendente(null)
+    setEnderecoPendente(null);
+
+
+    setTransferenciaPendente(null);
     setVeiculo(selecao);
 
     if (mudouVeiculo || limpouCampo) {
@@ -702,6 +770,8 @@ const [tier, setTier] = useState<Tier | null>(
     setPreviaLink(null);
     setErroBuscaLink("");
     setEnderecoPendente(null);
+
+    setTransferenciaPendente(null);
     setPreviaAberta(false);
     setObservacoes("");
     setInicioSegundos("");
@@ -758,7 +828,7 @@ const [tier, setTier] = useState<Tier | null>(
 
     setConfirmarDescarte(false);
 
-    // A saída acontece no efeito, depois de desativar a proteção.
+    // a saída acontece no efeito depois de desativar a proteção
     setPermitirSaida(true);
     }
 
@@ -895,6 +965,14 @@ const [tier, setTier] = useState<Tier | null>(
           enderecoPendente.incluir_subdominios,
       };
     }
+
+    if (
+      transferenciaPendente &&
+      transferenciaPendente.veiculoId === veiculo.id &&
+      transferenciaPendente.link === link.trim()
+    ) {
+      dados.transferir_endereco_veiculo = transferenciaPendente.dados;
+    }
     
     if (
       clippingInicial?.veiculo_nome_informado != null &&
@@ -924,6 +1002,9 @@ const [tier, setTier] = useState<Tier | null>(
       setSalvando(false);
       return;
     }
+
+    // a associação já foi salva mesmo se algum anexo falhar depois
+    setTransferenciaPendente(null);
 
     if (!editando) marcarNovo(clipping.id);
 
@@ -1221,6 +1302,8 @@ const [tier, setTier] = useState<Tier | null>(
             setErroBuscaLink("");
             limparErro("link");
             setEnderecoPendente(null);
+
+            setTransferenciaPendente(null);
           }}
           placeholder="https://..."
           autoCapitalize="none"
@@ -1434,6 +1517,83 @@ const [tier, setTier] = useState<Tier | null>(
           }
           showChanged={campoAlterado("veiculo")}
         />
+
+        {transferenciaPendente ? (
+        <View
+          accessibilityLiveRegion="polite"
+          style={[
+            styles.avisoAssociacao,
+            { backgroundColor: theme.textoTerciaria + "12" },
+          ]}
+        >
+          <View style={styles.cabecalhoAvisoAssociacao}>
+            <Ionicons
+              name="link-outline"
+              size={17}
+              color={theme.textoTerciaria}
+            />
+
+            <Text
+              weight="SemiBold"
+              style={styles.tituloAvisoAssociacao}
+            >
+              Associação pendente
+            </Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Desfazer correção da associação"
+              disabled={bloqueado}
+              onPress={() => setTransferenciaPendente(null)}
+              style={styles.acaoAvisoAssociacao}
+            >
+              <Ionicons
+                name="arrow-undo-outline"
+                size={14}
+                color={theme.textoTerciaria}
+              />
+
+              <Text
+                weight="SemiBold"
+                style={[
+                  styles.acaoAvisoAssociacaoTexto,
+                  { color: theme.textoTerciaria },
+                ]}
+              >
+                DESFAZER
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            weight="SemiBold"
+            style={styles.textoAvisoAssociacao}
+          >
+            {transferenciaPendente.associacao.host}
+            {transferenciaPendente.associacao.caminho_prefixo}
+          </Text>
+
+          <Text
+            style={[
+              styles.textoAvisoAssociacao,
+              { color: theme.textoSub },
+            ]}
+          >
+            {transferenciaPendente.associacao.veiculo_nome}
+            {" → "}
+            {transferenciaPendente.veiculoNome}
+          </Text>
+
+          <Text
+            style={[
+              styles.notaAvisoAssociacao,
+              { color: theme.textoSub },
+            ]}
+          >
+            Será alterada ao salvar o clipping.
+          </Text>
+        </View>
+      ) : null}
         
         <Input
           label="PROGRAMA / SEÇÃO"
@@ -1576,11 +1736,11 @@ const [tier, setTier] = useState<Tier | null>(
         ) : null}
 
         {editando &&
-        (quantidadeAlteracoes > 0 || arquivos.length > 0) ? (
+        quantidadePendencias > 0 ? (
             <UnsavedChanges
               visible
               saving={bloqueado}
-              alterations={quantidadeAlteracoes + arquivos.length}
+              alterations={quantidadePendencias}
               onSave={() => void salvar(false)}
               onDiscard={cancelarCadastro}
             />
@@ -1645,9 +1805,13 @@ const [tier, setTier] = useState<Tier | null>(
                 ...previaLink,
                 veiculo_sugerido: criado,
                 associar_endereco_ao_salvar: false,
+                transferir_endereco_ao_salvar: false,
                 endereco_associado_veiculo_id: enderecoFoiSalvo
                   ? criado.id
-                  : null,
+                  : previaLink.endereco_associado_veiculo_id ?? null,
+                endereco_associado: enderecoFoiSalvo
+                  ? null
+                  : previaLink.endereco_associado,
               });
 
               setNomeCadastroVeiculo(null);
@@ -1674,13 +1838,60 @@ const [tier, setTier] = useState<Tier | null>(
         onAplicar={aplicarDadosDoLink}
         visible={previaAberta}
         podeCriarVeiculo={podeCriarVeiculo}
+        podeAssociarEndereco={temPermissao("VEICULOS", "EDITAR")}
+        veiculoAtualPreenchido={
+          veiculo.id !== null || Boolean(veiculo.nome.trim())
+        }
+        onConfigurarTransferencia={(confirmada) => {
+          setPreviaLink((atual) => {
+            if (
+              !atual ||
+              !temPermissao("VEICULOS", "EDITAR") ||
+              !atual.endereco_associavel ||
+              !atual.endereco_associado ||
+              !atual.veiculo_sugerido ||
+              atual.endereco_associado.veiculo_id === atual.veiculo_sugerido.id
+            ) {
+              return atual;
+            }
+
+            return {
+              ...atual,
+              associar_endereco_ao_salvar: false,
+              transferir_endereco_ao_salvar: confirmada,
+            };
+          });
+        }}
+        onConfigurarAssociacao={(escopo, caminho) => {
+          setPreviaLink((atual) => {
+            if (!atual || atual.endereco_associado_veiculo_id != null) {
+              return atual;
+            }
+
+            return {
+              ...atual,
+              escopo_associacao: escopo,
+              endereco_sugerido: {
+                ...atual.endereco_sugerido,
+                caminho_prefixo: escopo === "site" ? "" : caminho,
+              },
+              associar_endereco_ao_salvar:
+                escopo !== "nenhum" &&
+                atual.veiculo_sugerido !== null &&
+                atual.endereco_associavel &&
+                temPermissao("VEICULOS", "EDITAR"),
+            };
+          });
+        }}
         onSelecionarVeiculo={(escolhido) => {
           setPreviaLink((atual) =>
             atual
               ? {
                   ...atual,
                   veiculo_sugerido: escolhido,
+                  transferir_endereco_ao_salvar: false,
                   associar_endereco_ao_salvar:
+                    atual.escopo_associacao !== "nenhum" &&
                     atual.endereco_associado_veiculo_id == null &&
                     atual.endereco_associavel &&
                     temPermissao("VEICULOS", "EDITAR"),
@@ -1689,6 +1900,14 @@ const [tier, setTier] = useState<Tier | null>(
           );
         }}
         onCadastroRapido={(nome, endereco) => {
+          if (endereco) {
+            setPreviaLink((atual) =>
+              atual
+                ? { ...atual, endereco_sugerido: endereco }
+                : atual
+            );
+          }
+
           setPreviaAberta(false);
           setEnderecoCadastroVeiculo(endereco);
           setNomeCadastroVeiculo(nome);
@@ -1700,6 +1919,7 @@ const [tier, setTier] = useState<Tier | null>(
                   ...atual,
                   veiculo_sugerido: null,
                   associar_endereco_ao_salvar: false,
+                  transferir_endereco_ao_salvar: false,
                 }
               : null
           );
@@ -1901,6 +2121,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: -12,
     marginBottom: 14,
+  },
+  avisoAssociacao: {
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 18,
+    gap: 6,
+  },
+
+  cabecalhoAvisoAssociacao: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  tituloAvisoAssociacao: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  acaoAvisoAssociacao: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 36,
+    gap: 4,
+  },
+
+  acaoAvisoAssociacaoTexto: {
+    fontSize: 10,
+    lineHeight: 15,
+  },
+
+  textoAvisoAssociacao: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  notaAvisoAssociacao: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   avisoCaptura: {
     flexDirection: "row",
