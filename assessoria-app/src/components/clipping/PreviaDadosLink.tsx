@@ -1133,14 +1133,14 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   origem: {
-    marginBottom: 13,
+  marginBottom: 6,
   },
   nomeOrigem: {
     fontSize: 14,
     lineHeight: 20,
   },
   veiculoSelecionado: {
-    gap: 4,
+    gap: 2,
   },
   linhaSelecionado: {
     flexDirection: "row",
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
   nomeSelecionado: {
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 5,
+    marginTop: 1,
   },
   avisoAssociacao: {
     fontSize: 11,

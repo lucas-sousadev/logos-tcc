@@ -7,6 +7,11 @@ import { authenticatedFetch } from "@/services/api/auth";
 
 export type OrigemCaptura = "clipping" | "relatorio";
 export type EstadoCaptura = "aguardando" | "processando";
+export type AvisoCaptura =
+  | "bloqueio"
+  | "pouco_conteudo"
+  | "sobreposicao"
+  | "incerto";
 
 export interface CapturaPagina {
   uri: string;
@@ -14,6 +19,7 @@ export interface CapturaPagina {
   altura: number;
   incompleta: boolean;
   temProxima: boolean;
+  aviso: AvisoCaptura | null;
   liberar: () => void;
 }
 
@@ -127,11 +133,30 @@ async function lerCaptura(
     throw new Error("A API não informou um tamanho válido para a captura.");
   }
 
+  const avisoRecebido = resposta.headers.get("X-Captura-Aviso");
+
+  const avisos: string[] = [
+    "bloqueio",
+    "pouco_conteudo",
+    "sobreposicao",
+    "incerto",
+  ];
+
+  const aviso: AvisoCaptura | null = avisoRecebido
+    ? avisos.includes(avisoRecebido)
+      ? (avisoRecebido as AvisoCaptura)
+      : "incerto"
+    : null;
+
   const comum = {
     largura,
     altura,
-    incompleta: resposta.headers.get("X-Captura-Incompleta") === "1",
-    temProxima: resposta.headers.get("X-Captura-Tem-Proxima") === "1",
+    incompleta:
+      resposta.headers.get("X-Captura-Incompleta") === "1" ||
+      aviso !== null,
+    aviso,
+    temProxima:
+      resposta.headers.get("X-Captura-Tem-Proxima") === "1",
   };
 
   if (Platform.OS === "web") {

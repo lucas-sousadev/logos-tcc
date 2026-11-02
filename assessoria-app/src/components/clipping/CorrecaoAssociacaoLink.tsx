@@ -38,18 +38,18 @@ export default function CorrecaoAssociacaoLink({
       {!confirmando ? (
         <Text style={[styles.texto, { color: theme.textoSub }]}>
           {pendente
-            ? "Correção preparada. Aplique os dados e salve o clipping para concluir."
-            : `Este endereço está associado a ${associacao.veiculo_nome}. Trocar o veículo deste clipping mantém essa associação.`}
+            ? "Alteração preparada. Aplique os dados e salve o clipping para concluir."
+            : `O endereço ${endereco} está associado a ${associacao.veiculo_nome}. Trocar para outro veículo neste clipping não altera a associação.`}
         </Text>
       ) : null}
 
       {confirmando ? (
         <View
-          style={styles.confirmacao}
+          style={[styles.confirmacao, {paddingTop: 3}]}
           accessibilityLiveRegion="polite"
         >
-          <Text weight="Bold" style={styles.titulo}>
-            Corrigir associação?
+          <Text weight="Bold" style={[styles.titulo, { borderColor: theme.borda, borderTopWidth: 1, paddingTop: 10 }]}>
+            Alterar associação?
           </Text>
           <Text weight="SemiBold" style={styles.texto}>
             {endereco}
@@ -60,12 +60,12 @@ export default function CorrecaoAssociacaoLink({
           </Text>
           <Text style={[styles.texto, { color: theme.textoSub }]}>
             {associacao.caminho_prefixo
-              ? "A mudança vale para esta seção e suas subseções."
-              : "A mudança vale para o site inteiro."}
+              ? "O veículo será associado à esta seção e suas subseções."
+              : "O veículo será associado ao site inteiro."}
             {associacao.incluir_subdominios
               ? " Inclui também os subdomínios cadastrados nessa associação."
               : ""}
-            {"\n"}Os clippings já salvos mantêm seus veículos.
+            {"\n"}Os clippings já salvos não mudarão.
           </Text>
 
           <View style={styles.acoes}>
@@ -113,13 +113,13 @@ export default function CorrecaoAssociacaoLink({
             weight="SemiBold"
             style={[styles.rotulo, { color: theme.textoTerciaria }]}
           >
-            {pendente ? "DESFAZER" : "CORRIGIR ASSOCIAÇÃO"}
+            {pendente ? "DESFAZER" : "ALTERAR ASSOCIAÇÃO"}
           </Text>
         </TouchableOpacity>
       ) : (
         <Text style={[styles.texto, { color: theme.textoSub }]}>
           {!podeEditar
-            ? "É preciso ter permissão para editar veículos para corrigir essa associação."
+            ? "É preciso ter permissão para editar veículos para alterar essa associação."
             : "O link redirecionou para outro domínio. Corrija este endereço pelo cadastro do veículo."}
         </Text>
       )}
@@ -129,8 +129,8 @@ export default function CorrecaoAssociacaoLink({
 
 const styles = StyleSheet.create({
   conteudo: {
-    gap: 8,
-    marginTop: 9,
+    gap: 4,
+    marginTop: 4,
   },
   texto: {
     fontSize: 11,

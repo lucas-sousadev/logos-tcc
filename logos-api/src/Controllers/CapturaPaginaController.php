@@ -83,7 +83,10 @@ final class CapturaPaginaController
                     'X-Captura-Tem-Proxima: ' .
                     ($resultado['tem_proxima'] ? '1' : '0')
                 );
-
+                header(
+                    'X-Captura-Aviso: ' .
+                    ($resultado['aviso'] ?? '')
+                );
                 echo $resultado['imagem'];
 
                 return;

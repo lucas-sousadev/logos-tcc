@@ -2,6 +2,7 @@ import {
   criarProxyCaptura,
   validarUrlCaptura as validarUrl,
 } from "./proxyCaptura.mjs";
+import { avaliarCaptura } from "./avaliarCaptura.mjs";
 import { chromium } from "playwright";
 
 const ALTURA_CAPTURA = 1200;
@@ -407,6 +408,12 @@ export async function capturar(link, trecho = 0, sinal) {
     }
 
     verificarBloqueio403();
+    const aviso = await avaliarCaptura(pagina, {
+      inicio,
+      altura,
+      largura: 1280,
+    });
+
     // usa as coordenadas da página mesmo se o site travar a rolagem
     const imagem = await pagina.screenshot({
       type: "jpeg",
@@ -440,7 +447,12 @@ export async function capturar(link, trecho = 0, sinal) {
       imagem,
       largura: 1280,
       altura,
-      incompleta: incompleta || recursosBloqueados || proxy.restricoes,
+      incompleta:
+        incompleta ||
+        recursosBloqueados ||
+        proxy.restricoes ||
+        aviso !== null,
+      aviso,
       temProxima:
         trecho < MAX_TRECHO &&
         alturaFinalPagina > inicio + altura + 50,

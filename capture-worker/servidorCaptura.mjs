@@ -122,6 +122,7 @@ export function criarServidorCaptura({
         "X-Captura-Altura": resultado.altura,
         "X-Captura-Incompleta": resultado.incompleta ? "1" : "0",
         "X-Captura-Tem-Proxima": resultado.temProxima ? "1" : "0",
+        "X-Captura-Aviso": resultado.aviso ?? "",
       });
 
       res.end(resultado.imagem);

@@ -26,6 +26,7 @@ import {
   capturarPagina,
   type CapturaPagina,
   type OrigemCaptura,
+  type AvisoCaptura,
 } from "@/services/api/capturaPagina";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -63,6 +64,23 @@ const TOTAL_TRECHOS = 37;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 const ZOOM_PASSO = 0.25;
+const AVISOS_CAPTURA: Record<AvisoCaptura, string> = {
+  bloqueio:
+    "A imagem pode mostrar uma verificação ou bloqueio do site. " +
+    "Refaça a captura ou feche para selecionar uma imagem manualmente.",
+
+  pouco_conteudo:
+    "Este trecho parece ter pouco conteúdo. " +
+    "Tente outro trecho, refaça a captura ou feche para escolher uma imagem manualmente.",
+
+  sobreposicao:
+    "Um aviso pode estar cobrindo o conteúdo. " +
+    "Confira a imagem e tente outro trecho ou feche para escolher uma imagem manualmente.",
+
+  incerto:
+    "Não foi possível conferir o conteúdo da página. " +
+    "Verifique a imagem antes de recortar ou refaça a captura.",
+};
 
 export default function CapturaPaginaModal({
   visivel,
@@ -92,6 +110,12 @@ export default function CapturaPaginaModal({
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
 
+  const avisoCaptura = captura?.aviso
+  ? AVISOS_CAPTURA[captura.aviso]
+  : captura?.incompleta
+    ? "Alguns elementos podem não ter carregado. Você pode refazer esta captura ou tentar outro trecho."
+    : null;
+    
   useEffect(() => {
     if (!visivel) {
       setCaptura(null);
@@ -698,15 +722,16 @@ export default function CapturaPaginaModal({
         </Text>
       ) : null}
 
-      {captura?.incompleta ? (
+      {avisoCaptura ? (
         <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
           style={[
             styles.avisoCarregamento,
             { color: theme.aviso },
           ]}
         >
-          Alguns elementos podem não ter carregado. Você pode
-          refazer esta captura ou tentar outro trecho.
+          {avisoCaptura}
         </Text>
       ) : null}
 

@@ -158,7 +158,10 @@ final class CapturaPaginaService
                     if (
                         in_array(
                             $nome,
-                            ['x-captura-incompleta', 'x-captura-tem-proxima'],
+                            [ 'x-captura-incompleta',
+                              'x-captura-tem-proxima',
+                              'x-captura-aviso',
+                            ],
                             true
                         )
                     ) {
@@ -218,13 +221,33 @@ final class CapturaPaginaService
                 );
             }
 
+            $aviso = $cabecalhos['x-captura-aviso'] ?? '';
+
+            if (
+                $aviso !== '' &&
+                !in_array(
+                    $aviso,
+                    [
+                        'bloqueio',
+                        'pouco_conteudo',
+                        'sobreposicao',
+                        'incerto',
+                    ],
+                    true
+                )
+            ) {
+                $aviso = 'incerto';
+            }
+            
             return [
                 'status' => 200,
                 'imagem' => $resposta,
                 'largura' => (int) $dimensoes[0],
                 'altura' => (int) $dimensoes[1],
                 'incompleta' =>
-                    ($cabecalhos['x-captura-incompleta'] ?? '0') === '1',
+                    ($cabecalhos['x-captura-incompleta'] ?? '0') === '1'
+                    || $aviso !== '',
+                'aviso' => $aviso === '' ? null : $aviso,
                 'tem_proxima' =>
                     ($cabecalhos['x-captura-tem-proxima'] ?? '0') === '1',
             ];

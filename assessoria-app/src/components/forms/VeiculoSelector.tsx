@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -10,13 +9,14 @@ import { Ionicons } from "@expo/vector-icons";
 
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
+import VeiculoResumo from "@/components/forms/VeiculoResumo";
+
 import { rotuloTier, type Tier } from "@/constants/tier";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { validarNomeVeiculo } from "@/utils/validarVeiculo";
 import {
   listarVeiculos,
-  obterUrlLogoVeiculo,
   type Veiculo,
 } from "@/services/api/veiculo";
 
@@ -69,7 +69,6 @@ export default function VeiculoSelector({
     useState<ResultadoBusca | null>(null);
 
   const [tentativa, setTentativa] = useState(0);
-  const [resumoAberto, setResumoAberto] = useState(false);
 
   const termo = value.nome.trim();
   const erroNome = validarNomeVeiculo(value.nome);
@@ -119,8 +118,6 @@ export default function VeiculoSelector({
       )
     );
 
-  const logo = obterUrlLogoVeiculo(value.logo_path);
-
   useEffect(() => {
     if (!deveBuscar) return;
 
@@ -165,7 +162,6 @@ export default function VeiculoSelector({
   function selecionar(item: Veiculo) {
     if (disabled) return;
 
-    setResumoAberto(false);
     onChange(item);
   }
 
@@ -181,7 +177,6 @@ export default function VeiculoSelector({
         onChangeText={(nome) => {
           if (disabled) return;
 
-          setResumoAberto(false);
           onChange({ id: null, nome });
         }}
         placeholder={
@@ -199,119 +194,34 @@ export default function VeiculoSelector({
       />
 
       {!semSelecao ? (
-        <View
-          style={[
-            styles.caixa,
-            { borderColor: theme.borda },
-          ]}
-        >
-          <View style={styles.linha}>
-            {mostrarResumo && logo ? (
-              <Image
-                source={{ uri: logo }}
-                style={styles.logo}
-                resizeMode="contain"
-                accessibilityLabel="Logo do veículo"
-              />
-            ) : (
+        mostrarResumo ? (
+          <VeiculoResumo
+            key={value.id}
+            veiculo={value}
+            disabled={disabled}
+          />
+        ) : (
+          <View
+            style={[
+              styles.caixa,
+              { borderColor: theme.borda },
+            ]}
+          >
+            <View style={styles.linha}>
               <Ionicons
                 name="checkmark-circle-outline"
                 size={22}
                 color={theme.primaria}
               />
-            )}
 
-            <View style={styles.informacoes}>
-              <Text weight="SemiBold" style={styles.nome}>
-                Veículo selecionado
-              </Text>
-
-              {mostrarResumo ? (
-                <Text
-                  style={[
-                    styles.ajuda,
-                    { color: theme.textoSub },
-                  ]}
-                >
-                  {rotuloTier(value.tier ?? null)}
-                  {value.ativo === 0 ? " • Inativo" : ""}
+              <View style={styles.informacoes}>
+                <Text weight="SemiBold" style={styles.nome}>
+                  {value.nome}
                 </Text>
-              ) : null}
+              </View>
             </View>
           </View>
-
-          {mostrarResumo ? (
-            <>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityState={{
-                  expanded: resumoAberto,
-                  disabled,
-                }}
-                disabled={disabled}
-                onPress={() =>
-                  setResumoAberto((atual) => !atual)
-                }
-                style={styles.atalho}
-              >
-                <Text
-                  style={[
-                    styles.ajuda,
-                    { color: theme.textoTerciaria },
-                  ]}
-                >
-                  {resumoAberto
-                    ? "Recolher descrição e alcance"
-                    : "Ver descrição e alcance"}
-                </Text>
-
-                <Ionicons
-                  name={
-                    resumoAberto
-                      ? "chevron-up"
-                      : "chevron-down"
-                  }
-                  size={16}
-                  color={theme.textoTerciaria}
-                />
-              </TouchableOpacity>
-
-              {resumoAberto ? (
-                <View style={styles.dados}>
-                  <Text weight="SemiBold" style={styles.nome}>
-                    Descrição
-                  </Text>
-
-                  <Text
-                    selectable
-                    style={[
-                      styles.ajuda,
-                      { color: theme.textoSub },
-                    ]}
-                  >
-                    {value.descricao?.trim() ||
-                      "Descrição não informada."}
-                  </Text>
-
-                  <Text weight="SemiBold" style={styles.nome}>
-                    Alcance
-                  </Text>
-
-                  <Text
-                    selectable
-                    style={[
-                      styles.ajuda,
-                      { color: theme.textoSub },
-                    ]}
-                  >
-                    {value.alcance?.trim() ||
-                      "Alcance não informado."}
-                  </Text>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </View>
+        )
       ) : null}
 
       {semSelecao && temTermo && !podeConsultar ? (
@@ -494,11 +404,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-  },
   nome: {
     fontSize: 13,
     lineHeight: 19,
@@ -512,9 +417,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  dados: {
-    gap: 6,
   },
   resultados: {
     borderWidth: 1.5,

@@ -2144,7 +2144,6 @@ const styles = StyleSheet.create({
   acaoAvisoAssociacao: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
     gap: 4,
   },
 
