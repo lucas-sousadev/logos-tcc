@@ -24,6 +24,7 @@ import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   capturarPagina,
+  TOTAL_TRECHOS_CAPTURA,
   type CapturaPagina,
   type OrigemCaptura,
   type AvisoCaptura,
@@ -60,7 +61,7 @@ function limitar(valor: number): number {
   return Math.max(0, Math.min(1, valor));
 }
 
-const TOTAL_TRECHOS = 37;
+const TOTAL_TRECHOS = TOTAL_TRECHOS_CAPTURA;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 const ZOOM_PASSO = 0.25;
@@ -111,11 +112,11 @@ export default function CapturaPaginaModal({
   const [erro, setErro] = useState("");
 
   const avisoCaptura = captura?.aviso
-  ? AVISOS_CAPTURA[captura.aviso]
-  : captura?.incompleta
-    ? "Alguns elementos podem não ter carregado. Você pode refazer esta captura ou tentar outro trecho."
-    : null;
-    
+    ? AVISOS_CAPTURA[captura.aviso]
+    : captura?.incompleta
+      ? "Alguns elementos podem não ter carregado. Você pode refazer esta captura ou tentar outro trecho."
+      : null;
+
   useEffect(() => {
     if (!visivel) {
       setCaptura(null);
@@ -210,7 +211,7 @@ export default function CapturaPaginaModal({
 
     const numero = Number(trechoDigitado);
     if (
-      !/^\d{1,2}$/.test(trechoDigitado) ||
+      !/^\d{1,3}$/.test(trechoDigitado) ||
       numero < 1 ||
       numero > TOTAL_TRECHOS
     ) {
@@ -636,7 +637,7 @@ export default function CapturaPaginaModal({
               accessibilityLabel={`Número do trecho, de 1 a ${TOTAL_TRECHOS}`}
               value={trechoDigitado}
               onChangeText={(texto) => {
-                setTrechoDigitado(texto.replace(/\D/g, "").slice(0, 2));
+                setTrechoDigitado(texto.replace(/\D/g, "").slice(0, 3));
                 setErroTrecho("");
               }}
               onSubmitEditing={irParaTrecho}
@@ -644,7 +645,7 @@ export default function CapturaPaginaModal({
               keyboardType="number-pad"
               returnKeyType="go"
               selectTextOnFocus
-              maxLength={2}
+              maxLength={3}
               style={[
                 styles.campoTrecho,
                 {
@@ -719,6 +720,16 @@ export default function CapturaPaginaModal({
       {erroTrecho ? (
         <Text style={[styles.erroTrecho, { color: theme.erro }]}>
           {erroTrecho}
+        </Text>
+      ) : null}
+
+      {captura?.limiteTrechos ? (
+        <Text
+          accessibilityRole="alert"
+          style={[styles.avisoCarregamento, { color: theme.aviso }]}
+        >
+          Você atingiu o limite de navegação desta captura. Ainda pode
+          recortar este trecho ou fechar para escolher uma imagem manualmente.
         </Text>
       ) : null}
 

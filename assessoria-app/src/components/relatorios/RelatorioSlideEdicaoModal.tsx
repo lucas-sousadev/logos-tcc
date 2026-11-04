@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -19,6 +19,7 @@ import RelatorioSlideVisual from "@/components/relatorios/RelatorioSlideVisual";
 import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import { criarEnvioMidiaSlide } from "@/services/api/envioMidiaSlide";
 import {
   atualizarSlideRelatorio,
   enviarMidiaSlideRelatorio,
@@ -39,6 +40,10 @@ interface Props {
 }
 
 type EstadoMidia = "manter" | "remover" | "trocar";
+
+type ArquivoImagemRascunho = ArquivoMidiaSlide & {
+  geradoPelaCaptura?: boolean;
+};
 
 function valor(texto: string): string | null {
   return texto.trim() || null;
@@ -67,19 +72,28 @@ export default function RelatorioSlideEdicaoModal({
   const [estadoLogo, setEstadoLogo] = useState<EstadoMidia>("manter");
   const [arquivoImagem, setArquivoImagem] = useState<ArquivoImagemRascunho | null>(null);
   const [arquivoLogo, setArquivoLogo] = useState<ArquivoMidiaSlide | null>(null);
-    type ArquivoImagemRascunho = ArquivoMidiaSlide & {
-    geradoPelaCaptura?: boolean;
-  };
+  const enviarMidia = useMemo(
+    () =>
+      criarEnvioMidiaSlide((tipo, arquivo) =>
+        enviarMidiaSlideRelatorio(
+          slide.relatorio_id,
+          slide.id,
+          tipo,
+          arquivo
+        )
+      ),
+    [slide.relatorio_id, slide.id]
+  );
   const [capturaAberta, setCapturaAberta] = useState(false);
   const podeCapturarPagina =
     /^https?:\/\/\S+$/i.test(link.trim());
 
-    const [erro, setErro] = useState("");
-    const [salvando, setSalvando] = useState(false);
-    const [errosCampos, setErrosCampos] = useState<{
-      data?: string;
-      link?: string;
-    }>({}); 
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [errosCampos, setErrosCampos] = useState<{
+    data?: string;
+    link?: string;
+  }>({});
 
   useEffect(() => {
     return () => {
@@ -96,7 +110,7 @@ export default function RelatorioSlideEdicaoModal({
         const arquivo = new ExpoFile(arquivoImagem.uri);
         if (arquivo.exists) arquivo.delete();
       } catch {
-        // O sistema também pode limpar arquivos de cache.
+        // o sistema também pode limpar os arquivos de cache
       }
     };
   }, [arquivoImagem]);
@@ -229,18 +243,14 @@ export default function RelatorioSlideEdicaoModal({
 
     try {
       if (estadoImagem === "trocar" && arquivoImagem) {
-        dados.imagem_midia_id = await enviarMidiaSlideRelatorio(
-          slide.relatorio_id,
-          slide.id,
+        dados.imagem_midia_id = await enviarMidia(
           "imagem",
           arquivoImagem
         );
       }
 
       if (estadoLogo === "trocar" && arquivoLogo) {
-        dados.logo_midia_id = await enviarMidiaSlideRelatorio(
-          slide.relatorio_id,
-          slide.id,
+        dados.logo_midia_id = await enviarMidia(
           "logo",
           arquivoLogo
         );

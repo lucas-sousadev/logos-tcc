@@ -5,6 +5,7 @@ namespace Logos\AssessoriaApi\Services;
 final class CapturaPaginaService
 {
     private const LIMITE_IMAGEM = 4_194_304;
+    private const MAX_TRECHO = 199;
 
     public static function processar(
         int $assessoriaId,
@@ -57,7 +58,7 @@ final class CapturaPaginaService
                 );
             }
 
-            if (!is_int($trecho) || $trecho < 0 || $trecho > 36) {
+            if (!is_int($trecho) || $trecho < 0 || $trecho > self::MAX_TRECHO) {
                 throw new \InvalidArgumentException(
                     'Trecho da página inválido.'
                 );
@@ -158,9 +159,11 @@ final class CapturaPaginaService
                     if (
                         in_array(
                             $nome,
-                            [ 'x-captura-incompleta',
-                              'x-captura-tem-proxima',
-                              'x-captura-aviso',
+                            [
+                                'x-captura-incompleta',
+                                'x-captura-tem-proxima',
+                                'x-captura-aviso',
+                                'x-captura-limite-trechos',
                             ],
                             true
                         )
@@ -248,6 +251,8 @@ final class CapturaPaginaService
                     ($cabecalhos['x-captura-incompleta'] ?? '0') === '1'
                     || $aviso !== '',
                 'aviso' => $aviso === '' ? null : $aviso,
+                'limite_trechos' =>
+                    ($cabecalhos['x-captura-limite-trechos'] ?? '0') === '1',
                 'tem_proxima' =>
                     ($cabecalhos['x-captura-tem-proxima'] ?? '0') === '1',
             ];

@@ -163,6 +163,11 @@ class RelatorioMidiaService
             'sha256' => $hash,
         ]);
 
+        // renova o prazo de uma imagem reaproveitada em uma nova edição
+        if (!touch($destino)) {
+            throw new \RuntimeException('Não foi possível atualizar a mídia do relatório.');
+        }
+
         return (int) $db->lastInsertId();
     }
 
@@ -414,6 +419,118 @@ class RelatorioMidiaService
         return $resultado;
     }
     
+    public static function limparSemUso(
+        int $assessoriaId,
+        int $relatorioId,
+        bool $aplicar = false
+    ): array {
+        $db = Connection::get();
+
+        if ($db->inTransaction()) {
+            throw new \LogicException('Execute a limpeza fora de outras operações.');
+        }
+
+        $versoes = $db->prepare("
+            SELECT 1 FROM relatorio_versoes
+            WHERE assessoria_id = :assessoria_id
+            AND relatorio_id = :relatorio_id
+            LIMIT 1
+        ");
+        $versoes->execute([
+            'assessoria_id' => $assessoriaId,
+            'relatorio_id' => $relatorioId,
+        ]);
+
+        // preserva tudo se houver histórico até a limpeza conhecer essas versões
+        if ($versoes->fetchColumn() !== false) {
+            return [
+                'candidatas' => [],
+                'removidas' => 0,
+                'avisos' => ['O relatório possui versões históricas e suas mídias foram preservadas.'],
+            ];
+        }
+
+        // confere também as edições pra preservar a imagem que pode ser restaurada
+        $semUso = "NOT EXISTS (
+            SELECT 1 FROM relatorio_slides s
+            WHERE s.relatorio_id = relatorio_midias.relatorio_id
+            AND s.assessoria_id = relatorio_midias.assessoria_id
+            AND (
+                s.imagem_midia_id = relatorio_midias.id
+                OR s.logo_midia_id = relatorio_midias.id
+                OR JSON_UNQUOTE(JSON_EXTRACT(
+                    s.edicoes_json, '$.imagem_midia_id'
+                )) = CAST(relatorio_midias.id AS CHAR)
+                OR JSON_UNQUOTE(JSON_EXTRACT(
+                    s.edicoes_json, '$.logo_midia_id'
+                )) = CAST(relatorio_midias.id AS CHAR)
+            )
+        )";
+
+        $consulta = $db->prepare("
+            SELECT id FROM relatorio_midias
+            WHERE assessoria_id = :assessoria_id
+            AND relatorio_id = :relatorio_id
+            AND {$semUso}
+            ORDER BY id
+            LIMIT 100
+        ");
+        $consulta->execute([
+            'assessoria_id' => $assessoriaId,
+            'relatorio_id' => $relatorioId,
+        ]);
+
+        $resultado = ['candidatas' => [], 'removidas' => 0, 'avisos' => []];
+
+        foreach ($consulta->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $id = (int) $id;
+
+            try {
+                $midia = self::localizar($assessoriaId, $relatorioId, $id);
+                $modificado = filemtime($midia['arquivo']);
+
+                // dá dois dias pra retomar uma edição antes de considerar a mídia abandonada
+                if ($modificado === false || $modificado > time() - 172_800) {
+                    continue;
+                }
+
+                $resultado['candidatas'][] = $id;
+                if (!$aplicar) continue;
+
+                $db->beginTransaction();
+                $remover = $db->prepare("
+                    DELETE FROM relatorio_midias
+                    WHERE id = :id
+                    AND assessoria_id = :assessoria_id
+                    AND relatorio_id = :relatorio_id
+                    AND {$semUso}
+                ");
+                $remover->execute([
+                    'id' => $id,
+                    'assessoria_id' => $assessoriaId,
+                    'relatorio_id' => $relatorioId,
+                ]);
+
+                if ($remover->rowCount() !== 1) {
+                    $db->rollBack();
+                    continue;
+                }
+
+                if (!unlink($midia['arquivo'])) {
+                    throw new \RuntimeException('Não foi possível remover o arquivo sem uso.');
+                }
+
+                $db->commit();
+                $resultado['removidas']++;
+            } catch (\Throwable $erro) {
+                if ($db->inTransaction()) $db->rollBack();
+                $resultado['avisos'][] = "Mídia {$id}: " . $erro->getMessage();
+            }
+        }
+
+        return $resultado;
+    }
+
     public static function localizar(
         int $assessoriaId,
         int $relatorioId,

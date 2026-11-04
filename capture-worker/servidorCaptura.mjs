@@ -2,6 +2,8 @@ import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { criarFilaCaptura, erroCaptura } from "./filaCaptura.mjs";
 import { validarUrlCaptura } from "./proxyCaptura.mjs";
+import { MAX_TRECHO } from "./limitesCaptura.mjs";
+import { criarResolvedorDominio } from "./resolverDominio.mjs";
 
 function json(res, status, dados) {
   const corpo = JSON.stringify(dados);
@@ -19,6 +21,7 @@ export function criarServidorCaptura({
   segredo,
   executar,
   configuracaoFila = {},
+  resolvedorDominio = criarResolvedorDominio(),
 }) {
   if (typeof segredo !== "string" || segredo.length < 32) {
     throw new Error("Configure CAPTURA_SEGREDO com pelo menos 32 caracteres.");
@@ -62,6 +65,12 @@ export function criarServidorCaptura({
         throw erroCaptura("Requisição inválida.");
       }
 
+      if (req.url === "/resolver-dominio") {
+        const ips = await resolvedorDominio.resolver(dados.host, dados.restante_ms);
+        json(res, 200, { ips });
+        return;
+      }
+
       const dono = dados.solicitante;
 
       if (
@@ -85,7 +94,7 @@ export function criarServidorCaptura({
 
         const trecho = dados.trecho ?? 0;
 
-        if (!Number.isSafeInteger(trecho) || trecho < 0 || trecho > 36) {
+        if (!Number.isSafeInteger(trecho) || trecho < 0 || trecho > MAX_TRECHO) {
           throw erroCaptura("Trecho da página inválido.");
         }
 
@@ -123,13 +132,14 @@ export function criarServidorCaptura({
         "X-Captura-Incompleta": resultado.incompleta ? "1" : "0",
         "X-Captura-Tem-Proxima": resultado.temProxima ? "1" : "0",
         "X-Captura-Aviso": resultado.aviso ?? "",
+        "X-Captura-Limite-Trechos": resultado.limiteTrechos ? "1" : "0",
       });
 
       res.end(resultado.imagem);
     } catch (erro) {
       if (res.destroyed || res.headersSent) return;
 
-      const status = [400, 404, 409, 413, 422, 429, 503].includes(erro?.status)
+      const status = [400, 404, 409, 413, 422, 429, 503, 504].includes(erro?.status)
         ? erro.status
         : 502;
 
@@ -146,6 +156,7 @@ export function criarServidorCaptura({
   servidor.headersTimeout = 5000;
   servidor.keepAliveTimeout = 1000;
   servidor.maxConnections = 128;
+  servidor.once("close", () => resolvedorDominio.fechar());
 
   return {
     servidor,

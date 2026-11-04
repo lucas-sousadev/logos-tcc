@@ -3,11 +3,13 @@ import {
   validarUrlCaptura as validarUrl,
 } from "./proxyCaptura.mjs";
 import { avaliarCaptura } from "./avaliarCaptura.mjs";
+import {
+  ALTURA_CAPTURA,
+  PASSO_CAPTURA,
+  MAX_TRECHO,
+  alcanceCaptura,
+} from "./limitesCaptura.mjs";
 import { chromium } from "playwright";
-
-const ALTURA_CAPTURA = 1200;
-const PASSO_CAPTURA = 250;
-const MAX_TRECHO = 36;
 
 const MENSAGEM_BLOQUEIO_403 =
   "O site bloqueou a captura automática (HTTP 403). " +
@@ -453,9 +455,7 @@ export async function capturar(link, trecho = 0, sinal) {
         proxy.restricoes ||
         aviso !== null,
       aviso,
-      temProxima:
-        trecho < MAX_TRECHO &&
-        alturaFinalPagina > inicio + altura + 50,
+      ...alcanceCaptura(alturaFinalPagina, inicio, altura, trecho),
     };
   } catch (erro) {
     throw proxy?.falha ?? erroExecucao ?? erro;

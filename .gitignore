@@ -2,6 +2,11 @@
 node_modules/
 vendor/
 tests/
+!/capture-worker/tests/
+!/logos-api/tests/
+/logos-api/tests/*
+!/logos-api/tests/webscraping.php
+!/logos-api/tests/resolver_dominio.php
 
 
 .expo/

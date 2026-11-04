@@ -7,6 +7,7 @@ import { authenticatedFetch } from "@/services/api/auth";
 
 export type OrigemCaptura = "clipping" | "relatorio";
 export type EstadoCaptura = "aguardando" | "processando";
+export const TOTAL_TRECHOS_CAPTURA = 200;
 export type AvisoCaptura =
   | "bloqueio"
   | "pouco_conteudo"
@@ -19,6 +20,7 @@ export interface CapturaPagina {
   altura: number;
   incompleta: boolean;
   temProxima: boolean;
+  limiteTrechos: boolean;
   aviso: AvisoCaptura | null;
   liberar: () => void;
 }
@@ -157,6 +159,8 @@ async function lerCaptura(
     aviso,
     temProxima:
       resposta.headers.get("X-Captura-Tem-Proxima") === "1",
+    limiteTrechos:
+      resposta.headers.get("X-Captura-Limite-Trechos") === "1",
   };
 
   if (Platform.OS === "web") {

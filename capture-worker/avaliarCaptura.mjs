@@ -27,36 +27,36 @@ export function analisarPaginaCaptura({ inicio, altura, largura }) {
     let primeiro = true;
 
     while (atual) {
-        if (!noPrazo()) return false;
+      if (!noPrazo()) return false;
 
-        let estilo = estilos.get(atual);
+      let estilo = estilos.get(atual);
 
-        if (!estilo) {
+      if (!estilo) {
         estilo = getComputedStyle(atual);
         estilos.set(atual, estilo);
-        }
+      }
 
-        if (
+      if (
         estilo.display === "none" ||
         Number(estilo.opacity) <= 0
-        ) {
+      ) {
         return false;
-        }
+      }
 
-        // o filho pode restaurar visibility mas não a opacidade de um ancestral
-        if (
+      // o filho pode restaurar visibility mas não a opacidade de um ancestral
+      if (
         primeiro &&
         ["hidden", "collapse"].includes(estilo.visibility)
-        ) {
+      ) {
         return false;
-        }
+      }
 
-        primeiro = false;
-        atual = atual.parentElement;
+      primeiro = false;
+      atual = atual.parentElement;
     }
 
     return true;
-    }
+  }
 
   function noPrazo() {
     if (performance.now() <= prazo) return true;
@@ -76,29 +76,29 @@ export function analisarPaginaCaptura({ inicio, altura, largura }) {
 
   const titulo = normalizar(document.title.slice(0, 300));
   const titulos = document.querySelectorAll("h1");
-    let h1 = "";
+  let h1 = "";
 
-    if (titulos.length > 20) limitada = true;
+  if (titulos.length > 20) limitada = true;
 
-    for (
+  for (
     let indice = 0;
     indice < Math.min(titulos.length, 20);
     indice += 1
-    ) {
+  ) {
     if (!noPrazo()) break;
 
     const elemento = titulos[indice];
 
     if (
-        visivel(elemento) &&
-        areaNoTrecho(elemento.getBoundingClientRect()) > 0
+      visivel(elemento) &&
+      areaNoTrecho(elemento.getBoundingClientRect()) > 0
     ) {
-        h1 = normalizar(
+      h1 = normalizar(
         (elemento.textContent ?? "").slice(0, 300)
-        );
-        break;
+      );
+      break;
     }
-    }
+  }
 
   const mensagensBloqueio = [
     /^just a moment\b/,
@@ -329,11 +329,11 @@ export function analisarPaginaCaptura({ inicio, altura, largura }) {
   }
 
   const possivelBloqueio =
-  caracteresArtigo < 240 &&
-  (
-    bloqueioVisivel ||
-    (caracteres < 1000 && tituloBloqueio)
-  );
+    caracteresArtigo < 240 &&
+    (
+      bloqueioVisivel ||
+      (caracteres < 1000 && tituloBloqueio)
+    );
 
   if (
     bloqueioDominante ||
@@ -346,7 +346,7 @@ export function analisarPaginaCaptura({ inicio, altura, largura }) {
   if (limitada && possivelBloqueio) {
     return "incerto";
   }
-  
+
   // uma imagem ou gráfico grande também pode ser conteúdo útil sem muito texto
   if (areaVisual / areaCaptura >= 0.02) return null;
 
@@ -354,13 +354,6 @@ export function analisarPaginaCaptura({ inicio, altura, largura }) {
     return caracteres >= 80 ? null : "incerto";
   }
 
-  if (
-    caracteres < 40 ||
-    areaTexto / areaCaptura < 0.003
-  ) {
-    return "pouco_conteudo";
-  }
-  
   if (
     caracteres < 40 ||
     areaTexto / areaCaptura < 0.003

@@ -323,8 +323,12 @@ final class ExtracaoLinkService
             // não começa outra consulta se o prazo já acabou
             self::tempoRestante($limiteNs, $limiteConsultaNs);
 
-            // usa IPv4 e fixa o IP aprovado no cURL depois de conferir se todos são públicos
-            $ips = gethostbynamel($host);
+            // resolve com prazo no serviço local e fixa o IP aprovado no cURL
+            $ips = ResolverDominioService::resolver(
+                $host,
+                $limiteNs,
+                $limiteConsultaNs
+            );
 
             $restanteMs = self::tempoRestante($limiteNs, $limiteConsultaNs);
 
@@ -1076,6 +1080,7 @@ final class ExtracaoLinkService
         string $videoId,
         int $limiteNs
     ): ?array {
+        $ips = ResolverDominioService::resolver('www.youtube.com', $limiteNs);
         $restanteMs = self::tempoRestante($limiteNs);
 
         $videoUrl = 'https://www.youtube.com/watch?v=' . $videoId;
@@ -1099,6 +1104,9 @@ final class ExtracaoLinkService
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
+            CURLOPT_RESOLVE => [
+                'www.youtube.com:443:' . implode(',', $ips),
+            ],
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
             CURLOPT_WRITEFUNCTION =>
                 static function ($curl, string $trecho) use (&$corpo): int {

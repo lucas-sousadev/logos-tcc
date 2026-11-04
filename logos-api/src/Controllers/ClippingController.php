@@ -9,6 +9,7 @@ use Logos\AssessoriaApi\Services\ClippingCsvService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoCsv;
 use Logos\AssessoriaApi\Services\ExtracaoLinkService;
+use Logos\AssessoriaApi\Exceptions\ConsultaLinkIndisponivelException;
 
 class ClippingController
 {
@@ -84,6 +85,11 @@ class ClippingController
                 ],
                 $status
             );
+        } catch (ConsultaLinkIndisponivelException $e) {
+            $this->responder([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 503);
         } catch (\OutOfBoundsException $e) {
             $this->responder(
                 [

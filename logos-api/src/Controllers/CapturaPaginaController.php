@@ -87,6 +87,10 @@ final class CapturaPaginaController
                     'X-Captura-Aviso: ' .
                     ($resultado['aviso'] ?? '')
                 );
+                header(
+                    'X-Captura-Limite-Trechos: ' .
+                    (!empty($resultado['limite_trechos']) ? '1' : '0')
+                );
                 echo $resultado['imagem'];
 
                 return;

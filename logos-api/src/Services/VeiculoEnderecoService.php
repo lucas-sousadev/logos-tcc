@@ -43,6 +43,70 @@ class VeiculoEnderecoService
         int $veiculoId,
         array $dados
     ): array {
+        $db = Connection::get();
+        $transacaoPropria = !$db->inTransaction();
+
+        if ($transacaoPropria) {
+            $db->beginTransaction();
+        }
+
+        try {
+            // trava o veículo pra duas inclusões não passarem juntas do limite
+            self::bloquearVersao($assessoriaId, $veiculoId);
+            self::conferirLimiteEnderecos($assessoriaId, $veiculoId);
+
+            $endereco = self::inserirEndereco(
+                $assessoriaId,
+                $veiculoId,
+                $dados
+            );
+
+            if ($transacaoPropria) {
+                $db->commit();
+            }
+
+            return $endereco;
+        } catch (\Throwable $erro) {
+            if ($transacaoPropria && $db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $erro;
+        }
+    }
+
+    private static function conferirLimiteEnderecos(
+        int $assessoriaId,
+        int $veiculoId
+    ): void {
+        $stmt = Connection::get()->prepare("
+            SELECT id
+            FROM veiculo_enderecos
+            WHERE assessoria_id = :assessoria_id
+            AND veiculo_id = :veiculo_id
+            ORDER BY id
+            LIMIT 20
+            FOR UPDATE
+        ");
+
+        $stmt->execute([
+            'assessoria_id' => $assessoriaId,
+            'veiculo_id' => $veiculoId,
+        ]);
+
+        if (count($stmt->fetchAll(PDO::FETCH_COLUMN)) >= 20) {
+            throw new DomainException(
+                'Este veículo já possui 20 endereços. ' .
+                'Remova um endereço antes de adicionar ou transferir outro.'
+            );
+        }
+    }
+
+    private static function inserirEndereco(
+        int $assessoriaId,
+        int $veiculoId,
+        array $dados
+    ): array {
         self::verificarVeiculo($assessoriaId, $veiculoId);
 
         $hostInformado = $dados['host'] ?? null;
@@ -652,32 +716,10 @@ class VeiculoEnderecoService
 
             self::conferirEnderecoDoLink($endereco, $link);
 
-            // confere a lista atual com o destino bloqueado pra não passar de 20 endereços
-            $enderecosDestino = $db->prepare("
-                SELECT id
-                FROM veiculo_enderecos
-                WHERE assessoria_id = :assessoria_id
-                AND veiculo_id = :veiculo_id
-                ORDER BY id
-                LIMIT 20
-                FOR UPDATE
-            ");
-
-            $enderecosDestino->execute([
-                'assessoria_id' => $assessoriaId,
-                'veiculo_id' => $veiculoDestinoId,
-            ]);
-
-            if (
-                count(
-                    $enderecosDestino->fetchAll(PDO::FETCH_COLUMN)
-                ) >= 20
-            ) {
-                throw new DomainException(
-                    'Este veículo já possui 20 endereços. ' .
-                    'Remova um endereço do cadastro dele antes de transferir esta associação.'
-                );
-            }
+            self::conferirLimiteEnderecos(
+                $assessoriaId,
+                $veiculoDestinoId
+            );
             
             // muda só o dono desse endereço e mantém domínio, seção e demais opções
             $alterar = $db->prepare("
@@ -889,4 +931,4 @@ class VeiculoEnderecoService
             throw $e;
         }
     }
-} 
+}
