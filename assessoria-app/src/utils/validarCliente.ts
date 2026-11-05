@@ -117,20 +117,23 @@ function siteValido(site: string): boolean {
   }
 }
 
+export function validarNomeCliente(nome: string): string | undefined {
+  if (!nome.trim()) {
+    return "Informe o nome do cliente.";
+  }
+
+  if (excede(nome, MAX_NOME_CLIENTE)) {
+    return `O nome do cliente deve possuir no máximo ${MAX_NOME_CLIENTE} caracteres.`;
+  }
+}
+
 export function validarFormularioCliente(
   dados: DadosClienteParaValidacao
 ): ErrosCliente {
   const erros: ErrosCliente = {};
 
-  if (!dados.nome.trim()) {
-    erros.nome = "Informe o nome do cliente.";
-  } else if (
-    excede(dados.nome, MAX_NOME_CLIENTE)
-  ) {
-    erros.nome =
-      `O nome do cliente deve possuir no máximo ` +
-      `${MAX_NOME_CLIENTE} caracteres.`;
-  }
+  const erroNome = validarNomeCliente(dados.nome);
+  if (erroNome) erros.nome = erroNome;
 
   const email = dados.email.trim();
 

@@ -93,90 +93,96 @@ export default function Clipping() {
     });
   }
 
+    const podeCriar = temPermissao("CLIPPING", "CRIAR");
+  const podeImportar = temPermissao("CLIPPING", "IMPORTAR");
+
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Header title="Clipping" />
 
       {carregando ? (
         <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.textoTerciaria}
-          />
+          <ActivityIndicator size="large" color={theme.textoTerciaria} />
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.conteudo}
           refreshControl={
-          <RefreshControl
-            refreshing={atualizando}
-            onRefresh={() => void carregarAnos()}
-            tintColor={theme.textoTerciaria}
-            colors={[theme.textoTerciaria]}
-          />
-        }
+            <RefreshControl
+              refreshing={atualizando}
+              onRefresh={() => void carregarAnos()}
+              tintColor={theme.textoTerciaria}
+              colors={[theme.textoTerciaria]}
+            />
+          }
         >
-          <View style={styles.headerRow}>
-            <View style={styles.headerInfo}>
-
-              <Text
-                style={[
-                  styles.subtitle,
-                  { color: theme.textoSub },
-                ]}
-              >
-                Escolha o ano para acessar os clientes e publicações.
-              </Text>
-            </View>
-
-          </View>
-          
-          <View style={styles.acoesContainer}>
-            {temPermissao("CLIPPING", "CRIAR") ? (
-                <Button
-                  title="NOVO CLIPPING"
-                  size="small"
+          {podeCriar || podeImportar ? (
+            <View style={styles.acoes}>
+              {podeCriar ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  activeOpacity={0.8}
                   onPress={novoClipping}
-                  style={styles.newButton}
-                />
-            ) : null}
-              {temPermissao("CLIPPING", "IMPORTAR") ? (
-              <Button
-                title="IMPORTAR CSV"
-                variant="outline"
-                size="small"
-                onPress={importarCsv}
-                style={styles.importButton}
-              />
-            ) : null}
+                  style={[
+                    styles.botaoAcao,
+                    { backgroundColor: theme.primaria },
+                  ]}
+                >
+                  <Ionicons name="add-outline" size={16} color={theme.branco} />
+                  <Text
+                    weight="SemiBold"
+                    style={[styles.textoBotaoAcao, { color: theme.branco }]}
+                  >
+                    NOVO CLIPPING
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {podeImportar ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  activeOpacity={0.8}
+                  onPress={importarCsv}
+                  style={[
+                    styles.botaoAcao,
+                    { backgroundColor: theme.primaria },
+                  ]}
+                >
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={15}
+                    color={theme.branco}
+                  />
+                  <Text
+                    weight="SemiBold"
+                    style={[styles.textoBotaoAcao, { color: theme.branco }]}
+                  >
+                    IMPORTAR CSV
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.cabecalhoAnos}>
+            <Text weight="Bold" style={styles.tituloAnos}>
+              Anos de referência
+            </Text>
+            <Text style={[styles.descricaoAnos, { color: theme.textoSub }]}>
+              Selecione um ano para ver seus clientes e publicações.
+            </Text>
           </View>
 
           {erro ? (
-            <View
-              style={[
-                styles.errorBox,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={24}
-                color="#EF4444"
-              />
-
-              <Text style={styles.errorText}>
+            <View style={[styles.mensagem, { borderColor: theme.borda }]}>
+              <Ionicons name="alert-circle-outline" size={22} color={theme.erro} />
+              <Text
+                accessibilityRole="alert"
+                style={[styles.textoMensagem, { color: theme.erro }]}
+              >
                 {erro}
               </Text>
-
               <Button
                 title="TENTAR NOVAMENTE"
                 size="small"
@@ -185,124 +191,134 @@ export default function Clipping() {
             </View>
           ) : null}
 
-          {anos.map((item) => (
-            <TouchableOpacity
-              key={item.ano_referencia}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityHint="Abrir os clientes e publicações deste ano"
-              onPress={() => abrirAno(item.ano_referencia)}
-              style={[
-                styles.yearCard,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            >
-              <View style={styles.yearHeader}>
-                <Text
-                  weight="Bold"
-                  style={[styles.yearText, {color: theme.textoTerciaria}]}
-                >
-                  {item.ano_referencia}
-                </Text>
+          <View style={styles.listaAnos}>
+            {anos.map((item) => {
+              const atual = item.ano_referencia === anoAtual;
+              const publicacoes = item.total_clippings.toLocaleString("pt-BR");
+              const clientes = item.total_clientes.toLocaleString("pt-BR");
+              const rotuloPublicacoes =
+                item.total_clippings === 1 ? "publicação" : "publicações";
+              const rotuloClientes =
+                item.total_clientes === 1 ? "cliente" : "clientes";
 
-                <View style={styles.yearHeaderRight}>
-                  {item.ano_referencia === anoAtual ? (
-                    <Text
-                      weight="SemiBold"
+              const indicadores = [
+                {
+                  icone: "document-text-outline",
+                  total: publicacoes,
+                  rotulo: rotuloPublicacoes,
+                },
+                {
+                  icone: "people-outline",
+                  total: clientes,
+                  rotulo: rotuloClientes,
+                },
+              ] as const;
+
+              return (
+                <TouchableOpacity
+                  key={item.ano_referencia}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    `${item.ano_referencia}${atual ? ", ano atual" : ""}. ` +
+                    `${publicacoes} ${rotuloPublicacoes}. ` +
+                    `${clientes} ${rotuloClientes} com publicações.`
+                  }
+                  accessibilityHint="Abrir os clientes e publicações deste ano"
+                  activeOpacity={0.8}
+                  onPress={() => abrirAno(item.ano_referencia)}
+                  style={[
+                    styles.cartaoAno,
+                    {
+                      borderColor: atual ? theme.borda : theme.borda + "66",
+                      backgroundColor: atual
+                        ? theme.primaria + "0F"
+                        : theme.backgroundSecundario,
+                    },
+                  ]}
+                >
+                  <View style={styles.topoAno}>
+                    <View
                       style={[
-                        styles.yearBadge,
-                        {
-                          color: theme.textoTerciaria,
-                          backgroundColor: theme.borda + "18",
-                        },
+                        styles.iconeAno,
+                        { backgroundColor: theme.primaria + "1A" },
                       ]}
                     >
-                      Ano atual
+                      <Ionicons
+                        name="calendar-outline"
+                        size={17}
+                        color={theme.textoTerciaria}
+                      />
+                    </View>
+
+                    <Text
+                      weight="Bold"
+                      style={[
+                        styles.ano,
+                        { color: atual ? theme.textoTerciaria : theme.texto },
+                      ]}
+                    >
+                      {item.ano_referencia}
                     </Text>
-                  ) : null}
 
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={theme.textoSub}
-                    accessible={false}
-                  />
-                </View>
-              </View>
+                    {atual ? (
+                      <Text
+                        weight="SemiBold"
+                        style={[
+                          styles.selo,
+                          {
+                            color: theme.textoTerciaria,
+                            backgroundColor: theme.primaria + "1A",
+                          },
+                        ]}
+                      >
+                        Ano atual
+                      </Text>
+                    ) : null}
 
-              <View
-                style={[
-                  styles.yearStats,
-                  { borderTopColor: theme.borda + "40" },
-                ]}
-              >
-                <View style={styles.yearStat}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.yearStatNumber}
-                  >
-                    {item.total_clippings.toLocaleString("pt-BR")}
-                  </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={17}
+                      color={theme.textoSub}
+                    />
+                  </View>
 
-                  <Text
+                  <View
                     style={[
-                      styles.yearStatLabel,
-                      { color: theme.textoSub },
+                      styles.resumo,
+                      { borderTopColor: theme.borda + "40" },
                     ]}
                   >
-                    {item.total_clippings === 1
-                      ? "publicação"
-                      : "publicações"}
-                  </Text>
-                </View>
+                    {indicadores.map(({ icone, total, rotulo }) => (
+                      <View key={icone} style={styles.indicador}>
+                        <Ionicons
+                          name={icone}
+                          size={14}
+                          color={theme.textoTerciaria}
+                        />
+                        <Text weight="SemiBold" style={styles.total}>
+                          {total}
+                        </Text>
+                        <Text
+                          style={[styles.rotuloTotal, { color: theme.textoSub }]}
+                        >
+                          {rotulo}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
 
-                <View style={styles.yearStat}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.yearStatNumber}
-                  >
-                    {item.total_clientes.toLocaleString("pt-BR")}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.yearStatLabel,
-                      { color: theme.textoSub },
-                    ]}
-                  >
-                    {item.total_clientes === 1
-                      ? "cliente com publicações"
-                      : "clientes com publicações"}
-                  </Text>
-                </View>
+            {!erro && anos.length === 0 ? (
+              <View style={[styles.mensagem, { borderColor: theme.borda }]}>
+                <Text weight="SemiBold">Nenhum ano disponível</Text>
+                <Text style={[styles.textoMensagem, { color: theme.textoSub }]}>
+                  Os anos aparecem aqui conforme as publicações são cadastradas.
+                </Text>
               </View>
-            </TouchableOpacity>
-          ))}
-
-          {!erro && anos.length === 0 ? (
-            <View
-              style={[
-                styles.empty,
-                { borderColor: theme.borda },
-              ]}
-            >
-              <Text weight="SemiBold">
-                Nenhum ano disponível
-              </Text>
-
-              <Text
-                style={[
-                  styles.emptyText,
-                  { color: theme.textoSub },
-                ]}
-              >
-                Crie o primeiro clipping para iniciar o agrupamento.
-              </Text>
-            </View>
-          ) : null}
+            ) : null}
+          </View>
         </ScrollView>
       )}
     </View>
@@ -313,143 +329,110 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
-  content: {
+  conteudo: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 32,
+    gap: 14,
   },
-
   loading: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  headerRow: {
+  acoes: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  botaoAcao: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
+    justifyContent: "center",
+    gap: 4,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
-
-  headerInfo: {
-    flex: 1,
+  textoBotaoAcao: {
+    flexShrink: 1,
+    fontSize: 10,
+    textAlign: "center",
   },
-
-  title: {
-    fontSize: 19,
+  cabecalhoAnos: {
+    gap: 4,
   },
-
-  subtitle: {
+  tituloAnos: {
+    fontSize: 15,
+  },
+  descricaoAnos: {
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 5,
   },
-
-  acoesContainer:{
+  listaAnos: {
     gap: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 20
   },
-  newButton: {
-    width: 130,
-    borderRadius: 12,
-    padding: 10
+  cartaoAno: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 9,
   },
-
-  importButton: {
-    width: 130,
-    borderRadius: 12,
-    padding: 10
-  },
-
-  yearCard: {
-    minHeight: 150,
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-  },
-
-  yearHeader: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    columnGap: 12,
-    rowGap: 8,
-  },
-
-  yearHeaderRight: {
+  topoAno: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-
-  yearText: {
-    fontSize: 28,
-    lineHeight: 34,
+  iconeAno: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
-
-  yearBadge: {
-    fontSize: 11,
-    lineHeight: 16,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-
-  yearStats: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 12,
-    paddingTop: 12,
-  },
-
-  yearStat: {
+  ano: {
     flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-
-  yearStatNumber: {
     fontSize: 22,
     lineHeight: 28,
   },
-
-  yearStatLabel: {
-    fontSize: 12,
-    lineHeight: 18,
+  selo: {
+    fontSize: 10,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-
-  empty: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 24,
+  resumo: {
+    flexDirection: "row",
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 9,
+  },
+  indicador: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
+    columnGap: 5,
+    rowGap: 2,
   },
-
-  emptyText: {
+  total: {
+    fontSize: 13,
+  },
+  rotuloTotal: {
+    fontSize: 11,
+  },
+  mensagem: {
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+  },
+  textoMensagem: {
     fontSize: 12,
     textAlign: "center",
-    marginTop: 7,
-  },
-
-  errorBox: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 18,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  errorText: {
-    fontSize: 12,
-    textAlign: "center",
-    marginVertical: 10,
   },
 });

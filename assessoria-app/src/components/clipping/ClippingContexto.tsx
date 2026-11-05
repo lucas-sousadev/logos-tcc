@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,6 +9,7 @@ import {
   Pressable,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,10 +20,21 @@ import Input from "@/components/ui/Input";
 import SearchBar from "@/components/ui/SearchBar";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   listarClientesDoAno,
   type ClienteClippingAno,
 } from "@/services/api/clipping";
+import { criarCliente } from "@/services/api/cliente";
+import {
+  MAX_CNPJ_CLIENTE,
+  MAX_EMAIL_CLIENTE,
+  MAX_NOME_CLIENTE,
+  MAX_TELEFONE_CLIENTE,
+  validarFormularioCliente,
+  type DadosClienteParaValidacao,
+  type ErrosCliente,
+} from "@/utils/validarCliente";
 
 type ClienteDoSeletor = Pick<
   ClienteClippingAno,
@@ -373,6 +385,11 @@ function PainelAno({
   );
 }
 
+type DadosCadastroRapido = Pick<
+  DadosClienteParaValidacao,
+  "nome" | "cnpj" | "email" | "telefone"
+>;
+
 function PainelClientes({
   ano,
   selecionado,
@@ -387,6 +404,14 @@ function PainelClientes({
   onSelecionar: (cliente: ClienteDoSeletor) => void;
 }) {
   const { theme } = useTheme();
+  const { temPermissao } = useAuth();
+  const podeCriar = temPermissao("CLIENTES", "CRIAR");
+
+  const travaCadastro = useRef(false);
+  const [cadastro, setCadastro] = useState<DadosCadastroRapido | null>(null);
+  const [errosCadastro, setErrosCadastro] = useState<ErrosCliente>({});
+  const [erroCadastro, setErroCadastro] = useState("");
+  const [salvandoCadastro, setSalvandoCadastro] = useState(false);
 
   const [busca, setBusca] = useState("");
   const [consulta, setConsulta] = useState("");
@@ -482,6 +507,181 @@ function PainelClientes({
     setTentativa((atual) => atual + 1);
   }
 
+  function alterarCadastro(campo: keyof DadosCadastroRapido, valor: string) {
+    setCadastro((atual) => atual ? { ...atual, [campo]: valor } : atual);
+    setErrosCadastro((atual) => ({ ...atual, [campo]: undefined }));
+    setErroCadastro("");
+  }
+
+  function voltarParaBusca() {
+    if (travaCadastro.current) return;
+
+    Keyboard.dismiss();
+    setCadastro(null);
+    setErrosCadastro({});
+    setErroCadastro("");
+  }
+
+  async function cadastrarCliente() {
+    if (!podeCriar || !cadastro || travaCadastro.current) return;
+
+    const dados = {
+      nome: cadastro.nome.trim(),
+      cnpj: cadastro.cnpj.trim(),
+      email: cadastro.email.trim(),
+      telefone: cadastro.telefone.trim(),
+      site: "",
+      cidade: "",
+      estado: "",
+      descricao: "",
+      segmento: "",
+      responsavel: "",
+    };
+
+    const erros = validarFormularioCliente(dados);
+    setErrosCadastro(erros);
+    setErroCadastro("");
+
+    if (Object.keys(erros).length > 0) return;
+
+    travaCadastro.current = true;
+    setSalvandoCadastro(true);
+    Keyboard.dismiss();
+
+    let cliente: ClienteDoSeletor;
+
+    try {
+      cliente = await criarCliente({ ...dados, ativo: true });
+    } catch (error) {
+      setErroCadastro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível cadastrar o cliente."
+      );
+      return;
+    } finally {
+      travaCadastro.current = false;
+      setSalvandoCadastro(false);
+    }
+
+    onSelecionar(cliente);
+  }
+
+  if (cadastro) {
+    const cadastroBloqueado = salvandoCadastro || !podeCriar;
+
+    return (
+      <Painel title="Novo cliente" onClose={voltarParaBusca}>
+        <ScrollView
+          style={styles.formularioCadastro}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <Input
+            label="NOME DO CLIENTE"
+            value={cadastro.nome}
+            onChangeText={(texto) => alterarCadastro("nome", texto)}
+            placeholder="Informe o nome do cliente"
+            maxLength={MAX_NOME_CLIENTE}
+            autoCapitalize="words"
+            editable={!cadastroBloqueado}
+            error={errosCadastro.nome}
+          />
+
+          <Input
+            label="CNPJ (OPCIONAL)"
+            value={cadastro.cnpj}
+            onChangeText={(texto) => alterarCadastro("cnpj", texto)}
+            placeholder="Ex.: 12.345.678/0001-95"
+            maxLength={MAX_CNPJ_CLIENTE}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!cadastroBloqueado}
+            error={errosCadastro.cnpj}
+          />
+
+          <Input
+            label="E-MAIL (OPCIONAL)"
+            value={cadastro.email}
+            onChangeText={(texto) => alterarCadastro("email", texto)}
+            placeholder="contato@cliente.com.br"
+            maxLength={MAX_EMAIL_CLIENTE}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!cadastroBloqueado}
+            error={errosCadastro.email}
+          />
+
+          <Input
+            label="TELEFONE (OPCIONAL)"
+            value={cadastro.telefone}
+            onChangeText={(texto) => alterarCadastro("telefone", texto)}
+            placeholder="Ex.: (11) 99999-9999"
+            maxLength={MAX_TELEFONE_CLIENTE}
+            keyboardType="phone-pad"
+            editable={!cadastroBloqueado}
+            error={errosCadastro.telefone}
+            onSubmitEditing={() => void cadastrarCliente()}
+          />
+        </ScrollView>
+
+        {erroCadastro ? (
+          <Text accessibilityRole="alert" style={styles.erro}>
+            {erroCadastro}
+          </Text>
+        ) : null}
+
+        <View style={styles.acoesCadastro}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Voltar à busca"
+            disabled={salvandoCadastro}
+            onPress={voltarParaBusca}
+            style={[
+              styles.botaoCadastro,
+              {
+                backgroundColor: theme.primaria,
+                opacity: salvandoCadastro ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="arrow-back-outline" size={15} color={theme.branco} />
+            <Text
+              weight="SemiBold"
+              style={[styles.textoBotaoCadastro, { color: theme.branco }]}
+            >
+              VOLTAR À BUSCA
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Cadastrar e selecionar cliente"
+            disabled={cadastroBloqueado}
+            onPress={() => void cadastrarCliente()}
+            style={[
+              styles.botaoCadastro,
+              { backgroundColor: theme.primaria, opacity: !podeCriar ? 0.5 : 1 },
+            ]}
+          >
+            {salvandoCadastro ? (
+              <ActivityIndicator size="small" color={theme.branco} />
+            ) : (
+              <Ionicons name="checkmark-outline" size={15} color={theme.branco} />
+            )}
+            <Text
+              weight="SemiBold"
+              style={[styles.textoBotaoCadastro, { color: theme.branco }]}
+            >
+              {salvandoCadastro ? "CADASTRANDO..." : "CADASTRAR"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Painel>
+    );
+  }
+
   return (
     <Painel title="Selecionar cliente" lista onClose={onClose}>
       <SearchBar
@@ -491,7 +691,26 @@ function PainelClientes({
         onClear={() => pesquisar("")}
         placeholder="Buscar cliente..."
       />
-
+      {podeCriar ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => {
+            Keyboard.dismiss();
+            setCadastro({
+              nome: busca.trim(),
+              cnpj: "",
+              email: "",
+              telefone: "",
+            });
+          }}
+          style={styles.atalhoCadastro}
+        >
+          <Ionicons name="person-add-outline" size={16} color={theme.textoTerciaria} />
+          <Text weight="SemiBold" style={{ color: theme.textoTerciaria, fontSize: 13 }}>
+            Cadastro rápido de cliente
+          </Text>
+        </TouchableOpacity>
+      ) : null}
       <FlatList
         style={styles.lista}
         data={clientes}
@@ -654,6 +873,40 @@ const styles = StyleSheet.create({
   },
   painelLista: {
     height: "75%",
+  },
+  atalhoCadastro: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+    marginTop: -6,
+  },
+  formularioCadastro: {
+    flexShrink: 1,
+  },
+  acoesCadastro: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  botaoCadastro: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  textoBotaoCadastro: {
+    flexShrink: 1,
+    fontSize: 10,
+    textAlign: "center",
   },
   cabecalho: {
     flexDirection: "row",

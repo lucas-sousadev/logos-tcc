@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
   Platform,
+  Image,
   ActivityIndicator
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,9 +18,13 @@ import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import RelatorioSlideVisual from "@/components/relatorios/RelatorioSlideVisual";
 import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
+import ClippingImagePreview from "@/components/clipping/ClippingImagePreview";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { criarEnvioMidiaSlide } from "@/services/api/envioMidiaSlide";
+import RelatorioSlideCampoMidia, {
+  type EstadoMidia,
+} from "@/components/relatorios/RelatorioSlideCampoMidia";
 import {
   atualizarSlideRelatorio,
   enviarMidiaSlideRelatorio,
@@ -27,6 +32,7 @@ import {
   type DadosEdicaoSlide,
   type SlideRelatorio,
 } from "@/services/api/relatorio";
+import { obterUrlLogoVeiculo } from "@/services/api/veiculo";
 import {
   dataBRParaISO,
   dataISOParaBR,
@@ -39,7 +45,6 @@ interface Props {
   onSaved: () => void;
 }
 
-type EstadoMidia = "manter" | "remover" | "trocar";
 
 type ArquivoImagemRascunho = ArquivoMidiaSlide & {
   geradoPelaCaptura?: boolean;
@@ -84,6 +89,10 @@ export default function RelatorioSlideEdicaoModal({
       ),
     [slide.relatorio_id, slide.id]
   );
+  type MidiaAmpliada = { titulo: string } & (
+    { uri: string } | { endpoint: string }
+  );
+  const [midiaAmpliada, setMidiaAmpliada] = useState<MidiaAmpliada | null>(null);
   const [capturaAberta, setCapturaAberta] = useState(false);
   const podeCapturarPagina =
     /^https?:\/\/\S+$/i.test(link.trim());
@@ -121,8 +130,6 @@ export default function RelatorioSlideEdicaoModal({
   }
 
   const dataISO = data.trim() ? dataBRParaISO(data) : null;
-  const imagemDefinida = estadoImagem === "manter" ? imagemAtual : estadoImagem === "trocar";
-  const logoDefinida = estadoLogo === "manter" ? logoAtual : estadoLogo === "trocar";
 
   const previa: SlideRelatorio = {
     ...slide,
@@ -156,6 +163,42 @@ export default function RelatorioSlideEdicaoModal({
       },
     },
   };
+
+  function ampliarMidia(tipo: "imagem" | "logo") {
+    const imagem = tipo === "imagem";
+    const estado = imagem ? estadoImagem : estadoLogo;
+    const arquivo = imagem ? arquivoImagem : arquivoLogo;
+    const titulo = imagem ? "Imagem do slide" : "Logo do veículo";
+
+    if (estado === "trocar" && arquivo) {
+      setMidiaAmpliada({ titulo: arquivo.nome, uri: arquivo.uri });
+      return;
+    }
+
+    if (estado !== "manter") return;
+
+    const id = imagem ? slide.imagem_midia_id : slide.logo_midia_id;
+
+    if (id) {
+      setMidiaAmpliada({
+        titulo,
+        endpoint: `/relatorios/${slide.relatorio_id}/midias/${id}`,
+      });
+      return;
+    }
+
+    if (imagem && slide.clipping_id && slide.imagem_anexo_id) {
+      setMidiaAmpliada({
+        titulo,
+        endpoint: `/clippings/${slide.clipping_id}/anexos/${slide.imagem_anexo_id}/arquivo`,
+      });
+    }
+
+    if (!imagem) {
+      const uri = obterUrlLogoVeiculo(veiculo?.logo_path);
+      if (uri) setMidiaAmpliada({ titulo, uri });
+    }
+  }
 
   async function escolherMidia(tipo: "imagem" | "logo") {
     try {
@@ -271,7 +314,8 @@ export default function RelatorioSlideEdicaoModal({
       transparent
       animationType="slide"
       onRequestClose={() => {
-        if (capturaAberta) setCapturaAberta(false);
+        if (midiaAmpliada) setMidiaAmpliada(null);
+        else if (capturaAberta) setCapturaAberta(false);
         else if (!salvando) onClose();
       }}
     >
@@ -306,6 +350,9 @@ export default function RelatorioSlideEdicaoModal({
                 paddingBottom: Math.max(insets.bottom, 12),
               },
             ]}
+            pointerEvents={midiaAmpliada ? "none" : "auto"}
+            accessibilityElementsHidden={midiaAmpliada !== null}
+            importantForAccessibility={midiaAmpliada ? "no-hide-descendants" : "auto"}
           >
             <View style={[styles.cabecalho, { borderBottomColor: theme.borda }]}>
               <View>
@@ -353,124 +400,25 @@ export default function RelatorioSlideEdicaoModal({
                     {Math.max(0, 250 - pauta.length)} caracteres restantes
                   </Text>
                 ) : null}
-                <View style={styles.midia}>
-                  <View style={styles.linhaRotuloMidia}>
-                    <Text weight="Medium" style={styles.rotuloCampo}>
-                      IMAGEM DO SLIDE
-                    </Text>
-            
-                    {estadoImagem !== "manter" ? (
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Desfazer alteração da imagem do slide"
-                        disabled={salvando}
-                        activeOpacity={0.75}
-                        hitSlop={6}
-                        onPress={() => {
-                          setEstadoImagem("manter");
-                          setArquivoImagem(null);
-                        }}
-                        style={styles.desfazerNoRotulo}
-                      >
-                        <Ionicons
-                          name="arrow-undo-outline"
-                          size={14}
-                          color={theme.textoTerciaria}
-                        />
-                        <Text
-                          weight="SemiBold"
-                          style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
-                        >
-                          DESFAZER
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  <Text style={{ color: imagemDefinida ? theme.textoSecundaria : theme.textoSub }}>
-                    {estadoImagem === "trocar"
-                      ? arquivoImagem?.nome
-                      : imagemDefinida
-                        ? "Imagem definida"
-                        : "Sem imagem"}
-                  </Text>
-
-                  <View style={styles.acoesMidia}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Escolher imagem do slide"
-                      disabled={salvando}
-                      activeOpacity={0.8}
-                      onPress={() => void escolherMidia("imagem")}
-                      style={[
-                        styles.botaoMidia,
-                        {
-                          backgroundColor: theme.primaria,
-                          borderColor: theme.primaria,
-                          opacity: salvando ? 0.5 : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="image-outline" size={16} color={theme.branco} />
-                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
-                        ESCOLHER IMAGEM
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Remover imagem do slide"
-                      disabled={salvando || !imagemDefinida}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setEstadoImagem(imagemAtual ? "remover" : "manter");
-                        setArquivoImagem(null);
-                      }}
-                      style={[
-                        styles.botaoMidia,
-                        {
-                          backgroundColor: theme.erro,
-                          borderColor: theme.erro,
-                          opacity: salvando || !imagemDefinida ? 0.5 : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={theme.background} />
-                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
-                        REMOVER
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Capturar imagem da página"
-                    disabled={salvando || !podeCapturarPagina}
-                    onPress={() => setCapturaAberta(true)}
-                    style={[
-                      styles.botaoCapturaPagina,
-                      {
-                        borderColor: theme.borda,
-                        opacity:
-                          salvando || !podeCapturarPagina ? 0.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="image-outline"
-                      size={15}
-                      color={theme.textoTerciaria}
-                    />
-                    <Text
-                      weight="SemiBold"
-                      style={[
-                        styles.textoCapturaPagina,
-                        { color: theme.textoTerciaria },
-                      ]}
-                    >
-                      CAPTURAR IMAGEM DO LINK
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <RelatorioSlideCampoMidia
+                  tipo="imagem"
+                  estado={estadoImagem}
+                  temOriginal={imagemAtual}
+                  arquivo={arquivoImagem}
+                  disabled={salvando}
+                  onEscolher={() => void escolherMidia("imagem")}
+                  onAmpliar={() => ampliarMidia("imagem")}
+                  onRemover={() => {
+                    setEstadoImagem(imagemAtual ? "remover" : "manter");
+                    setArquivoImagem(null);
+                  }}
+                  onDesfazer={() => {
+                    setEstadoImagem("manter");
+                    setArquivoImagem(null);
+                  }}
+                  onCapturar={() => setCapturaAberta(true)}
+                  capturaDisponivel={podeCapturarPagina}
+                />
                 <Input
                   label="DATA DE PUBLICAÇÃO"
                   value={data}
@@ -525,95 +473,23 @@ export default function RelatorioSlideEdicaoModal({
                   containerStyle={styles.campo}
                   clearable
                 />
-                  <View style={styles.midia}>
-                  <View style={styles.linhaRotuloMidia}>
-                    <Text weight="Medium" style={styles.rotuloCampo}>
-                      LOGO DO VEÍCULO
-                    </Text>
-
-                    {estadoLogo !== "manter" ? (
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Desfazer alteração da logo do slide"
-                        disabled={salvando}
-                        activeOpacity={0.75}
-                        hitSlop={6}
-                        onPress={() => {
-                          setEstadoLogo("manter");
-                          setArquivoLogo(null);
-                        }}
-                        style={styles.desfazerNoRotulo}
-                      >
-                        <Ionicons
-                          name="arrow-undo-outline"
-                          size={14}
-                          color={theme.textoTerciaria}
-                        />
-                        <Text
-                          weight="SemiBold"
-                          style={[styles.textoDesfazerNoRotulo, { color: theme.textoTerciaria }]}
-                        >
-                          DESFAZER
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  <Text style={{ color: logoDefinida ? theme.textoSecundaria : theme.textoSub }}>
-                    {estadoLogo === "trocar"
-                      ? arquivoLogo?.nome
-                      : logoDefinida
-                        ? "Logo definida"
-                        : "Sem logo"}
-                  </Text>
-
-                  <View style={styles.acoesMidia}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Escolher logo do slide"
-                      disabled={salvando}
-                      activeOpacity={0.8}
-                      onPress={() => void escolherMidia("logo")}
-                      style={[
-                        styles.botaoMidia,
-                        {
-                          backgroundColor: theme.primaria,
-                          borderColor: theme.primaria,
-                          opacity: salvando ? 0.5 : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="image-outline" size={16} color={theme.branco} />
-                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.branco }]}>
-                        ESCOLHER LOGO
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Remover logo do slide"
-                      disabled={salvando || !logoDefinida}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setEstadoLogo(logoAtual ? "remover" : "manter");
-                        setArquivoLogo(null);
-                      }}
-                      style={[
-                        styles.botaoMidia,
-                        {
-                          backgroundColor: theme.erro,
-                          borderColor: theme.erro,
-                          opacity: salvando || !logoDefinida ? 0.5 : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={theme.background} />
-                      <Text weight="Bold" style={[styles.textoBotaoMidia, { color: theme.background }]}>
-                        REMOVER
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  <RelatorioSlideCampoMidia
+                    tipo="logo"
+                    estado={estadoLogo}
+                    temOriginal={logoAtual}
+                    arquivo={arquivoLogo}
+                    disabled={salvando}
+                    onEscolher={() => void escolherMidia("logo")}
+                    onAmpliar={() => ampliarMidia("logo")}
+                    onRemover={() => {
+                      setEstadoLogo(logoAtual ? "remover" : "manter");
+                      setArquivoLogo(null);
+                    }}
+                    onDesfazer={() => {
+                      setEstadoLogo("manter");
+                      setArquivoLogo(null);
+                    }}
+                  />
 
                 <Input 
                   label="DESCRIÇÃO" 
@@ -697,6 +573,55 @@ export default function RelatorioSlideEdicaoModal({
               </Text>
             </ScrollView>
           </View>
+          {midiaAmpliada ? (
+            <View
+              accessibilityViewIsModal
+              style={[
+                styles.painelMidia,
+                {
+                  backgroundColor: theme.background,
+                  paddingTop: insets.top,
+                  paddingBottom: Math.max(insets.bottom, 12),
+                },
+              ]}
+            >
+              <View style={[styles.cabecalho, { borderBottomColor: theme.borda }]}>
+                <Text
+                  weight="Bold"
+                  numberOfLines={1}
+                  style={[styles.titulo, styles.nomeMidia]}
+                >
+                  {midiaAmpliada.titulo}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Fechar visualização"
+                  onPress={() => setMidiaAmpliada(null)}
+                  style={styles.fechar}
+                >
+                  <Ionicons name="close" size={24} color={theme.texto} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.conteudoMidia}>
+                {"endpoint" in midiaAmpliada ? (
+                  <ClippingImagePreview
+                    endpoint={midiaAmpliada.endpoint}
+                    nome={midiaAmpliada.titulo}
+                    resizeMode="contain"
+                    style={styles.imagemAmpliada}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: midiaAmpliada.uri }}
+                    accessibilityLabel={midiaAmpliada.titulo}
+                    resizeMode="contain"
+                    style={styles.imagemAmpliada}
+                  />
+                )}
+              </View>
+            </View>
+          ) : null}
         </View>
       )}
     </Modal>
@@ -708,6 +633,23 @@ const styles = StyleSheet.create({
     flex: 1, 
     justifyContent: "flex-end", 
     backgroundColor: "rgba(0, 0, 0, 0.48)" 
+  },
+  painelMidia: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
+  },
+  nomeMidia: { 
+    flex: 1, 
+    marginRight: 12 
+  },
+  conteudoMidia: { 
+    flex: 1,
+    padding: 16 
+  },
+  imagemAmpliada: { 
+    width: "100%", 
+    height: "100%", 
+    borderRadius: 0 
   },
   container: { 
     maxHeight: "94%", 
@@ -744,22 +686,12 @@ const styles = StyleSheet.create({
   rotulo: { 
     fontSize: 11 
   },
-  rotuloCampo: { 
-    fontSize: 15 
-  },
   multilinha: {
     height: 92,
     minHeight: 92,
     paddingTop: 12,
     paddingBottom: 12,
     textAlignVertical: "top",
-  },
-  midia: { 
-    gap: 6 
-  },
-  acoesMidia: { 
-    flexDirection: "row", 
-    gap: 7 
   },
   botaoMidia: {
     flex: 1,
@@ -776,40 +708,9 @@ const styles = StyleSheet.create({
     fontSize: 11, 
     textAlign: "center" 
   },
-  botaoCapturaPagina: {
-    alignSelf: "flex-start",
-    minHeight: 35,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginTop: 5,
-  },
-  textoCapturaPagina: {
-    fontSize: 11,
-  },
   acoes: {
   flexDirection: "row",
     gap: 7,
     marginTop: 4,
-  },
-  linhaRotuloMidia: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  desfazerNoRotulo: {
-    minHeight: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingLeft: 6,
-  },
-  textoDesfazerNoRotulo: {
-    fontSize: 10,
   },
 });

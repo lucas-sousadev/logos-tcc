@@ -89,8 +89,9 @@ export default function RelatorioSlidePreview({
   const [erroLink, setErroLink] = useState("");
   const [mostrarMateriaNova, setMostrarMateriaNova] = useState(false);
   const [mostrarVeiculoNovo, setMostrarVeiculoNovo] = useState(false);
-  const [confirmacao, setConfirmacao] = useState<"ALTERAR" | "IGNORAR" | null>(null);
-  
+  const [confirmacao, setConfirmacao] = useState<
+    "INCLUIR" | "ALTERAR" | "IGNORAR" | null
+  >(null);  
   const podeVerClipping = temPermissao(
     "CLIPPING",
     "VISUALIZAR"
@@ -909,13 +910,7 @@ export default function RelatorioSlidePreview({
                       }
                       accessibilityState={{ disabled: revisando }}
                       disabled={revisando}
-                      onPress={() => {
-                        if (slide.revisao_pendente) {
-                          onDecidir("INCLUIR");
-                        } else {
-                          setConfirmacao("ALTERAR");
-                        }
-                      }}
+                      onPress={() => setConfirmacao(slide.revisao_pendente ? "INCLUIR" : "ALTERAR")}
                       style={[
                         styles.slideRevisaoBotao,
                         {
@@ -976,25 +971,30 @@ export default function RelatorioSlidePreview({
           visible={confirmacao !== null}
           variant="warning"
           title={
-            confirmacao === "ALTERAR"
-              ? "Atualizar este slide?"
-              : slide.revisao_pendente
-                ? "Ignorar novo slide?"
-                : "Ignorar alterações?"
+            confirmacao === "INCLUIR"
+              ? "Incluir este slide?"
+              : confirmacao === "ALTERAR"
+                ? "Atualizar este slide?"
+                : slide.revisao_pendente
+                  ? "Ignorar novo slide?"
+                  : "Ignorar alterações?"
           }
           message={
-            confirmacao === "ALTERAR"
-              ? slide.revisao_veiculo_pendente &&
-                slide.revisao_clipping_pendente
-                ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
-                : slide.revisao_veiculo_pendente
-                  ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
-                  : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
-              : slide.revisao_pendente
-                ? "Este slide será removido do relatório e a matéria não será incluída novamente de forma automática."
-                : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
+            confirmacao === "INCLUIR"
+              ? "A matéria será incluída no relatório com os dados atuais do clipping e do veículo."
+              : confirmacao === "ALTERAR"
+                ? slide.revisao_veiculo_pendente && slide.revisao_clipping_pendente
+                  ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
+                  : slide.revisao_veiculo_pendente
+                    ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+                    : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+                : slide.revisao_pendente
+                  ? "Este slide será removido do relatório e a matéria não será incluída novamente de forma automática."
+                  : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
           }
-          primaryLabel={confirmacao === "ALTERAR" ? "ATUALIZAR" : "IGNORAR"}
+          primaryLabel={
+            confirmacao === "ALTERAR" ? "ATUALIZAR" : confirmacao ?? "INCLUIR"
+          }
           secondaryLabel="CANCELAR"
           primaryDanger={
             confirmacao === "IGNORAR" && Boolean(slide.revisao_pendente)
@@ -1006,8 +1006,11 @@ export default function RelatorioSlidePreview({
             const decisao = confirmacao;
             setConfirmacao(null);
 
-            if (decisao === "ALTERAR") onDecidir("ALTERAR");
-            if (decisao === "IGNORAR") onIgnorar();
+            if (decisao === "IGNORAR") {
+              onIgnorar();
+            } else if (decisao) {
+              onDecidir(decisao);
+            }
           }}
         />
       </View>

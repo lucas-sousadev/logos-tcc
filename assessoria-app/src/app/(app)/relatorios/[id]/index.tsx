@@ -437,7 +437,7 @@ export default function DetalheRelatorio() {
   const slideReabrirId = useRef<number | null>(null);
   const [slideDecidindoId, setSlideDecidindoId] = useState<number | null>(null);
   const [slideParaIgnorar, setSlideParaIgnorar] = useState<SlideRelatorio | null>(null);
-  const [slideParaAtualizar, setSlideParaAtualizar] = useState<SlideRelatorio | null>(null);
+  const [slideParaValidar, setSlideParaValidar] = useState<SlideRelatorio | null>(null);
   const [erroSlide, setErroSlide] = useState<{
     id: number;
     mensagem: string;
@@ -871,7 +871,7 @@ export default function DetalheRelatorio() {
     if (!relatorio || slideDecidindoId !== null) return;
 
     if (!slide.revisao_token) {
-      setSlideParaAtualizar(null);
+      setSlideParaValidar(null);
       setSlideParaIgnorar(null);
       setErroSlide({
         id: slide.id,
@@ -891,7 +891,7 @@ export default function DetalheRelatorio() {
         slide.revisao_token
       );
 
-      setSlideParaAtualizar(null);
+      setSlideParaValidar(null);
       setSlideParaIgnorar(null);
 
       if (resultado.removido) {
@@ -933,7 +933,7 @@ export default function DetalheRelatorio() {
 
       recarregarAposRevisao(resultado.removido);
     } catch (error) {
-      setSlideParaAtualizar(null);
+      setSlideParaValidar(null);
       setSlideParaIgnorar(null);
       setErroSlide({
         id: slide.id,
@@ -947,29 +947,32 @@ export default function DetalheRelatorio() {
     }
   }
 
-function pedirParaIgnorar(slide: SlideRelatorio) {
-  setErroSlide(null);
+  function pedirParaIgnorar(slide: SlideRelatorio) {
+    setErroSlide(null);
 
-  if (slideAberto?.id === slide.id) {
-    setSlideAberto(null);
-    setTimeout(() => setSlideParaIgnorar(slide), 300);
-    return;
+    if (slideAberto?.id === slide.id) {
+      setSlideAberto(null);
+      setTimeout(() => setSlideParaIgnorar(slide), 300);
+      return;
+    }
+
+    setSlideParaIgnorar(slide);
   }
 
-  setSlideParaIgnorar(slide);
-}
+  function pedirParaValidar(slide: SlideRelatorio) {
+    setErroSlide(null);
 
-function pedirParaAtualizar(slide: SlideRelatorio) {
-  setErroSlide(null);
+    if (slideAberto?.id === slide.id) {
+      setSlideAberto(null);
+      setTimeout(() => setSlideParaValidar(slide), 300);
+      return;
+    }
 
-  if (slideAberto?.id === slide.id) {
-    setSlideAberto(null);
-    setTimeout(() => setSlideParaAtualizar(slide), 300);
-    return;
+    setSlideParaValidar(slide);
   }
 
-  setSlideParaAtualizar(slide);
-}
+  const incluindoSlide = Boolean(slideParaValidar?.revisao_pendente);
+  
   return (
     <View
       style={[
@@ -1752,13 +1755,7 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
                         ? abrirMoverSlide(slide)
                         : setSlideAberto(slide)
                     }
-                    onDecidir={() => {
-                      if (slide.revisao_pendente) {
-                        void decidirSlide(slide, "INCLUIR");
-                      } else {
-                        pedirParaAtualizar(slide);
-                      }
-                    }}
+                    onDecidir={() => pedirParaValidar(slide)}
                     onIgnorar={() => pedirParaIgnorar(slide)}
                     decidindo={slideDecidindoId === slide.id}
                     podeEditar={temPermissao("RELATORIOS", "EDITAR")}
@@ -1879,30 +1876,31 @@ function pedirParaAtualizar(slide: SlideRelatorio) {
       ) : null}
       
       <FeedbackAlert
-        visible={slideParaAtualizar !== null}
+        visible={slideParaValidar !== null}
         variant="warning"
-        title="Atualizar este slide?"
+        title={incluindoSlide ? "Incluir este slide?" : "Atualizar este slide?"}
         message={
-          slideParaAtualizar?.revisao_veiculo_pendente &&
-          slideParaAtualizar?.revisao_clipping_pendente
-            ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
-            : slideParaAtualizar?.revisao_veiculo_pendente
-              ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
-              : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+          incluindoSlide
+            ? "A matéria será incluída no relatório com os dados atuais do clipping e do veículo."
+            : slideParaValidar?.revisao_veiculo_pendente &&
+                slideParaValidar?.revisao_clipping_pendente
+              ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
+              : slideParaValidar?.revisao_veiculo_pendente
+                ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
+                : "Os campos alterados no clipping atualizarão este slide. Edições individuais dos demais campos serão mantidas."
         }
-        primaryLabel="ATUALIZAR"
+        primaryLabel={incluindoSlide ? "INCLUIR" : "ATUALIZAR"}
         secondaryLabel="CANCELAR"
-        loading={slideDecidindoId === slideParaAtualizar?.id}
+        loading={slideDecidindoId === slideParaValidar?.id}
         onClose={() => {
-          if (slideDecidindoId === null) {
-            setSlideParaAtualizar(null);
-          }
+          if (slideDecidindoId === null) setSlideParaValidar(null);
         }}
-        onSecondary={() => setSlideParaAtualizar(null)}
+        onSecondary={() => setSlideParaValidar(null)}
         onPrimary={() => {
-          if (slideParaAtualizar) {
-            void decidirSlide(slideParaAtualizar, "ALTERAR");
-          }
+          if (!slideParaValidar) return;
+
+          const decisao = incluindoSlide ? "INCLUIR" : "ALTERAR";
+          void decidirSlide(slideParaValidar, decisao);
         }}
       />
 
