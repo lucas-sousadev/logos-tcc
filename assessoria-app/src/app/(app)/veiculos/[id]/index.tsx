@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,7 @@ import {
 } from "react-native";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import EnderecosVeiculo from
@@ -91,11 +92,25 @@ export default function VeiculoDetalhes() {
   const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
-  const { id: idParam, origemRelatorioId } = useLocalSearchParams<{
+  const {
+    id: idParam,
+    origemRelatorioId,
+    origemClippingId,
+    origemTipo,
+    origemId,
+    retornoVinculado,
+  } = useLocalSearchParams<{
     id: string;
     origemRelatorioId?: string;
+    origemClippingId?: string;
+    origemTipo?: string;
+    origemId?: string;
+    retornoVinculado?: "origem" | "lista";
   }>();
   const id = Number(idParam);
+  const clippingId = Number(origemClippingId);
+  const veioDoClipping =
+    Number.isSafeInteger(clippingId) && clippingId > 0;
 
    const [erros, setErros] = useState<ErrosVeiculo>({});
   const [erroGeral, setErroGeral] = useState("");
@@ -136,6 +151,19 @@ export default function VeiculoDetalhes() {
   }, [modoEdicao]);
 
   const voltarDoVeiculo = useCallback(() => {
+    if (veioDoClipping) {
+      router.navigate({
+        pathname: "/clipping/[id]",
+        params: {
+          id: String(clippingId),
+          origemTipo,
+          origemId,
+          retornoVinculado,
+        },
+      });
+      return;
+    }
+
     const relatorioId = Number(origemRelatorioId);
 
     if (Number.isSafeInteger(relatorioId) && relatorioId > 0) {
@@ -152,7 +180,36 @@ export default function VeiculoDetalhes() {
     }
 
     router.replace("/veiculos");
-  }, [origemRelatorioId, router]);
+  }, [
+    clippingId,
+    origemId,
+    origemRelatorioId,
+    origemTipo,
+    retornoVinculado,
+    router,
+    veioDoClipping,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        Platform.OS !== "android" ||
+        !veioDoClipping ||
+        modoEdicao ||
+        excluindo ||
+        excluindoVinculos
+      ) {
+        return;
+      }
+
+      const inscricao = BackHandler.addEventListener("hardwareBackPress", () => {
+        voltarDoVeiculo();
+        return true;
+      });
+
+      return () => inscricao.remove();
+    }, [excluindo, excluindoVinculos, modoEdicao, veioDoClipping, voltarDoVeiculo])
+  );
   
   const carregarVeiculo = useCallback(
     async () => {
@@ -986,7 +1043,6 @@ const styles = StyleSheet.create({
   sectionTitle: { 
     fontSize: 13, 
     marginBottom: 12, 
-    marginTop: 4 
   },
   infoRow: {
     minHeight: 68,

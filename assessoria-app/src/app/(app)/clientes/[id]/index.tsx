@@ -32,6 +32,7 @@ import FeedbackAlert, {
 } from "@/components/forms/FeedbackAlert";
 import LogoPicker from "@/components/forms/LogoPicker";
 import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
+import RelatoriosVinculados from "@/components/relatorios/RelatoriosVinculados";
 import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -82,10 +83,23 @@ export default function ClienteDetalhes() {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const { id: idParam } =
-    useLocalSearchParams<{ id: string }>();
+  const { id: idParam, vinculo } =
+    useLocalSearchParams<{ id: string; vinculo?: string }>();
 
   const id = Number(idParam);
+  const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
+  const podeVerRelatorios = temPermissao("RELATORIOS", "VISUALIZAR");
+
+  const [abaVinculos, setAbaVinculos] =
+    useState<"clippings" | "relatorios">(
+      vinculo === "relatorios" ? "relatorios" : "clippings"
+    );
+  const [excluindoVinculos, setExcluindoVinculos] = useState(false);
+
+  const abaVinculosAtiva =
+    podeVerClippings && (!podeVerRelatorios || abaVinculos === "clippings")
+      ? "clippings"
+      : "relatorios";
 
   const [cliente, setCliente] =
     useState<Cliente | null>(null);
@@ -154,6 +168,10 @@ export default function ClienteDetalhes() {
   useEffect(() => {
     void carregarCliente();
   }, [id]);
+
+  useEffect(() => {
+    setAbaVinculos(vinculo === "relatorios" ? "relatorios" : "clippings");
+  }, [id, vinculo]);
 
   function dadosFormulario(
     dados: Cliente
@@ -1227,12 +1245,49 @@ export default function ClienteDetalhes() {
               />
             ) : null}
 
-            <ClippingsVinculados
-              key={`cliente-${cliente.id}`}
-              tipo="cliente"
-              id={cliente.id}
-              nome={cliente.nome}
-            />
+            {podeVerClippings || podeVerRelatorios ? (
+              <View style={styles.vinculos}>
+                <Text weight="Bold" style={styles.sectionTitle}>
+                  VÍNCULOS DO CLIENTE
+                </Text>
+
+                {podeVerClippings && podeVerRelatorios ? (
+                  <View style={styles.actions}>
+                    <Button
+                      title="CLIPPINGS"
+                      size="small"
+                      variant={abaVinculosAtiva === "clippings" ? "primary" : "outline"}
+                      disabled={excluindo || excluindoVinculos}
+                      onPress={() => setAbaVinculos("clippings")}
+                      style={styles.actionButton}
+                    />
+                    <Button
+                      title="RELATÓRIOS"
+                      size="small"
+                      variant={abaVinculosAtiva === "relatorios" ? "primary" : "outline"}
+                      disabled={excluindo || excluindoVinculos}
+                      onPress={() => setAbaVinculos("relatorios")}
+                      style={styles.actionButton}
+                    />
+                  </View>
+                ) : null}
+
+                {abaVinculosAtiva === "clippings" ? (
+                  <ClippingsVinculados
+                    key={`cliente-${cliente.id}`}
+                    tipo="cliente"
+                    id={cliente.id}
+                    nome={cliente.nome}
+                    onExcluindoChange={setExcluindoVinculos}
+                  />
+                ) : (
+                  <RelatoriosVinculados
+                    key={cliente.id}
+                    clienteId={cliente.id}
+                  />
+                )}
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -1438,10 +1493,13 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 13,
-    marginBottom: 12,
-    borderBottomWidth: 1.5,
     paddingBottom: 2,
-    textAlign: "center"
+    marginTop: 4,
+    marginBottom: 10,
+  },
+
+  vinculos: {
+    marginTop: 5,
   },
 
   infoRow: {

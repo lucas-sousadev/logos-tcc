@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useRef, useState, useEffect } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   ScrollView,
   StyleSheet,
   View,
@@ -409,8 +410,12 @@ export default function DetalheRelatorio() {
   const params = useLocalSearchParams<{
     id: string;
     origem?: string;
+    origemClienteId?: string;
   }>();
   const id = Number(params.id);
+  const clienteOrigemId = Number(params.origemClienteId);
+  const veioDoCliente =
+    Number.isSafeInteger(clienteOrigemId) && clienteOrigemId > 0;
   const scrollRef = useRef<ScrollView>(null);
   const focado = useIsFocused();
   
@@ -467,6 +472,29 @@ export default function DetalheRelatorio() {
   const [exportandoPptx, setExportandoPptx] = useState(false);
   const [mensagemPptx, setMensagemPptx] = useState("");
   const travaPptx = useRef(false);
+
+  const voltarParaCliente = useCallback(() => {
+    if (!veioDoCliente) return false;
+
+    router.navigate({
+      pathname: "/clientes/[id]",
+      params: { id: String(clienteOrigemId), vinculo: "relatorios" },
+    });
+    return true;
+  }, [clienteOrigemId, router, veioDoCliente]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android" || !veioDoCliente || excluindo) return;
+
+      const inscricao = BackHandler.addEventListener(
+        "hardwareBackPress",
+        voltarParaCliente
+      );
+
+      return () => inscricao.remove();
+    }, [excluindo, veioDoCliente, voltarParaCliente])
+  );
 
   const slidesSelecionaveis = slides.filter(
     (slide) =>
@@ -766,7 +794,9 @@ export default function DetalheRelatorio() {
     try {
       await excluirRelatorio(relatorio.id);
       setConfirmarExclusao(false);
-      router.replace("/relatorios");
+      if (!voltarParaCliente()) {
+        router.replace("/relatorios");
+      }
     } catch (e) {
       setConfirmarExclusao(false);
       setErroAcao(
@@ -984,6 +1014,8 @@ export default function DetalheRelatorio() {
         title="Relatório"
         showBackButton
         onBackPress={() => {
+          if (voltarParaCliente()) return;
+
           if (params.origem === "dashboard") {
             router.replace("/");
             return;

@@ -167,7 +167,7 @@ export default function Clipping() {
 
           <View style={styles.cabecalhoAnos}>
             <Text weight="Bold" style={styles.tituloAnos}>
-              Anos de referência
+              Grupos Anuais
             </Text>
             <Text style={[styles.descricaoAnos, { color: theme.textoSub }]}>
               Selecione um ano para ver seus clientes e publicações.

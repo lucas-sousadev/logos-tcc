@@ -190,6 +190,12 @@ export default function ClippingDetalhes() {
     atualizarDados,
   } = useConsultaClipping(consultarClipping, String(id));
 
+  const veiculoId = Number(clipping?.veiculo_id);
+  const podeAbrirVeiculo =
+    Number.isSafeInteger(veiculoId) &&
+    veiculoId > 0 &&
+    temPermissao("VEICULOS", "VISUALIZAR");
+
   useEffect(() => {
     setErroLink("");
     setMostrarSobreVeiculo(false);
@@ -232,6 +238,23 @@ export default function ClippingDetalhes() {
     }
 
     router.replace("/clipping");
+  }
+
+  function abrirVeiculo() {
+    if (!clipping || !podeAbrirVeiculo || ocupado || travaExcluir.current) {
+      return;
+    }
+
+    router.push({
+      pathname: "/veiculos/[id]",
+      params: {
+        id: String(veiculoId),
+        origemClippingId: String(clipping.id),
+        origemTipo: params.origemTipo,
+        origemId: params.origemId,
+        retornoVinculado: params.retornoVinculado,
+      },
+    });
   }
 
   async function abrirLink() {
@@ -760,17 +783,45 @@ function concluirEdicao(registro: Clipping) {
             </Text>
           </View>
 
-          <Text
-            selectable
-            weight="Medium"
-            style={[
-              styles.nomeVeiculo,
-              styles.espacoSuperior,
-              !veiculo && { color: cores.pendencia },
-            ]}
-          >
-            {veiculo || "Sem veículo"}
-          </Text>
+          {podeAbrirVeiculo ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel={
+                veiculo ? `Abrir veículo ${veiculo}` : "Abrir cadastro do veículo"
+              }
+              accessibilityState={{ disabled: ocupado }}
+              disabled={ocupado}
+              hitSlop={6}
+              onPress={abrirVeiculo}
+              style={[styles.linkVeiculo, styles.espacoSuperior]}
+            >
+              <Text
+                weight="SemiBold"
+                style={[styles.nomeVeiculo, { color: theme.textoTerciaria }]}
+              >
+                {veiculo || "Abrir cadastro do veículo"}
+              </Text>
+
+              <Ionicons
+                name="open-outline"
+                size={14}
+                color={theme.textoTerciaria}
+              />
+            </TouchableOpacity>
+          ) : (
+            <Text
+              selectable
+              weight="Medium"
+              style={[
+                styles.nomeVeiculo,
+                styles.espacoSuperior,
+                !veiculo && { color: cores.pendencia },
+              ]}
+            >
+              {veiculo || "Sem veículo"}
+            </Text>
+          )}
 
           <View style={styles.programaVeiculo}>
             <Campo
@@ -1204,7 +1255,15 @@ const styles = StyleSheet.create({
   colunaTier: {
     flexShrink: 0,
   },
+  linkVeiculo: {
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   nomeVeiculo: {
+    flexShrink: 1,
     fontSize: 14,
     lineHeight: 20,
   },

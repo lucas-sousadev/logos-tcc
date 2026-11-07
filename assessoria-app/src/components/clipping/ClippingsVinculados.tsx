@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -115,6 +114,7 @@ export default function ClippingsVinculados({
 
   const [anoEscolhido, setAnoEscolhido] =
     useState<number | null>(null);
+  const [listaAnosAberta, setListaAnosAberta] = useState(false);
 
   const [pagina, setPagina] = useState(1);
   const [modoSelecao, setModoSelecao] = useState(false);
@@ -158,24 +158,11 @@ export default function ClippingsVinculados({
 
   const anos = consultaAnos.dados?.anos ?? [];
 
-  const anoDisponivel =
-    anoEscolhido !== null &&
-    anos.some(
-      (item) =>
-        Number(item.ano_referencia) === anoEscolhido
-    );
-
-  const ano =
-    anoDisponivel
-      ? anoEscolhido
-      : Number(
-          anos.find(
-            (item) =>
-              Number(item.total_clippings) > 0
-          )?.ano_referencia ??
-          anos[0]?.ano_referencia ??
-          0
-        ) || null;
+  const opcaoAno =
+    anos.find((item) => Number(item.ano_referencia) === anoEscolhido) ??
+    anos.find((item) => Number(item.total_clippings) > 0) ??
+    anos[0];
+  const ano = Number(opcaoAno?.ano_referencia) || null;
 
   const totalGeral = anos.reduce(
     (total, item) =>
@@ -217,8 +204,23 @@ export default function ClippingsVinculados({
   const totalNoAno =
     consultaLista.dados?.pagination.total ?? 0;
 
+  const clippingsPorCliente = new Map<number, Clipping[]>();
+
+  if (tipo === "veiculo") {
+    for (const clipping of clippings) {
+      const grupo = clippingsPorCliente.get(clipping.cliente_id);
+
+      if (grupo) {
+        grupo.push(clipping);
+      } else {
+        clippingsPorCliente.set(clipping.cliente_id, [clipping]);
+      }
+    }
+  }
+
   useEffect(() => {
     setPagina(1);
+    setListaAnosAberta(false);
     setModoSelecao(false);
     setConfirmarExclusao(false);
     setIdsSelecionados([]);
@@ -226,6 +228,7 @@ export default function ClippingsVinculados({
 
   useFocusEffect(
     useCallback(() => {
+      setListaAnosAberta(false);
       setModoSelecao(false);
       setIdsSelecionados([]);
       setConfirmarExclusao(false);
@@ -270,10 +273,15 @@ export default function ClippingsVinculados({
     consultaLista.atualizando;
 
   const selecaoBloqueada = ocupado || Boolean(consultaLista.erro);
+  const navegacaoBloqueada = excluindo || modoSelecao;
   
   function escolherAno(novoAno: number) {
-    if (excluindo || novoAno === ano || modoSelecao) return;
-    setAnoEscolhido(novoAno);
+    if (navegacaoBloqueada) return;
+
+    setListaAnosAberta(false);
+    if (novoAno !== ano) {
+      setAnoEscolhido(novoAno);
+    }
   }
 
   function alternarSelecao(clippingId: number) {
@@ -385,6 +393,22 @@ export default function ClippingsVinculados({
         },
     });
     }
+
+  function renderizarClipping(clipping: Clipping) {
+    return (
+      <ClippingCard
+        key={clipping.id}
+        clipping={clipping}
+        expandido={false}
+        abrirAoTocar
+        onAbrirDetalhes={() => abrirDetalhes(clipping.id)}
+        modoSelecao={modoSelecao}
+        selecionado={idsSelecionados.includes(clipping.id)}
+        bloqueado={selecaoBloqueada}
+        onSelecionar={() => alternarSelecao(clipping.id)}
+      />
+    );
+  }
 
   async function excluirSelecionados() {
     if (
@@ -551,65 +575,108 @@ export default function ClippingsVinculados({
         </View>
       ) : (
         <>
-          <Text
-            weight="SemiBold"
-            style={styles.rotuloAno}
-          >
-            ANO DOS CLIPPINGS
-          </Text>
+          {opcaoAno && ano !== null ? (
+            <>
+              <Text weight="SemiBold" style={styles.rotuloAno}>
+                ANO DOS CLIPPINGS
+              </Text>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={
-              styles.listaAnos
-            }
-          >
-            {anos.map((item) => {
-              const anoItem = Number(
-                item.ano_referencia
-              );
-              const ativo = anoItem === ano;
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Ano dos clippings, ${ano}`}
+                accessibilityState={{
+                  expanded: listaAnosAberta,
+                  disabled: navegacaoBloqueada,
+                }}
+                activeOpacity={0.8}
+                disabled={navegacaoBloqueada}
+                onPress={() => setListaAnosAberta((aberta) => !aberta)}
+                style={[
+                  styles.linhaAno,
+                  styles.seletorAno,
+                  {
+                    borderColor: theme.borda,
+                    backgroundColor: theme.backgroundSecundario,
+                    opacity: navegacaoBloqueada ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={17}
+                  color={theme.textoTerciaria}
+                />
+                <Text weight="Bold" style={styles.textoAno}>
+                  {ano}
+                </Text>
+                <Text style={[styles.totalAno, { color: theme.textoSub }]}>
+                  {opcaoAno.total_clippings} clippings
+                </Text>
+                <Ionicons
+                  name={listaAnosAberta ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color={theme.textoTerciaria}
+                />
+              </TouchableOpacity>
 
-              return (
-                <TouchableOpacity
-                  key={anoItem}
-                  accessibilityRole="radio"
-                  accessibilityState={{
-                    checked: ativo,
-                  }}
-                  activeOpacity={0.8}
-                  disabled={excluindo || modoSelecao}
-                  onPress={() =>
-                    escolherAno(anoItem)
-                  }
+              {listaAnosAberta ? (
+                <View
+                  accessibilityRole="radiogroup"
                   style={[
-                    styles.ano,
+                    styles.listaAnos,
                     {
                       borderColor: theme.borda,
-                      backgroundColor: ativo
-                        ? theme.backgroundContainer
-                        : theme.background,
+                      backgroundColor: theme.backgroundSecundario,
                     },
                   ]}
                 >
-                  <Text
-                    weight="SemiBold"
-                    style={{
-                      color: ativo
-                        ? theme.textoContainer
-                        : theme.texto,
-                    }}
-                  >
-                    {anoItem} ·{" "}
-                    {Number(
-                      item.total_clippings
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                  {anos.map((item) => {
+                    const anoItem = Number(item.ano_referencia);
+                    const ativo = anoItem === ano;
+
+                    return (
+                      <TouchableOpacity
+                        key={anoItem}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: ativo }}
+                        activeOpacity={0.8}
+                        onPress={() => escolherAno(anoItem)}
+                        style={[
+                          styles.linhaAno,
+                          styles.opcaoAno,
+                          ativo && { backgroundColor: theme.backgroundContainer },
+                        ]}
+                      >
+                        <Text
+                          weight="SemiBold"
+                          style={[
+                            styles.textoAno,
+                            ativo && { color: theme.textoContainer },
+                          ]}
+                        >
+                          {anoItem}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.totalAno,
+                            { color: ativo ? theme.textoContainer : theme.textoSub },
+                          ]}
+                        >
+                          {item.total_clippings} clippings
+                        </Text>
+                        <Ionicons
+                          name="checkmark"
+                          size={16}
+                          color={theme.textoContainer}
+                          style={{ opacity: ativo ? 1 : 0 }}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
           {ano !== null ? (
             <View style={styles.atalhos}>
@@ -663,15 +730,6 @@ export default function ClippingsVinculados({
             </View>
           ) : null}
 
-          <Text
-            style={[
-              styles.resumo,
-              { color: theme.textoSub },
-            ]}
-          >
-            {totalNoAno} clipping(s) neste ano
-          </Text>
-
           {podeExcluir &&
           (clippings.length > 0 ||
             idsSelecionados.length > 0) ? (
@@ -682,6 +740,7 @@ export default function ClippingsVinculados({
                     {
                     backgroundColor: theme.background,
                     borderColor: theme.borda,
+                    marginTop: 12,
                     },
                 ]}
                 >
@@ -787,10 +846,15 @@ export default function ClippingsVinculados({
                 accessibilityRole="button"
                 accessibilityLabel="Selecionar clippings"
                 disabled={selecaoBloqueada}
-                onPress={() => setModoSelecao(true)}
+                onPress={() => {
+                  setListaAnosAberta(false);
+                  setModoSelecao(true);
+                }}
                 style={[
                     styles.selectionStartButton,
-                    { borderColor: theme.borda },
+                    { borderColor: theme.borda,
+                      marginTop: 12,
+                    },
                 ]}
                 >
                 <Ionicons
@@ -863,60 +927,48 @@ export default function ClippingsVinculados({
                   : "Nenhum clipping vinculado ainda."}
               </Text>
             </View>
-          ) : (
-            clippings.map((clipping) => {
-                const selecionado =
-                    idsSelecionados.includes(clipping.id);
+          ) : tipo === "veiculo" ? (
+            Array.from(clippingsPorCliente, ([clienteId, grupo]) => {
+              const clienteNome =
+                grupo[0].cliente_nome?.trim() || `Cliente #${clienteId}`;
 
-                return (
-                    <View key={clipping.id}>
-                    <ClippingCard
-                        clipping={clipping}
-                        expandido={false}
-                        abrirAoTocar
-                        mostrarCliente={tipo === "veiculo"}
-                        onAbrirDetalhes={() =>
-                        abrirDetalhes(clipping.id)
-                        }
-                        modoSelecao={modoSelecao}
-                        selecionado={selecionado}
-                        bloqueado={selecaoBloqueada}
-                        onSelecionar={() =>
-                        alternarSelecao(clipping.id)
-                        }
+              return (
+                <View key={clienteId} style={styles.grupoCliente}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver listagem de ${clienteNome}`}
+                    accessibilityState={{ disabled: navegacaoBloqueada }}
+                    activeOpacity={0.8}
+                    disabled={navegacaoBloqueada}
+                    onPress={() => abrirListaDoCliente(clienteId, clienteNome)}
+                    style={[
+                      styles.cabecalhoGrupoCliente,
+                      { backgroundColor: theme.backgroundSecundario },
+                    ]}
+                  >
+                    <Ionicons
+                      name="briefcase-outline"
+                      size={17}
+                      color={theme.textoTerciaria}
                     />
-
-                    {tipo === "veiculo" && !modoSelecao ? (
-                        <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() =>
-                            abrirListaDoCliente(
-                            clipping.cliente_id,
-                            clipping.cliente_nome
-                            )
-                        }
-                        style={styles.linkCliente}
-                        >
-                        <Text
-                            weight="SemiBold"
-                            numberOfLines={1}
-                            style={[
-                            styles.linkClienteTexto,
-                            { color: theme.textoTerciaria },
-                            ]}
-                        >
-                            VER LISTAGEM DO CLIENTE 
-                        </Text>
-                        <Ionicons
-                            name="arrow-forward"
-                            size={14}
-                            color={theme.textoTerciaria}
-                        />
-                        </TouchableOpacity>
+                    <Text weight="Bold" style={styles.nomeGrupoCliente}>
+                      {clienteNome}
+                    </Text>
+                    {!navegacaoBloqueada ? (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={17}
+                        color={theme.textoTerciaria}
+                      />
                     ) : null}
-                    </View>
-                );
+                  </TouchableOpacity>
+
+                  {grupo.map(renderizarClipping)}
+                </View>
+              );
             })
+          ) : (
+            clippings.map(renderizarClipping)
           )}
           {consultaLista.dados && !consultaLista.erro ? (
             <PaginacaoLista
@@ -1005,16 +1057,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 8,
   },
-  listaAnos: {
-    gap: 8,
-    paddingBottom: 6,
-  },
-  ano: {
-    minHeight: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
+  linhaAno: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 44,
+    gap: 10,
     paddingHorizontal: 12,
-    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  seletorAno: {
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  textoAno: {
+    flex: 1,
+    fontSize: 14,
+  },
+  totalAno: {
+    flexShrink: 1,
+    fontSize: 12,
+  },
+  listaAnos: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 4,
+  },
+  opcaoAno: {
+    borderRadius: 8,
   },
   atalhos: {
     flexDirection: "row",
@@ -1048,20 +1118,23 @@ selectionStartButton: {
 selectionStartText: {
   fontSize: 12,
 },
-linkCliente: {
-  alignSelf: "flex-end",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 4,
-  minHeight: 40,
-  paddingHorizontal: 8,
-  marginBottom: 9,
-},
-linkClienteTexto: {
-  fontSize: 10,
-  flexShrink: 1,
-},
+  grupoCliente: {
+    marginBottom: 6,
+  },
+  cabecalhoGrupoCliente: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 6,
+    borderRadius: 10,
+  },
+  nomeGrupoCliente: {
+    flex: 1,
+    fontSize: 13,
+  },
   resumo: {
     fontSize: 12,
     marginTop: 14,
