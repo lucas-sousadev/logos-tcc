@@ -469,42 +469,42 @@ export default function ClippingsDoCliente() {
               {total} clipping(s) em {ano}
             </Text>
               {!selecao.ativo &&
-temPermissao("CLIPPING", "IMPORTAR") ? (
-  <TouchableOpacity
-    activeOpacity={0.8}
-    accessibilityRole="button"
-    accessibilityLabel="Importar clippings de um arquivo CSV"
-    disabled={
-      carregando ||
-      atualizando ||
-      Boolean(erro) ||
-      selecao.excluindo ||
-      exportacao.exportando
-    }
-    onPress={abrirImportacao}
-    style={[
-      styles.exportButton,
-      {
-        backgroundColor: theme.background,
-        borderColor: theme.borda,
-        opacity:
-          carregando ||
-          atualizando ||
-          Boolean(erro) ||
-          selecao.excluindo ||
-          exportacao.exportando
-            ? 0.5
-            : 1,
-      },
-    ]}
-  >
-    <Ionicons
-      name="cloud-upload-outline"
-      size={20}
-      color={theme.texto}
-    />
-  </TouchableOpacity>
-) : null}
+                temPermissao("CLIPPING", "IMPORTAR") ? (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Importar clippings de um arquivo CSV"
+                    disabled={
+                      carregando ||
+                      atualizando ||
+                      Boolean(erro) ||
+                      selecao.excluindo ||
+                      exportacao.exportando
+                    }
+                    onPress={abrirImportacao}
+                    style={[
+                      styles.exportButton,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: theme.borda,
+                        opacity:
+                          carregando ||
+                          atualizando ||
+                          Boolean(erro) ||
+                          selecao.excluindo ||
+                          exportacao.exportando
+                            ? 0.5
+                            : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="download-outline"
+                      size={20}
+                      color={theme.texto}
+                    />
+                  </TouchableOpacity>
+                ) : null}
 
               {podeExportar && !selecao.ativo ? (
                 <TouchableOpacity
@@ -538,7 +538,7 @@ temPermissao("CLIPPING", "IMPORTAR") ? (
                   ]}
                 >
                   <Ionicons
-                    name="download-outline"
+                    name="cloud-upload-outline"
                     size={20}
                     color={theme.texto}
                   />
@@ -547,7 +547,8 @@ temPermissao("CLIPPING", "IMPORTAR") ? (
               
             {!selecao.ativo && temPermissao("CLIPPING", "CRIAR") ? (
               <Button
-                title="NOVO"
+                icon="add-outline"
+                title="CLIPPING"
                 size="small"
                 disabled={selecao.excluindo}
                 onPress={abrirNovo}

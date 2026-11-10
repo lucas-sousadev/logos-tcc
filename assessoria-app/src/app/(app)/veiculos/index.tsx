@@ -484,7 +484,8 @@ export default function Veiculos() {
             "CRIAR"
           ) && (
             <Button
-              title="NOVO"
+              icon="add-outline"
+              title="VEÍCULO"
               size="small"
               onPress={() =>
                 router.push(
@@ -1012,7 +1013,6 @@ const styles = StyleSheet.create({
 
   newButton: {
     width: "auto",
-    borderRadius: 12
   },
 
   item: {

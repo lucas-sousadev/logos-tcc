@@ -703,3 +703,38 @@ $router->post(
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 
+// releases
+$router->get(
+    "/api/releases",
+    "ReleaseController:listar",
+    "RELEASES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/releases/{id}",
+    "ReleaseController:buscar",
+    "RELEASES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/releases/templates",
+    "ReleaseController:templates",
+    "RELEASES.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/releases/destinatarios",
+    "ReleaseController:destinatarios",
+    "MAILING.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases",
+    "ReleaseController:criar",
+    "RELEASES.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);

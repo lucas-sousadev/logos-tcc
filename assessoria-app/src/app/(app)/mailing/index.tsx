@@ -800,7 +800,7 @@ export default function Mailing() {
                   />
                 ) : (
                   <Ionicons
-                    name="cloud-upload-outline"
+                    name="download-outline"
                     size={20}
                     color={theme.texto}
                   />
@@ -833,7 +833,7 @@ export default function Mailing() {
                   />
                 ) : (
                   <Ionicons
-                    name="download-outline"
+                    name="cloud-upload-outline"
                     size={20}
                     color={theme.texto}
                   />
@@ -843,7 +843,8 @@ export default function Mailing() {
 
             {temPermissao("MAILING", "CRIAR") && (
               <Button
-                title="NOVO"
+                icon="add-outline"
+                title="CONTATO"
                 size="small"
                 onPress={() =>
                   router.push("/mailing/novo")

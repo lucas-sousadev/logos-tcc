@@ -191,7 +191,8 @@ export default function ListaRelatorios() {
 
           {temPermissao("RELATORIOS", "CRIAR") ? (
             <Button
-              title="NOVO"
+              icon="add-outline"
+              title="RELATÓRIO"
               size="small"
               onPress={() =>
                 router.push("/relatorios/novo")

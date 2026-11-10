@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   ScrollView,
   View,
+  StyleProp,
+  ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,6 +66,7 @@ interface ClippingContextoProps {
   onAno?: (ano: number) => void;
   clienteAlterado?: boolean;
   anoAlterado?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
 export default function ClippingContexto({
@@ -80,6 +83,7 @@ export default function ClippingContexto({
   onCliente,
   onAno,
   apenasCliente = false,
+  style,
 }: ClippingContextoProps) {
   const { theme } = useTheme();
 
@@ -101,7 +105,7 @@ export default function ClippingContexto({
   }
 
   return (
-    <View style={styles.contexto}>
+    <View style={[styles.contexto, style]}>
       <CampoContexto
         label="CLIENTE"
         value={

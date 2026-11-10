@@ -28,6 +28,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Funcionario } from "@/services/api/auth";
 import { Ionicons } from "@expo/vector-icons";
 
+function obterIniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  const primeira = partes[0]?.charAt(0) ?? "";
+
+  const ultima =
+    partes.length > 1
+      ? partes[partes.length - 1].charAt(0)
+      : "";
+
+  return (
+    (primeira + ultima).toLocaleUpperCase("pt-BR") || "?"
+  );
+}
+
 export default function Funcionarios() {
   const router = useRouter();
   const { theme } = useTheme();
@@ -243,9 +257,12 @@ export default function Funcionarios() {
               : "funcionários"}
           </Text>
 
-          {temPermissao("CONVITES", "VISUALIZAR") && (
-            <TouchableOpacity
-              activeOpacity={0.8}
+          {temPermissao("CONVITES", "VISUALIZAR") ? (
+            <Button
+              title="CONVITES"
+              icon="mail-outline"
+              size="small"
+              style={styles.convitesButton}
               onPress={() =>
                 router.push({
                   pathname: "/convites",
@@ -254,23 +271,8 @@ export default function Funcionarios() {
                   },
                 })
               }
-              style={[
-                styles.convitesButton,
-                {
-                  backgroundColor:
-                    theme.backgroundContainer,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Gerenciar convites"
-            >
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={theme.textoContainer}
-              />
-            </TouchableOpacity>
-          )}
+            />
+          ) : null}
         </View>
 
         <LimparFiltrosButton
@@ -341,86 +343,124 @@ export default function Funcionarios() {
           </View>
         ) : (
           <>
-            {funcionarios.map((funcionario) => (
-              <TouchableOpacity
-                key={funcionario.id}
-                activeOpacity={0.8}
-                onPress={() =>
-                  router.push({
-                    pathname: "/funcionarios/[id]",
-                    params: {
-                      id: funcionario.id.toString(),
-                    },
-                  })
-                }
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
-                  },
-                ]}
-              >
-                <View
+            {funcionarios.map((funcionario) => {
+              const ativo = funcionario.ativo === 1;
+
+              const corStatus = ativo
+                ? theme.alteracao
+                : theme.textoSub;
+
+              return (
+                <TouchableOpacity
+                  key={funcionario.id}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    funcionario.nome +
+                    ". " +
+                    funcionario.email +
+                    ". " +
+                    (ativo ? "Ativo." : "Inativo.")
+                  }
+                  accessibilityHint="Abre o cadastro do funcionário."
+                  onPress={() =>
+                    router.push({
+                      pathname: "/funcionarios/[id]",
+                      params: {
+                        id: funcionario.id.toString(),
+                      },
+                    })
+                  }
                   style={[
-                    styles.avatar,
+                    styles.card,
                     {
-                      backgroundColor:
-                        theme.backgroundContainer,
+                      backgroundColor: theme.backgroundSecundario,
+                      borderColor: theme.borda + "45",
                     },
                   ]}
                 >
-                  <Text
-                    weight="Bold"
-                    style={{
-                      color: theme.textoContainer,
-                      fontSize: 18,
-                    }}
-                  >
-                    {funcionario.nome
-                      .charAt(0)
-                      .toUpperCase()}
-                  </Text>
-                </View>
-
-                <View style={styles.cardContent}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.name}
-                  >
-                    {funcionario.nome}
-                  </Text>
-
-                  <Text style={styles.email}>
-                    {funcionario.email}
-                  </Text>
-
-                  <Text
-                    weight="SemiBold"
+                  <View
                     style={[
-                      styles.status,
+                      styles.avatar,
                       {
-                        color:
-                          funcionario.ativo === 1
-                            ? theme.terciaria
-                            : "#EF4444",
+                        backgroundColor: theme.primaria + "12",
                       },
                     ]}
                   >
-                    {funcionario.ativo === 1
-                      ? "Ativo"
-                      : "Inativo"}
-                  </Text>
-                </View>
+                    <Text
+                      weight="Bold"
+                      style={[
+                        styles.avatarTexto,
+                        { color: theme.textoTerciaria },
+                      ]}
+                    >
+                      {obterIniciais(funcionario.nome)}
+                    </Text>
+                  </View>
 
-                <Text
-                  weight="Regular"
-                  style={[styles.arrow, {color: theme.texto}]}
-                >
-                  ›
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.cardContent}>
+                    <Text
+                      weight="SemiBold"
+                      numberOfLines={1}
+                      style={styles.name}
+                    >
+                      {funcionario.nome}
+                    </Text>
+
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.email,
+                        { color: theme.textoSub },
+                      ]}
+                    >
+                      {funcionario.email}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor: corStatus + "14",
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.statusPonto,
+                          { backgroundColor: corStatus },
+                        ]}
+                      />
+
+                      <Text
+                        weight="SemiBold"
+                        style={[
+                          styles.statusTexto,
+                          { color: corStatus },
+                        ]}
+                      >
+                        {ativo ? "Ativo" : "Inativo"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.cardSeta,
+                      {
+                        backgroundColor: theme.primaria + "0A",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={theme.textoTerciaria}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
 
             {temMais && (
               <Button
@@ -459,19 +499,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 12,
   },
 
   count: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 13,
   },
 
   convitesButton: {
-    width: 50,
-    height: 45,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    width: "auto",
+    flexShrink: 0,
+    paddingHorizontal: 12,
   },
 
   loading: {
@@ -480,46 +521,73 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    minHeight: 82,
+    minHeight: 96,
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
-    borderRadius: 15,
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
 
+  avatarTexto: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+
   cardContent: {
     flex: 1,
-    marginLeft: 12,
+    minWidth: 0,
+    gap: 4,
   },
 
   name: {
-    fontSize: 17,
+    fontSize: 15,
+    lineHeight: 21,
   },
 
   email: {
-    fontSize: 13,
-    marginTop: 3,
-    color: "#808080",
-  },
-
-  status: {
     fontSize: 12,
-    marginTop: 5,
+    lineHeight: 17,
   },
 
-  arrow: {
-    fontSize: 30,
-    marginLeft: 8,
+  statusBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginTop: 2,
+  },
+
+  statusPonto: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+
+  statusTexto: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+
+  cardSeta: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   emptyCard: {

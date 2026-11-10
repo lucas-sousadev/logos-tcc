@@ -2,6 +2,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { Search, SlidersHorizontal, X } from "lucide-react-native";
 
@@ -16,7 +18,9 @@ interface SearchBarProps {
   filterActive?: boolean;
   placeholder?: string;
   onClear?: () => void;
+  containerStyle?: StyleProp<ViewStyle>;
 }
+
 
 export default function SearchBar({
   value,
@@ -26,13 +30,14 @@ export default function SearchBar({
   onClear,
   filterActive = false,
   placeholder = "Pesquisar...",
+  containerStyle,
 }: SearchBarProps) {
   const { theme } = useTheme();
   const temTexto = value.trim().length > 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
+      <View style={[styles.container, containerStyle]}>
+        <View style={styles.searchContainer}>
         <Input  
           style={[
             styles.input,

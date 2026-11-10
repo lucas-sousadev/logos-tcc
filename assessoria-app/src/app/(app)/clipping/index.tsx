@@ -150,7 +150,7 @@ export default function Clipping() {
                   ]}
                 >
                   <Ionicons
-                    name="cloud-upload-outline"
+                    name="download-outline"
                     size={15}
                     color={theme.branco}
                   />

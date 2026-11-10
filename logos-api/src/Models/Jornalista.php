@@ -124,7 +124,7 @@ class Jornalista
 
             WHERE {$whereSql}
 
-            ORDER BY {$colunaOrdem} {$direcao}
+            ORDER BY {$colunaOrdem} {$direcao}, j.id {$direcao}
 
             LIMIT :limit
             OFFSET :offset

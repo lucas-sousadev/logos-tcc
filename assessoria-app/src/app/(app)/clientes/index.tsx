@@ -460,7 +460,8 @@ function alternarClienteSelecionado(id: number) {
             "CRIAR"
           ) ? (
             <Button
-              title="NOVO"
+              icon="add-outline"
+              title="CLIENTE"
               size="small"
               onPress={() =>
                 router.push("/clientes/novo")
@@ -974,7 +975,6 @@ const styles = StyleSheet.create({
   },
   newButton: {
     width: "auto",
-    borderRadius: 12
   },
 
   item: {

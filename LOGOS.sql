@@ -320,15 +320,23 @@ CREATE TABLE templates (
 
 CREATE TABLE releases (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-
+    
     assessoria_id BIGINT UNSIGNED NOT NULL,
-    cliente_id BIGINT UNSIGNED NOT NULL,
+    cliente_id BIGINT UNSIGNED NULL,
 
     template_id BIGINT UNSIGNED NULL,
+    template_codigo VARCHAR(50) NULL,
     criado_por BIGINT UNSIGNED NOT NULL,
 
-    assunto VARCHAR(255) NOT NULL,
+    titulo VARCHAR(150) NOT NULL DEFAULT '',
+    chave_rascunho CHAR(36) NULL,
+    assinatura_cadastro CHAR(64) NULL,
 
+    assunto VARCHAR(255) NOT NULL,
+    primeira_linha VARCHAR(150) NOT NULL DEFAULT '',
+    nome_remetente VARCHAR(100) NOT NULL DEFAULT '',
+    responder_para VARCHAR(254) NOT NULL DEFAULT '',
+    
     -- Snapshot do template utilizado neste release.
     -- Isso impede que futuras alterações no template
     -- modifiquem releases antigos.
@@ -370,6 +378,7 @@ CREATE TABLE releases (
 		ON DELETE RESTRICT,
         
 	UNIQUE KEY uq_release_id_assessoria (id, assessoria_id),
+    UNIQUE KEY uq_release_rascunho (assessoria_id, criado_por, chave_rascunho),
     
    INDEX idx_releases_assessoria (assessoria_id),
     INDEX idx_releases_cliente (cliente_id),

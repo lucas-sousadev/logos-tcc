@@ -8,7 +8,7 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { useState } from "react";
+import { useState, type Ref } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,9 +22,11 @@ interface InputProps extends TextInputProps {
   showChanged?: boolean;
   onUndo?: () => void;
   showPasswordToggle?: boolean;
+  inputRef?: Ref<TextInput>;
 }
 
 export default function Input({
+  inputRef,
   label,
   error,
   containerStyle,
@@ -98,6 +100,7 @@ export default function Input({
 
       <View style={styles.inputWrapper}>
         <TextInput
+          ref={inputRef}
           {...props}
           placeholderTextColor={
             props.placeholderTextColor ??

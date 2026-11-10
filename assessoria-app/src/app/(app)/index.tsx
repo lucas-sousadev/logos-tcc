@@ -517,7 +517,7 @@ export default function Dashboard() {
                 <Atalho
                   titulo="Importar clippings"
                   descricao="Adicione matérias em lote"
-                  icone="cloud-upload-outline"
+                  icone="download-outline"
                   onPress={() =>
                     router.push({
                       pathname: "/clipping/importar",
