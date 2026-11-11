@@ -1,3 +1,7 @@
+import type { DocumentPickerAsset } from "expo-document-picker";
+import { File as ExpoFile } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
+import { Platform } from "react-native";
 import { API_URL } from "@/constants/api";
 import { authenticatedFetch } from "@/services/api/auth";
 import type {
@@ -160,6 +164,37 @@ export async function criarRelease(
   }
 }
 
+export async function enviarTesteRelease(
+  email: string,
+  dadosEnvio: DadosEnvioRelease,
+  blocos: BlocoTemplateRelease[]
+): Promise<void> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    const prazo = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(
+          "O envio ainda não foi confirmado. Confira a caixa de entrada antes de tentar novamente."
+        ));
+        controller.abort();
+      }, 45_000);
+    });
+
+    const envio = authenticatedFetch(API_URL + "/api/releases/envio-teste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, dados_envio: dadosEnvio, blocos }),
+      signal: controller.signal,
+    }).then(lerResposta);
+
+    await Promise.race([envio, prazo]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type DestinatarioRelease = Pick<
   Jornalista,
   "id" | "nome" | "email" | "veiculo_nome" | "ativo"
@@ -269,4 +304,45 @@ export async function listarTemplatesRelease(
   );
 
   return lerResposta(response);
+}
+
+export async function carregarImagemRelease(
+  arquivo: DocumentPickerAsset
+): Promise<string> {
+  const formulario = new FormData();
+  const imagem = Platform.OS === "web" ? arquivo.file : new ExpoFile(arquivo.uri);
+
+  if (!imagem) {
+    throw new Error("A imagem selecionada não está disponível.");
+  }
+
+  formulario.append("arquivo", imagem, arquivo.name);
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    const prazo = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error("O envio da imagem demorou demais. Tente novamente."));
+        controller.abort();
+      }, 45_000);
+    });
+
+    const envio = authenticatedFetch(
+      API_URL + "/api/releases/imagens",
+      { method: "POST", body: formulario, signal: controller.signal },
+      Platform.OS === "web" ? fetch : expoFetch
+    ).then(lerResposta<{ caminho: string }>);
+
+    const { caminho } = await Promise.race([envio, prazo]);
+
+    if (!/^\/uploads\/releases\/\d+\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(caminho)) {
+      throw new Error("A API não retornou o endereço da imagem.");
+    }
+
+    return API_URL.replace(/\/$/, "") + caminho;
+  } finally {
+    clearTimeout(timer);
+  }
 }

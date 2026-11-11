@@ -288,7 +288,7 @@ class ReleaseService
         return self::buscar($assessoriaId, $existente['id']);
     }   
 
-    private static function validarDadosEnvio(mixed $dados): array
+    public static function validarDadosEnvio(mixed $dados): array
     {
         $campos = [
             'assunto' => ['Assunto', 255],

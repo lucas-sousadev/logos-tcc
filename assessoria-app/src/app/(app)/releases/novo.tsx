@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Keyboard,
   ScrollView,
   StyleSheet,
   View,
   type TextInput
 } from "react-native";
-import { useRouter } from "expo-router";
-import { usePreventRemove } from "expo-router/react-navigation";
+import { useNavigation, useRouter } from "expo-router";
+import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import * as Crypto from "expo-crypto";
 
 import Header from "@/components/layout/Header";
@@ -17,6 +18,7 @@ import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ClippingContexto from "@/components/clipping/ClippingContexto";
 import ReleaseDestinatariosModal from "@/components/releases/ReleasesDestinatariosModal";
 import ReleaseDadosEnvioEtapa from "@/components/releases/ReleaseDadosEnvioEtapa";
+import ReleaseRevisaoEtapa from "@/components/releases/ReleaseRevisaoEtapa";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -27,6 +29,7 @@ import ReleaseEtapas, {
 import ReleaseDestinatariosCampo from "@/components/releases/ReleaseDestinatariosCampo";
 import ReleaseTemplateEtapa from "@/components/releases/ReleaseTemplateEtapa";
 import ReleaseConteudoEditor from "@/components/releases/ReleaseConteudoEditor";
+import ReleaseEnvioTeste from "@/components/releases/ReleaseEnvioTeste";
 
 import type {
   DestinatarioRelease,
@@ -50,6 +53,7 @@ const ORDEM_CADASTRO: EtapaRelease[] = [
   "TEMPLATE",
   "CONTEUDO",
   "ENVIO",
+  "REVISAO",
 ];
 
 export default function NovoRelease() {
@@ -61,13 +65,14 @@ export default function NovoRelease() {
 
 function CadastroRelease({ conta }: { conta: string | null }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
   const conteudoScrollRef = useRef<View>(null);
   const { theme } = useTheme();
   const { temPermissao, usuario } = useAuth();
 
   const [etapa, setEtapa] = useState<EtapaRelease>("DESTINO");
-  
+
   // etapa 1
   const [titulo, setTitulo] = useState("");
   const [cliente, setCliente] = useState<{
@@ -87,30 +92,54 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   } | null>(null);
 
   // etapa 3
-  const [dadosEnvio, setDadosEnvio] = useState<DadosEnvioRelease>({
+  const dadosEnvioIniciais = useRef<DadosEnvioRelease>({
     assunto: "",
     primeira_linha: "",
     nome_remetente: (usuario?.nome ?? "").slice(0, 100),
     responder_para: usuario?.email ?? "",
   });
+  const [dadosEnvio, setDadosEnvio] = useState(dadosEnvioIniciais.current);
 
   const [selecionados, setSelecionados] = useState<
     DestinatarioRelease[]
   >([]);
   const [seletorAberto, setSeletorAberto] = useState(false);
+  const [imagemOcupada, setImagemOcupada] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [pendente, setPendente] = useState<ReleasePendente | null>(null);
   const [recuperacao, setRecuperacao] = useState<"carregando" | "pronta" | "falhou">("carregando");
   const [tentativasRecuperacao, setTentativasRecuperacao] = useState(0);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
+  const [avisoSaidaAberto, setAvisoSaidaAberto] = useState(false);
 
   const trava = useRef(false);
+  const acaoSaida = useRef<NavigationAction | null>(null);
   const confirmando = pendente !== null;
-  const bloqueado = salvando || confirmando || sucesso;
+  const bloqueado = salvando || confirmando || sucesso || imagemOcupada;
   const podeCriar = temPermissao("RELEASES", "CRIAR");
 
-  usePreventRemove(salvando, () => {});
+  const temAlteracoesNaoSalvas =
+    !confirmando &&
+    !sucesso &&
+    Boolean(
+      titulo ||
+      cliente ||
+      template ||
+      selecionados.length ||
+      dadosEnvio.assunto ||
+      dadosEnvio.primeira_linha ||
+      dadosEnvio.nome_remetente !== dadosEnvioIniciais.current.nome_remetente ||
+      dadosEnvio.responder_para !== dadosEnvioIniciais.current.responder_para
+    );
+
+  usePreventRemove(salvando || imagemOcupada || temAlteracoesNaoSalvas, ({ data }) => {
+    if (trava.current || imagemOcupada || acaoSaida.current) return;
+
+    acaoSaida.current = data.action;
+    Keyboard.dismiss();
+    setAvisoSaidaAberto(true);
+  });
 
   useEffect(() => {
     if (!conta) {
@@ -159,7 +188,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     ORDEM_CADASTRO[indiceEtapa + 1];
 
   async function salvar() {
-    if (!conta || trava.current || !podeCriar || sucesso || recuperacao !== "pronta") return;
+    if (!conta || trava.current || !podeCriar || imagemOcupada || sucesso || recuperacao !== "pronta") return;
 
     trava.current = true;
     setSalvando(true);
@@ -336,12 +365,23 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     );
   }
 
+  function continuarEditando() {
+    acaoSaida.current = null;
+    setAvisoSaidaAberto(false);
+  }
+
+  function descartarESair() {
+    const acao = acaoSaida.current;
+    continuarEditando();
+    if (acao) navigation.dispatch(acao);
+  }
+
   function voltarParaLista() {
     router.replace("/releases");
   }
 
   function voltar() {
-    if (trava.current || sucesso) return;
+    if (trava.current || sucesso || imagemOcupada) return;
 
     if (!confirmando && recuperacao === "pronta" && etapaAnterior) {
       mudarEtapa(etapaAnterior);
@@ -537,20 +577,22 @@ function CadastroRelease({ conta }: { conta: string | null }) {
                     </View>
 
                     <ReleaseConteudoEditor
-                        blocos={blocos}
-                        nomeTemplate={template?.nome ?? ""}
-                        disabled={bloqueado}
-                        onChange={(alterar) => {
-                            if (bloqueado) return;
+                      blocos={blocos}
+                      nomeTemplate={template?.nome ?? ""}
+                      disabled={bloqueado}
+                      imagemOcupada={imagemOcupada}
+                      onImagemOcupadaChange={setImagemOcupada}
+                      onChange={(alterar) => {
+                        if (salvando || confirmando || sucesso) return;
 
-                            setBlocos(alterar);
-                            setConteudoEditado(true);
-                            setErro("");
-                        }}
-                        onMostrarCampo={mostrarCampo}
+                        setBlocos(alterar);
+                        setConteudoEditado(true);
+                        setErro("");
+                      }}
+                      onMostrarCampo={mostrarCampo}
                     />
                   </>
-            ) : (
+            ) : etapa === "ENVIO" ? (
             <>
                 <View style={styles.cabecalho}>
                 <Text weight="Bold" style={styles.titulo}>
@@ -577,12 +619,45 @@ function CadastroRelease({ conta }: { conta: string | null }) {
                 }}
                 />
             </>
+            ) : (
+              <>
+                <View style={styles.cabecalho}>
+                  <Text weight="Bold" style={styles.titulo}>Revisão</Text>
+                  <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+                    Etapa 5 de 5
+                  </Text>
+                </View>
+
+                <ReleaseRevisaoEtapa
+                  titulo={titulo}
+                  clienteNome={cliente?.nome ?? null}
+                  templateNome={template?.nome ?? ""}
+                  dadosEnvio={dadosEnvio}
+                  blocos={blocos}
+                  selecionados={selecionados}
+                  disabled={bloqueado}
+                  podeSelecionarDestinatarios={temPermissao("MAILING", "VISUALIZAR")}
+                  onEditar={mudarEtapa}
+                  onVerDestinatarios={() => setSeletorAberto(true)}
+                />
+
+                {temPermissao("RELEASES", "ENVIAR") ? (
+                  <ReleaseEnvioTeste
+                    emailInicial={usuario?.email ?? ""}
+                    dadosEnvio={dadosEnvio}
+                    blocos={blocos}
+                    disabled={bloqueado}
+                  />
+                ) : null}
+              </>
             )}
 
             {etapaAnterior && proximaEtapa ? (
                 <Button
                     title={
-                    proximaEtapa === "ENVIO"
+                    proximaEtapa === "REVISAO"
+                        ? "AVANÇAR PARA REVISÃO"
+                        : proximaEtapa === "ENVIO"
                         ? "AVANÇAR PARA DADOS DO E-MAIL"
                         : proximaEtapa === "CONTEUDO"
                         ? "AVANÇAR PARA EDITAR CONTEÚDO"
@@ -602,7 +677,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
                     title={confirmando ? "SAIR" : "VOLTAR"}
                     variant="outline"
                     style={styles.botaoRodape}
-                    disabled={salvando || sucesso}
+                    disabled={salvando || sucesso || imagemOcupada}
                     onPress={voltar}
                     />
                 ) : proximaEtapa ? (
@@ -622,9 +697,9 @@ function CadastroRelease({ conta }: { conta: string | null }) {
                     }
                     style={styles.botaoRodape}
                     loading={salvando}
-                    disabled={!conta || !podeCriar || sucesso}
+                    disabled={!conta || !podeCriar || sucesso || imagemOcupada}
                     onPress={() => void salvar()}
-                    variant={etapa === "ENVIO" ? "primary" : "outline"}
+                    variant={etapa === "REVISAO" ? "primary" : "outline"}
                 />
                 </View>
 
@@ -654,6 +729,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       {seletorAberto ? (
         <ReleaseDestinatariosModal
           selecionados={selecionados}
+          iniciarComSelecionados={etapa === "REVISAO" && selecionados.length > 0}
           onAlternar={alternarContato}
           onClose={() => setSeletorAberto(false)}
           onAdicionar={adicionarContatos}
@@ -681,6 +757,18 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
             setTrocaTemplate(null);
         }}
+      />
+      <FeedbackAlert
+        visible={avisoSaidaAberto}
+        variant="warning"
+        title="Sair do novo release?"
+        message="Se sair agora, você perderá tudo o que preencheu neste release."
+        primaryLabel="SAIR"
+        secondaryLabel="CONTINUAR"
+        primaryDanger
+        onPrimary={descartarESair}
+        onSecondary={continuarEditando}
+        onClose={continuarEditando}
       />
       <FeedbackAlert
         visible={sucesso}

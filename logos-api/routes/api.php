@@ -738,3 +738,17 @@ $router->post(
     "RELEASES.CRIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
+
+$router->post(
+    "/api/releases/envio-teste",
+    "ReleaseController:enviarTeste",
+    "RELEASES.ENVIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases/imagens",
+    "ReleaseController:carregarImagem",
+    "RELEASES.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);

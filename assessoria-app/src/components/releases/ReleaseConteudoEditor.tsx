@@ -16,6 +16,7 @@ import ReleaseBlocosPrevia, {
   type CampoBlocoPrevia,
 } from "@/components/releases/ReleaseBlocosPrevia";
 import ReleaseAdicionarBlocoModal from "@/components/releases/ReleaseAdicionarBlocoModal";
+import ReleaseImagemCampo from "@/components/releases/ReleaseImagemCampo";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BlocoTemplateRelease } from "@/services/api/release";
@@ -45,6 +46,8 @@ interface Props {
     ) => BlocoTemplateRelease[]
   ) => void;
   onMostrarCampo: (campo: TextInput) => void;
+  imagemOcupada: boolean;
+  onImagemOcupadaChange: (ocupado: boolean) => void;
 }
 
 export default function ReleaseConteudoEditor({
@@ -53,13 +56,16 @@ export default function ReleaseConteudoEditor({
   disabled = false,
   onChange,
   onMostrarCampo,
+  imagemOcupada,
+  onImagemOcupadaChange,
 }: Props) {
   const { theme } = useTheme();
 
   const [modo, setModo] = useState<
     "EDITAR" | "PREVIA"
   >("EDITAR");
-
+  const [mostrarLapis, setMostrarLapis] = useState(true);
+  
   const [aberto, setAberto] = useState<string | null>(
     null
   );
@@ -210,6 +216,7 @@ export default function ReleaseConteudoEditor({
                       : theme.background,
                 },
               ]}
+              disabled={imagemOcupada}
             >
               <Text
                 weight="SemiBold"
@@ -240,11 +247,21 @@ export default function ReleaseConteudoEditor({
       </Text>
 
       {modo === "PREVIA" ? (
-        <ReleaseBlocosPrevia
-          blocos={blocos}
-          disabled={disabled}
-          onEditar={abrirCampo}
-        />
+        <>
+          <Button
+            title={mostrarLapis ? "OCULTAR LÁPIS" : "MOSTRAR LÁPIS"}
+            icon={mostrarLapis ? "eye-off-outline" : "eye-outline"}
+            variant="outline"
+            size="small"
+            style={styles.botaoPrevia}
+            onPress={() => setMostrarLapis((valor) => !valor)}
+          />
+          <ReleaseBlocosPrevia
+            blocos={blocos}
+            disabled={disabled}
+            onEditar={mostrarLapis ? abrirCampo : undefined}
+          />
+        </>
       ) : (
         <>
           {blocos.length === 0 ? (
@@ -427,13 +444,18 @@ export default function ReleaseConteudoEditor({
                       </Text>
                     )}
 
-                    {temUrl ? (
+                    {bloco.tipo === "imagem" ? (
+                      <ReleaseImagemCampo
+                        url={bloco.url ?? ""}
+                        disabled={disabled || imagemOcupada}
+                        inputRef={urlRef}
+                        onInputLayout={() => revelarCampo(bloco.id, "url", urlRef.current)}
+                        onChange={(url) => alterar(bloco.id, { url })}
+                        onOcupadoChange={onImagemOcupadaChange}
+                      />
+                    ) : temUrl ? (
                       <Input
-                        label={
-                          bloco.tipo === "imagem"
-                            ? "LINK DA IMAGEM"
-                            : "LINK DE DESTINO"
-                        }
+                        label="LINK DE DESTINO"
                         value={bloco.url ?? ""}
                         onChangeText={(url) =>
                           alterar(bloco.id, {
@@ -667,5 +689,8 @@ const styles = StyleSheet.create({
   borderWidth: 1,
   borderRadius: 8,
   paddingHorizontal: 10,
+},
+botaoPrevia: {
+  width: "auto",
 },
 });

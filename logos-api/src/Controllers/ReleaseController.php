@@ -6,6 +6,8 @@ use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\PermissaoService;
 use Logos\AssessoriaApi\Services\ReleaseService;
 use Logos\AssessoriaApi\Services\TemplateService;
+use Logos\AssessoriaApi\Services\ReleaseEnvioTesteService;
+use Logos\AssessoriaApi\Services\ReleaseImagemService;
 
 class ReleaseController
 {
@@ -64,8 +66,14 @@ class ReleaseController
         } catch (\DomainException $erro) {
             $this->responder(['success' => false, 'message' => $erro->getMessage()], 409);
         } catch (\Throwable $erro) {
-            if ($erro instanceof \RuntimeException && $erro->getCode() === 403) {
-                $this->responder(['success' => false, 'message' => $erro->getMessage()], 403);
+            if (
+                $erro instanceof \RuntimeException &&
+                in_array($erro->getCode(), [403, 429, 502, 503], true)
+            ) {
+                $this->responder(
+                    ['success' => false, 'message' => $erro->getMessage()],
+                    $erro->getCode()
+                );
                 return;
             }
 
@@ -131,5 +139,21 @@ class ReleaseController
             fn(int $assessoriaId, int $usuarioId) =>
                 TemplateService::listar($assessoriaId, $_GET)
         );
+    }
+
+    public function carregarImagem(): void
+    {
+        $this->executar(fn(int $assessoriaId) => [
+            'caminho' => ReleaseImagemService::salvar($assessoriaId),
+        ], 201);
+    }
+    
+    public function enviarTeste(): void
+    {
+        $this->executar(function (int $assessoriaId): array {
+            ReleaseEnvioTesteService::enviar($assessoriaId, $this->corpo());
+
+            return ['message' => 'Teste enviado.'];
+        });
     }
 }

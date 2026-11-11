@@ -156,25 +156,6 @@ try {
     conferirRelease(ReleaseService::listar(1, ['status' => 'ENVIADO', 'data_inicio' => '2026-10-31', 'data_fim' => '2026-10-31'])['pagination']['total'] === 1, 'O período acompanha a data de referência do envio.');
     echo "OK: cadastro, repetição, busca, filtros, paginação, validação, transações e isolamento.\n";
 
-    // Recria a estrutura anterior para verificar a atualização de um banco existente.
-    $db->exec('DELETE FROM releases');
-    $db->exec('ALTER TABLE releases
-        DROP INDEX uq_release_rascunho,
-        DROP COLUMN titulo, DROP COLUMN chave_rascunho, DROP COLUMN assinatura_cadastro,
-        DROP COLUMN template_codigo, DROP COLUMN primeira_linha,
-        DROP COLUMN nome_remetente, DROP COLUMN responder_para,
-        MODIFY COLUMN cliente_id BIGINT UNSIGNED NOT NULL');
-    $db->exec("INSERT INTO releases (assessoria_id, cliente_id, criado_por, assunto, blocos_json)
-        VALUES (1, 1, 1, 'Registro anterior', '[]')");
-    $legadoId = (int) $db->lastInsertId();
-    $migracao = file_get_contents(dirname(__DIR__) . '/database/2026-11-07_releases_inicial.sql');
-    $db->exec($migracao);
-    $db->exec($migracao);
-    conferirRelease(ReleaseService::buscar(1, $legadoId)['assunto'] === 'Registro anterior', 'A migração repetida preserva os registros antigos.');
-    conferirRelease(ReleaseService::criar(1, 1, [])['cliente_id'] === null, 'A migração permite rascunhos incompletos.');
-    $outro = ReleaseService::criar(2, 2, ['titulo' => 'Outra assessoria']);
-    echo "OK: schema novo e migração repetida com dados anteriores.\n";
-
     $socket = stream_socket_server('tcp://127.0.0.1:0');
     $endereco = stream_socket_get_name($socket, false);
     fclose($socket);

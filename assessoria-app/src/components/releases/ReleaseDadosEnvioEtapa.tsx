@@ -63,6 +63,22 @@ export default function ReleaseDadosEnvioEtapa({
         clearable
       />
 
+      <View style={styles.grupo}>
+        <Input
+          label="RESPONDER PARA"
+          value={dados.responder_para}
+          onChangeText={(valor) => onChange("responder_para", valor)}
+          editable={!disabled}
+          maxLength={254}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="E-mail para receber as respostas"
+          containerStyle={styles.campo}
+          clearable
+        />
+        
+      </View>
       <View
         style={[
           styles.remetente,
@@ -83,30 +99,13 @@ export default function ReleaseDadosEnvioEtapa({
             Remetente padrão do LOGOS
           </Text>
           <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-            O release será enviado pelo endereço padrão do sistema.
+            O release será enviado pelo endereço de e-mail padrão do sistema.
           </Text>
         </View>
       </View>
-
-      <View style={styles.grupo}>
-        <Input
-          label="RESPONDER PARA"
-          value={dados.responder_para}
-          onChangeText={(valor) => onChange("responder_para", valor)}
-          editable={!disabled}
-          maxLength={254}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="E-mail para receber as respostas"
-          containerStyle={styles.campo}
-          clearable
-        />
-        <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-          As respostas dos contatos serão direcionadas a este endereço.
-        </Text>
-      </View>
-
+      <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+        As respostas dos contatos serão direcionadas a este endereço.
+      </Text>
       <View
         style={[
           styles.previa,

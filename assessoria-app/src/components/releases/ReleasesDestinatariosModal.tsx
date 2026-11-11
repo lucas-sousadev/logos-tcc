@@ -33,6 +33,7 @@ const LIMITE_PAGINA = 30;
 
 interface Props {
   selecionados: DestinatarioRelease[];
+  iniciarComSelecionados?: boolean;
   onAlternar: (jornalista: DestinatarioRelease) => void;
   onAdicionar: (jornalistas: DestinatarioRelease[]) => void;
   onClose: () => void;
@@ -40,6 +41,7 @@ interface Props {
 
 export default function ReleaseDestinatariosModal({
   selecionados,
+  iniciarComSelecionados = false,
   onAlternar,
   onAdicionar,
   onClose,
@@ -60,7 +62,7 @@ export default function ReleaseDestinatariosModal({
   const [erroSelecao, setErroSelecao] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [somenteSelecionados, setSomenteSelecionados] =
-    useState(false);
+    useState(iniciarComSelecionados);
   const [modalFiltros, setModalFiltros] = useState(false);
   const [selecionandoTodos, setSelecionandoTodos] =
     useState(false);
