@@ -174,7 +174,13 @@ export default function AppLayout() {
     href: null,
   }}
 />
-      
+<Tabs.Screen
+  name="templates"
+  options={{
+    href: null,
+  }}
+/>
+
     </Tabs>
   );
 }

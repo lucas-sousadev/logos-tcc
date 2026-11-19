@@ -307,7 +307,8 @@ export async function listarTemplatesRelease(
 }
 
 export async function carregarImagemRelease(
-  arquivo: DocumentPickerAsset
+  arquivo: DocumentPickerAsset,
+  contexto: "RELEASES" | "TEMPLATES" = "RELEASES"
 ): Promise<string> {
   const formulario = new FormData();
   const imagem = Platform.OS === "web" ? arquivo.file : new ExpoFile(arquivo.uri);
@@ -330,7 +331,10 @@ export async function carregarImagemRelease(
     });
 
     const envio = authenticatedFetch(
-      API_URL + "/api/releases/imagens",
+      API_URL +
+      (contexto === "TEMPLATES"
+        ? "/api/templates/imagens"
+        : "/api/releases/imagens"),
       { method: "POST", body: formulario, signal: controller.signal },
       Platform.OS === "web" ? fetch : expoFetch
     ).then(lerResposta<{ caminho: string }>);

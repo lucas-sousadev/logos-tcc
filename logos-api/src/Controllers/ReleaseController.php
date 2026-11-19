@@ -161,10 +161,41 @@ class ReleaseController
     {
         $this->executar(function (int $assessoriaId, int $usuarioId, string $perfil) use ($rota): never {
             if (
-                !PermissaoService::usuarioTemPermissao($usuarioId, $perfil, 'RELEASES', 'CRIAR') &&
-                !PermissaoService::usuarioTemPermissao($usuarioId, $perfil, 'RELEASES', 'VISUALIZAR')
+                !PermissaoService::usuarioTemPermissao(
+                    $usuarioId,
+                    $perfil,
+                    'RELEASES',
+                    'CRIAR'
+                )
+                && !PermissaoService::usuarioTemPermissao(
+                    $usuarioId,
+                    $perfil,
+                    'RELEASES',
+                    'VISUALIZAR'
+                )
+                && !PermissaoService::usuarioTemPermissao(
+                    $usuarioId,
+                    $perfil,
+                    'TEMPLATES',
+                    'VISUALIZAR'
+                )
+                && !PermissaoService::usuarioTemPermissao(
+                    $usuarioId,
+                    $perfil,
+                    'TEMPLATES',
+                    'CRIAR'
+                )
+                && !PermissaoService::usuarioTemPermissao(
+                    $usuarioId,
+                    $perfil,
+                    'TEMPLATES',
+                    'EDITAR'
+                )
             ) {
-                throw new \RuntimeException('Você não possui permissão para visualizar a imagem.', 403);
+                throw new \RuntimeException(
+                    'Você não possui permissão para visualizar a imagem.',
+                    403
+                );
             }
 
             ReleaseImagemService::exibir(

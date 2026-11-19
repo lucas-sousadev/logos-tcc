@@ -48,6 +48,7 @@ interface Props {
   onMostrarCampo: (campo: TextInput) => void;
   imagemOcupada: boolean;
   onImagemOcupadaChange: (ocupado: boolean) => void;
+  contextoImagem?: "RELEASES" | "TEMPLATES";
 }
 
 export default function ReleaseConteudoEditor({
@@ -58,6 +59,7 @@ export default function ReleaseConteudoEditor({
   onMostrarCampo,
   imagemOcupada,
   onImagemOcupadaChange,
+  contextoImagem = "RELEASES",
 }: Props) {
   const { theme } = useTheme();
 
@@ -310,7 +312,7 @@ export default function ReleaseConteudoEditor({
                       disabled,
                     }}
                     accessibilityLabel={
-                      "Editar bloco " +
+                      (expandido ? "Fechar bloco " : "Editar bloco ") +
                       (indice + 1) +
                       ": " +
                       ROTULOS[bloco.tipo]
@@ -332,10 +334,9 @@ export default function ReleaseConteudoEditor({
                         fontSize: 12,
                       }}
                     >
-                      {bloco.texto ||
-                        (temTexto
-                          ? "Toque para editar"
-                          : "Bloco de separação")}
+                      {expandido
+                        ? "Toque para fechar"
+                        : "Toque para editar"}
                     </Text>
                   </TouchableOpacity>
 
@@ -452,6 +453,7 @@ export default function ReleaseConteudoEditor({
                         onInputLayout={() => revelarCampo(bloco.id, "url", urlRef.current)}
                         onChange={(url) => alterar(bloco.id, { url })}
                         onOcupadoChange={onImagemOcupadaChange}
+                        contextoImagem={contextoImagem}
                       />
                     ) : temUrl ? (
                       <Input

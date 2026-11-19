@@ -759,3 +759,40 @@ $router->get(
     "RELEASES.IMAGEM",
     middleware: [$authMiddleware]
 );
+
+// templates
+
+$router->get(
+    "/api/templates",
+    "TemplateController:listar",
+    "TEMPLATES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/templates",
+    "TemplateController:criar",
+    "TEMPLATES.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/templates/{id}",
+    "TemplateController:atualizar",
+    "TEMPLATES.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->delete(
+    "/api/templates/{id}",
+    "TemplateController:excluir",
+    "TEMPLATES.EXCLUIR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/templates/imagens",
+    "TemplateController:carregarImagem",
+    "TEMPLATES.IMAGEM",
+    middleware: [$authMiddleware]
+);

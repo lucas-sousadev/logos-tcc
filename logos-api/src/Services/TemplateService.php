@@ -252,6 +252,177 @@ class TemplateService
         ];
     }
 
+    public static function salvar(
+        int $assessoriaId,
+        int $usuarioId,
+        array $dados,
+        mixed $id = null
+    ): array {
+        $permitidos = $id === null
+            ? ['nome', 'blocos']
+            : ['nome', 'blocos', 'assinatura'];
+
+        $nome = $dados['nome'] ?? null;
+
+        if (
+            array_diff(array_keys($dados), $permitidos) !== []
+            || !is_string($nome)
+            || !mb_check_encoding($nome, 'UTF-8')
+            || trim($nome) === ''
+            || mb_strlen(trim($nome), 'UTF-8') > 150
+        ) {
+            throw new \InvalidArgumentException(
+                'Informe um nome de até 150 caracteres.'
+            );
+        }
+
+        $blocos = ReleaseBlocosService::validar(
+            $dados['blocos'] ?? null
+        );
+
+        if ($blocos === []) {
+            throw new \InvalidArgumentException(
+                'Adicione pelo menos um bloco ao template.'
+            );
+        }
+
+        $nome = trim($nome);
+        $json = json_encode(
+            $blocos,
+            JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            if ($id === null) {
+                $stmt = $db->prepare('
+                    INSERT INTO templates (
+                        assessoria_id,
+                        criado_por,
+                        nome,
+                        blocos_json
+                    )
+                    VALUES (
+                        :assessoria,
+                        :usuario,
+                        :nome,
+                        :blocos
+                    )
+                ');
+
+                $stmt->execute([
+                    'assessoria' => $assessoriaId,
+                    'usuario' => $usuarioId,
+                    'nome' => $nome,
+                    'blocos' => $json,
+                ]);
+
+                $templateId = (int) $db->lastInsertId();
+            } else {
+                $templateId = self::numero($id, 'Template');
+
+                $stmt = $db->prepare('
+                    SELECT id, nome, blocos_json
+                    FROM templates
+                    WHERE id = :id
+                    AND assessoria_id = :assessoria
+                    AND ativo = 1
+                    FOR UPDATE
+                ');
+
+                $stmt->execute([
+                    'id' => $templateId,
+                    'assessoria' => $assessoriaId,
+                ]);
+
+                $linha = $stmt->fetch();
+
+                if (!$linha) {
+                    throw new \OutOfBoundsException(
+                        'Template não encontrado nesta assessoria.'
+                    );
+                }
+
+                $atual = self::preparar([
+                    'id' => $templateId,
+                    'codigo' => null,
+                    'origem' => 'ASSESSORIA',
+                    'nome' => $linha['nome'],
+                    'blocos' => $linha['blocos_json'],
+                ]);
+
+                $assinatura = $dados['assinatura'] ?? null;
+
+                if (
+                    !is_string($assinatura)
+                    || !hash_equals(
+                        $atual['assinatura'],
+                        $assinatura
+                    )
+                ) {
+                    throw new \DomainException(
+                        'Este template foi alterado. Reabra o modelo antes de editar.'
+                    );
+                }
+
+                $stmt = $db->prepare('
+                    UPDATE templates
+                    SET nome = :nome,
+                        blocos_json = :blocos
+                    WHERE id = :id
+                    AND assessoria_id = :assessoria
+                    AND ativo = 1
+                ');
+
+                $stmt->execute([
+                    'nome' => $nome,
+                    'blocos' => $json,
+                    'id' => $templateId,
+                    'assessoria' => $assessoriaId,
+                ]);
+            }
+
+            $modelo = self::preparar([
+                'id' => $templateId,
+                'codigo' => null,
+                'origem' => 'ASSESSORIA',
+                'nome' => $nome,
+                'blocos' => $blocos,
+            ]);
+
+            $db->commit();
+
+            return $modelo;
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $erro;
+        }
+    }
+
+    public static function excluir(
+        int $assessoriaId,
+        mixed $id
+    ): void {
+        $templateId = self::numero($id, 'Template');
+
+        $stmt = Connection::get()->prepare('
+            UPDATE templates
+            SET ativo = 0
+            WHERE id = :id
+            AND assessoria_id = :assessoria
+        ');
+
+        $stmt->execute([
+            'id' => $templateId,
+            'assessoria' => $assessoriaId,
+        ]);
+    }
+
     public static function buscarParaRelease(
         int $assessoriaId,
         ?int $id,

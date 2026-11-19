@@ -29,6 +29,7 @@ interface Props {
   onInputLayout: () => void;
   onChange: (url: string) => void;
   onOcupadoChange: (ocupado: boolean) => void;
+  contextoImagem?: "RELEASES" | "TEMPLATES";
 }
 
 export default function ReleaseImagemCampo({
@@ -38,6 +39,7 @@ export default function ReleaseImagemCampo({
   onInputLayout,
   onChange,
   onOcupadoChange,
+  contextoImagem = "RELEASES",
 }: Props) {
   const { theme } = useTheme();
   const trava = useRef(false);
@@ -65,7 +67,7 @@ export default function ReleaseImagemCampo({
     setErro("");
 
     try {
-      const endereco = await carregarImagemRelease(imagem);
+      const endereco = await carregarImagemRelease(imagem,contextoImagem);
       setUrlComErro("");
       onChange(endereco);
     } catch (falha) {
