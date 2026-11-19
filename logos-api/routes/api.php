@@ -752,3 +752,10 @@ $router->post(
     "RELEASES.CRIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
+
+$router->get(
+    "/api/releases/imagens/{assessoria_id}/{arquivo}",
+    "ReleaseController:exibirImagem",
+    "RELEASES.IMAGEM",
+    middleware: [$authMiddleware]
+);

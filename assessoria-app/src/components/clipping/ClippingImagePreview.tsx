@@ -16,10 +16,11 @@ import { Ionicons } from "@expo/vector-icons";
 
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
-import {
-  authenticatedFetch,
-  getToken,
-} from "@/services/api/auth";
+import { randomUUID } from "expo-crypto";
+import { File as ExpoFile, Paths } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
+
+import { authenticatedFetch } from "@/services/api/auth";
 import { obterUrlArquivoAnexo } from "@/services/api/clipping";
 
 interface ClippingImagemPreviewProps {
@@ -47,10 +48,17 @@ export default function ClippingImagemPreview({
   const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
-    let ativo = true;
-    let urlTemporaria: string | null = null;
-
     const controller = new AbortController();
+    let urlTemporaria: string | null = null;
+    let arquivoTemporario: ExpoFile | null = null;
+
+    function liberarArquivo(arquivo: ExpoFile) {
+      try {
+        if (arquivo.exists) arquivo.delete();
+      } catch {
+        // O sistema pode já ter limpado o cache.
+      }
+    }
 
     setFonte(null);
     setErro("");
@@ -58,61 +66,66 @@ export default function ClippingImagemPreview({
 
     async function carregar() {
       try {
-        const url = obterUrlArquivoAnexo(endpoint);
+        const resposta = await authenticatedFetch(
+          obterUrlArquivoAnexo(endpoint),
+          { signal: controller.signal },
+          Platform.OS === "web" ? fetch : expoFetch
+        );
 
-        if (Platform.OS === "web") {
-          // no navegador, a autenticação acontece nesta requisição
-          const resposta = await authenticatedFetch(url, {
-            signal: controller.signal,
-          });
-
-          if (!resposta.ok) {
-            throw new Error(
-              resposta.status === 403
-                ? "Você não possui permissão para visualizar esta imagem."
-                : "Não foi possível carregar a imagem."
-            );
-          }
-
-          const arquivo = await resposta.blob();
-
-          if (!arquivo.type.startsWith("image/")) {
-            throw new Error(
-              "O servidor não retornou uma imagem válida."
-            );
-          }
-
-          if (!ativo) return;
-
-          // a imagem usa uma URL local temporária, sem token na URL
-          urlTemporaria = URL.createObjectURL(arquivo);
-
-          setFonte({
-            uri: urlTemporaria,
-          });
-
-          return;
-        }
-
-        // no aplicativo nativo, Image aceita os cabeçalhos
-        const token = await getToken();
-
-        if (!token) {
+        if (!resposta.ok) {
           throw new Error(
-            "Sua sessão não está disponível. Entre novamente."
+            resposta.status === 403
+              ? "Você não possui permissão para visualizar esta imagem."
+              : "Não foi possível carregar a imagem."
           );
         }
 
-        if (!ativo) return;
+        const tipo = resposta.headers.get("Content-Type")?.split(";")[0].trim();
 
-        setFonte({
-          uri: url,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        if (!tipo?.startsWith("image/")) {
+          throw new Error("O servidor não retornou uma imagem válida.");
+        }
+
+        if (controller.signal.aborted) return;
+
+        if (Platform.OS === "web") {
+          const imagem = await resposta.blob();
+
+          if (controller.signal.aborted) return;
+
+          urlTemporaria = URL.createObjectURL(imagem);
+          setFonte({ uri: urlTemporaria });
+          return;
+        }
+
+        if (!resposta.body) {
+          throw new Error("A resposta da imagem veio vazia.");
+        }
+
+        const extensao = tipo === "image/jpeg"
+          ? "jpg"
+          : tipo.slice("image/".length).replace(/[^a-z0-9]/gi, "");
+
+        const arquivo = new ExpoFile(
+          Paths.cache,
+          "previa-" + randomUUID() + "." + (extensao || "img")
+        );
+
+        try {
+          arquivo.create();
+          await resposta.body.pipeTo(arquivo.writableStream(), {
+            signal: controller.signal,
+          });
+
+          if (!controller.signal.aborted) {
+            arquivoTemporario = arquivo;
+            setFonte({ uri: arquivo.uri });
+          }
+        } finally {
+          if (arquivoTemporario !== arquivo) liberarArquivo(arquivo);
+        }
       } catch (error) {
-        if (!ativo) return;
+        if (controller.signal.aborted) return;
 
         setErro(
           error instanceof Error
@@ -126,12 +139,9 @@ export default function ClippingImagemPreview({
     void carregar();
 
     return () => {
-      ativo = false;
       controller.abort();
-
-      if (urlTemporaria) {
-        URL.revokeObjectURL(urlTemporaria);
-      }
+      if (urlTemporaria) URL.revokeObjectURL(urlTemporaria);
+      if (arquivoTemporario) liberarArquivo(arquivoTemporario);
     };
   }, [endpoint, tentativa]);
 

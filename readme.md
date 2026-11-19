@@ -16,3 +16,8 @@ NÃO ESQUEÇA DE lIGAR O AUTO SAVE NO VSCODE
 8. no xampp, inicie os módulos MySQL e Apache
 9. digite "cd assessoria-app" se não estiver nessa pasta, depois digite npx expo start para iniciar o app, depois aperte W para abrir na web.
 
+para o webscraping funcionar, execute na pasta do capture-worker:
+- npm install
+- npm i playwright-chromium
+
+((se der erro ainda, execute também npm install chromium))

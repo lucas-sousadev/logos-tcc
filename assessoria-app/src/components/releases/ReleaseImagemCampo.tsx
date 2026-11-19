@@ -4,6 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Platform,
   type TextInput,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -13,7 +14,13 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
-import { carregarImagemRelease } from "@/services/api/release";
+import ClippingImagemPreview from "@/components/clipping/ClippingImagePreview";
+import {
+  carregarImagemRelease,
+  obterEndpointImagemRelease,
+} from "@/services/api/release";
+
+const FORMATOS = ["image/jpeg", "image/png", "image/webp"];
 
 interface Props {
   url: string;
@@ -34,15 +41,23 @@ export default function ReleaseImagemCampo({
 }: Props) {
   const { theme } = useTheme();
   const trava = useRef(false);
+  const selecionando = useRef(false);
+  const seletorWeb = useRef<HTMLInputElement>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
   const [urlComErro, setUrlComErro] = useState("");
 
   const podeExibir = /^https?:\/\/\S+$/i.test(url);
   const exibirImagem = podeExibir && urlComErro !== url;
+  const endpointImagem = obterEndpointImagemRelease(url);
 
-  async function carregar() {
+  async function enviar(imagem: DocumentPicker.DocumentPickerAsset) {
     if (disabled || trava.current) return;
+
+    if (imagem.size !== undefined && (imagem.size <= 0 || imagem.size > 5 * 1024 * 1024)) {
+      setErro("Selecione uma imagem de até 5 MB.");
+      return;
+    }
 
     trava.current = true;
     setOcupado(true);
@@ -50,21 +65,6 @@ export default function ReleaseImagemCampo({
     setErro("");
 
     try {
-      const resultado = await DocumentPicker.getDocumentAsync({
-        type: ["image/jpeg", "image/png", "image/webp"],
-        multiple: false,
-        copyToCacheDirectory: true,
-        base64: false,
-      });
-
-      if (resultado.canceled) return;
-
-      const imagem = resultado.assets[0];
-
-      if (imagem.size !== undefined && (imagem.size <= 0 || imagem.size > 5 * 1024 * 1024)) {
-        throw new Error("Selecione uma imagem de até 5 MB.");
-      }
-
       const endereco = await carregarImagemRelease(imagem);
       setUrlComErro("");
       onChange(endereco);
@@ -74,6 +74,34 @@ export default function ReleaseImagemCampo({
       trava.current = false;
       setOcupado(false);
       onOcupadoChange(false);
+    }
+  }
+
+  async function carregar() {
+    if (disabled || trava.current || selecionando.current) return;
+
+    if (Platform.OS === "web") {
+      seletorWeb.current?.click();
+      return;
+    }
+
+    selecionando.current = true;
+
+    try {
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: FORMATOS,
+        multiple: false,
+        copyToCacheDirectory: true,
+        base64: false,
+      });
+
+      if (!resultado.canceled && resultado.assets[0]) {
+        await enviar(resultado.assets[0]);
+      }
+    } catch {
+      setErro("Não foi possível abrir o seletor de imagens.");
+    } finally {
+      selecionando.current = false;
     }
   }
 
@@ -95,7 +123,14 @@ export default function ReleaseImagemCampo({
           },
         ]}
       >
-        {exibirImagem ? (
+        {endpointImagem ? (
+          <ClippingImagemPreview
+            endpoint={endpointImagem}
+            nome="Miniatura da imagem do release"
+            style={styles.miniatura}
+            resizeMode="contain"
+          />
+        ) : exibirImagem ? (
           <Image
             accessibilityLabel="Miniatura da imagem do release"
             source={{ uri: url }}
@@ -111,7 +146,7 @@ export default function ReleaseImagemCampo({
 
         <View style={styles.detalhes}>
           <Text weight="SemiBold">
-            {exibirImagem
+            {endpointImagem || exibirImagem
               ? "Imagem selecionada"
               : podeExibir
                 ? "Prévia indisponível"
@@ -135,6 +170,29 @@ export default function ReleaseImagemCampo({
         ) : null}
       </View>
 
+      {Platform.OS === "web" ? (
+        <input
+          type="file"
+          accept={FORMATOS.join(",")}
+          ref={seletorWeb}
+          style={{ display: "none" }}
+          onChange={(evento) => {
+            const arquivo = evento.currentTarget.files?.[0];
+            evento.currentTarget.value = "";
+
+            if (arquivo) {
+              void enviar({
+                uri: "",
+                file: arquivo,
+                name: arquivo.name,
+                size: arquivo.size,
+                mimeType: arquivo.type,
+                lastModified: arquivo.lastModified,
+              });
+            }
+          }}
+        />
+      ) : null}
       <Button
         title={url ? "TROCAR IMAGEM" : "CARREGAR IMAGEM"}
         icon="add-outline"

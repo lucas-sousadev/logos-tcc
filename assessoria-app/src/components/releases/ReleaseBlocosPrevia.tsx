@@ -10,7 +10,11 @@ import { Pencil } from "lucide-react-native";
 
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
-import type { BlocoTemplateRelease } from "@/services/api/release";
+import ClippingImagemPreview from "@/components/clipping/ClippingImagePreview";
+import {
+  obterEndpointImagemRelease,
+  type BlocoTemplateRelease,
+} from "@/services/api/release";
 
 export type CampoBlocoPrevia =
   | "texto"
@@ -90,6 +94,7 @@ function BlocoPrevia({
   const [urlComErro, setUrlComErro] = useState("");
 
   const url = bloco.url ?? "";
+  const endpointImagem = obterEndpointImagemRelease(url);
 
   function acao(campo: CampoBlocoPrevia) {
     return onEditar
@@ -120,8 +125,14 @@ function BlocoPrevia({
           disabled={disabled}
           onEditar={acao("url")}
         >
-          {/^https?:\/\/[^\s]+$/i.test(url) &&
-          urlComErro !== url ? (
+          {endpointImagem ? (
+            <ClippingImagemPreview
+              endpoint={endpointImagem}
+              nome={bloco.texto || "Imagem da matéria"}
+              style={styles.foto}
+              resizeMode="contain"
+            />
+          ) : /^https?:\/\/[^\s]+$/i.test(url) && urlComErro !== url ? (
             <Image
               source={{ uri: url }}
               style={styles.foto}

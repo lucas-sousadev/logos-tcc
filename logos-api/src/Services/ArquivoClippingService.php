@@ -528,4 +528,9 @@ class ArquivoClippingService
     {
         return self::base(true);
     }
+    
+    public static function baseArmazenamento(): string
+    {
+        return self::base(true);
+    }
 }

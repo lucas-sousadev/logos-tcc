@@ -337,12 +337,40 @@ export async function carregarImagemRelease(
 
     const { caminho } = await Promise.race([envio, prazo]);
 
-    if (!/^\/uploads\/releases\/\d+\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(caminho)) {
+    if (!/^\/api\/releases\/imagens\/[1-9]\d*\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(caminho)) {
       throw new Error("A API não retornou o endereço da imagem.");
     }
 
     return API_URL.replace(/\/$/, "") + caminho;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+export function obterEndpointImagemRelease(url: string): string | null {
+  if (!/^https?:\/\//i.test(url)) return null;
+
+  try {
+    const base = new URL(API_URL);
+    const imagem = new URL(url);
+    const prefixo = base.pathname.replace(/\/+$/, "");
+
+    if (
+      imagem.origin !== base.origin ||
+      imagem.username ||
+      imagem.password ||
+      !imagem.pathname.startsWith(prefixo + "/")
+    ) {
+      return null;
+    }
+
+    const caminho = imagem.pathname.slice(prefixo.length);
+    const partes = caminho.match(
+      /^\/(?:api\/releases\/imagens|uploads\/releases)\/([1-9]\d*)\/([a-f0-9]{64}\.(?:jpg|png|webp))$/
+    );
+
+    return partes ? "/releases/imagens/" + partes[1] + "/" + partes[2] : null;
+  } catch {
+    return null;
   }
 }

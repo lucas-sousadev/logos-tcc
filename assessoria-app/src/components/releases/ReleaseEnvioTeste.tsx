@@ -117,6 +117,7 @@ export default function ReleaseEnvioTeste({
                     setEmail(texto);
                     setErro("");
                   }}
+                  clearable
                 />
 
                 {erro ? (

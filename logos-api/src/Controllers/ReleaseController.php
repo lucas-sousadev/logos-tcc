@@ -156,4 +156,22 @@ class ReleaseController
             return ['message' => 'Teste enviado.'];
         });
     }
+
+    public function exibirImagem(array $rota): void
+    {
+        $this->executar(function (int $assessoriaId, int $usuarioId, string $perfil) use ($rota): never {
+            if (
+                !PermissaoService::usuarioTemPermissao($usuarioId, $perfil, 'RELEASES', 'CRIAR') &&
+                !PermissaoService::usuarioTemPermissao($usuarioId, $perfil, 'RELEASES', 'VISUALIZAR')
+            ) {
+                throw new \RuntimeException('Você não possui permissão para visualizar a imagem.', 403);
+            }
+
+            ReleaseImagemService::exibir(
+                $assessoriaId,
+                $rota['assessoria_id'] ?? null,
+                $rota['arquivo'] ?? null
+            );
+        });
+    }
 }

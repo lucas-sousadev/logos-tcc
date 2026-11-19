@@ -672,36 +672,34 @@ function CadastroRelease({ conta }: { conta: string | null }) {
             ) : null}
 
             <View style={styles.acoesRodape}>
-                {etapaAnterior || confirmando ? (
-                    <Button
-                    title={confirmando ? "SAIR" : "VOLTAR"}
-                    variant="outline"
-                    style={styles.botaoRodape}
-                    disabled={salvando || sucesso || imagemOcupada}
-                    onPress={voltar}
-                    />
-                ) : proximaEtapa ? (
-                    <Button
-                    title="PRÓXIMO"
-                    style={styles.botaoRodape}
-                    disabled={bloqueado}
-                    onPress={() => mudarEtapa(proximaEtapa)}
-                    />
-                ) : null}
-
+              {etapaAnterior || confirmando ? (
                 <Button
-                    title={
-                    confirmando
-                        ? "CONFIRMAR SALVAMENTO"
-                        : "SALVAR RASCUNHO"
-                    }
-                    style={styles.botaoRodape}
-                    loading={salvando}
-                    disabled={!conta || !podeCriar || sucesso || imagemOcupada}
-                    onPress={() => void salvar()}
-                    variant={etapa === "REVISAO" ? "primary" : "outline"}
+                  title={confirmando ? "SAIR" : "VOLTAR"}
+                  variant="outline"
+                  style={styles.botaoRodape}
+                  disabled={salvando || sucesso || imagemOcupada}
+                  onPress={voltar}
                 />
-                </View>
+              ) : null}
+
+              <Button
+                title={confirmando ? "CONFIRMAR SALVAMENTO" : "SALVAR RASCUNHO"}
+                style={styles.botaoRodape}
+                loading={salvando}
+                disabled={!conta || !podeCriar || sucesso || imagemOcupada}
+                onPress={() => void salvar()}
+                variant={etapa === "REVISAO" ? "primary" : "outline"}
+              />
+
+              {!etapaAnterior && !confirmando && proximaEtapa ? (
+                <Button
+                  title="PRÓXIMO"
+                  style={styles.botaoRodape}
+                  disabled={bloqueado}
+                  onPress={() => mudarEtapa(proximaEtapa)}
+                />
+              ) : null}
+            </View>
 
                 <Text style={{ color: theme.textoSub }}>
                     Você pode salvar o rascunho com o preenchimento incompleto.
