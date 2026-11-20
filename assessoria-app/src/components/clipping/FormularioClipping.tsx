@@ -806,7 +806,7 @@ const [tier, setTier] = useState<Tier | null>(
         return;
         }
 
-        router.replace("/clipping");
+        router.dismissTo("/clipping");
     };
 
     if (temAlteracoesPendentes) {
@@ -1085,7 +1085,7 @@ const [tier, setTier] = useState<Tier | null>(
             if (router.canGoBack()) {
               router.back();
             } else {
-              router.replace("/clipping");
+              router.dismissTo("/clipping");
             }
           }}
         />

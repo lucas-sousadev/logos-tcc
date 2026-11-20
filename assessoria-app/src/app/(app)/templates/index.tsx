@@ -6,16 +6,14 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  BackHandler,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
@@ -27,6 +25,7 @@ import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ReleaseBlocosPrevia from "@/components/releases/ReleaseBlocosPrevia";
 import TemplateFormulario from "@/components/templates/TemplateFormulario";
 import TemplateMiniatura from "@/components/templates/TemplateMiniatura";
+import ContadorLista from "@/components/ui/ContadorLista";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -64,7 +63,6 @@ export default function Templates() {
 }
 
 function CatalogoTemplates() {
-  const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const { width } = useWindowDimensions();
@@ -75,6 +73,7 @@ function CatalogoTemplates() {
   const podeExcluir = temPermissao("TEMPLATES", "EXCLUIR");
 
   const trava = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   const [formulario, setFormulario] = useState<{
     modelo: TemplateRelease | null;
@@ -99,31 +98,6 @@ function CatalogoTemplates() {
   const [removendo, setRemovendo] = useState(false);
   const [erroRemocao, setErroRemocao] = useState("");
   const [sucesso, setSucesso] = useState("");
-
-  const voltarParaMais = useCallback(() => {
-    router.navigate("/mais");
-  }, [router]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (
-        Platform.OS !== "android" ||
-        formulario ||
-        previa ||
-        remover ||
-        sucesso
-      ) {
-        return;
-      }
-
-      const assinatura = BackHandler.addEventListener("hardwareBackPress", () => {
-        voltarParaMais();
-        return true;
-      });
-
-      return () => assinatura.remove();
-    }, [formulario, previa, remover, sucesso, voltarParaMais])
-  );
 
   useEffect(() => {
     const texto = digitado.trim();
@@ -206,7 +180,9 @@ function CatalogoTemplates() {
   }
 
   function mudarPagina(page: number) {
+    if (carregando || removendo || page === pagina) return;
     setConsulta((atual) => ({ ...atual, page }));
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }
 
   function pedirRemocao(modelo: TemplateRelease) {
@@ -291,13 +267,10 @@ function CatalogoTemplates() {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header
-        title="Templates"
-        showBackButton
-        onBackPress={voltarParaMais}
-      />
+      <Header title="Templates" showBackButton />
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.conteudo}
         keyboardShouldPersistTaps="handled"
       >
@@ -441,22 +414,9 @@ function CatalogoTemplates() {
                       Modelos
                     </Text>
 
-                    <View
-                      style={[
-                        styles.contador,
-                        { backgroundColor: theme.primaria + "0C" },
-                      ]}
-                    >
-                      <Text
-                        weight="Medium"
-                        style={{
-                          color: theme.textoSub,
-                          fontSize: 11,
-                        }}
-                      >
-                        {total} {total === 1 ? "encontrado" : "encontrados"}
-                      </Text>
-                    </View>
+                    <ContadorLista>
+                      {total} {total === 1 ? "encontrado" : "encontrados"}
+                    </ContadorLista>
                   </View>
 
                   {!templates.length ? (
@@ -576,6 +536,7 @@ function CatalogoTemplates() {
                     pagina={pagina}
                     limite={LIMITE_PAGINA}
                     total={total}
+                    disabled={carregando || removendo}
                     onChange={mudarPagina}
                   />
                 </>
@@ -745,6 +706,7 @@ const styles = StyleSheet.create({
   },
   resultadosTopo: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,

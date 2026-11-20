@@ -7,7 +7,7 @@ import {
   RefreshControl
 } from "react-native";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import {useLocalSearchParams, useRouter} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -18,9 +18,9 @@ import Text from "@/components/ui/Text";
 import ClienteFilterModal, { type FiltrosClientes,} from "@/components/ui/Filtros/ClienteFilterModal";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
+import ContadorLista from "@/components/ui/ContadorLista";
 
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   ClienteClippingAno,
   listarClientesDoAno,
@@ -37,21 +37,21 @@ function filtrosClientesIniciais(): FiltrosClientes {
   };
 }
 
+type RotaAno = {
+  ano?: string;
+  origemTipo?: string;
+  origemId?: string;
+};
+
 export default function ClientesDoAno() {
+  const params = useLocalSearchParams<RotaAno>();
+  const ano = params.ano === undefined ? new Date().getFullYear() : Number(params.ano);
+  return <ConteudoClientesDoAno key={String(ano)} ano={ano} params={params} />;
+}
+
+function ConteudoClientesDoAno({ ano, params }: { ano: number; params: RotaAno }) {
   const router = useRouter();
   const { theme } = useTheme();
-  const { temPermissao } = useAuth();
-
-  const params = useLocalSearchParams<{
-    ano?: string;
-    origemTipo?: string;
-    origemId?: string;
-  }>();
-
-  const ano =
-  params.ano === undefined
-    ? new Date().getFullYear()
-    : Number(params.ano);
 
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] =
@@ -69,13 +69,6 @@ export default function ClientesDoAno() {
     Boolean(filtros.cidade.trim()) ||
     Boolean(filtros.segmento.trim());
 
-  useEffect(() => {
-    setPagina(1);
-    setBusca("");
-    setBuscaAplicada("");
-    setFiltros(filtrosClientesIniciais());
-    setFiltrosAberto(false);
-  }, [ano]);
 
   const consultarClientes = useCallback(async () => {
     if (
@@ -94,6 +87,11 @@ export default function ClientesDoAno() {
     });
   }, [ano, buscaAplicada, filtros, pagina]);
 
+  const ajustarPagina = useCallback((resposta: Awaited<ReturnType<typeof listarClientesDoAno>>) => {
+    const ultima = Math.max(1, Math.ceil(resposta.pagination.total / 50));
+    if (pagina > ultima) setPagina(ultima);
+  }, [pagina]);
+
   const {
     dados,
     carregando,
@@ -102,24 +100,13 @@ export default function ClientesDoAno() {
     recarregar: carregarClientes,
   } = useConsultaClipping(
     consultarClientes,
-    JSON.stringify([ano, buscaAplicada, filtros, pagina])
+    JSON.stringify([ano, buscaAplicada, filtros, pagina]),
+    ajustarPagina
   );
 
   const clientes = dados?.clientes ?? [];
   const total = dados?.pagination.total ?? 0;
 
-  useEffect(() => {
-    if (!dados || erro) return;
-
-    const ultima = Math.max(
-      1,
-      Math.ceil(dados.pagination.total / 50)
-    );
-
-    if (pagina > ultima) {
-      setPagina(ultima);
-    }
-  }, [dados, erro, pagina]);
 
   function voltar() {
     const origem = rotaOrigemClipping(
@@ -137,11 +124,16 @@ export default function ClientesDoAno() {
       return;
     }
 
-    router.replace("/clipping");
+    router.dismissTo("/clipping");
   }
 
   function pesquisar() {
-    setBuscaAplicada(busca.trim());
+    const texto = busca.trim();
+    if (texto === buscaAplicada && pagina === 1) {
+      void carregarClientes();
+      return;
+    }
+    setBuscaAplicada(texto);
     setPagina(1);
   }
 
@@ -158,18 +150,6 @@ export default function ClientesDoAno() {
         id: String(cliente.id),
         ano: String(ano),
         clienteNome: cliente.nome,
-        origemTipo: params.origemTipo,
-        origemId: params.origemId,
-        retornoVinculado: "ano",
-      },
-    });
-  }
-
-  function novoClipping() {
-    router.push({
-      pathname: "/clipping/novo",
-      params: {
-        ano: String(ano),
         origemTipo: params.origemTipo,
         origemId: params.origemId,
         retornoVinculado: "ano",
@@ -221,14 +201,11 @@ export default function ClientesDoAno() {
           />
 
           <View style={styles.topRow}>
-            <Text
-              style={[
-                styles.count,
-                { color: theme.textoSub },
-              ]}
-            >
-              {total} cliente(s) disponíveis
-            </Text>
+            <ContadorLista>
+              {total} {total === 1 ? "cliente" : "clientes"}
+              {" em "}
+              {ano}
+            </ContadorLista>
           </View>
 
           {erro ? (
@@ -386,6 +363,7 @@ const styles = StyleSheet.create({
 
   topRow: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     gap: 10,
     marginBottom: 14,
@@ -402,6 +380,7 @@ const styles = StyleSheet.create({
   },
 
   clientCard: {
+    minWidth: 0,
     minHeight: 76,
     borderWidth: 1.5,
     borderRadius: 16,
@@ -414,6 +393,7 @@ const styles = StyleSheet.create({
   clientIcon: {
     width: 45,
     height: 45,
+    flexShrink: 0,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
@@ -422,6 +402,7 @@ const styles = StyleSheet.create({
 
   clientInfo: {
     flex: 1,
+    minWidth: 0,
   },
 
   clientName: {

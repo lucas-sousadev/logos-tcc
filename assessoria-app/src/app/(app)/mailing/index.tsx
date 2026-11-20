@@ -6,15 +6,17 @@ import {
   View,
   Platform
 } from "react-native";
+
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import { File, Paths,} from "expo-file-system";
-import { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef} from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import MailingFilterModal from "@/components/ui/Filtros/MailingFilterModal";
 import type {
   FiltrosMailing,
 } from "@/components/ui/Filtros/MailingFilterModal";
+import ContadorLista from "@/components/ui/ContadorLista";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -24,6 +26,8 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert, { type FeedbackAlertVariant,} from "@/components/forms/FeedbackAlert";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -70,6 +74,7 @@ const LIMITE_SELECAO_EM_LOTE = 100;
 
 export default function Mailing() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
 
@@ -97,9 +102,6 @@ export default function Mailing() {
   const [buscaAplicada, setBuscaAplicada] =
     useState("");
 
-  const [jornalistas, setJornalistas] =
-    useState<Jornalista[]>([]);
-
   const [filtrosAberto, setFiltrosAberto] = useState(false);
 
   const [filtros, setFiltros] =
@@ -110,105 +112,79 @@ export default function Mailing() {
       ativo: 1,
     });
 
-  const [carregando, setCarregando] =
-    useState(true);
+  const consultarPagina = useCallback(
+    async (page: number, limit: number) => {
+      const resposta = await listarJornalistas({
+        page,
+        limit,
+        busca: buscaAplicada,
+        estado: filtros.estado,
+        cidade: filtros.cidade,
+        cargo: filtros.cargo,
+        veiculo_id: filtros.veiculoId,
+        ativo: filtros.ativo,
+      });
 
-  const [carregandoMais, setCarregandoMais] =
-    useState(false);
-
-  const [pagina, setPagina] = useState(1);
-
-  const [temMais, setTemMais] =
-    useState(false);
-
-  const [total, setTotal] = useState(0);
-  
-
-  const carregarJornalistas = useCallback(
-  async (reset = false) => {
-    try {
-      if (reset) {
-        setCarregando(true);
-        setPagina(1);
-      } else {
-        setCarregandoMais(true);
-      }
-
-      const paginaAtual = reset
-        ? 1
-        : pagina + 1;
-
-      const resposta =
-        await listarJornalistas({
-          page: paginaAtual,
-          limit: 50,
-          busca: buscaAplicada,
-          estado: filtros.estado,
-          cidade: filtros.cidade,
-          cargo: filtros.cargo,
-          veiculo_id: filtros.veiculoId,
-          ativo: filtros.ativo,
-        });
-
-      if (reset) {
-        setJornalistas(resposta.jornalistas);
-      } else {
-        setJornalistas((atual) => [
-          ...atual,
-          ...resposta.jornalistas,
-        ]);
-      }
-
-      setPagina(paginaAtual);
-
-      setTotal(
-        resposta.pagination.total
-      );
-
-      setTemMais(
-        resposta.pagination.has_next
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao carregar mailing:",
-        error
-      );
-    } finally {
-      setCarregando(false);
-      setCarregandoMais(false);
-    }
-  },
-  [
-    pagina,
-    buscaAplicada,
-    filtros,
-  ]
-); 
-
-  useFocusEffect(
-    useCallback(() => {
-      carregarJornalistas(true);
-
-      return () => {
-        setIdsSelecionados([]);
-        setModoSelecao(false);
+      return {
+        itens: resposta.jornalistas,
+        total: resposta.pagination.total,
       };
-    }, [
+    },
+    [
       buscaAplicada,
       filtros.estado,
       filtros.cidade,
       filtros.cargo,
       filtros.veiculoId,
       filtros.ativo,
-    ])
+    ]
+  );
+
+  const {
+    itens: jornalistas,
+    pagina,
+    total,
+    carregando,
+    erro,
+    limite,
+    carregarPagina,
+  } = useListaPaginada<Jornalista>({
+    chave: JSON.stringify([buscaAplicada, filtros]),
+    consultar: consultarPagina,
+  });
+
+  function carregarJornalistas(reset = false) {
+    return carregarPagina(reset ? 1 : undefined);
+  }
+
+  useFocusEffect(
+    useCallback(() => () => {
+      setIdsSelecionados([]);
+      setModoSelecao(false);
+    }, [])
   );
 
   function realizarBusca() {
     sairModoSelecao();
 
-    setBuscaAplicada(
-      busca.trim()
-    );
+    const texto = busca.trim();
+
+    if (texto === buscaAplicada) {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada(texto);
+    }
+  }
+
+  function limparBusca() {
+    sairModoSelecao();
+    setBusca("");
+
+    if (buscaAplicada === "") {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada("");
+    }
   }
 
   function abrirFiltros() {
@@ -220,9 +196,16 @@ export default function Mailing() {
   ) {
     sairModoSelecao();
 
-    setPagina(1);
+    const mesmos =
+      JSON.stringify(novosFiltros) ===
+      JSON.stringify(filtros);
+
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
+
+    if (mesmos) {
+      void carregarPagina(1);
+    }
   }
 
   function filtrosAtivos() {
@@ -285,7 +268,7 @@ export default function Mailing() {
       const compartilhamentoDisponivel =
         await Sharing.isAvailableAsync();
 
-        
+
       if (!compartilhamentoDisponivel) {
         throw new Error(
           "O compartilhamento de arquivos não está disponível neste dispositivo."
@@ -355,7 +338,7 @@ export default function Mailing() {
 
   async function executarImportacaoArquivo() {
     sairModoSelecao();
-    
+
     try {
       const resultadoSeletor =
         await DocumentPicker.getDocumentAsync({
@@ -715,7 +698,7 @@ export default function Mailing() {
           },
         ]}
       >
-        <Header title="Mailing" />
+        <Header title="Mailing" showBackButton />
 
         <View style={styles.loading}>
           <ActivityIndicator
@@ -737,11 +720,12 @@ export default function Mailing() {
         },
       ]}
     >
-      <Header title="Mailing" />
+      <Header title="Mailing" showBackButton />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        ref={scrollRef}
       >
         <SearchBar
           value={busca}
@@ -750,25 +734,13 @@ export default function Mailing() {
           onSearch={realizarBusca}
           onFilterPress={abrirFiltros}
           filterActive={filtrosAtivos()}
-          onClear={() => {
-            sairModoSelecao();
-            setBusca("");
-            setBuscaAplicada("");
-          }}
+          onClear={limparBusca}
         />
 
         <View style={styles.topRow}>
-          <Text
-            weight="Medium"
-            style={[
-              styles.count,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            {total} contatos
-          </Text>
+          <ContadorLista>
+            {total} {total === 1 ? "contato" : "contatos"}
+          </ContadorLista>
 
           <View style={styles.topActions}>
             {temPermissao(
@@ -806,14 +778,14 @@ export default function Mailing() {
                   />
                 )}
               </TouchableOpacity>
-            )} 
+            )}
             {temPermissao(
               "MAILING",
               "EXPORTAR"
             ) && (
               <TouchableOpacity
                 onPress={exportarMailing}
-                disabled={exportando || importando}                
+                disabled={exportando || importando}
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Exportar contatos do mailing"
@@ -858,7 +830,6 @@ export default function Mailing() {
             visible={filtrosAtivos()}
             disabled={
               carregando ||
-              carregandoMais ||
               excluindoSelecionados ||
               importando ||
               exportando
@@ -1061,10 +1032,8 @@ export default function Mailing() {
               style={[
                 styles.item,
                 {
-                  backgroundColor:
-                    theme.background,
-                  borderColor:
-                    theme.borda,
+                  backgroundColor: theme.backgroundSecundario,
+                  borderColor: theme.borda + "45",
                 },
               ]}
             >
@@ -1073,23 +1042,17 @@ export default function Mailing() {
                   style={[
                     styles.avatar,
                     {
-                      backgroundColor:
-                        theme
-                          .backgroundContainer,
+                      backgroundColor: theme.primaria + "12",
                     },
                   ]}
                 >
                   <Text
                     weight="Bold"
                     style={{
-                      color:
-                        theme
-                          .textoContainer,
+                      color: theme.textoTerciaria,
                     }}
                   >
-                    {jornalista.nome
-                      .charAt(0)
-                      .toUpperCase()}
+                    {jornalista.nome.charAt(0).toUpperCase()}
                   </Text>
                 </View>
 
@@ -1101,6 +1064,8 @@ export default function Mailing() {
                     style={
                       styles.itemName
                     }
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {jornalista.nome}
                   </Text>
@@ -1167,28 +1132,41 @@ export default function Mailing() {
                   ) : null}
                 </View>
               ) : (
-                <Ionicons
-                  name="chevron-forward-outline"
-                  size={21}
-                  color={theme.texto}
-                />
+                <View
+                  style={[
+                    styles.itemArrow,
+                    { backgroundColor: theme.primaria + "0C" },
+                  ]}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={17}
+                    color={theme.textoTerciaria}
+                  />
+                </View>
               )}
               </View>
             </TouchableOpacity>
           ))
         )}
 
-        {temMais && (
-          <Button
-            title="CARREGAR MAIS"
-            variant="outline"
-            loading={carregandoMais}
-            onPress={() =>
-              carregarJornalistas(false)
-            }
-            style={styles.moreButton}
-          />
-        )}
+
+      {!erro && total > 0 ? (
+        <PaginacaoLista
+          pagina={pagina}
+          limite={limite}
+          total={total}
+          disabled={carregando || excluindoSelecionados || importando || exportando}
+          onChange={(destino) => {
+            void carregarPagina(destino);
+
+            scrollRef.current?.scrollTo({
+              y: 0,
+              animated: false,
+            });
+          }}
+        />
+      ) : null}
       </ScrollView>
       <MailingFilterModal
         visible={filtrosAberto}
@@ -1238,12 +1216,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   topActions: {
+    flexShrink: 0,
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 6,
   },
 
-  exportButton: { 
+  exportButton: {
     width: 40,
     height: 40,
   borderRadius: 12,
@@ -1320,59 +1301,72 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   // botoes de exclusao em lote acima
-  
+
   count: {
     flex: 1,
     flexShrink: 1,
     fontSize: 13,
   },
 
-  
+
   newButton: {
     width: "auto",
     borderRadius: 12
 
   },
-
   item: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    width: "100%",
+    minWidth: 0,
+    minHeight: 82,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    marginBottom: 8,
   },
-
   itemMain: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
   avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 23,
-
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
 
+  itemEmail: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+
   itemInfo: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 10,
+    minWidth: 0,
+    gap: 2,
   },
 
   itemName: {
-    fontSize: 16,
-  },
-
-  itemEmail: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 19,
   },
 
   itemMeta: {
-    fontSize: 12,
-    marginTop: 5,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+
+  itemArrow: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   empty: {

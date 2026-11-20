@@ -5,7 +5,7 @@ import {
   StatusBar
 } from "react-native";
 
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,7 @@ interface HeaderProps {
   showBackButton?: boolean;
   showSettings?: boolean;
   onBackPress?: () => void;
+  backFallback?: Href;
 }
 
 export default function Header({
@@ -25,6 +26,7 @@ export default function Header({
   showBackButton = false,
   showSettings = true,
   onBackPress,
+  backFallback = "/",
 }: HeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -48,7 +50,12 @@ export default function Header({
       return;
     }
 
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace(backFallback);
   }
 
   function handleSettings() {

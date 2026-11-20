@@ -109,7 +109,7 @@ export default function Mais() {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header title="Mais" />
+      <Header title="Mais" showBackButton />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -176,7 +176,7 @@ export default function Mais() {
                       accessibilityLabel={
                         item.titulo + ". " + item.descricao
                       }
-                      onPress={() => router.push(item.rota)}
+                      onPress={() => router.navigate(item.rota)}
                       style={({ pressed }) => [
                         styles.item,
                         {

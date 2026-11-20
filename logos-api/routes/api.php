@@ -704,6 +704,7 @@ $router->post(
 );
 
 // releases
+
 $router->get(
     "/api/releases",
     "ReleaseController:listar",
@@ -758,6 +759,20 @@ $router->get(
     "ReleaseController:exibirImagem",
     "RELEASES.IMAGEM",
     middleware: [$authMiddleware]
+);
+
+$router->post(
+    "/api/releases/{id}/enviar",
+    "ReleaseController:enviar",
+    "RELEASES.ENVIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->get(
+    "/api/releases/{id}/envio",
+    "ReleaseController:situacaoEnvio",
+    "RELEASES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
 );
 
 // templates

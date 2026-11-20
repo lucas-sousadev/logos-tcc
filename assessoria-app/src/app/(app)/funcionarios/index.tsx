@@ -6,9 +6,8 @@ import {
   View,
 } from "react-native";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef} from "react";
 import {
-  useFocusEffect,
   useRouter,
 } from "expo-router";
 
@@ -18,11 +17,13 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import SearchBar from "@/components/ui/SearchBar";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
-
+import ContadorLista from "@/components/ui/ContadorLista";
 import FuncionarioFilterModal, {
   type FiltrosFuncionarios,
 } from "@/components/ui/Filtros/FuncionariosFilterModal";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
 
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Funcionario } from "@/services/api/auth";
@@ -44,6 +45,7 @@ function obterIniciais(nome: string): string {
 
 export default function Funcionarios() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
 
   const {
@@ -63,54 +65,19 @@ export default function Funcionarios() {
       ativo: undefined,
     });
 
-  const [funcionarios, setFuncionarios] =
-    useState<Funcionario[]>([]);
+  const consultarPagina = useCallback(
+    async (page: number, limit: number) => {
+      const resposta = await listarFuncionarios({
+        page,
+        limit,
+        busca: buscaAplicada,
+        ativo: filtros.ativo,
+      });
 
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [carregandoMais, setCarregandoMais] =
-    useState(false);
-
-  const [pagina, setPagina] = useState(1);
-  const [temMais, setTemMais] = useState(false);
-  const [total, setTotal] = useState(0);
-
-  const [erro, setErro] = useState("");
-
-  const carregarPrimeiraPagina = useCallback(
-    async () => {
-      try {
-        setCarregando(true);
-        setErro("");
-
-        const resposta = await listarFuncionarios({
-          page: 1,
-          limit: 50,
-          busca: buscaAplicada,
-          ativo: filtros.ativo,
-        });
-
-        setFuncionarios(resposta.funcionarios);
-        setPagina(resposta.pagination.page);
-        setTotal(resposta.pagination.total);
-        setTemMais(
-          resposta.pagination.has_next
-        );
-      } catch (error) {
-        console.error(
-          "Erro ao carregar funcionários:",
-          error
-        );
-
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar os funcionários."
-        );
-      } finally {
-        setCarregando(false);
-      }
+      return {
+        itens: resposta.funcionarios,
+        total: resposta.pagination.total,
+      };
     },
     [
       buscaAplicada,
@@ -119,58 +86,45 @@ export default function Funcionarios() {
     ]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      carregarPrimeiraPagina();
-    }, [carregarPrimeiraPagina])
-  );
+  const {
+    itens: funcionarios,
+    pagina,
+    total,
+    carregando,
+    erro,
+    limite,
+    carregarPagina,
+  } = useListaPaginada<Funcionario>({
+    chave: JSON.stringify([buscaAplicada, filtros]),
+    consultar: consultarPagina,
+    habilitado: temPermissao(
+      "USUARIOS",
+      "VISUALIZAR"
+    ),
+  });
 
-  async function carregarMais() {
-    if (carregandoMais || !temMais) {
-      return;
-    }
-
-    try {
-      setCarregandoMais(true);
-      setErro("");
-
-      const paginaAtual = pagina + 1;
-
-      const resposta = await listarFuncionarios({
-        page: paginaAtual,
-        limit: 50,
-        busca: buscaAplicada,
-        ativo: filtros.ativo,
-      });
-
-      setFuncionarios((atuais) => [
-        ...atuais,
-        ...resposta.funcionarios,
-      ]);
-
-      setPagina(resposta.pagination.page);
-      setTotal(resposta.pagination.total);
-      setTemMais(
-        resposta.pagination.has_next
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao carregar mais funcionários:",
-        error
-      );
-
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os funcionários."
-      );
-    } finally {
-      setCarregandoMais(false);
-    }
+  function carregarPrimeiraPagina() {
+    return carregarPagina(1);
   }
 
   function realizarBusca() {
-    setBuscaAplicada(busca.trim());
+    const texto = busca.trim();
+
+    if (texto === buscaAplicada) {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada(texto);
+    }
+  }
+
+  function limparBusca() {
+    setBusca("");
+
+    if (buscaAplicada === "") {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada("");
+    }
   }
 
   function aplicarFiltros(
@@ -226,6 +180,7 @@ export default function Funcionarios() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
+        ref={scrollRef}
       >
         <SearchBar
           value={busca}
@@ -238,24 +193,13 @@ export default function Funcionarios() {
           filterActive={
             filtros.ativo !== undefined
           }
-          onClear={() => setBuscaAplicada("")}
+          onClear={limparBusca}
         />
 
         <View style={styles.topRow}>
-          <Text
-            weight="Medium"
-            style={[
-              styles.count,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            {total}{" "}
-            {total === 1
-              ? "funcionário"
-              : "funcionários"}
-          </Text>
+          <ContadorLista>
+            {total} {total === 1 ? "colaborador" : "colaboradores"}
+          </ContadorLista>
 
           {temPermissao("CONVITES", "VISUALIZAR") ? (
             <Button
@@ -277,10 +221,8 @@ export default function Funcionarios() {
 
         <LimparFiltrosButton
           visible={filtros.ativo !== undefined}
-          disabled={carregando || carregandoMais}
+          disabled={carregando}
           onPress={() => {
-            setPagina(1);
-
             aplicarFiltros({
               ativo: undefined,
             });
@@ -462,15 +404,22 @@ export default function Funcionarios() {
               );
             })}
 
-            {temMais && (
-              <Button
-                title="CARREGAR MAIS"
-                variant="outline"
-                loading={carregandoMais}
-                onPress={carregarMais}
-                style={styles.moreButton}
+            {!erro && total > 0 ? (
+              <PaginacaoLista
+                pagina={pagina}
+                limite={limite}
+                total={total}
+                disabled={carregando}
+                onChange={(destino) => {
+                  void carregarPagina(destino);
+
+                  scrollRef.current?.scrollTo({
+                    y: 0,
+                    animated: false,
+                  });
+                }}
               />
-            )}
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -497,6 +446,7 @@ const styles = StyleSheet.create({
 
   topRow: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,

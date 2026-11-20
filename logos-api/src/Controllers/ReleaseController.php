@@ -8,6 +8,7 @@ use Logos\AssessoriaApi\Services\ReleaseService;
 use Logos\AssessoriaApi\Services\TemplateService;
 use Logos\AssessoriaApi\Services\ReleaseEnvioTesteService;
 use Logos\AssessoriaApi\Services\ReleaseImagemService;
+use Logos\AssessoriaApi\Services\ReleaseEnvioService;
 
 class ReleaseController
 {
@@ -146,6 +147,58 @@ class ReleaseController
         $this->executar(fn(int $assessoriaId) => [
             'caminho' => ReleaseImagemService::salvar($assessoriaId),
         ], 201);
+    }
+    
+    public function enviar(array $rota): void
+    {
+        $this->executar(
+            function (
+                int $assessoriaId,
+                int $usuarioId,
+                string $perfil
+            ) use ($rota): array {
+                if ($this->corpo() !== []) {
+                    throw new \InvalidArgumentException(
+                        'O envio usa os dados do release salvo.'
+                    );
+                }
+
+                if (
+                    !PermissaoService::usuarioTemPermissao(
+                        $usuarioId,
+                        $perfil,
+                        'RELEASES',
+                        'VISUALIZAR'
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'Você precisa da permissão de visualizar releases.',
+                        403
+                    );
+                }
+
+                return [
+                    'envio' => ReleaseEnvioService::enfileirar(
+                        $assessoriaId,
+                        $rota['id'] ?? null
+                    ),
+                ];
+            },
+            202
+        );
+    }
+
+    public function situacaoEnvio(array $rota): void
+    {
+        $this->executar(
+            fn(int $assessoriaId) => [
+                'envio' => ReleaseEnvioService::situacao(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $_GET
+                ),
+            ]
+        );
     }
     
     public function enviarTeste(): void

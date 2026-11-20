@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Button from "@/components/ui/Button";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import Input from "@/components/ui/Input";
 import SearchBar from "@/components/ui/SearchBar";
 import Text from "@/components/ui/Text";
@@ -43,13 +44,15 @@ type ClienteDoSeletor = Pick<
   "id" | "nome" | "ativo"
 >;
 
+const CLIENTES_POR_PAGINA = 50;
+
 type BuscarClientes = (params: {
   busca: string;
   page: number;
   limit: number;
 }) => Promise<{
   clientes: ClienteDoSeletor[];
-  pagination: { has_next: boolean };
+  pagination: { total: number; has_next: boolean };
 }>;
 
 interface ClippingContextoProps {
@@ -423,11 +426,13 @@ function PainelClientes({
   const [tentativa, setTentativa] = useState(0);
   const [clientes, setClientes] = useState<ClienteDoSeletor[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [temMais, setTemMais] = useState(false);
+  const [total, setTotal] = useState(0);
+  const listaRef = useRef<FlatList<ClienteDoSeletor>>(null);
   const [erro, setErro] = useState("");
 
   useEffect(() => {
     let ativo = true;
+    let redirecionando = false;
 
     async function carregar() {
       try {
@@ -435,31 +440,26 @@ function PainelClientes({
           ? await buscarClientes({
               busca: consulta,
               page: pagina,
-              limit: 50,
+              limit: CLIENTES_POR_PAGINA,
             })
           : await listarClientesDoAno(ano, {
               busca: consulta,
               page: pagina,
-              limit: 50,
-        });
+              limit: CLIENTES_POR_PAGINA,
+            });
 
         if (!ativo) return;
 
-        setClientes((anteriores) => {
-          if (pagina === 1) return resposta.clientes;
-
-          const porId = new Map(
-            anteriores.map((cliente) => [cliente.id, cliente] as const)
-          );
-
-          resposta.clientes.forEach((cliente) => {
-            porId.set(cliente.id, cliente);
-          });
-
-          return Array.from(porId.values());
-        });
-
-        setTemMais(resposta.pagination.has_next);
+        setTotal(resposta.pagination.total);
+        setErro("");
+        const ultima = Math.max(1, Math.ceil(resposta.pagination.total / CLIENTES_POR_PAGINA));
+        if (pagina > ultima) {
+          redirecionando = true;
+          setCarregando(true);
+          setPagina(ultima);
+          return;
+        }
+        setClientes(resposta.clientes);
       } catch (error) {
         if (!ativo) return;
 
@@ -469,7 +469,7 @@ function PainelClientes({
             : "Não foi possível carregar os clientes."
         );
       } finally {
-        if (ativo) setCarregando(false);
+        if (ativo && !redirecionando) setCarregando(false);
       }
     }
 
@@ -491,16 +491,18 @@ function PainelClientes({
     setConsulta(texto);
     setPagina(1);
     setClientes([]);
-    setTemMais(false);
+    setTotal(0);
     setErro("");
     setCarregando(true);
   }
 
-  function carregarMais() {
-    if (carregando || !temMais) return;
-
+  function mudarPagina(destino: number) {
+    if (carregando || destino === pagina || destino < 1) return;
+    setErro("");
     setCarregando(true);
-    setPagina((atual) => atual + 1);
+    setClientes([]);
+    setPagina(destino);
+    listaRef.current?.scrollToOffset({ offset: 0, animated: false });
   }
 
   function tentarNovamente() {
@@ -716,6 +718,7 @@ function PainelClientes({
         </TouchableOpacity>
       ) : null}
       <FlatList
+        ref={listaRef}
         style={styles.lista}
         data={clientes}
         keyExtractor={(cliente) => String(cliente.id)}
@@ -805,12 +808,13 @@ function PainelClientes({
               </>
             ) : carregando && clientes.length > 0 ? (
               <ActivityIndicator color={theme.primaria} />
-            ) : temMais && !carregando ? (
-              <Button
-                title="CARREGAR MAIS"
-                variant="outline"
-                size="small"
-                onPress={carregarMais}
+            ) : !carregando && total > 0 ? (
+              <PaginacaoLista
+                pagina={pagina}
+                limite={CLIENTES_POR_PAGINA}
+                total={total}
+                disabled={carregando}
+                onChange={mudarPagina}
               />
             ) : null}
           </View>

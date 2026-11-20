@@ -22,6 +22,9 @@ import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import FiltroModalBase from "@/components/ui/Filtros/FiltroModalBase";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
+import ReleaseListaCard from "@/components/releases/ReleaseListaCard";
+import ContadorLista from "@/components/ui/ContadorLista";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -30,7 +33,6 @@ import {
   type ResumoRelease,
   type StatusRelease,
 } from "@/services/api/release";
-import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 export default function ListaReleases() {
   const router = useRouter();
@@ -85,6 +87,11 @@ export default function ListaReleases() {
 
       if (requisicao !== requisicaoAtual.current) return;
 
+      const ultima = Math.max(1, Math.ceil(resposta.pagination.total / 20));
+      if (pagina > ultima) {
+        setPagina(ultima);
+        return;
+      }
       setReleases(resposta.releases);
       setTotal(resposta.pagination.total);
     } catch (error) {
@@ -139,7 +146,7 @@ export default function ListaReleases() {
         { backgroundColor: theme.background },
       ]}
     >
-      <Header title="Releases" />
+      <Header title="Releases" showBackButton />
 
       <ScrollView
         ref={scroll}
@@ -165,10 +172,9 @@ export default function ListaReleases() {
         />
 
         <View style={styles.topo}>
-          <Text style={{ color: theme.textoSub }}>
-            {total}{" "}
-            {total === 1 ? "release" : "releases"}
-          </Text>
+          <ContadorLista>
+            {total} {total === 1 ? "release" : "releases"}
+          </ContadorLista>
 
           {temPermissao("RELEASES", "CRIAR") ? (
             <Button
@@ -216,7 +222,7 @@ export default function ListaReleases() {
           />
         ) : null}
 
-        {!carregando &&
+      {!carregando &&
         podeVisualizar &&
         !erro &&
         releases.length === 0 ? (
@@ -232,65 +238,18 @@ export default function ListaReleases() {
 
         {!carregando && !erro
           ? releases.map((release) => (
-              <View
+              <ReleaseListaCard
                 key={release.id}
-                style={[
-                  styles.card,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Text
-                  weight="Bold"
-                  style={styles.titulo}
-                >
-                  {release.titulo ||
-                    "Release sem título"}
-                </Text>
-
-                <Text
-                  weight="SemiBold"
-                  style={{
-                    color: theme.textoTerciaria,
-                  }}
-                >
-                  {release.cliente_nome ||
-                    "Cliente a definir"}
-                </Text>
-
-                <Text
-                  style={{
-                    color:
-                      release.status === "RASCUNHO"
-                        ? theme.aviso
-                        : theme.textoTerciaria,
-                  }}
-                >
-                  {ROTULOS_STATUS[release.status]}
-                </Text>
-
-                <Text>
-                  {release.total_destinatarios}{" "}
-                  {release.total_destinatarios === 1
-                    ? "destinatário"
-                    : "destinatários"}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.legenda,
-                    { color: theme.textoSub },
-                  ]}
-                >
-                  {dataISOParaBR(
-                    (
-                      release.data_referencia ||
-                      release.updated_at
-                    ).slice(0, 10)
-                  )}
-                  {" · "}
-                  {release.criado_por_nome}
-                </Text>
-              </View>
+                release={release}
+                onPress={() =>
+                  router.push({
+                    pathname: "/releases/[id]",
+                    params: {
+                      id: String(release.id),
+                    },
+                  })
+                }
+              />
             ))
           : null}
 
@@ -379,24 +338,13 @@ const styles = StyleSheet.create({
   },
   topo: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
   novo: {
     width: "auto",
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    gap: 8,
-  },
-  titulo: {
-    fontSize: 16,
-  },
-  legenda: {
-    fontSize: 12,
   },
   vazio: {
     textAlign: "center",

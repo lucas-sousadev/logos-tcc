@@ -345,8 +345,11 @@ CREATE TABLE releases (
     status ENUM(
         'RASCUNHO',
         'AGENDADO',
+        'NA_FILA',
         'ENVIANDO',
-        'ENVIADO'
+        'ENVIADO',
+        'PARCIAL',
+        'FALHOU'
     ) NOT NULL DEFAULT 'RASCUNHO',
 
     agendado_para DATETIME NULL,

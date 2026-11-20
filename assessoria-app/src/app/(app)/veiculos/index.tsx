@@ -7,7 +7,7 @@ import {
   Image
 } from "react-native";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -19,6 +19,9 @@ import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import { rotuloTier } from "@/constants/tier";
 import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/VeiculoFilterModal";
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
+import ContadorLista from "@/components/ui/ContadorLista";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,8 +61,21 @@ function resumoVinculos(veiculo: Veiculo): string {
 
 const LIMITE_SELECAO_EM_LOTE = 100;
 
+  function quantidadeFiltro(
+    valorOriginal: string
+  ): number | undefined {
+    const valor = valorOriginal.trim();
+
+    if (valor === "" || !/^\d+$/.test(valor)) {
+      return undefined;
+    }
+
+    return Number(valor);
+  }
+
 export default function Veiculos() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
@@ -75,18 +91,6 @@ export default function Veiculos() {
     minClippings: "",
     maxClippings: "",
   });
-
-  const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
-
-  const [carregando, setCarregando] = useState(true);
-  const [carregandoMais, setCarregandoMais] =
-    useState(false);
-
-  const [pagina, setPagina] = useState(1);
-  const [temMais, setTemMais] = useState(false);
-  const [total, setTotal] = useState(0);
-
-  const [erro, setErro] = useState("");
 
   const [modoSelecao, setModoSelecao] = useState(false);
 
@@ -104,130 +108,108 @@ export default function Veiculos() {
     setFeedback(null);
   }
 
-  function quantidadeFiltro(
-    valorOriginal: string
-  ): number | undefined {
-    const valor = valorOriginal.trim();
+  const consultarPagina = useCallback(
+    async (page: number, limit: number) => {
+      const resposta = await listarVeiculos({
+        page,
+        limit,
+        busca: buscaAplicada,
+        ativo: filtros.ativo,
+        ordem: filtros.ordem,
+        direcao: filtros.direcao,
+        min_contatos: quantidadeFiltro(
+          filtros.minContatos
+        ),
+        max_contatos: quantidadeFiltro(
+          filtros.maxContatos
+        ),
+        min_clippings: quantidadeFiltro(
+          filtros.minClippings
+        ),
+        max_clippings: quantidadeFiltro(
+          filtros.maxClippings
+        ),
+      });
 
-    if (valor === "" || !/^\d+$/.test(valor)) {
-      return undefined;
-    }
-
-    return Number(valor);
-  }
-
-  const carregarVeiculos = useCallback(
-    async (
-      reset = false,
-      buscaAtual = buscaAplicada
-    ) => {
-      try {
-        setErro("");
-
-        if (reset) {
-          setCarregando(true);
-        } else {
-          setCarregandoMais(true);
-        }
-
-        const paginaAtual = reset
-          ? 1
-          : pagina + 1;
-
-        const resposta = await listarVeiculos({
-          page: paginaAtual,
-          limit: 50,
-          busca: buscaAtual,
-          ativo: filtros.ativo,
-          ordem: filtros.ordem,
-          direcao: filtros.direcao,
-          min_contatos: quantidadeFiltro(
-            filtros.minContatos
-          ),
-          max_contatos: quantidadeFiltro(
-            filtros.maxContatos
-          ),
-          min_clippings: quantidadeFiltro(filtros.minClippings),
-          max_clippings: quantidadeFiltro(filtros.maxClippings),
-        });
-
-        if (reset) {
-          setVeiculos(resposta.veiculos);
-          setPagina(1);
-        } else {
-          setVeiculos((atuais) => [
-            ...atuais,
-            ...resposta.veiculos,
-          ]);
-
-          setPagina(paginaAtual);
-        }
-
-        setTotal(resposta.pagination.total);
-        setTemMais(
-          resposta.pagination.has_next
-        );
-      } catch (error) {
-        console.error(
-          "Erro ao carregar veículos:",
-          error
-        );
-
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar os veículos."
-        );
-      } finally {
-        setCarregando(false);
-        setCarregandoMais(false);
-      }
+      return {
+        itens: resposta.veiculos,
+        total: resposta.pagination.total,
+      };
     },
-      [
-        pagina,
-        buscaAplicada, 
-        filtros.ativo,
-        filtros.ordem, 
-        filtros.direcao, 
-        filtros.minContatos,
-        filtros.maxContatos,
-        filtros.minClippings,
-        filtros.maxClippings,
-      ]
+    [
+      buscaAplicada,
+      filtros.ativo,
+      filtros.ordem,
+      filtros.direcao,
+      filtros.minContatos,
+      filtros.maxContatos,
+      filtros.minClippings,
+      filtros.maxClippings,
+    ]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      carregarVeiculos(true);
+  const {
+    itens: veiculos,
+    pagina,
+    total,
+    carregando,
+    erro,
+    limite,
+    carregarPagina,
+  } = useListaPaginada<Veiculo>({
+    chave: JSON.stringify([buscaAplicada, filtros]),
+    consultar: consultarPagina,
+  });
 
-      return () => {
-        setIdsSelecionados([]);
-        setModoSelecao(false);
-      };
-    }, [
-        buscaAplicada,
-        filtros.ativo,
-        filtros.ordem,
-        filtros.direcao,
-        filtros.minContatos,
-        filtros.maxContatos,
-        filtros.minClippings,
-        filtros.maxClippings,
-      ])
+  function carregarVeiculos(reset = false) {
+    return carregarPagina(reset ? 1 : undefined);
+  }
+
+  useFocusEffect(
+    useCallback(() => () => {
+      setIdsSelecionados([]);
+      setModoSelecao(false);
+    }, [])
   );
 
   function realizarBusca() {
     sairModoSelecao();
-    setBuscaAplicada(busca.trim());
+
+    const texto = busca.trim();
+
+    if (texto === buscaAplicada) {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada(texto);
+    }
+  }
+
+  function limparBusca() {
+    sairModoSelecao();
+    setBusca("");
+
+    if (buscaAplicada === "") {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada("");
+    }
   }
 
   function aplicarFiltros(
     novosFiltros: FiltrosVeiculos
   ) {
     sairModoSelecao();
-    setPagina(1);
+
+    const mesmos =
+      JSON.stringify(novosFiltros) ===
+      JSON.stringify(filtros);
+
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
+
+    if (mesmos) {
+      void carregarPagina(1);
+    }
   }
 
   function filtrosAtivos() {
@@ -420,7 +402,7 @@ export default function Veiculos() {
           },
         ]}
       >
-        <Header title="Veículos" />
+        <Header title="Veículos" showBackButton />
 
         <View style={styles.loading}>
           <ActivityIndicator
@@ -441,11 +423,12 @@ export default function Veiculos() {
         },
       ]}
     >
-      <Header title="Veículos" />
+      <Header title="Veículos" showBackButton />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        ref={scrollRef}
       >
         <SearchBar
           value={busca}
@@ -456,28 +439,14 @@ export default function Veiculos() {
             sairModoSelecao();
             setFiltrosAberto(true);
           }}
-          onClear={() => {
-            sairModoSelecao();
-            setBuscaAplicada("");
-          }}
+          onClear={limparBusca}
           filterActive={filtrosAtivos()}
         />
 
         <View style={styles.topRow}>
-          <Text
-            weight="Medium"
-            style={[
-              styles.count,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            {total}{" "}
-            {total === 1
-              ? "veículo"
-              : "veículos"}
-          </Text>
+          <ContadorLista>
+            {total} {total === 1 ? "veiculo" : "veiculos"}
+          </ContadorLista>
 
           {temPermissao(
             "VEICULOS",
@@ -540,7 +509,6 @@ export default function Veiculos() {
           visible={filtrosAtivos()}
           disabled={
             carregando ||
-            carregandoMais ||
             excluindoSelecionados
           }
           onPress={() => {
@@ -743,9 +711,8 @@ export default function Veiculos() {
                 style={[
                   styles.item,
                   {
-                    backgroundColor:
-                      theme.background,
-                    borderColor: theme.borda,
+                    backgroundColor: theme.backgroundSecundario,
+                    borderColor: theme.borda + "45",
                   },
                 ]}
               >
@@ -753,8 +720,9 @@ export default function Veiculos() {
                   style={[
                     styles.iconContainer,
                     {
-                      backgroundColor:
-                        theme.backgroundContainer,
+                      backgroundColor: veiculo.logo_path
+                        ? theme.branco
+                        : theme.primaria + "12",
                     },
                   ]}
                 >
@@ -773,7 +741,7 @@ export default function Veiculos() {
                     <Ionicons
                       name="newspaper-outline"
                       size={21}
-                      color={theme.textoContainer}
+                      color={theme.textoTerciaria}
                     />
                   )}
                 </View>
@@ -783,6 +751,7 @@ export default function Veiculos() {
                     weight="SemiBold"
                     style={styles.itemName}
                     numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {veiculo.nome}
                   </Text>
@@ -854,26 +823,40 @@ export default function Veiculos() {
                     ) : null}
                   </View>
                 ) : (
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={21}
-                    color={theme.texto}
-                  />
+                  <View
+                    style={[
+                      styles.itemArrow,
+                      {
+                        backgroundColor: theme.primaria + "0C",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={17}
+                      color={theme.textoTerciaria}
+                    />
+                  </View>
                 )}
               </TouchableOpacity>
             ))}
 
-            {temMais && (
-              <Button
-                title="CARREGAR MAIS"
-                variant="outline"
-                loading={carregandoMais}
-                onPress={() =>
-                  carregarVeiculos(false)
-                }
-                style={styles.moreButton}
+            {!erro && total > 0 ? (
+              <PaginacaoLista
+                pagina={pagina}
+                limite={limite}
+                total={total}
+                disabled={carregando || excluindoSelecionados}
+                onChange={(destino) => {
+                  void carregarPagina(destino);
+
+                  scrollRef.current?.scrollTo({
+                    y: 0,
+                    animated: false,
+                  });
+                }}
               />
-            )}
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -920,6 +903,7 @@ const styles = StyleSheet.create({
 
   topRow: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
@@ -936,11 +920,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 2,
   },
 
   linkedText: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 11,
+    lineHeight: 15,
   },
 
   selectionStartButton: {
@@ -1016,23 +1002,26 @@ const styles = StyleSheet.create({
   },
 
   item: {
-    padding: 8,
-    minHeight: 74,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    width: "100%",
+    minWidth: 0,
+    minHeight: 82,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
-
   iconContainer: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
+    flexShrink: 0,
     borderRadius: 12,
+    padding: 4,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
     overflow: "hidden",
   },
   logoImage: {
@@ -1041,17 +1030,28 @@ const styles = StyleSheet.create({
   },
   itemInfo: {
     flex: 1,
-    marginRight: 10,
+    minWidth: 0,
+    gap: 2,
   },
 
   itemName: {
     fontSize: 14,
+    lineHeight: 19,
   },
 
   itemMeta: {
     fontSize: 11,
+    lineHeight: 15,
   },
 
+  itemArrow: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   empty: {
     borderWidth: 1.5,
     borderRadius: 18,

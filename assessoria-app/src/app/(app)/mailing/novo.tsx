@@ -174,7 +174,7 @@ export default function FormularioJornalista() {
                   : undefined,
             });
 
-            router.replace("/mailing");
+            router.dismissTo("/mailing");
         } catch (error) {
             console.error(
             "Erro ao cadastrar contato:",
@@ -205,7 +205,7 @@ export default function FormularioJornalista() {
       <Header
         title="Novo contato"
         showBackButton
-        onBackPress={() => router.replace("/mailing")}
+        backFallback="/mailing"
       />
 
       <ScrollView
@@ -364,7 +364,14 @@ export default function FormularioJornalista() {
           <Button
             title="CANCELAR"
             variant="outline"
-            onPress={() => router.replace("/mailing")}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+
+              router.dismissTo("/mailing");
+            }}
             style={styles.actionButton}
           />
 

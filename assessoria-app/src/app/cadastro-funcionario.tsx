@@ -1,491 +1,387 @@
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useCallback, useRef, useState } from "react";
+import { BackHandler, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 
-import { useAuth } from "../contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-import BackButton from "@/components/ui/BackButton";
-import Text from "@/components/ui/Text";
-import Input from "@/components/ui/Input";
+import AcessoLayout, {
+  CampoAcesso,
+  MensagemAcesso,
+  SecaoAcesso,
+} from "@/components/auth/AcessoLayout";
 import Button from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthContext";
 import { validarSenha } from "@/utils/validarSenha";
 
-type CampoCadastro =
-  | "codigo"
-  | "nome"
-  | "email"
-  | "telefone"
-  | "senha"
-  | "confirmarSenha";
+const INICIAL = {
+  nome: "",
+  email: "",
+  telefone: "",
+  senha: "",
+  confirmarSenha: "",
+};
 
-type ErrosCadastro = Partial<
-  Record<CampoCadastro, string>
->;
+type Dados = typeof INICIAL;
+type Campo = keyof Dados | "codigo";
+type Erros = Partial<Record<Campo, string>>;
+
+function validarDadosFuncionario(dados: Dados): Erros {
+  const erros: Erros = {};
+
+  if (!dados.nome.trim()) {
+    erros.nome = "Informe seu nome.";
+  }
+
+  if (!dados.email.trim()) {
+    erros.email = "Informe seu e-mail.";
+  } else if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      dados.email.trim()
+    )
+  ) {
+    erros.email = "Informe um e-mail válido.";
+  }
+
+  if (
+    dados.telefone.trim() &&
+    !/^\d{10,11}$/.test(
+      dados.telefone.replace(/\D/g, "")
+    )
+  ) {
+    erros.telefone =
+      "O telefone deve possuir 10 ou 11 dígitos.";
+  }
+
+  const erroSenha = dados.senha
+    ? validarSenha(dados.senha)
+    : "Informe uma senha.";
+
+  if (erroSenha) erros.senha = erroSenha;
+
+  if (!dados.confirmarSenha) {
+    erros.confirmarSenha = "Confirme sua senha.";
+  } else if (dados.senha !== dados.confirmarSenha) {
+    erros.confirmarSenha =
+      "As senhas não coincidem.";
+  }
+
+  return erros;
+}
 
 export default function CadastroFuncionario() {
   const router = useRouter();
-
   const {
     validarConvite,
     registerFuncionario,
   } = useAuth();
 
-  const { theme, mode } = useTheme();
+  const trava = useRef(false);
 
   const [etapa, setEtapa] = useState<1 | 2>(1);
-
   const [codigo, setCodigo] = useState("");
-  const [erros, setErros] =
-  useState<ErrosCadastro>({});
+  const [dados, setDados] = useState(INICIAL);
+  const [erros, setErros] = useState<Erros>({});
   const [erroGeral, setErroGeral] = useState("");
-
-  const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [senha, setSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
-
   const [carregando, setCarregando] = useState(false);
 
-  function limparErro(campo: CampoCadastro) {
+  useFocusEffect(
+    useCallback(() => {
+      if (etapa !== 2 && !carregando) return;
+
+      const evento = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          if (!trava.current) {
+            setErroGeral("");
+            setEtapa(1);
+          }
+
+          return true;
+        }
+      );
+
+      return () => evento.remove();
+    }, [etapa, carregando])
+  );
+
+  function alterar(
+    campo: keyof Dados,
+    valor: string
+  ) {
+    setDados((atual) => ({
+      ...atual,
+      [campo]: valor,
+    }));
+
     setErros((atuais) => ({
       ...atuais,
       [campo]: undefined,
+      ...(campo === "senha"
+        ? { confirmarSenha: undefined }
+        : {}),
     }));
-  }
 
-  async function handleValidarConvite() {
-  setErroGeral("");
-  setErros({});
-
-  if (!codigo.trim()) {
-    setErros({
-      codigo: "Digite o código do convite.",
-    });
-
-    return;
-  }
-
-  try {
-    setCarregando(true);
-
-    await validarConvite(codigo.trim());
-
-    setEtapa(2);
-  } catch (error) {
-    const mensagem =
-      error instanceof Error
-        ? error.message
-        : "Não foi possível validar o convite.";
-
-    if (mensagem.includes("Muitas tentativas")) {
-      setErroGeral(mensagem);
-    } else {
-      setErros({
-        codigo: mensagem,
-      });
-    }
-  } finally {
-    setCarregando(false);
-  }
-}
-
-  async function handleCadastro() {
     setErroGeral("");
+  }
 
-    const novosErros: ErrosCadastro = {};
+  async function validarCodigo() {
+    if (trava.current || etapa !== 1) return;
 
-    if (!nome.trim()) {
-      novosErros.nome = "Informe seu nome.";
-    }
+    setErroGeral("");
+    setErros({});
 
-    const emailFormatado = email.trim();
+    const valor = codigo.trim().toUpperCase();
 
-    if (!emailFormatado) {
-      novosErros.email = "Informe seu e-mail.";
-    } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        emailFormatado
-      )
-    ) {
-      novosErros.email = "Informe um e-mail válido.";
-    }
-
-    const telefoneFormatado = telefone.trim();
-
-    if (telefoneFormatado) {
-      const telefoneNumerico =
-        telefoneFormatado.replace(/\D/g, "");
-
-      if (!/^\d{10,11}$/.test(telefoneNumerico)) {
-        novosErros.telefone =
-          "O telefone deve possuir 10 ou 11 dígitos.";
-      }
-    }
-
-    if (!senha) {
-      novosErros.senha = "Informe uma senha.";
-    } else {
-      const erroSenha = validarSenha(senha);
-
-      if (erroSenha) {
-        novosErros.senha = erroSenha;
-      }
-    }
-
-    if (!confirmarSenha) {
-      novosErros.confirmarSenha =
-        "Confirme sua senha.";
-    } else if (senha !== confirmarSenha) {
-      novosErros.confirmarSenha =
-        "As senhas não coincidem.";
-    }
-
-    setErros(novosErros);
-
-    if (Object.keys(novosErros).length > 0) {
+    if (!valor) {
+      setErros({
+        codigo: "Digite o código do convite.",
+      });
       return;
     }
 
+    trava.current = true;
+    setCarregando(true);
+
     try {
-      setCarregando(true);
-
-      await registerFuncionario({
-        codigo: codigo.trim(),
-        nome: nome.trim(),
-        email: email.trim(),
-        telefone: telefone.trim(),
-        senha,
-      });
-
-      router.replace("/(app)");
+      await validarConvite(valor);
+      setCodigo(valor);
+      setEtapa(2);
     } catch (error) {
-      console.error(
-        "Erro ao criar conta:",
-        error
-      );
+      const mensagem =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível validar o convite.";
 
+      if (
+        mensagem
+          .toLowerCase()
+          .includes("muitas tentativas")
+      ) {
+        setErroGeral(mensagem);
+      } else {
+        setErros({ codigo: mensagem });
+      }
+    } finally {
+      trava.current = false;
+      setCarregando(false);
+    }
+  }
+
+  async function cadastrar() {
+    if (trava.current || etapa !== 2) return;
+
+    setErroGeral("");
+
+    const novosErros = validarDadosFuncionario(dados);
+    setErros(novosErros);
+
+    if (Object.keys(novosErros).length) return;
+
+    trava.current = true;
+    setCarregando(true);
+
+    try {
+      await registerFuncionario({
+        codigo: codigo.trim().toUpperCase(),
+        nome: dados.nome.trim(),
+        email: dados.email.trim(),
+        telefone: dados.telefone.trim(),
+        senha: dados.senha,
+      });
+    } catch (error) {
       setErroGeral(
         error instanceof Error
           ? error.message
-          : "Não foi possível criar a conta."
+          : "Não foi possível criar sua conta."
       );
     } finally {
+      trava.current = false;
       setCarregando(false);
     }
   }
 
   function voltar() {
+    if (trava.current) return;
+
     setErroGeral("");
 
     if (etapa === 2) {
       setEtapa(1);
-      return;
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/entrar");
     }
-
-    router.back();
   }
 
   return (
-    <View style={styles.screen}>
-      <Image
-        source={
-          mode === "light"
-            ? require("@/assets/images/background-logos-white.png")
-            : require("@/assets/images/background-logos-dark.png")
-        }
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      />
-
-      <BackButton
-        onPress={voltar}
-        color={theme.texto}
-      />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.container,
-          etapa === 1
-            ? styles.containerEtapa1
-            : styles.containerEtapa2,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {etapa === 1 ? (
-          <View style={styles.formContent}>
-            <Text
-              weight="SemiBold"
-              style={styles.title}
-            >
-              ENTRAR COM CONVITE
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: theme.textoTerciaria,
-                },
-              ]}
-            >
-              Informe o código recebido pela sua
-              assessoria.
-            </Text>
-
-            <Input
+    <AcessoLayout
+      titulo={
+        etapa === 1
+          ? "Faça parte da equipe"
+          : "Crie sua conta"
+      }
+      descricao={
+        etapa === 1
+          ? "Informe o convite recebido para se vincular à sua assessoria."
+          : "Convite validado. Preencha seus dados para concluir o cadastro. Os campos com * são obrigatórios."
+      }
+      ocupado={carregando}
+      onBack={voltar}
+    >
+      {etapa === 1 ? (
+        <>
+          <SecaoAcesso
+            titulo="Seu convite"
+            descricao="Etapa 1 de 2"
+            icone="mail-open-outline"
+          >
+            <CampoAcesso
               label="Código do convite"
-              placeholder="LOGOS-XXXX-XXXX"
-              autoCapitalize="characters"
-              autoCorrect={false}
+              placeholder="Digite seu código"
               value={codigo}
-              onChangeText={(texto) => {
-                setCodigo(texto);
-                limparErro("codigo");
+              onChangeText={(v) => {
+                setCodigo(v.toUpperCase());
+                setErros({});
+                setErroGeral("");
               }}
               error={erros.codigo}
-            />
-
-            <Button
-              title="VALIDAR CONVITE"
-              loading={carregando}
-              onPress={handleValidarConvite}
-              style={styles.button}
-            />
-
-            <TouchableOpacity
-              onPress={() =>
-                router.push("/login-funcionario")
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!carregando}
+              clearable
+              returnKeyType="go"
+              onSubmitEditing={() =>
+                void validarCodigo()
               }
-              activeOpacity={0.7}
-            >
-              <Text
-                weight="Medium"
-                style={[
-                  styles.link,
-                  {
-                    color: theme.textoTerciaria,
-                  },
-                ]}
-              >
-                Já possuo uma conta
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.formContent}>
-            <Text
-              weight="SemiBold"
-              style={styles.title}
-            >
-              CRIAR CONTA
-            </Text>
+            />
+          </SecaoAcesso>
 
-            <Text
-              weight="SemiBold"
-              style={[
-                styles.successText,
-              ]}
-            >
-              Convite válido
-            </Text>
+          <MensagemAcesso mensagem={erroGeral} />
 
-            <Text
-              style={[
-                styles.infoText,
-                {
-                  color: theme.textoSub,
-                },
-              ]}
-            >
-              Agora informe seus dados para criar a conta.
-            </Text>
-
-            <Input
-              label="Nome *"
-              placeholder="Seu nome *"
-              value={nome}
-              onChangeText={(texto) => {
-                setNome(texto);
-                limparErro("nome");
-              }}
+          <Button
+            title="VALIDAR CONVITE"
+            icon="arrow-forward-outline"
+            size="large"
+            loading={carregando}
+            onPress={() => void validarCodigo()}
+          />
+        </>
+      ) : (
+        <>
+          <SecaoAcesso
+            titulo="Seu perfil"
+            descricao="Etapa 2 de 2 · Seus dados de acesso."
+            icone="person-outline"
+          >
+            <CampoAcesso
+              label="Seu nome *"
+              placeholder="Nome completo"
+              value={dados.nome}
+              onChangeText={(v) => alterar("nome", v)}
               error={erros.nome}
+              autoCapitalize="words"
+              editable={!carregando}
+              clearable
             />
 
-            <Input
-              label="E-mail *"
-              placeholder="Seu e-mail *"
+            <CampoAcesso
+              label="Seu e-mail *"
+              placeholder="voce@exemplo.com.br"
+              value={dados.email}
+              onChangeText={(v) => alterar("email", v)}
+              error={erros.email}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              value={email}
-              onChangeText={(texto) => {
-                setEmail(texto);
-                limparErro("email");
-              }}
-              error={erros.email}
+              editable={!carregando}
+              clearable
             />
 
-            <Input
-              label="Telefone"
-              placeholder="Ex.: (11) 99999-9999"
-              keyboardType="phone-pad"
-              value={telefone}
-              onChangeText={(texto) => {
-                setTelefone(texto);
-                limparErro("telefone");
-              }}
+            <CampoAcesso
+              label="Seu telefone"
+              placeholder="DDD + número"
+              value={dados.telefone}
+              onChangeText={(v) =>
+                alterar("telefone", v)
+              }
               error={erros.telefone}
+              keyboardType="phone-pad"
+              editable={!carregando}
+              clearable
             />
+          </SecaoAcesso>
 
-            <Input
+          <SecaoAcesso
+            titulo="Senha de acesso"
+            descricao="Use pelo menos 8 caracteres."
+            icone="lock-closed-outline"
+          >
+            <CampoAcesso
               label="Senha *"
-              placeholder="Sua senha *"
-              secureTextEntry
-              clearable
-              showPasswordToggle
-              value={senha}
-              onChangeText={(texto) => {
-                setSenha(texto);
-                limparErro("senha");
-              }}
+              placeholder="Crie sua senha"
+              value={dados.senha}
+              onChangeText={(v) => alterar("senha", v)}
               error={erros.senha}
+              secureTextEntry
+              showPasswordToggle
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="new-password"
+              textContentType="newPassword"
+              editable={!carregando}
             />
 
-            <Input
+            <CampoAcesso
               label="Confirmar senha *"
-              placeholder="Confirme sua senha *"
-              secureTextEntry
-              clearable
-              showPasswordToggle
-              value={confirmarSenha}
-              onChangeText={(texto) => {
-                setConfirmarSenha(texto);
-                limparErro("confirmarSenha");
-              }}
+              placeholder="Digite a senha novamente"
+              value={dados.confirmarSenha}
+              onChangeText={(v) =>
+                alterar("confirmarSenha", v)
+              }
               error={erros.confirmarSenha}
+              secureTextEntry
+              showPasswordToggle
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="new-password"
+              textContentType="newPassword"
+              editable={!carregando}
             />
-            
-            {erroGeral ? (
-              <Text
-                weight="Medium"
-                style={styles.erroGeral}
-              >
-                {erroGeral}
-              </Text> 
-            ) : null}
+          </SecaoAcesso>
+
+          <MensagemAcesso mensagem={erroGeral} />
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 10,
+            }}
+          >
+            <Button
+              title="VOLTAR"
+              variant="outline"
+              disabled={carregando}
+              onPress={voltar}
+              style={{
+                flex: 1,
+                width: "auto",
+                minWidth: 0,
+              }}
+            />
 
             <Button
               title="CRIAR CONTA"
+              icon="checkmark-outline"
               loading={carregando}
-              onPress={handleCadastro}
-              style={styles.button}
-            />
-
-            <TouchableOpacity
-              onPress={() => {
-                setErroGeral("");
-                setErros({});
-                setEtapa(1);
+              onPress={() => void cadastrar()}
+              style={{
+                flex: 1,
+                width: "auto",
+                minWidth: 0,
               }}
-              activeOpacity={0.7}
-            >
-              <Text
-                weight="Medium"
-                style={[
-                  styles.link,
-                  {
-                    color: theme.textoTerciaria,
-                  },
-                ]}
-              >
-                Alterar convite
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
-        )}
-      </ScrollView>
-    </View>
+        </>
+      )}
+    </AcessoLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-
-  backgroundImage: {
-    ...StyleSheet.absoluteFill,
-    width: "100%",
-    height: "100%",
-  },
-
-  scroll: {
-    flex: 1,
-  },
-
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 25,
-    paddingTop: 100,
-    paddingBottom: 40,
-  },
-  containerEtapa1: {
-    justifyContent: "center",
-    paddingTop: 40,
-  },
-
-  containerEtapa2: {
-    paddingTop: 100,
-  },
-
-  formContent: {
-    width: "100%",
-  },
-
-  title: {
-    fontSize: 25,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-
-  subtitle: {
-    textAlign: "center",
-    marginBottom: 30,
-  },
-
-  successText: {
-    color: "green",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-
-  infoText: {
-    textAlign: "center",
-    marginBottom: 25,
-  },
-
-  button: {
-    marginTop: 10,
-  },
-
-  link: {
-    textAlign: "center",
-    marginTop: 25,
-  },
-  erroGeral: {
-    color: "#EF4444",
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 4,
-  },
-});

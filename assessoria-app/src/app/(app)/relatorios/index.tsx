@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,20 +18,27 @@ import RelatorioFilterModal, {
   possuiFiltrosRelatorios,
   type FiltrosRelatorios,
 } from "@/components/ui/Filtros/RelatorioFilterModal";
+import RelatorioListaCard from "@/components/relatorios/RelatorioListaCard";
+import ContadorLista from "@/components/ui/ContadorLista";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   listarRelatorios,
   type ResumoRelatorio,
 } from "@/services/api/relatorio";
-import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 const LIMITE_PAGINA = 20;
 
 export default function ListaRelatorios() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ pendencias?: string }>();
-  const pendenciasDaRota = params.pendencias === "com" ? "com" : "todas";
+  const pendencias = params.pendencias === "com" ? "com" : "todas";
+  return <ConteudoRelatorios key={pendencias} pendenciasDaRota={pendencias} />;
+}
+
+function ConteudoRelatorios({ pendenciasDaRota }: { pendenciasDaRota: "com" | "todas" }) {
+  const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
@@ -47,21 +53,12 @@ export default function ListaRelatorios() {
   const [relatorios, setRelatorios] = useState<ResumoRelatorio[]>([]);
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
-  const [temMais, setTemMais] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
 
   const requisicaoAtual = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
 
-  useEffect(() => {
-    setPagina(1);
-    setFiltros((atual) =>
-      atual.pendencias === pendenciasDaRota
-        ? atual
-        : { ...atual, pendencias: pendenciasDaRota }
-    );
-  }, [pendenciasDaRota]);
 
   const carregar = useCallback(
     async (
@@ -89,9 +86,13 @@ export default function ListaRelatorios() {
 
         if (requisicao !== requisicaoAtual.current) return;
 
+        const ultima = Math.max(1, Math.ceil(resposta.pagination.total / LIMITE_PAGINA));
+        if (paginaAtual > ultima) {
+          setPagina(ultima);
+          return;
+        }
         setRelatorios(resposta.relatorios);
         setTotal(resposta.pagination.total);
-        setTemMais(resposta.pagination.has_next);
       } catch (e) {
         if (requisicao === requisicaoAtual.current) {
           setRelatorios([]);
@@ -179,15 +180,9 @@ export default function ListaRelatorios() {
         />
 
         <View style={styles.topRow}>
-          <Text
-            weight="Medium"
-            style={[
-              styles.count,
-              { color: theme.textoSub },
-            ]}
-          >
+          <ContadorLista>
             {total} {total === 1 ? "relatório" : "relatórios"}
-          </Text>
+          </ContadorLista>
 
           {temPermissao("RELATORIOS", "CRIAR") ? (
             <Button
@@ -255,11 +250,9 @@ export default function ListaRelatorios() {
           </View>
         ) : (
           relatorios.map((relatorio) => (
-            <TouchableOpacity
+            <RelatorioListaCard
               key={relatorio.id}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={`Abrir relatório ${relatorio.titulo}`}
+              relatorio={relatorio}
               onPress={() =>
                 router.push({
                   pathname: "/relatorios/[id]",
@@ -268,148 +261,18 @@ export default function ListaRelatorios() {
                   },
                 })
               }
-              style={[
-                styles.card,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            >
-              <View style={styles.cardTop}>
-                <View style={styles.cardTitleArea}>
-                  <Text
-                    weight="Bold"
-                    style={styles.cardTitle}
-                  >
-                    {relatorio.titulo}
-                  </Text>
-
-                  <Text
-                    weight="SemiBold"
-                    style={{
-                      color: theme.textoTerciaria,
-                    }}
-                  >
-                    {relatorio.cliente_nome}
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={21}
-                  color={theme.texto}
-                />
-              </View>
-
-              <View
-                style={[
-                  styles.cardSection,
-                  { borderTopColor: `${theme.borda}55` },
-                ]}
-              >
-                <Ionicons
-                  name="calendar-outline"
-                  size={16}
-                  color={theme.textoSub}
-                />
-
-                <Text style={{ color: theme.texto }}>
-                  {dataISOParaBR(
-                    relatorio.periodo_inicio
-                  )}{" "}
-                  a{" "}
-                  {dataISOParaBR(
-                    relatorio.periodo_fim
-                  )}
-                </Text>
-              </View>
-
-              <View style={styles.cardBottom}>
-                <Text style={{ color: theme.textoTerciaria }}>
-                  {relatorio.total_materias}{" "}
-                  {relatorio.total_materias === 1
-                    ? "matéria"
-                    : "matérias"}
-                </Text>
-
-                <Text style={{ color: theme.textoSub }}>
-                  ·
-                </Text>
-
-                <Text style={{ color: theme.texto }}>
-                  Inclusão automática{" "}
-                  {relatorio.inclusao_automatica
-                    ? "ativa"
-                    : "pausada"}
-                </Text>
-              </View>
-
-              {relatorio.total_pendentes > 0 ? (
-                <View
-                  style={[
-                    styles.pending,
-                    {
-                      backgroundColor:
-                        `${theme.aviso}18`,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={16}
-                    color={theme.aviso}
-                  />
-
-                  <Text
-                    weight="SemiBold"
-                    style={{ color: theme.aviso }}
-                  >
-                    {relatorio.total_pendentes}{" "}
-                    {relatorio.total_pendentes === 1
-                      ? "slide para revisar"
-                      : "slides para revisar"}
-                  </Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
+            />
           ))
         )}
 
         {!carregando && !erro && total > 0 ? (
-          <View style={styles.pagination}>
-            <Text
-              style={[
-                styles.paginationInfo,
-                { color: theme.textoSub },
-              ]}
-            >
-              Exibindo {(pagina - 1) * LIMITE_PAGINA + 1}–
-              {Math.min(pagina * LIMITE_PAGINA, total)} de {total}
-              {" · "}Página {pagina} de{" "}
-              {Math.ceil(total / LIMITE_PAGINA)}
-            </Text>
-
-            <View style={styles.paginationButtons}>
-              <Button
-                title="ANTERIOR"
-                variant="outline"
-                size="small"
-                disabled={pagina === 1}
-                onPress={() => mudarPagina(pagina - 1)}
-                style={styles.paginationButton}
-              />
-
-              <Button
-                title="PRÓXIMA"
-                variant="outline"
-                size="small"
-                disabled={!temMais}
-                onPress={() => mudarPagina(pagina + 1)}
-                style={styles.paginationButton}
-              />
-            </View>
-          </View>
+          <PaginacaoLista
+            pagina={pagina}
+            limite={LIMITE_PAGINA}
+            total={total}
+            disabled={carregando}
+            onChange={mudarPagina}
+          />
         ) : null}
       </ScrollView>
 
@@ -433,6 +296,7 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
@@ -459,47 +323,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingVertical: 45,
-  },
-  card: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 12,
-    gap: 11,
-  },
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  cardTitleArea: {
-    flex: 1,
-    gap: 5,
-  },
-  cardTitle: {
-    fontSize: 15,
-  },
-  cardSection: {
-    borderTopWidth: 1,
-    paddingTop: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  cardBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  pending: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
   },
   pagination: {
     marginTop: 8,

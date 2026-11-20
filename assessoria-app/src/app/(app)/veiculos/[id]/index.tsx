@@ -179,7 +179,7 @@ export default function VeiculoDetalhes() {
       return;
     }
 
-    router.replace("/veiculos");
+    router.dismissTo("/veiculos");
   }, [
     clippingId,
     origemId,
@@ -577,12 +577,12 @@ export default function VeiculoDetalhes() {
 
       if (Platform.OS === "web") {
         window.alert("Veículo excluído com sucesso.");
-        router.replace("/veiculos");
+        router.dismissTo("/veiculos");
         return;
       }
 
       Alert.alert("Sucesso", "Veículo excluído com sucesso.", [
-        { text: "OK", onPress: () => router.replace("/veiculos") },
+        { text: "OK", onPress: () => router.dismissTo("/veiculos") },
       ]);
     } catch (error) {
       const mensagem =

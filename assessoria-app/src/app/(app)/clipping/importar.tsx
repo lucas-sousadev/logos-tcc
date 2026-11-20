@@ -260,7 +260,7 @@ export default function ImportarClippings() {
       return;
     }
 
-    router.replace("/clipping");
+    router.dismissTo("/clipping");
   }
 
   function voltar() {

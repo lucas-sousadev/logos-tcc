@@ -11,6 +11,8 @@ import type {
   TemplateRelease,
 } from "@/services/api/release";
 
+export type AcaoCadastroRelease = "RASCUNHO" | "ENVIAR";
+
 export interface ReleasePendente {
   dados: DadosNovoRelease & { dados_envio: DadosEnvioRelease };
   etapa: EtapaRelease;
@@ -18,6 +20,8 @@ export interface ReleasePendente {
   template: Omit<TemplateRelease, "blocos"> | null;
   selecionados: DestinatarioRelease[];
   conteudoEditado: boolean;
+  acao?: AcaoCadastroRelease;
+  release_id?: number;
 }
 
 function prefixo(conta: string) {
@@ -69,11 +73,27 @@ export async function lerReleasePendente(conta: string): Promise<ReleasePendente
     if (api !== API_URL) continue;
 
     if (
-      nome !== nomeTentativa(conta, tentativa?.dados?.chave_rascunho) ||
+      nome !== nomeTentativa(
+        conta,
+        tentativa?.dados?.chave_rascunho
+      ) ||
       !Array.isArray(tentativa.selecionados) ||
-      !tentativa.dados.dados_envio
+      !tentativa.dados.dados_envio ||
+      (
+        tentativa.acao !== undefined &&
+        !["RASCUNHO", "ENVIAR"].includes(tentativa.acao)
+      ) ||
+      (
+        tentativa.release_id !== undefined &&
+        (
+          !Number.isSafeInteger(tentativa.release_id) ||
+          tentativa.release_id < 1
+        )
+      )
     ) {
-      throw new Error("O rascunho salvo neste dispositivo está incompleto.");
+      throw new Error(
+        "O rascunho salvo neste dispositivo está incompleto."
+      );
     }
 
     return tentativa;

@@ -10,6 +10,7 @@ import {
 import {
   useCallback,
   useState,
+  useRef
 } from "react";
 
 import {
@@ -25,7 +26,10 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import ClienteFilterModal, { FiltrosClientes } from "@/components/ui/Filtros/ClienteFilterModal";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
+import ContadorLista from "@/components/ui/ContadorLista";
+import PaginacaoLista from "@/components/ui/PaginacaoLista";
 
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
@@ -50,6 +54,7 @@ const LIMITE_SELECAO_EM_LOTE = 100;
 
 export default function Clientes() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
@@ -65,21 +70,6 @@ export default function Clientes() {
     segmento: "",
     ativo: undefined,
   });
-  const [clientes, setClientes] = useState<
-    Cliente[]
-  >([]);
-
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [carregandoMais, setCarregandoMais] =
-    useState(false);
-
-  const [pagina, setPagina] = useState(1);
-  const [temMais, setTemMais] = useState(false);
-  const [total, setTotal] = useState(0);
-
-  const [erro, setErro] = useState("");
   const [modoSelecao, setModoSelecao] = useState(false);
 
   const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
@@ -91,69 +81,24 @@ export default function Clientes() {
 
   const [feedback, setFeedback] = useState<FeedbackState | null>(null); 
 
-  const carregarClientes = useCallback(
-    async (
-      reset = false,
-      buscaAtual = buscaAplicada
-    ) => {
-      try {
-        setErro("");
+  const consultarPagina = useCallback(
+    async (page: number, limit: number) => {
+      const resposta = await listarClientes({
+        page,
+        limit,
+        busca: buscaAplicada,
+        estado: filtros.estado,
+        cidade: filtros.cidade,
+        segmento: filtros.segmento,
+        ativo: filtros.ativo,
+      });
 
-        if (reset) {
-          setCarregando(true);
-        } else {
-          setCarregandoMais(true);
-        }
-
-        const paginaAtual = reset
-          ? 1
-          : pagina + 1;
-
-        const resposta = await listarClientes({
-          page: paginaAtual,
-          limit: 50,
-          busca: buscaAtual,
-          estado: filtros.estado,
-          cidade: filtros.cidade,
-          segmento: filtros.segmento,
-          ativo: filtros.ativo,
-        });
-
-        if (reset) {
-          setClientes(resposta.clientes);
-          setPagina(1);
-        } else {
-          setClientes((atuais) => [
-            ...atuais,
-            ...resposta.clientes,
-          ]);
-
-          setPagina(paginaAtual);
-        }
-
-        setTotal(resposta.pagination.total);
-
-        setTemMais(
-          resposta.pagination.has_next
-        );
-      } catch (error) {
-        console.error(
-          "Erro ao carregar clientes:",
-          error
-        );
-
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar os clientes."
-        );
-      } finally {
-        setCarregando(false);
-        setCarregandoMais(false);
-      }
+      return {
+        itens: resposta.clientes,
+        total: resposta.pagination.total,
+      };
     },
-        [
-      pagina,
+    [
       buscaAplicada,
       filtros.estado,
       filtros.cidade,
@@ -162,33 +107,51 @@ export default function Clientes() {
     ]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      void carregarClientes(true);
+  const {
+    itens: clientes,
+    pagina,
+    total,
+    carregando,
+    erro,
+    limite,
+    carregarPagina,
+  } = useListaPaginada<Cliente>({
+    chave: JSON.stringify([buscaAplicada, filtros]),
+    consultar: consultarPagina,
+  });
 
-      return () => {
-        setIdsSelecionados([]);
-        setModoSelecao(false);
-      };
-    }, [
-      buscaAplicada,
-      filtros.estado,
-      filtros.cidade,
-      filtros.segmento,
-      filtros.ativo,
-    ])
+  function carregarClientes(reset = false) {
+    return carregarPagina(reset ? 1 : undefined);
+  }
+
+  useFocusEffect(
+    useCallback(() => () => {
+      setIdsSelecionados([]);
+      setModoSelecao(false);
+    }, [])
   );
 
   function realizarBusca() {
     sairModoSelecao();
-    setPagina(1);
-    setBuscaAplicada(busca.trim());
+
+    const texto = busca.trim();
+
+    if (texto === buscaAplicada) {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada(texto);
+    }
   }
 
   function limparBusca() {
     sairModoSelecao();
-    setPagina(1);
-    setBuscaAplicada("");
+    setBusca("");
+
+    if (buscaAplicada === "") {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada("");
+    }
   }
 
   function abrirCliente(id: number) {
@@ -204,9 +167,16 @@ export default function Clientes() {
     novosFiltros: FiltrosClientes
   ) {
     sairModoSelecao();
-    setPagina(1);
+    const mesmos =
+      JSON.stringify(novosFiltros) ===
+      JSON.stringify(filtros);
+
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
+
+    if (mesmos) {
+      void carregarPagina(1);
+    }
   }
 
   function filtrosAtivos() {
@@ -399,7 +369,7 @@ function alternarClienteSelecionado(id: number) {
           },
         ]}
       >
-        <Header title="Clientes" />
+        <Header title="Clientes" showBackButton />
 
         <View style={styles.loading}>
           <ActivityIndicator
@@ -420,11 +390,12 @@ function alternarClienteSelecionado(id: number) {
         },
       ]}
     >
-      <Header title="Clientes" />
+      <Header title="Clientes" showBackButton />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        ref={scrollRef}
       >
         <SearchBar
           value={busca}
@@ -440,20 +411,9 @@ function alternarClienteSelecionado(id: number) {
         />
 
         <View style={styles.topRow}>
-          <Text
-            weight="Medium"
-            style={[
-              styles.count,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            {total}{" "}
-            {total === 1
-              ? "cliente"
-              : "clientes"}
-          </Text>
+          <ContadorLista>
+            {total} {total === 1 ? "cliente" : "clientes"}
+          </ContadorLista>
 
           {temPermissao(
             "CLIENTES",
@@ -514,7 +474,6 @@ function alternarClienteSelecionado(id: number) {
           visible={filtrosAtivos()}
           disabled={
             carregando ||
-            carregandoMais ||
             excluindoSelecionados
           }
           onPress={() => {
@@ -735,8 +694,8 @@ function alternarClienteSelecionado(id: number) {
                 style={[
                   styles.item,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
+                    backgroundColor: theme.backgroundSecundario,
+                    borderColor: theme.borda + "45",
                   },
                 ]}
               >
@@ -744,8 +703,9 @@ function alternarClienteSelecionado(id: number) {
                   style={[
                     styles.logoContainer,
                     {
-                      backgroundColor:
-                        theme.backgroundContainer,
+                      backgroundColor: logoUrl
+                        ? theme.branco
+                        : theme.primaria + "12",
                     },
                   ]}
                 >
@@ -759,7 +719,7 @@ function alternarClienteSelecionado(id: number) {
                     <Ionicons
                       name="briefcase-outline"
                       size={21}
-                      color={theme.textoContainer}
+                      color={theme.textoTerciaria}
                     />
                   )}
                 </View>
@@ -769,6 +729,7 @@ function alternarClienteSelecionado(id: number) {
                     weight="SemiBold"
                     style={styles.itemName}
                     numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {cliente.nome}
                   </Text>
@@ -786,23 +747,28 @@ function alternarClienteSelecionado(id: number) {
                   </Text>
                   {cliente.total_clippings_ano_atual !== undefined &&
                     cliente.ano_clippings !== undefined ? (
-                      <Text
-                        style={[
-                          styles.itemMeta,
-                          { color: "#F59E0B", marginLeft: -1 },
-                        ]}
-                      >
+                      <View style={styles.itemVinculos}>
                         <Ionicons
                           name="attach-outline"
-                          size={13}
+                          size={14}
                           color="#F59E0B"
                         />
-                        {""}{cliente.total_clippings_ano_atual}{" "}
-                        {cliente.total_clippings_ano_atual === 1
-                          ? "clipping"
-                          : "clippings"}
-                        {" • "}{cliente.ano_clippings}
-                      </Text>
+
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.itemVinculosTexto,
+                            { color: "#F59E0B" },
+                          ]}
+                        >
+                          {cliente.total_clippings_ano_atual}{" "}
+                          {cliente.total_clippings_ano_atual === 1
+                            ? "clipping"
+                            : "clippings"}
+                          {" • "}
+                          {cliente.ano_clippings}
+                        </Text>
+                      </View>
                     ) : null}
                 </View>
 
@@ -831,26 +797,40 @@ function alternarClienteSelecionado(id: number) {
                     ) : null}
                   </View>
                 ) : (
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={21}
-                    color={theme.texto}
-                  />
+                  <View
+                    style={[
+                      styles.itemArrow,
+                      {
+                        backgroundColor: theme.primaria + "0C",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={17}
+                      color={theme.textoTerciaria}
+                    />
+                  </View>
                 )}
               </TouchableOpacity>
             );
           })
         )}
 
-        {temMais ? (
-          <Button
-            title="CARREGAR MAIS"
-            variant="outline"
-            loading={carregandoMais}
-            onPress={() =>
-              void carregarClientes(false)
-            }
-            style={styles.moreButton}
+        {!erro && total > 0 ? (
+          <PaginacaoLista
+            pagina={pagina}
+            limite={limite}
+            total={total}
+            disabled={carregando || excluindoSelecionados}
+            onChange={(destino) => {
+              void carregarPagina(destino);
+
+              scrollRef.current?.scrollTo({
+                y: 0,
+                animated: false,
+              });
+            }}
           />
         ) : null}
       </ScrollView>
@@ -895,7 +875,9 @@ const styles = StyleSheet.create({
 
   topRow: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
     marginBottom: 12,
   },
@@ -978,26 +960,29 @@ const styles = StyleSheet.create({
   },
 
   item: {
-    padding: 8,
-    minHeight: 74,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    width: "100%",
+    minWidth: 0,
+    minHeight: 82,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
   logoContainer: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
+    flexShrink: 0,
     borderRadius: 12,
+    padding: 4,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
     overflow: "hidden",
   },
-
   logoImage: {
     width: "100%",
     height: "100%",
@@ -1005,17 +990,40 @@ const styles = StyleSheet.create({
 
   itemInfo: {
     flex: 1,
-    marginRight: 10,
+    minWidth: 0,
+    gap: 2,
   },
 
   itemName: {
     fontSize: 14,
-    marginBottom: -2,
+    lineHeight: 19,
   },
 
   itemMeta: {
     fontSize: 11,
-    margin: 1
+    lineHeight: 15,
+  },
+
+  itemArrow: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  itemVinculos: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  itemVinculosTexto: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    lineHeight: 15,
   },
 
   empty: {

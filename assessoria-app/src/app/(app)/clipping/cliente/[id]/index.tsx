@@ -4,7 +4,8 @@ import {
   StyleSheet,
   View,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  useWindowDimensions,
 } from "react-native";
 
 import { useCallback, useState, useEffect } from "react";
@@ -25,6 +26,8 @@ import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import ClippingFilterModal, { novosFiltrosClippings, converterFiltrosClipping, possuiFiltrosClipping,} from "@/components/ui/Filtros/ClippingFilterModal";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import ContadorLista from "@/components/ui/ContadorLista";
+
 import { useSelecaoClippings } from "@/hooks/useSelecaoClipping";
 import { useExportacaoClippings } from "@/hooks/useExportacaoClippings";
 
@@ -38,8 +41,25 @@ import { buscarCliente } from "@/services/api/cliente";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
+type RotaClippings = {
+  id?: string;
+  ano?: string;
+  clienteNome?: string;
+  criadoId?: string;
+  origemTipo?: string;
+  origemId?: string;
+  retornoVinculado?: "ano" | "origem";
+};
+
 export default function ClippingsDoCliente() {
+  const params = useLocalSearchParams<RotaClippings>();
+  return <ConteudoClippingsDoCliente key={JSON.stringify([params.id, params.ano])} params={params} />;
+}
+
+function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const compacto = width < 380;
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const { novos, marcarVisualizado } = useClippingNovos();
@@ -50,15 +70,6 @@ export default function ClippingsDoCliente() {
 
   const filtrosAtivos = possuiFiltrosClipping(filtros);
 
-  const params = useLocalSearchParams<{
-    id?: string;
-    ano?: string;
-    clienteNome?: string;
-    criadoId?: string;
-    origemTipo?: string;
-    origemId?: string;
-    retornoVinculado?: "ano" | "origem";
-  }>();
 
   const ano = Number(params.ano);
   const clienteId = Number(params.id);
@@ -82,14 +93,6 @@ export default function ClippingsDoCliente() {
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
 
-  useEffect(() => {
-    setBusca("");
-    setBuscaAplicada("");
-    setExpandido(null);
-    setFiltros(novosFiltrosClippings());
-    setFiltrosAberto(false);
-    setPagina(1);
-  }, [clienteId, ano]);
 
   useEffect(() => {
     let ativo = true;
@@ -149,6 +152,11 @@ export default function ClippingsDoCliente() {
     });
   }, [ano, clienteId, buscaAplicada, filtros, pagina]);
 
+  const ajustarPagina = useCallback((resposta: Awaited<ReturnType<typeof listarClippings>>) => {
+    const ultima = Math.max(1, Math.ceil(resposta.pagination.total / 50));
+    if (pagina > ultima) setPagina(ultima);
+  }, [pagina]);
+
   const {
     dados,
     carregando,
@@ -158,7 +166,8 @@ export default function ClippingsDoCliente() {
     atualizarDados,
   } = useConsultaClipping(
     consultarClippings,
-    chaveConsulta
+    chaveConsulta,
+    ajustarPagina
   );
 
   const clippings = dados?.clippings ?? [];
@@ -253,18 +262,6 @@ export default function ClippingsDoCliente() {
         void exportacao.exportar(selecao.selecionados);
       }
 
-  useEffect(() => {
-    if (!dados || erro || selecao.excluindo) return;
-
-    const ultima = Math.max(
-      1,
-      Math.ceil(dados.pagination.total / 50)
-    );
-
-    if (pagina > ultima) {
-      setPagina(ultima);
-    }
-  }, [dados, erro, pagina, selecao.excluindo]);
 
   function fecharAviso() {
     router.setParams({
@@ -332,7 +329,7 @@ export default function ClippingsDoCliente() {
       return;
     }
 
-    router.replace("/clipping");
+    router.dismissTo("/clipping");
   }
 
   function abrirNovo() {
@@ -459,15 +456,14 @@ export default function ClippingsDoCliente() {
             placeholder="Buscar pauta, veículo, programa ou categoria..."
           />
 
-          <View style={styles.topRow}>
-            <Text
-              style={[
-                styles.count,
-                { color: theme.textoSub },
-              ]}
-            >
-              {total} clipping(s) em {ano}
-            </Text>
+          <View style={[styles.topRow, compacto && styles.topRowCompact]}>
+            <ContadorLista style={compacto ? styles.contadorCompacto : undefined}>
+              {total} {total === 1 ? "clipping" : "clippings"}
+              {" em "}
+              {ano}
+            </ContadorLista>
+
+            <View style={[styles.topActions, compacto && styles.topActionsCompact]}>
               {!selecao.ativo &&
                 temPermissao("CLIPPING", "IMPORTAR") ? (
                   <TouchableOpacity
@@ -484,6 +480,7 @@ export default function ClippingsDoCliente() {
                     onPress={abrirImportacao}
                     style={[
                       styles.exportButton,
+                    compacto && styles.exportButtonCompact,
                       {
                         backgroundColor: theme.background,
                         borderColor: theme.borda,
@@ -522,6 +519,7 @@ export default function ClippingsDoCliente() {
                   onPress={exportarResultados}
                   style={[
                     styles.exportButton,
+                      compacto && styles.exportButtonCompact,
                     {
                       backgroundColor: theme.background,
                       borderColor: theme.borda,
@@ -545,16 +543,17 @@ export default function ClippingsDoCliente() {
                 </TouchableOpacity>
               ) : null}
               
-            {!selecao.ativo && temPermissao("CLIPPING", "CRIAR") ? (
-              <Button
-                icon="add-outline"
-                title="CLIPPING"
-                size="small"
-                disabled={selecao.excluindo}
-                onPress={abrirNovo}
-                style={styles.newButton}
-              />
-            ) : null}
+              {!selecao.ativo && temPermissao("CLIPPING", "CRIAR") ? (
+                <Button
+                  icon="add-outline"
+                  title="NOVO"
+                  size="small"
+                  disabled={selecao.excluindo}
+                  onPress={abrirNovo}
+                  style={[styles.newButton, compacto && styles.newButtonCompact]}
+                />
+              ) : null}
+            </View>
           </View>
 
           {erro ? (
@@ -858,6 +857,11 @@ export default function ClippingsDoCliente() {
 }
 
 const styles = StyleSheet.create({
+  topRowCompact: { gap: 6 },
+  topActionsCompact: { gap: 4 },
+  contadorCompacto: { paddingHorizontal: 8 },
+  exportButtonCompact: { width: 34, height: 34, borderRadius: 10 },
+  newButtonCompact: { paddingHorizontal: 8 },
   container: {
     flex: 1,
   },
@@ -875,11 +879,22 @@ const styles = StyleSheet.create({
   },
 
   topRow: {
+    minWidth: 0,
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
     marginBottom: 14,
+  },
+
+  topActions: {
+    flexShrink: 0,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
   },
 
   count: {
@@ -889,7 +904,7 @@ const styles = StyleSheet.create({
 
   newButton: {
     width: "auto",
-    borderRadius: 12
+    borderRadius: 12,
   },
 
   exportButton: {
@@ -921,6 +936,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderRadius: 16,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
     padding: 10,
@@ -929,6 +945,7 @@ const styles = StyleSheet.create({
 
   selectionInfo: {
     flex: 1,
+    minWidth: 100,
   },
 
   selectionTitle: {

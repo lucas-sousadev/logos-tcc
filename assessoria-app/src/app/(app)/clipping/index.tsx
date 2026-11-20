@@ -93,12 +93,12 @@ export default function Clipping() {
     });
   }
 
-    const podeCriar = temPermissao("CLIPPING", "CRIAR");
+  const podeCriar = temPermissao("CLIPPING", "CRIAR");
   const podeImportar = temPermissao("CLIPPING", "IMPORTAR");
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Header title="Clipping" />
+      <Header title="Clipping" showBackButton />
 
       {carregando ? (
         <View style={styles.loading}>
@@ -342,12 +342,13 @@ const styles = StyleSheet.create({
   },
   acoes: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     gap: 8,
   },
   botaoAcao: {
     flex: 1,
     minWidth: 0,
-    minHeight: 38,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -375,6 +376,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cartaoAno: {
+    width: "100%",
+    minWidth: 0,
     borderWidth: 1,
     borderRadius: 14,
     padding: 12,
@@ -382,22 +385,26 @@ const styles = StyleSheet.create({
   },
   topoAno: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   },
   iconeAno: {
     width: 34,
     height: 34,
+    flexShrink: 0,
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
   ano: {
     flex: 1,
+    minWidth: 72,
     fontSize: 22,
     lineHeight: 28,
   },
   selo: {
+    flexShrink: 0,
     fontSize: 10,
     borderRadius: 8,
     paddingHorizontal: 8,
@@ -405,13 +412,15 @@ const styles = StyleSheet.create({
   },
   resumo: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 9,
   },
   indicador: {
-    flex: 1,
-    minWidth: 0,
+    flexGrow: 1,
+    flexBasis: 120,
+    minWidth: 120,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",

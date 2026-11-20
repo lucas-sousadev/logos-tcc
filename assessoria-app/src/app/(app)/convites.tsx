@@ -4,6 +4,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useCallback, useRef, useState } from "react";
@@ -13,13 +14,14 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { TouchableOpacity } from "react-native";
 import * as Clipboard from "expo-clipboard";
 
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import ContadorLista from "@/components/ui/ContadorLista";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { ConviteHistorico } from "@/services/api/auth";
@@ -48,9 +50,9 @@ export default function Convites() {
   const podeCriar = temPermissao("CONVITES", "CRIAR");
 
   const [historico, setHistorico] = useState<ConviteHistorico[]>([]);
-  const [pagina, setPagina] = useState(1);
+  const [consulta, setConsulta] = useState({ pagina: 1, versao: 0 });
+  const { pagina } = consulta;
   const [total, setTotal] = useState(0);
-  const [atualizacao, setAtualizacao] = useState(0);
   const [carregandoHistorico, setCarregandoHistorico] = useState(true);
   const [criando, setCriando] = useState(false);
   const [erroHistorico, setErroHistorico] = useState("");
@@ -84,17 +86,16 @@ export default function Convites() {
   }
 
   function voltar() {
-    if (origem === "funcionarios") {
-      router.replace("/funcionarios");
-      return;
-    }
-
     if (router.canGoBack()) {
       router.back();
       return;
     }
 
-    router.replace("/");
+    router.replace(
+      origem === "funcionarios"
+        ? "/funcionarios"
+        : "/"
+    );
   }
 
   useFocusEffect(
@@ -105,9 +106,15 @@ export default function Convites() {
       setCarregandoHistorico(true);
       setErroHistorico("");
 
-      void listarConvites(pagina, LIMITE_PAGINA)
+      void listarConvites(consulta.pagina, LIMITE_PAGINA)
         .then((resposta) => {
           if (requisicao !== requisicaoAtual.current) return;
+
+          const ultima = Math.max(1, Math.ceil((resposta.pagination?.total ?? 0) / LIMITE_PAGINA));
+          if (consulta.pagina > ultima) {
+            setConsulta((atual) => ({ ...atual, pagina: ultima }));
+            return;
+          }
 
           setHistorico(resposta.convites ?? []);
           setTotal(resposta.pagination?.total ?? 0);
@@ -132,7 +139,7 @@ export default function Convites() {
       return () => {
         requisicaoAtual.current++;
       };
-    }, [podeVisualizar, listarConvites, pagina, atualizacao])
+    }, [podeVisualizar, listarConvites, consulta])
   );
 
   async function gerarConvite() {
@@ -155,8 +162,7 @@ export default function Convites() {
         expira_em: resposta.convite.expira_em,
       });
 
-      setPagina(1);
-      setAtualizacao((valor) => valor + 1);
+      setConsulta((atual) => ({ pagina: 1, versao: atual.versao + 1 }));
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error) {
       setErroCriacao(
@@ -259,12 +265,9 @@ export default function Convites() {
         contentContainerStyle={styles.conteudo}
       >
         <View style={styles.linhaSuperior}>
-          <Text
-            weight="Medium"
-            style={[styles.contagem, { color: theme.textoSub }]}
-          >
+          <ContadorLista>
             {total} {total === 1 ? "convite" : "convites"}
-          </Text>
+          </ContadorLista>
 
           {podeCriar ? (
             <Button
@@ -446,7 +449,7 @@ export default function Convites() {
               title="TENTAR NOVAMENTE"
               size="small"
               onPress={() =>
-                setAtualizacao((valor) => valor + 1)
+                setConsulta((atual) => ({ ...atual, versao: atual.versao + 1 }))
               }
             />
           </View>
@@ -663,7 +666,7 @@ export default function Convites() {
               total={total}
               disabled={carregandoHistorico || criando}
               onChange={(novaPagina) => {
-                setPagina(novaPagina);
+                setConsulta((atual) => ({ ...atual, pagina: novaPagina }));
                 scrollRef.current?.scrollTo({
                   y: 0,
                   animated: true,
@@ -688,6 +691,7 @@ const styles = StyleSheet.create({
   },
   linhaSuperior: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,

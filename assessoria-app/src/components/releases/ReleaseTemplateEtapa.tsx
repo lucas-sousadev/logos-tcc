@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -18,6 +18,7 @@ import Text from "@/components/ui/Text";
 import ReleaseBlocosPrevia from "@/components/releases/ReleaseBlocosPrevia";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 import {
   listarTemplatesRelease,
   type TemplateRelease,
@@ -55,59 +56,32 @@ export default function ReleaseTemplateEtapa({
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [origem, setOrigem] = useState<Origem>("TODOS");
-  const [pagina, setPagina] = useState(1);
-  const [templates, setTemplates] = useState<TemplateRelease[]>([]);
-  const [total, setTotal] = useState(0);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
-  const [tentativa, setTentativa] = useState(0);
   const [previa, setPrevia] = useState<TemplateRelease | null>(null);
 
-  useEffect(() => {
-    let ativo = true;
+  const consultar = useCallback(async (pagina: number) => {
+    const resposta = await listarTemplatesRelease({
+      page: pagina,
+      busca: buscaAplicada,
+      origem,
+    });
+    return { itens: resposta.templates, total: resposta.pagination.total };
+  }, [buscaAplicada, origem]);
 
-    setCarregando(true);
-    setErro("");
-
-    async function carregar() {
-      try {
-        const resposta = await listarTemplatesRelease({
-          page: pagina,
-          busca: buscaAplicada,
-          origem,
-        });
-
-        if (!ativo) return;
-
-        setTemplates(resposta.templates);
-        setTotal(resposta.pagination.total);
-      } catch (error) {
-        if (!ativo) return;
-
-        setTemplates([]);
-        setTotal(0);
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar os templates."
-        );
-      } finally {
-        if (ativo) setCarregando(false);
-      }
-    }
-
-    void carregar();
-
-    return () => {
-      ativo = false;
-    };
-  }, [pagina, buscaAplicada, origem, tentativa]);
+  const { itens: templates, total, pagina, carregando, erro, carregarPagina } =
+    useListaPaginada({
+      chave: JSON.stringify([buscaAplicada, origem]),
+      consultar,
+      limite: 20,
+    });
 
   function buscar(texto: string) {
     setBusca(texto);
-    setBuscaAplicada(texto.trim());
-    setPagina(1);
-    setTentativa((valor) => valor + 1);
+    const termo = texto.trim();
+    if (termo === buscaAplicada) {
+      void carregarPagina(1);
+    } else {
+      setBuscaAplicada(termo);
+    }
   }
 
   return (
@@ -134,7 +108,6 @@ export default function ReleaseTemplateEtapa({
             accessibilityState={{ checked: origem === valor }}
             onPress={() => {
               setOrigem(valor);
-              setPagina(1);
             }}
             style={[
               styles.origem,
@@ -185,7 +158,7 @@ export default function ReleaseTemplateEtapa({
           <Button
             title="TENTAR NOVAMENTE"
             size="small"
-            onPress={() => setTentativa((valor) => valor + 1)}
+            onPress={() => void carregarPagina()}
           />
         </View>
       ) : null}
@@ -300,7 +273,8 @@ export default function ReleaseTemplateEtapa({
           pagina={pagina}
           limite={20}
           total={total}
-          onChange={setPagina}
+          disabled={disabled || carregando}
+          onChange={(destino) => void carregarPagina(destino)}
         />
       ) : null}
 

@@ -1,85 +1,129 @@
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  View,
-  Image
-} from "react-native";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "expo-router";
 
-import { useAuth } from "../contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-
-import Text from "@/components/ui/Text";
-import Input from "@/components/ui/Input";
+import AcessoLayout, {
+  CampoAcesso,
+  MensagemAcesso,
+  SecaoAcesso,
+} from "@/components/auth/AcessoLayout";
 import Button from "@/components/ui/Button";
-import BackButton from "@/components/ui/BackButton";
+import { useAuth } from "@/contexts/AuthContext";
 import { validarSenha } from "@/utils/validarSenha";
 import { cnpjValido } from "@/utils/validarCliente";
 
-type CampoCadastroAssessoria =
-  | "assessoriaNome"
-  | "assessoriaEmail"
-  | "cnpj"
-  | "telefone"
-  | "assessorNome"
-  | "assessorEmail"
-  | "assessorTelefone"
-  | "senha";
+const INICIAL = {
+  assessoriaNome: "",
+  assessoriaEmail: "",
+  cnpj: "",
+  telefone: "",
+  assessorNome: "",
+  assessorEmail: "",
+  assessorTelefone: "",
+  senha: "",
+  confirmarSenha: "",
+};
 
-type ErrosCadastroAssessoria = Partial<
-  Record<CampoCadastroAssessoria, string>
->;
+type Dados = typeof INICIAL;
+type Campo = keyof Dados;
+type Erros = Partial<Record<Campo, string>>;
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validarDadosAssessoria(dados: Dados): Erros {
+  const erros: Erros = {};
+
+  if (!dados.assessoriaNome.trim()) {
+    erros.assessoriaNome =
+      "Informe o nome da assessoria.";
+  }
+
+  if (!dados.assessorNome.trim()) {
+    erros.assessorNome =
+      "Informe o nome do assessor.";
+  }
+
+  if (
+    dados.assessoriaEmail.trim() &&
+    !EMAIL.test(dados.assessoriaEmail.trim())
+  ) {
+    erros.assessoriaEmail =
+      "Informe um e-mail válido.";
+  }
+
+  if (!dados.assessorEmail.trim()) {
+    erros.assessorEmail = "Informe seu e-mail.";
+  } else if (!EMAIL.test(dados.assessorEmail.trim())) {
+    erros.assessorEmail =
+      "Informe um e-mail válido.";
+  }
+
+  if (dados.cnpj.trim() && !cnpjValido(dados.cnpj)) {
+    erros.cnpj = "Informe um CNPJ válido.";
+  }
+
+  for (
+    const campo of [
+      "telefone",
+      "assessorTelefone",
+    ] as const
+  ) {
+    if (
+      dados[campo].trim() &&
+      !/^\d{10,11}$/.test(
+        dados[campo].replace(/\D/g, "")
+      )
+    ) {
+      erros[campo] =
+        "O telefone deve possuir 10 ou 11 dígitos.";
+    }
+  }
+
+  const erroSenha = dados.senha
+    ? validarSenha(dados.senha)
+    : "Informe uma senha.";
+
+  if (erroSenha) erros.senha = erroSenha;
+
+  if (!dados.confirmarSenha) {
+    erros.confirmarSenha = "Confirme sua senha.";
+  } else if (dados.senha !== dados.confirmarSenha) {
+    erros.confirmarSenha =
+      "As senhas não coincidem.";
+  }
+
+  return erros;
+}
 
 export default function Cadastro() {
-  const {theme, mode} = useTheme();
+  const router = useRouter();
   const { registerAssessoria } = useAuth();
-  const [assessoriaNome, setAssessoriaNome] = useState("");
-  const [assessoriaEmail, setAssessoriaEmail] = useState("");
-  const [cnpj, setCnpj] = useState("");
-  const [telefone, setTelefone] = useState("");
 
-  const [assessorNome, setAssessorNome] = useState("");
-  const [assessorEmail, setAssessorEmail] = useState("");
-  const [assessorTelefone, setAssessorTelefone] = useState("");
-
-  const [senha, setSenha] = useState("");
-
-  const [erros, setErros] = useState<ErrosCadastroAssessoria>({});
+  const trava = useRef(false);
+  const [dados, setDados] = useState(INICIAL);
+  const [erros, setErros] = useState<Erros>({});
   const [erroGeral, setErroGeral] = useState("");
-
   const [carregando, setCarregando] = useState(false);
 
-  function limparErro(
-    campo: CampoCadastroAssessoria
-  ) {
+  function alterar(campo: Campo, valor: string) {
+    setDados((atual) => ({
+      ...atual,
+      [campo]: valor,
+    }));
+
     setErros((atuais) => ({
       ...atuais,
       [campo]: undefined,
+      ...(campo === "senha"
+        ? { confirmarSenha: undefined }
+        : {}),
     }));
+
+    setErroGeral("");
   }
 
-  function validarTelefone(
-    valor: string
-  ): string | null {
-    if (!valor.trim()) {
-      return null;
-    }
-
-    const telefoneNumerico =
-      valor.replace(/\D/g, "");
-
-    if (!/^\d{10,11}$/.test(telefoneNumerico)) {
-      return "O telefone deve possuir 10 ou 11 dígitos.";
-    }
-
-    return null;
-  }
-
-  function mostrarErroApi(mensagem: string) {
+  function mostrarErro(mensagem: string) {
     const texto = mensagem.toLowerCase();
-
-    let campo: CampoCadastroAssessoria | null = null;
+    let campo: Campo | undefined;
 
     if (texto.includes("cnpj")) {
       campo = "cnpj";
@@ -91,378 +135,217 @@ export default function Cadastro() {
       campo = "assessorEmail";
     } else if (texto.includes("e-mail da assessoria")) {
       campo = "assessoriaEmail";
-    } else if (texto.includes("e-mail") && texto.includes("cadastrado")) {
+    } else if (
+      texto.includes("e-mail") &&
+      texto.includes("cadastrado")
+    ) {
       campo = "assessorEmail";
     } else if (texto.includes("senha")) {
       campo = "senha";
     }
 
     if (campo) {
-      setErros({
-        [campo]: mensagem,
-      });
+      setErros({ [campo]: mensagem });
     } else {
       setErroGeral(mensagem);
     }
   }
 
-  async function handleCadastro() {
+  async function cadastrar() {
+    if (trava.current) return;
+
     setErroGeral("");
 
-    const novosErros: ErrosCadastroAssessoria = {};
-
-    if (!assessoriaNome.trim()) {
-      novosErros.assessoriaNome =
-        "Informe o nome da assessoria.";
-    }
-
-    const emailAssessoria = assessoriaEmail.trim();
-
-    if (
-      emailAssessoria &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        emailAssessoria
-      )
-    ) {
-      novosErros.assessoriaEmail =
-        "Informe um e-mail válido.";
-    }
-
-    if (cnpj.trim() && !cnpjValido(cnpj)) {
-      novosErros.cnpj =
-        "Informe um CNPJ válido.";
-    }
-
-    const erroTelefoneAssessoria =
-      validarTelefone(telefone);
-
-    if (erroTelefoneAssessoria) {
-      novosErros.telefone =
-        erroTelefoneAssessoria;
-    }
-
-    if (!assessorNome.trim()) {
-      novosErros.assessorNome =
-        "Informe o nome do assessor.";
-    }
-
-    const emailAssessor = assessorEmail.trim();
-
-    if (!emailAssessor) {
-      novosErros.assessorEmail =
-        "Informe o e-mail do assessor.";
-    } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        emailAssessor
-      )
-    ) {
-      novosErros.assessorEmail =
-        "Informe um e-mail válido.";
-    }
-
-    const erroTelefoneAssessor =
-      validarTelefone(assessorTelefone);
-
-    if (erroTelefoneAssessor) {
-      novosErros.assessorTelefone =
-        erroTelefoneAssessor;
-    }
-
-    if (!senha) {
-      novosErros.senha = "Informe uma senha.";
-    } else {
-      const erroSenha = validarSenha(senha);
-
-      if (erroSenha) {
-        novosErros.senha = erroSenha;
-      }
-    }
-
+    const novosErros = validarDadosAssessoria(dados);
     setErros(novosErros);
 
-    if (Object.keys(novosErros).length > 0) {
-      return;
-    }
+    if (Object.keys(novosErros).length) return;
+
+    trava.current = true;
+    setCarregando(true);
 
     try {
-      setCarregando(true);
-
-      const data = await registerAssessoria({
-        assessoria_nome: assessoriaNome.trim(),
-        assessoria_email: emailAssessoria,
-        cnpj: cnpj.trim(),
-        telefone: telefone.trim(),
-        assessor_nome: assessorNome.trim(),
-        assessor_email: emailAssessor,
-        assessor_telefone: assessorTelefone.trim(),
-        senha,
+      await registerAssessoria({
+        assessoria_nome: dados.assessoriaNome.trim(),
+        assessoria_email: dados.assessoriaEmail.trim(),
+        cnpj: dados.cnpj.trim(),
+        telefone: dados.telefone.trim(),
+        assessor_nome: dados.assessorNome.trim(),
+        assessor_email: dados.assessorEmail.trim(),
+        assessor_telefone:
+          dados.assessorTelefone.trim(),
+        senha: dados.senha,
       });
-
-      console.log("Assessoria criada:", data);
-      console.log("JWT salvo:", data.token);
-      console.log("Usuário:", data.usuario);
-
-      Alert.alert(
-        "Cadastro realizado com sucesso!",
-        "Entre como assessor para se conectar à sua assessoria."
-      );
     } catch (error) {
-      const mensagem =
+      mostrarErro(
         error instanceof Error
           ? error.message
-          : "Não foi possível criar a assessoria.";
-
-      mostrarErroApi(mensagem);
+          : "Não foi possível criar a assessoria."
+      );
     } finally {
+      trava.current = false;
       setCarregando(false);
     }
   }
 
   return (
-    <View
-      style={[
-        styles.screen,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
+    <AcessoLayout
+      titulo="Crie sua assessoria"
+      descricao="Cadastre a assessoria e seu perfil de assessor. Os campos com * são obrigatórios."
+      ocupado={carregando}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace("/entrar");
+      }}
     >
-       <Image
-          source={
-            mode === "light"
-            ? require("@/assets/images/background-logos-white.png")
-            : require("@/assets/images/background-logos-dark.png")
-          }
-          style={styles.backgroundImage}
-          resizeMode="cover"
-        />
-      <BackButton />
-
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+      <SecaoAcesso
+        titulo="Sua assessoria"
+        descricao="Informações da organização."
+        icone="business-outline"
       >
-        <Text
-          weight="SemiBold"
-          style={styles.title}
-        >
-          Criar assessoria
-        </Text>
-
-        <View style={styles.sectionContainer}>
-            <Text
-              weight="SemiBold"
-              style={[
-                styles.section,
-                {
-                  color: theme.texto,
-                  borderBottomColor: theme.backgroundContainer,
-                },
-              ]}
-            >
-              Dados da assessoria
-            </Text>
-        </View>
-
-        <Input
+        <CampoAcesso
           label="Nome da assessoria *"
-          placeholder="Digite o nome da assessoria"
-          value={assessoriaNome}
-          onChangeText={(texto) => {
-            setAssessoriaNome(texto);
-            limparErro("assessoriaNome");
-          }}
+          placeholder="Nome da assessoria"
+          value={dados.assessoriaNome}
+          onChangeText={(v) =>
+            alterar("assessoriaNome", v)
+          }
           error={erros.assessoriaNome}
+          editable={!carregando}
+          autoCapitalize="words"
           clearable
         />
 
-        <Input
+        <CampoAcesso
           label="E-mail da assessoria"
-          placeholder="Digite o e-mail da assessoria"
-          keyboardType="email-address"
-          autoCorrect={false}
-          autoCapitalize="none"
-          value={assessoriaEmail}
-          onChangeText={(texto) => {
-            setAssessoriaEmail(texto);
-            limparErro("assessoriaEmail");
-          }}
+          placeholder="contato@assessoria.com.br"
+          value={dados.assessoriaEmail}
+          onChangeText={(v) =>
+            alterar("assessoriaEmail", v)
+          }
           error={erros.assessoriaEmail}
-          clearable
-        />
-
-        <Input
-          label="CNPJ"
-          placeholder="Digite o CNPJ"
-          keyboardType="numeric"
-          value={cnpj}
-          onChangeText={(texto) => {
-            setCnpj(texto);
-            limparErro("cnpj");
-          }}
-          error={erros.cnpj}
-          clearable
-        />
-
-        <Input
-          label="Telefone"
-          placeholder="Digite o telefone"
-          keyboardType="phone-pad"
-          value={telefone}
-          onChangeText={(texto) => {
-            setTelefone(texto);
-            limparErro("telefone");
-          }}
-          error={erros.telefone}
-          clearable
-        />
-
-         <View style={styles.sectionContainer}>
-            <Text
-              weight="SemiBold"
-              style={[
-                styles.section,
-                {
-                  color: theme.texto,
-                  borderBottomColor: theme.backgroundContainer,
-                }, 
-              ]}
-            >
-              Dados do assessor
-            </Text>
-        </View>
-
-        <Input
-          label="Nome do assessor *"
-          placeholder="Digite o nome do assessor"
-          value={assessorNome}
-          onChangeText={(texto) => {
-            setAssessorNome(texto);
-            limparErro("assessorNome");
-          }}
-          error={erros.assessorNome}
-          clearable
-        />
-
-        <Input
-          label="E-mail do assessor *"
-          placeholder="Digite o e-mail do assessor"
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          value={assessorEmail}
-          onChangeText={(texto) => {
-            setAssessorEmail(texto);
-            limparErro("assessorEmail");
-          }}
-          error={erros.assessorEmail}
+          editable={!carregando}
           clearable
         />
 
-        <Input
-          label="Senha *"
-          placeholder="Digite uma senha"
-          secureTextEntry
-          value={senha}
-          onChangeText={(texto) => {
-            setSenha(texto);
-            limparErro("senha");
-          }}
-          error={erros.senha}
+        <CampoAcesso
+          label="CNPJ"
+          placeholder="00.000.000/0000-00"
+          value={dados.cnpj}
+          onChangeText={(v) => alterar("cnpj", v)}
+          error={erros.cnpj}
+          keyboardType="numeric"
+          editable={!carregando}
           clearable
-          showPasswordToggle
         />
 
-        <Input
-          label="Telefone do assessor"
-          placeholder="Digite o telefone do assessor"
+        <CampoAcesso
+          label="Telefone da assessoria"
+          placeholder="DDD + número"
+          value={dados.telefone}
+          onChangeText={(v) => alterar("telefone", v)}
+          error={erros.telefone}
           keyboardType="phone-pad"
-          value={assessorTelefone}
-          onChangeText={(texto) => {
-            setAssessorTelefone(texto);
-            limparErro("assessorTelefone");
-          }}
-          error={erros.assessorTelefone}
+          editable={!carregando}
+          clearable
+        />
+      </SecaoAcesso>
+
+      <SecaoAcesso
+        titulo="Seu perfil"
+        descricao="Dados do assessor responsável."
+        icone="person-outline"
+      >
+        <CampoAcesso
+          label="Seu nome *"
+          placeholder="Nome completo"
+          value={dados.assessorNome}
+          onChangeText={(v) => alterar("assessorNome", v)}
+          error={erros.assessorNome}
+          autoCapitalize="words"
+          editable={!carregando}
           clearable
         />
 
-        {erroGeral ? (
-          <Text
-            weight="Medium"
-            style={styles.erro}
-          >
-            {erroGeral}
-          </Text>
-        ) : null}
-
-        <Button
-          title="CRIAR ASSESSORIA"
-          loading={carregando}
-          onPress={handleCadastro}
-          style={styles.button}
+        <CampoAcesso
+          label="Seu e-mail *"
+          placeholder="voce@exemplo.com.br"
+          value={dados.assessorEmail}
+          onChangeText={(v) =>
+            alterar("assessorEmail", v)
+          }
+          error={erros.assessorEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!carregando}
+          clearable
         />
-      </ScrollView>
-    </View>
+
+        <CampoAcesso
+          label="Seu telefone"
+          placeholder="DDD + número"
+          value={dados.assessorTelefone}
+          onChangeText={(v) =>
+            alterar("assessorTelefone", v)
+          }
+          error={erros.assessorTelefone}
+          keyboardType="phone-pad"
+          editable={!carregando}
+          clearable
+        />
+      </SecaoAcesso>
+
+      <SecaoAcesso
+        titulo="Senha de acesso"
+        descricao="Use pelo menos 8 caracteres."
+        icone="lock-closed-outline"
+      >
+        <CampoAcesso
+          label="Senha *"
+          placeholder="Crie sua senha"
+          value={dados.senha}
+          onChangeText={(v) => alterar("senha", v)}
+          error={erros.senha}
+          secureTextEntry
+          showPasswordToggle
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="new-password"
+          textContentType="newPassword"
+          editable={!carregando}
+        />
+
+        <CampoAcesso
+          label="Confirmar senha *"
+          placeholder="Digite a senha novamente"
+          value={dados.confirmarSenha}
+          onChangeText={(v) =>
+            alterar("confirmarSenha", v)
+          }
+          error={erros.confirmarSenha}
+          secureTextEntry
+          showPasswordToggle
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="new-password"
+          textContentType="newPassword"
+          editable={!carregando}
+        />
+      </SecaoAcesso>
+
+      <MensagemAcesso mensagem={erroGeral} />
+
+      <Button
+        title="CRIAR ASSESSORIA"
+        icon="add-outline"
+        size="large"
+        loading={carregando}
+        onPress={() => void cadastrar()}
+      />
+    </AcessoLayout>
   );
 }
-
-const styles = StyleSheet.create({
-   screen: {
-    flex: 1,
-  },
-
-  container: {
-    flexGrow: 1,
-    
-    paddingHorizontal: 25,
-    paddingTop: 100,
-    paddingBottom: 30,
-  },
-  backgroundImage: {
-  ...StyleSheet.absoluteFill,
-  width: "100%",
-  height: "100%",
-},
-  title: {
-    fontSize: 30,
-    marginBottom: 30,
-    justifyContent: "center",
-    textAlign: "center",
-  },
-
-  sectionContainer: {
-  alignSelf: "flex-start",
-  },
-
-  section: {
-    fontSize: 20,
-    marginTop: 15,
-    marginBottom: 15,
-    paddingBottom: 5,
-    borderBottomWidth: 1.5,
-  },
-
-  input: {
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 10,
-
-    paddingHorizontal: 15,
-    marginBottom: 15,
-  },
-  erro:{
-    textAlign: "center",
-    color: "red",
-  },
-  button: {
-    height: 52,
-    borderRadius: 26,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 15,
-  },
-
-  buttonText: {
-    fontSize: 17,
-  },
-});

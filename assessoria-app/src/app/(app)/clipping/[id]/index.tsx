@@ -237,7 +237,7 @@ export default function ClippingDetalhes() {
       return;
     }
 
-    router.replace("/clipping");
+    router.dismissTo("/clipping");
   }
 
   function abrirVeiculo() {

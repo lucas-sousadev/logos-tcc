@@ -191,7 +191,7 @@ export default function Dashboard() {
       titulo: "Relatórios",
       detalhe: "cadastrados",
       icone: "bar-chart-outline",
-      abrir: () => router.push("/relatorios"),
+      abrir: () => router.navigate("/relatorios"),
     });
   }
   if (podeVerClippings) {
@@ -200,7 +200,7 @@ export default function Dashboard() {
       titulo: "Clippings",
       detalhe: "cadastrados",
       icone: "newspaper-outline",
-      abrir: () => router.push("/clipping"),
+      abrir: () => router.navigate("/clipping"),
     });
   }
   if (podeVerVeiculos) {
@@ -209,7 +209,7 @@ export default function Dashboard() {
       titulo: "Veículos",
       detalhe: "cadastrados",
       icone: "radio-outline",
-      abrir: () => router.push("/veiculos"),
+      abrir: () => router.navigate("/veiculos"),
     });
   }
   if (podeVerClientes) {
@@ -218,7 +218,7 @@ export default function Dashboard() {
       titulo: "Clientes",
       detalhe: "ativos",
       icone: "business-outline",
-      abrir: () => router.push("/clientes"),
+      abrir: () => router.navigate("/clientes"),
     });
   }
   if (podeVerContatos) {
@@ -227,7 +227,7 @@ export default function Dashboard() {
       titulo: "Contatos",
       detalhe: "ativos",
       icone: "people-outline",
-      abrir: () => router.push("/mailing"),
+      abrir: () => router.navigate("/mailing"),
     });
   }
   if (podeVerFuncionarios) {
@@ -236,7 +236,7 @@ export default function Dashboard() {
       titulo: "Equipe",
       detalhe: "na assessoria",
       icone: "person-outline",
-      abrir: () => router.push("/funcionarios"),
+      abrir: () => router.navigate("/funcionarios"),
     });
   }
 
@@ -531,7 +531,7 @@ export default function Dashboard() {
                   titulo="Convites"
                   descricao="Gerenciar e convidar colaboradores"
                   icone="mail-outline"
-                  onPress={() => router.push("/convites")}
+                  onPress={() => router.navigate("/convites")}
                 />
               ) : null}
             </View>

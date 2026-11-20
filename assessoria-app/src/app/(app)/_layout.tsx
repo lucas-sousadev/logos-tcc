@@ -50,6 +50,7 @@ export default function AppLayout() {
           fontFamily: Fonts.MontserratMedium,
         },
       }}
+      backBehavior="history"
     >
       <Tabs.Screen
         name="index"

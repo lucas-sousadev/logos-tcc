@@ -9,7 +9,15 @@ use PDOStatement;
 
 class ReleaseService
 {
-    private const STATUS = ['RASCUNHO', 'AGENDADO', 'ENVIANDO', 'ENVIADO'];
+    private const STATUS = [
+        'RASCUNHO',
+        'AGENDADO',
+        'NA_FILA',
+        'ENVIANDO',
+        'ENVIADO',
+        'PARCIAL',
+        'FALHOU',
+    ];
 
     private const DATA_LISTAGEM =
         'COALESCE(r.enviado_em, r.agendado_para, r.updated_at)';

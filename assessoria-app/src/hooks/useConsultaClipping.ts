@@ -12,10 +12,12 @@ interface EstadoConsulta<T> {
 
 export function useConsultaClipping<T>(
   consultar: () => Promise<T>,
-  chave: string
+  chave: string,
+  aoReceber?: (dados: T) => void
 ) {
   const ativo = useRef(false);
   const requisicao = useRef(0);
+  const chaveAtiva = useRef(chave);
 
   const [estado, setEstado] = useState<EstadoConsulta<T>>({
     chave,
@@ -25,7 +27,7 @@ export function useConsultaClipping<T>(
   });
 
   const recarregar = useCallback(async (): Promise<boolean> => {
-    if (!ativo.current) return false;
+    if (!ativo.current || chaveAtiva.current !== chave) return false;
 
     const numero = ++requisicao.current;
 
@@ -39,7 +41,13 @@ export function useConsultaClipping<T>(
     try {
       const dados = await consultar();
 
-      if (!ativo.current || numero !== requisicao.current) {
+      if (!ativo.current || chaveAtiva.current !== chave || numero !== requisicao.current) {
+        return false;
+      }
+
+      aoReceber?.(dados);
+
+      if (!ativo.current || chaveAtiva.current !== chave || numero !== requisicao.current) {
         return false;
       }
 
@@ -51,7 +59,7 @@ export function useConsultaClipping<T>(
       });
       return true;
     } catch (error) {
-      if (!ativo.current || numero !== requisicao.current) {
+      if (!ativo.current || chaveAtiva.current !== chave || numero !== requisicao.current) {
         return false;
       }
 
@@ -73,18 +81,19 @@ export function useConsultaClipping<T>(
       }));
       return false;
     }
-  }, [chave, consultar]);
+  }, [chave, consultar, aoReceber]);
 
   useFocusEffect(
     useCallback(() => {
       ativo.current = true;
+      chaveAtiva.current = chave;
       void recarregar();
 
       return () => {
         ativo.current = false;
         requisicao.current += 1;
       };
-    }, [recarregar])
+    }, [recarregar, chave])
   );
 
   const atual = estado.chave === chave ? estado : null;
@@ -92,6 +101,7 @@ export function useConsultaClipping<T>(
   const emCarregamento = atual?.carregando ?? true;
   const atualizarDados = useCallback(
     (dados: T) => {
+      if (!ativo.current || chaveAtiva.current !== chave) return;
       // Impede uma consulta anterior de sobrescrever os dados recém-salvos.
       requisicao.current += 1;
 

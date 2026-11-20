@@ -12,14 +12,20 @@ import type {
 export type StatusRelease =
   | "RASCUNHO"
   | "AGENDADO"
+  | "NA_FILA"
   | "ENVIANDO"
-  | "ENVIADO";
+  | "ENVIADO"
+  | "PARCIAL"
+  | "FALHOU";
 
 export const ROTULOS_STATUS: Record<StatusRelease, string> = {
   RASCUNHO: "Rascunho",
   AGENDADO: "Agendado",
+  NA_FILA: "Na fila",
   ENVIANDO: "Enviando",
-  ENVIADO: "Enviado",
+  ENVIADO: "Encaminhado ao servidor",
+  PARCIAL: "Concluído com falhas",
+  FALHOU: "Falha no envio",
 };
 
 export interface ResumoRelease {
@@ -376,5 +382,127 @@ export function obterEndpointImagemRelease(url: string): string | null {
     return partes ? "/releases/imagens/" + partes[1] + "/" + partes[2] : null;
   } catch {
     return null;
+  }
+}
+
+export interface DetalheRelease extends ResumoRelease {
+  blocos: BlocoTemplateRelease[];
+  primeira_linha: string;
+  nome_remetente: string;
+  responder_para: string;
+  destinatarios: { email: string }[];
+}
+
+export type StatusDestinatarioRelease =
+  | "PENDENTE"
+  | "ENVIANDO"
+  | "ENVIADO"
+  | "ERRO";
+
+export interface SituacaoEnvioRelease {
+  release: {
+    id: number;
+    status: StatusRelease;
+    iniciado_em: string | null;
+    enviado_em: string | null;
+  };
+  totais: {
+    total: number;
+    pendentes: number;
+    processando: number;
+    aceitos: number;
+    falhas: number;
+  };
+  destinatarios: {
+    id: number;
+    email: string;
+    nome: string | null;
+    status: StatusDestinatarioRelease;
+    enviado_em: string | null;
+    erro_mensagem: string | null;
+  }[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export async function buscarRelease(
+  id: number,
+  signal?: AbortSignal
+): Promise<DetalheRelease> {
+  const dados = await lerResposta<{
+    release: DetalheRelease;
+  }>(
+    await authenticatedFetch(
+      API_URL + "/api/releases/" + id,
+      { signal }
+    )
+  );
+
+  return dados.release;
+}
+
+export async function consultarEnvioRelease(
+  id: number,
+  consulta: {
+    page: number;
+    status: StatusDestinatarioRelease | "TODOS";
+  },
+  signal?: AbortSignal
+): Promise<SituacaoEnvioRelease> {
+  const query = new URLSearchParams({
+    page: String(consulta.page),
+    status: consulta.status,
+  });
+
+  return (
+    await lerResposta<{ envio: SituacaoEnvioRelease }>(
+      await authenticatedFetch(
+        API_URL + "/api/releases/" + id + "/envio?" + query,
+        { signal }
+      )
+    )
+  ).envio;
+}
+
+export async function solicitarEnvioRelease(
+  id: number
+): Promise<SituacaoEnvioRelease> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    const prazo = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new Error(
+            "A solicitação ainda não foi confirmada. Confira o andamento antes de tentar novamente."
+          )
+        );
+        controller.abort();
+      }, 30_000);
+    });
+
+    const requisicao = authenticatedFetch(
+      API_URL + "/api/releases/" + id + "/enviar",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+        signal: controller.signal,
+      }
+    ).then(
+      lerResposta<{ envio: SituacaoEnvioRelease }>
+    );
+
+    return (
+      await Promise.race([requisicao, prazo])
+    ).envio;
+  } finally {
+    clearTimeout(timer);
   }
 }

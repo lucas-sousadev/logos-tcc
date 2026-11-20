@@ -64,7 +64,7 @@ export default function NovoVeiculo() {
       },
         logo ?? undefined
     );
-      router.replace("/veiculos");
+      router.dismissTo("/veiculos");
     } catch (error) {
       setErroGeral(
         error instanceof Error
@@ -81,8 +81,9 @@ export default function NovoVeiculo() {
       <Header
         title="Novo veículo"
         showBackButton
-        onBackPress={() => router.replace("/veiculos")}
+        backFallback="/veiculos"
       />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -172,7 +173,14 @@ export default function NovoVeiculo() {
           <Button
             title="CANCELAR"
             variant="outline"
-            onPress={() => router.replace("/veiculos")}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+
+              router.dismissTo("/veiculos");
+            }}
             style={styles.actionButton}
           />
           <Button

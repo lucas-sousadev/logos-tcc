@@ -515,9 +515,9 @@ export default function ClienteDetalhes() {
         message:
           "O cliente foi excluído com sucesso.",
         onPrimary: () =>
-          router.replace("/clientes"),
+          router.dismissTo("/clientes"),
         onClose: () =>
-          router.replace("/clientes"),
+          router.dismissTo("/clientes"),
       });
     } catch (error) {
       mostrarFeedback({
@@ -660,9 +660,7 @@ export default function ClienteDetalhes() {
         <Header
           title="Cliente"
           showBackButton
-          onBackPress={() =>
-            router.replace("/clientes")
-          }
+          backFallback="/clientes"
         />
 
         <View style={styles.errorContainer}>
@@ -693,9 +691,13 @@ export default function ClienteDetalhes() {
             <Button
               title="VOLTAR"
               variant="outline"
-              onPress={() =>
-                router.replace("/clientes")
-              }
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.dismissTo("/clientes");
+                }
+              }}
               style={styles.actionButton}
             />
 

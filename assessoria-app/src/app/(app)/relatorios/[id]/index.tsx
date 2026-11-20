@@ -795,7 +795,7 @@ export default function DetalheRelatorio() {
       await excluirRelatorio(relatorio.id);
       setConfirmarExclusao(false);
       if (!voltarParaCliente()) {
-        router.replace("/relatorios");
+        router.dismissTo("/relatorios");
       }
     } catch (e) {
       setConfirmarExclusao(false);
@@ -1026,7 +1026,7 @@ export default function DetalheRelatorio() {
             return;
           }
 
-          router.replace("/relatorios");
+          router.dismissTo("/relatorios");
         }}
       />
 

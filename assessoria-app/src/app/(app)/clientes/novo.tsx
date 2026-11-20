@@ -160,7 +160,7 @@ export default function NovoCliente() {
         logo ?? undefined
       );
 
-      router.replace("/clientes");
+      router.dismissTo("/clientes");
     } catch (error) {
       mostrarErroApi(
         error instanceof Error
@@ -184,9 +184,7 @@ export default function NovoCliente() {
       <Header
         title="Novo cliente"
         showBackButton
-        onBackPress={() =>
-          router.replace("/clientes")
-        }
+        backFallback="/clientes"
       />
 
       <ScrollView
@@ -435,9 +433,14 @@ export default function NovoCliente() {
           <Button
             title="CANCELAR"
             variant="outline"
-            onPress={() =>
-              router.replace("/clientes")
-            }
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+
+              router.dismissTo("/clientes");
+            }}
             style={styles.actionButton}
           />
 
