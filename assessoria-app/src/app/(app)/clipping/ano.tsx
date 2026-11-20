@@ -12,6 +12,7 @@ import {useLocalSearchParams, useRouter} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import { useVoltarNaPilha } from "@/hooks/useNavegacaoModulos";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -51,6 +52,7 @@ export default function ClientesDoAno() {
 
 function ConteudoClientesDoAno({ ano, params }: { ano: number; params: RotaAno }) {
   const router = useRouter();
+  const voltarNaPilha = useVoltarNaPilha();
   const { theme } = useTheme();
 
   const [busca, setBusca] = useState("");
@@ -119,10 +121,7 @@ function ConteudoClientesDoAno({ ano, params }: { ano: number; params: RotaAno }
       return;
     }
 
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    if (voltarNaPilha()) return;
 
     router.dismissTo("/clipping");
   }
@@ -244,56 +243,83 @@ function ConteudoClientesDoAno({ ano, params }: { ano: number; params: RotaAno }
               style={[
                 styles.clientCard,
                 {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
+                  borderColor: theme.borda + "45",
+                  backgroundColor: theme.backgroundSecundario,
                 },
               ]}
             >
               <View
                 style={[
                   styles.clientIcon,
-                  {
-                    backgroundColor:
-                      theme.backgroundContainer,
-                  },
+                  { backgroundColor: theme.primaria + "12" },
                 ]}
               >
                 <Ionicons
                   name="briefcase-outline"
-                  size={22}
-                  color={theme.textoContainer}
+                  size={21}
+                  color={theme.textoTerciaria}
                 />
               </View>
 
               <View style={styles.clientInfo}>
                 <Text
                   weight="SemiBold"
-                  style={styles.clientName}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={styles.clientName}
                 >
                   {cliente.nome}
                 </Text>
 
-                <Text
-                  style={[
-                    styles.clientMeta,
-                    { color: theme.textoSub },
-                  ]}
-                >
-                  {cliente.total_clippings}{" "}
-                  {Number(cliente.total_clippings) === 1 ? "clipping" : "clippings"}
-                  {" "}({ano})
-                  {cliente.ativo !== 1
-                    ? " • Cliente inativo"
-                    : ""}
-                </Text>
+                <View style={styles.clientVinculos}>
+                  <Ionicons
+                    name="attach-outline"
+                    size={14}
+                    color={theme.alteracao}
+                  />
+
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={[
+                      styles.clientMeta,
+                      { color:  theme.alteracao },
+                    ]}
+                  >
+                    {cliente.total_clippings}{" "}
+                    {Number(cliente.total_clippings) === 1
+                      ? "clipping"
+                      : "clippings"}
+                    {" • "}
+                    {ano}
+                  </Text>
+                </View>
+
+                {cliente.ativo !== 1 ? (
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.clientState,
+                      { color: theme.textoSub },
+                    ]}
+                  >
+                    Cliente inativo
+                  </Text>
+                ) : null}
               </View>
 
-              <Ionicons
-                name="chevron-forward"
-                size={21}
-                color={theme.textoSub}
-              />
+              <View
+                style={[
+                  styles.clientArrow,
+                  { backgroundColor: theme.primaria + "0C" },
+                ]}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={theme.textoTerciaria}
+                />
+              </View>
             </TouchableOpacity>
           ))}
 
@@ -381,37 +407,63 @@ const styles = StyleSheet.create({
 
   clientCard: {
     minWidth: 0,
-    minHeight: 76,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 13,
-    marginBottom: 10,
+    minHeight: 82,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
   clientIcon: {
-    width: 45,
-    height: 45,
+    width: 40,
+    height: 40,
     flexShrink: 0,
-    borderRadius: 13,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
   },
 
   clientInfo: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
   },
 
   clientName: {
     fontSize: 14,
+    lineHeight: 19,
+  },
+
+  clientVinculos: {
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
 
   clientMeta: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 11,
-    marginTop: 5,
+    lineHeight: 15,
+  },
+
+  clientState: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+
+  clientArrow: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   empty: {

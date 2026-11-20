@@ -21,6 +21,8 @@ import * as Sharing from "expo-sharing";
 
 import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useVoltarNaPilha, useAbrirModulo } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import RelatorioSlidePreview from "@/components/relatorios/RelatorioSlidePreview";
@@ -407,6 +409,8 @@ export default function DetalheRelatorio() {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const router = useRouter();
+  const voltarNaPilha = useVoltarNaPilha();
+  const abrirModulo = useAbrirModulo();
   const params = useLocalSearchParams<{
     id: string;
     origem?: string;
@@ -472,6 +476,8 @@ export default function DetalheRelatorio() {
   const [exportandoPptx, setExportandoPptx] = useState(false);
   const [mensagemPptx, setMensagemPptx] = useState("");
   const travaPptx = useRef(false);
+
+  const saida = useSaidaFormulario(false, excluindo);
 
   const voltarParaCliente = useCallback(() => {
     if (!veioDoCliente) return false;
@@ -795,7 +801,7 @@ export default function DetalheRelatorio() {
       await excluirRelatorio(relatorio.id);
       setConfirmarExclusao(false);
       if (!voltarParaCliente()) {
-        router.dismissTo("/relatorios");
+        saida.concluirSaida(() => router.dismissTo("/relatorios"));
       }
     } catch (e) {
       setConfirmarExclusao(false);
@@ -1014,17 +1020,15 @@ export default function DetalheRelatorio() {
         title="Relatório"
         showBackButton
         onBackPress={() => {
+          if (excluindo) return;
           if (voltarParaCliente()) return;
 
           if (params.origem === "dashboard") {
-            router.replace("/");
+            abrirModulo("index");
             return;
           }
 
-          if (router.canGoBack()) {
-            router.back();
-            return;
-          }
+          if (voltarNaPilha()) return;
 
           router.dismissTo("/relatorios");
         }}

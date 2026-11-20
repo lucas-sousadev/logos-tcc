@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +11,9 @@ import {
 
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -37,7 +40,6 @@ type Periodo = {
 };
 
 export default function EditarPeriodoRelatorio() {
-  const router = useRouter();
   const { theme } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
@@ -83,6 +85,16 @@ export default function EditarPeriodoRelatorio() {
   const [salvando, setSalvando] = useState(false);
   const [tentativaConsulta, setTentativaConsulta] = useState(0);
   const assinaturaRevisada = useRef<string | null>(null);
+
+  const retornar = useRetornoSeguro({
+    pathname: "/relatorios/[id]", params: { id: String(id) },
+  });
+  const alterado = Boolean(relatorio && (
+    dataInicio !== dataISOParaBR(relatorio.periodo_inicio) ||
+    dataFim !== dataISOParaBR(relatorio.periodo_fim) ||
+    marcadas.size || desmarcadas.size || todasMarcadas
+  ));
+  const saida = useSaidaFormulario(alterado, salvando);
 
   useEffect(() => {
     if (!Number.isSafeInteger(id) || id < 1) {
@@ -350,7 +362,7 @@ export default function EditarPeriodoRelatorio() {
         assinatura: resumo.assinatura, 
       });
 
-      router.back();
+      saida.concluirSaida(retornar);
     } catch (e) {
       const mensagem =
         e instanceof Error
@@ -890,7 +902,8 @@ export default function EditarPeriodoRelatorio() {
           />
         </View>
       ) : null}
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

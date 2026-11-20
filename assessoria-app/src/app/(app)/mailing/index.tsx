@@ -17,6 +17,7 @@ import type {
   FiltrosMailing,
 } from "@/components/ui/Filtros/MailingFilterModal";
 import ContadorLista from "@/components/ui/ContadorLista";
+import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -949,30 +950,10 @@ export default function Mailing() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <SelecaoListaButton
+                title="SELECIONAR CONTATOS"
                 onPress={abrirModoSelecao}
-                style={[
-                  styles.selectionStartButton,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={19}
-                  color={theme.texto}
-                />
-
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.selectionStartText,
-                    { color: theme.texto },
-                  ]}
-                >
-                  SELECIONAR CONTATOS
-                </Text>
-              </TouchableOpacity>
+              />
             )
           ) : null}
 

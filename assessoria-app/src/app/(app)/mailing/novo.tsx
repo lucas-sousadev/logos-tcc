@@ -5,9 +5,11 @@ import {
 } from "react-native";
 
 import { useState } from "react";
-import { useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 
@@ -25,8 +27,6 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { criarJornalista } from "@/services/api/jornalista";
 
 export default function FormularioJornalista() {
-
-        const router = useRouter();
         const { theme } = useTheme();
         const { temPermissao } = useAuth();
 
@@ -49,6 +49,9 @@ export default function FormularioJornalista() {
 
   const [salvando, setSalvando] =
     useState(false);
+
+  const retornar = useRetornoSeguro("/mailing");
+  const saida = useSaidaFormulario(Boolean(nome || email || telefone || cargo || estado || cidade || observacoes || veiculo.id || veiculo.nome), salvando);
 
     function limparErro(
       campo: keyof ErrosJornalista
@@ -174,7 +177,7 @@ export default function FormularioJornalista() {
                   : undefined,
             });
 
-            router.dismissTo("/mailing");
+            saida.concluirSaida(retornar);
         } catch (error) {
             console.error(
             "Erro ao cadastrar contato:",
@@ -365,12 +368,7 @@ export default function FormularioJornalista() {
             title="CANCELAR"
             variant="outline"
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-                return;
-              }
-
-              router.dismissTo("/mailing");
+              retornar();
             }}
             style={styles.actionButton}
           />
@@ -383,7 +381,8 @@ export default function FormularioJornalista() {
           />
         </View>
       </ScrollView>
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

@@ -11,6 +11,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -51,6 +54,7 @@ export default function NovoRelatorio() {
   const params = useLocalSearchParams<{
     clienteId?: string;
     clienteNome?: string;
+    origemNavegacao?: string;
   }>();
 
   const clienteInicialId = Number(params.clienteId);
@@ -109,6 +113,14 @@ export default function NovoRelatorio() {
   const [salvando, setSalvando] = useState(false);
   const [erroConsulta, setErroConsulta] = useState("");
   const [erroSalvar, setErroSalvar] = useState("");
+
+  const retornar = useRetornoSeguro("/relatorios");
+  const estadoFormulario = JSON.stringify({
+    cliente: cliente?.id ?? null, titulo, dataInicio, dataFim, inclusaoAutomatica,
+    excluidos: [...excluidos.keys()], semDataIncluidos: [...semDataIncluidos],
+  });
+  const [inicial] = useState(estadoFormulario);
+  const saida = useSaidaFormulario(estadoFormulario !== inicial, salvando);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -373,12 +385,13 @@ export default function NovoRelatorio() {
         ],
       });
 
-      router.replace({
+      saida.concluirSaida(() => router.replace({
         pathname: "/relatorios/[id]",
         params: {
           id: String(resposta.relatorio.id),
+          ...(params.origemNavegacao === "inicio" ? { origemNavegacao: "inicio" } : {}),
         },
-      });
+      }));
     } catch (e) {
       setErroSalvar(
         e instanceof Error
@@ -405,12 +418,13 @@ export default function NovoRelatorio() {
         }
         showBackButton
         onBackPress={() => {
+          if (salvando) return;
           if (periodo) {
             setPeriodo(null);
             setErroConsulta("");
             setErroSalvar("");
           } else {
-            router.back();
+            retornar();
           }
         }}
       />
@@ -1015,7 +1029,8 @@ export default function NovoRelatorio() {
           />
         </View>
       ) : null}
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

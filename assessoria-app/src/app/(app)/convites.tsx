@@ -12,11 +12,11 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   useFocusEffect,
   useLocalSearchParams,
-  useRouter,
 } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import Header from "@/components/layout/Header";
+import { useAbrirModulo, useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
@@ -41,7 +41,8 @@ function formatarData(data: string | null): string {
 }
 
 export default function Convites() {
-  const router = useRouter();
+  const abrirModulo = useAbrirModulo();
+  const retornar = useRetornoSeguro();
   const { theme } = useTheme();
   const { origem } = useLocalSearchParams<{ origem?: string }>();
   const { criarConvite, listarConvites, temPermissao } = useAuth();
@@ -86,16 +87,8 @@ export default function Convites() {
   }
 
   function voltar() {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace(
-      origem === "funcionarios"
-        ? "/funcionarios"
-        : "/"
-    );
+    if (origem === "funcionarios") abrirModulo("funcionarios", "mais");
+    else retornar();
   }
 
   useFocusEffect(

@@ -2,10 +2,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
-  StatusBar
+  StatusBar,
+  BackHandler,
+  Platform,
 } from "react-native";
 
 import { useRouter, type Href } from "expo-router";
+import { useCallback } from "react";
+import { useFocusEffect } from "expo-router";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,9 +31,10 @@ export default function Header({
   showBackButton = false,
   showSettings = true,
   onBackPress,
-  backFallback = "/",
+  backFallback,
 }: HeaderProps) {
   const router = useRouter();
+  const retornar = useRetornoSeguro(backFallback);
   const insets = useSafeAreaInsets();
   
   const { usuario } = useAuth();
@@ -44,19 +50,23 @@ export default function Header({
     .join("")
     .toUpperCase();
 
-  function handleBack() {
+  const handleBack = useCallback(() => {
     if (onBackPress) {
       onBackPress();
       return;
     }
 
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    retornar();
+  }, [onBackPress, retornar]);
 
-    router.replace(backFallback);
-  }
+  useFocusEffect(useCallback(() => {
+    if (!showBackButton || Platform.OS !== "android") return;
+    const evento = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => evento.remove();
+  }, [showBackButton, handleBack]));
 
   function handleSettings() {
     router.push("/configuracoes");

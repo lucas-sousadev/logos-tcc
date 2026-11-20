@@ -12,6 +12,7 @@ import { useFonts } from "expo-font";
 import { Fonts } from "@/constants/fonts"
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { abrirModuloNaNavegacao, ehModuloApp } from "@/utils/navegacaoModulos";
 
 export default function AppLayout() {
     const { temPermissao } = useAuth();
@@ -32,6 +33,7 @@ export default function AppLayout() {
   return (
 
     <Tabs
+      initialRouteName="index"
       screenOptions={{
       headerShown: false,
         tabBarActiveTintColor: theme.textoTerciaria,
@@ -50,7 +52,14 @@ export default function AppLayout() {
           fontFamily: Fonts.MontserratMedium,
         },
       }}
-      backBehavior="history"
+      backBehavior="initialRoute"
+      screenListeners={({ navigation, route }) => ({
+        tabPress: (evento) => {
+          if (!ehModuloApp(route.name)) return;
+          evento.preventDefault();
+          abrirModuloNaNavegacao(navigation, route.name);
+        },
+      })}
     >
       <Tabs.Screen
         name="index"
@@ -74,7 +83,7 @@ export default function AppLayout() {
             "CLIPPING",
             "VISUALIZAR"
           )
-            ? "/clipping"
+            ? undefined
             : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
@@ -94,7 +103,7 @@ export default function AppLayout() {
             "MAILING",
             "VISUALIZAR"
           )
-            ? "/mailing"
+            ? undefined
             : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons
@@ -114,7 +123,7 @@ export default function AppLayout() {
             "RELEASES",
             "VISUALIZAR"
           )
-            ? "/releases"
+            ? undefined
             : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons

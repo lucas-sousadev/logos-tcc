@@ -19,6 +19,9 @@ import EnderecosVeiculo from
 import EnderecosVeiculoRascunho from "@/components/veiculos/EnderecosVeiculoRascunho";
 import { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -90,6 +93,7 @@ function dadosFormulario(dados: Veiculo): Formulario {
   }
 export default function VeiculoDetalhes() {
   const router = useRouter();
+  const retornar = useRetornoSeguro("/veiculos");
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const {
@@ -174,12 +178,7 @@ export default function VeiculoDetalhes() {
       return;
     }
 
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.dismissTo("/veiculos");
+    retornar();
   }, [
     clippingId,
     origemId,
@@ -188,6 +187,7 @@ export default function VeiculoDetalhes() {
     retornoVinculado,
     router,
     veioDoClipping,
+    retornar,
   ]);
 
   useFocusEffect(
@@ -373,13 +373,16 @@ export default function VeiculoDetalhes() {
     return campos;
   }
 
+  const saida = useSaidaFormulario(camposAlterados().length > 0, salvando || excluindo || excluindoVinculos);
+
   function handleBack() {
+    if (salvando || excluindo || excluindoVinculos) return;
     if (!modoEdicao) {
       voltarDoVeiculo()
       return;
     }
     
-    if (camposAlterados().length > 0) return;
+    if (camposAlterados().length > 0) { saida.confirmarSaida(cancelarEdicao); return; }
     cancelarEdicao();
   }
 
@@ -577,12 +580,12 @@ export default function VeiculoDetalhes() {
 
       if (Platform.OS === "web") {
         window.alert("Veículo excluído com sucesso.");
-        router.dismissTo("/veiculos");
+        saida.concluirSaida(() => router.dismissTo("/veiculos"));
         return;
       }
 
       Alert.alert("Sucesso", "Veículo excluído com sucesso.", [
-        { text: "OK", onPress: () => router.dismissTo("/veiculos") },
+        { text: "OK", onPress: () => saida.concluirSaida(() => router.dismissTo("/veiculos")) },
       ]);
     } catch (error) {
       const mensagem =
@@ -611,6 +614,7 @@ export default function VeiculoDetalhes() {
         <View style={styles.loading}>
           <ActivityIndicator size="large" color={theme.primaria} />
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -950,7 +954,8 @@ export default function VeiculoDetalhes() {
           </>
         )}
       </ScrollView>
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

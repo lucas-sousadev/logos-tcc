@@ -6,10 +6,11 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import { useAbrirModulo } from "@/hooks/useNavegacaoModulos";
+import type { ModuloApp } from "@/utils/navegacaoModulos";
 import Text from "@/components/ui/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -18,7 +19,7 @@ interface ItemMenu {
   titulo: string;
   descricao: string;
   icone: ComponentProps<typeof Ionicons>["name"];
-  rota: Href;
+  rota: ModuloApp;
   visivel: boolean;
 }
 
@@ -28,7 +29,7 @@ interface GrupoMenu {
 }
 
 export default function Mais() {
-  const router = useRouter();
+  const abrirModulo = useAbrirModulo();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const { width } = useWindowDimensions();
@@ -41,7 +42,7 @@ export default function Mais() {
           titulo: "Templates",
           descricao: "Modelos para seus releases",
           icone: "albums-outline",
-          rota: "/templates",
+          rota: "templates",
           visivel:
             temPermissao("TEMPLATES", "VISUALIZAR") ||
             temPermissao("TEMPLATES", "CRIAR"),
@@ -50,7 +51,7 @@ export default function Mais() {
           titulo: "Relatórios",
           descricao: "Slides e acompanhamento",
           icone: "bar-chart-outline",
-          rota: "/relatorios",
+          rota: "relatorios",
           visivel: temPermissao("RELATORIOS", "VISUALIZAR"),
         },
       ],
@@ -62,14 +63,14 @@ export default function Mais() {
           titulo: "Clientes",
           descricao: "Clientes da assessoria",
           icone: "business-outline",
-          rota: "/clientes",
+          rota: "clientes",
           visivel: temPermissao("CLIENTES", "VISUALIZAR"),
         },
         {
           titulo: "Veículos",
           descricao: "Veículos de comunicação",
           icone: "radio-outline",
-          rota: "/veiculos",
+          rota: "veiculos",
           visivel: temPermissao("VEICULOS", "VISUALIZAR"),
         },
       ],
@@ -81,14 +82,14 @@ export default function Mais() {
           titulo: "Funcionários",
           descricao: "Pessoas e permissões",
           icone: "people-outline",
-          rota: "/funcionarios",
+          rota: "funcionarios",
           visivel: temPermissao("USUARIOS", "VISUALIZAR"),
         },
         {
           titulo: "Convites",
           descricao: "Acessos para novos funcionários",
           icone: "mail-outline",
-          rota: "/convites",
+          rota: "convites",
           visivel: temPermissao("CONVITES", "VISUALIZAR"),
         },
       ],
@@ -176,7 +177,7 @@ export default function Mais() {
                       accessibilityLabel={
                         item.titulo + ". " + item.descricao
                       }
-                      onPress={() => router.navigate(item.rota)}
+                      onPress={() => abrirModulo(item.rota, "mais")}
                       style={({ pressed }) => [
                         styles.item,
                         {

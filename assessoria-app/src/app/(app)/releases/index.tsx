@@ -244,10 +244,18 @@ export default function ListaReleases() {
                 onPress={() =>
                   router.push({
                     pathname: "/releases/[id]",
-                    params: {
-                      id: String(release.id),
-                    },
+                    params: { id: String(release.id) },
                   })
+                }
+                onEditar={
+                  release.status === "RASCUNHO" &&
+                  temPermissao("RELEASES", "EDITAR")
+                    ? () =>
+                        router.push({
+                          pathname: "/releases/novo",
+                          params: { editar: String(release.id) },
+                        })
+                    : undefined
                 }
               />
             ))

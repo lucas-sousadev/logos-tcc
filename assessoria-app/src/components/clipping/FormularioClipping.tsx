@@ -14,6 +14,7 @@ import { useIsFocused, useNavigation,useRouter, useLocalSearchParams,} from "exp
 import { CommonActions, usePreventRemove,} from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
 import Header from "@/components/layout/Header";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -108,6 +109,7 @@ export default function FormularioClipping({
   onSalvo?: (clipping: Clipping) => void;
 }) {
   const router = useRouter();
+  const retornar = useRetornoSeguro("/clipping");
   const paramsRota = useLocalSearchParams<{
     origemTipo?: string;
     origemId?: string;
@@ -801,12 +803,7 @@ const [tier, setTier] = useState<Tier | null>(
         return;
         }
 
-        if (router.canGoBack()) {
-        router.back();
-        return;
-        }
-
-        router.dismissTo("/clipping");
+        retornar();
     };
 
     if (temAlteracoesPendentes) {
@@ -839,7 +836,7 @@ const [tier, setTier] = useState<Tier | null>(
 
     Keyboard.dismiss();
 
-    router.push({
+    router.replace({
       pathname: "/clipping/[id]",
       params: {
         id: String(ultimoCriado.id),
@@ -1082,11 +1079,7 @@ const [tier, setTier] = useState<Tier | null>(
           title="Clipping cadastrado"
           showBackButton
           onBackPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.dismissTo("/clipping");
-            }
+            retornar();
           }}
         />
 

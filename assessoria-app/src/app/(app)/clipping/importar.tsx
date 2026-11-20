@@ -14,6 +14,8 @@ import {
 } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useVoltarNaPilha } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -101,6 +103,7 @@ function resumirAnosDiferentes(
 
 export default function ImportarClippings() {
   const router = useRouter();
+  const voltarNaPilha = useVoltarNaPilha();
   const { theme, mode } = useTheme();
   const corAcao = mode === "dark" ? theme.borda : theme.borda;
   const fundoFiltroAtivo = mode === "dark"  ? "#071a41" : "#F5F5F5";
@@ -222,10 +225,7 @@ export default function ImportarClippings() {
   const contextoValido = clienteValido && anoValido;
 
   function sairParaListagem() {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    if (voltarNaPilha()) return;
 
     const anoDaEntrada = Number(params.ano);
     const origem = rotaOrigemClipping(
@@ -262,6 +262,8 @@ export default function ImportarClippings() {
 
     router.dismissTo("/clipping");
   }
+
+  const saida = useSaidaFormulario(Boolean((previa !== null && resultado === null) || envioPendente), ocupado);
 
   function voltar() {
     if (ocupado) return;
@@ -1042,6 +1044,7 @@ export default function ImportarClippings() {
             ? "Cliente inválido."
             : "Você não possui permissão para importar clippings."}
         </Text>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   } 
@@ -1469,6 +1472,7 @@ export default function ImportarClippings() {
             }}
           />
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -1801,6 +1805,7 @@ export default function ImportarClippings() {
             />
           
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
     }
@@ -1956,7 +1961,8 @@ export default function ImportarClippings() {
               style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
             />
           </View>
-        </View>
+        <FeedbackAlert {...saida.alertaProps} />
+      </View>
       );
     }
 
@@ -2202,7 +2208,8 @@ export default function ImportarClippings() {
             style={{ backgroundColor: fundoSelecionado, borderColor: corAcao }}
             />
         </View>
-        </View>
+        <FeedbackAlert {...saida.alertaProps} />
+      </View>
     );
     }
     
@@ -2750,7 +2757,8 @@ export default function ImportarClippings() {
             sairParaListagem();
           }}
         />
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
     );
 }
 

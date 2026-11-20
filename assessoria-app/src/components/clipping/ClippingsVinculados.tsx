@@ -24,6 +24,7 @@ import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
 import ClippingCard from "@/components/clipping/ClippingCard";
+import SelecaoListaButton from "../ui/SelecaoListaButton";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -841,37 +842,15 @@ export default function ClippingsVinculados({
                 </TouchableOpacity>
                 </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Selecionar clippings"
+              <SelecaoListaButton
+                title="SELECIONAR CLIPPINGS"
                 disabled={selecaoBloqueada}
+                style={{ marginTop: 12 }}
                 onPress={() => {
                   setListaAnosAberta(false);
                   setModoSelecao(true);
                 }}
-                style={[
-                    styles.selectionStartButton,
-                    { borderColor: theme.borda,
-                      marginTop: 12,
-                    },
-                ]}
-                >
-                <Ionicons
-                    name="checkmark-circle-outline"
-                    size={19}
-                    color={theme.texto}
-                />
-                <Text
-                    weight="SemiBold"
-                    style={[
-                    styles.selectionStartText,
-                    { color: theme.texto },
-                    ]}
-                >
-                    SELECIONAR CLIPPINGS
-                </Text>
-              </TouchableOpacity>
+              />
             )
           ) : null}
 

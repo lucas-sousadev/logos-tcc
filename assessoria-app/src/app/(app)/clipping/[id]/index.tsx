@@ -22,6 +22,7 @@ import {
 } from "expo-router/react-navigation";
 
 import Header from "@/components/layout/Header";
+import { useVoltarNaPilha } from "@/hooks/useNavegacaoModulos";
 import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import ClippingAnexos from "@/components/clipping/ClippingAnexos";
@@ -130,6 +131,7 @@ function Campo({
 
 export default function ClippingDetalhes() {
   const router = useRouter();
+  const voltarNaPilha = useVoltarNaPilha();
   const focado = useIsFocused();
   const { theme, mode } = useTheme();
   const { marcarVisualizado } = useClippingNovos();
@@ -220,10 +222,7 @@ export default function ClippingDetalhes() {
       return;
     }
 
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    if (voltarNaPilha()) return;
 
     if (clipping) {
       router.replace({

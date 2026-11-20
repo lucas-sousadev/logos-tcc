@@ -23,6 +23,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -80,6 +82,7 @@ interface FeedbackState {
 
 export default function ClienteDetalhes() {
   const router = useRouter();
+  const retornar = useRetornoSeguro("/clientes");
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
@@ -331,13 +334,17 @@ export default function ClienteDetalhes() {
     setModoEdicao(false);
   }
 
+  const saida = useSaidaFormulario(camposAlterados().length > 0, salvando || excluindo || excluindoVinculos);
+
   function handleBack() {
+    if (salvando || excluindo || excluindoVinculos) return;
     if (!modoEdicao) {
-      router.back();
+      retornar();
       return;
     }
 
     if (camposAlterados().length > 0) {
+      saida.confirmarSaida(cancelarEdicao);
       return;
     }
 
@@ -515,9 +522,9 @@ export default function ClienteDetalhes() {
         message:
           "O cliente foi excluído com sucesso.",
         onPrimary: () =>
-          router.dismissTo("/clientes"),
+          saida.concluirSaida(() => router.dismissTo("/clientes")),
         onClose: () =>
-          router.dismissTo("/clientes"),
+          saida.concluirSaida(() => router.dismissTo("/clientes")),
       });
     } catch (error) {
       mostrarFeedback({
@@ -643,6 +650,7 @@ export default function ClienteDetalhes() {
             color={theme.primaria}
           />
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -692,11 +700,7 @@ export default function ClienteDetalhes() {
               title="VOLTAR"
               variant="outline"
               onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.dismissTo("/clientes");
-                }
+                retornar();
               }}
               style={styles.actionButton}
             />
@@ -710,6 +714,7 @@ export default function ClienteDetalhes() {
             />
           </View>
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -1313,7 +1318,8 @@ export default function ClienteDetalhes() {
         }}
         onSecondary={fecharFeedback}
       />
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

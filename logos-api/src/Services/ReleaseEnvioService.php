@@ -59,9 +59,13 @@ final class ReleaseEnvioService
 
     public static function enfileirar(
         int $assessoriaId,
-        mixed $id
+        mixed $id,
+        mixed $versao = null
     ): array {
         $id = self::numero($id);
+        if ($versao !== null && (!is_string($versao) || !preg_match('/^[a-f0-9]{64}$/D', $versao))) {
+            throw new \InvalidArgumentException('Reabra o release para conferir sua versão antes de enviar.');
+        }
         $db = Connection::get();
         $db->beginTransaction();
 
@@ -88,6 +92,12 @@ final class ReleaseEnvioService
             }
 
             if ($release['status'] === 'RASCUNHO') {
+                if ($versao !== null && !hash_equals(
+                    ReleaseService::buscar($assessoriaId, $id)['versao_edicao'],
+                    $versao
+                )) {
+                    throw new \DomainException('Este release foi alterado após a revisão. Confira o conteúdo atual antes de enviar.');
+                }
                 if (trim($release['titulo']) === '') {
                     throw new \InvalidArgumentException(
                         'Preencha o título interno antes de enviar.'

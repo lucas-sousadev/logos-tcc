@@ -28,6 +28,7 @@ import ClienteFilterModal, { FiltrosClientes } from "@/components/ui/Filtros/Cli
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import ContadorLista from "@/components/ui/ContadorLista";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
 
 import { useListaPaginada } from "@/hooks/useListaPaginada";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -594,30 +595,10 @@ function alternarClienteSelecionado(id: number) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <SelecaoListaButton
+                title="SELECIONAR CLIENTES"
                 onPress={abrirModoSelecao}
-                style={[
-                  styles.selectionStartButton,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={19}
-                  color={theme.texto}
-                />
-
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.selectionStartText,
-                    { color: theme.texto },
-                  ]}
-                >
-                  SELECIONAR CLIENTES
-                </Text>
-              </TouchableOpacity>
+              />
             )
           ) : null}
 
@@ -751,14 +732,14 @@ function alternarClienteSelecionado(id: number) {
                         <Ionicons
                           name="attach-outline"
                           size={14}
-                          color="#F59E0B"
+                          color={theme.alteracao}
                         />
 
                         <Text
                           numberOfLines={1}
                           style={[
                             styles.itemVinculosTexto,
-                            { color: "#F59E0B" },
+                            { color: theme.alteracao },
                           ]}
                         >
                           {cliente.total_clippings_ano_atual}{" "}

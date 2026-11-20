@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Keyboard,
   ScrollView,
@@ -6,11 +11,12 @@ import {
   View,
   type TextInput
 } from "react-native";
-import { useNavigation, useRouter } from "expo-router";
+import { useNavigation, useRouter, useLocalSearchParams } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import * as Crypto from "expo-crypto";
 
 import Header from "@/components/layout/Header";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -19,9 +25,7 @@ import ClippingContexto from "@/components/clipping/ClippingContexto";
 import ReleaseDestinatariosModal from "@/components/releases/ReleasesDestinatariosModal";
 import ReleaseDadosEnvioEtapa from "@/components/releases/ReleaseDadosEnvioEtapa";
 import ReleaseRevisaoEtapa from "@/components/releases/ReleaseRevisaoEtapa";
-
-import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
+import ReleaseEdicao from "@/components/releases/ReleaseEdicao";
 import { listarClientes } from "@/services/api/cliente";
 import ReleaseEtapas, {
   type EtapaRelease,
@@ -31,6 +35,9 @@ import ReleaseTemplateEtapa from "@/components/releases/ReleaseTemplateEtapa";
 import ReleaseConteudoEditor from "@/components/releases/ReleaseConteudoEditor";
 import ReleaseEnvioTeste from "@/components/releases/ReleaseEnvioTeste";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useRascunhoRelease } from "@/hooks/useRascunhoRelease";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
 import type {
   DestinatarioRelease,
@@ -43,6 +50,7 @@ import {
   solicitarEnvioRelease,
   ErroApiRelease,
 } from "@/services/api/release";
+import { encerrarCopiaRelease } from "@/services/rascunhoRelease";
 
 import {
   guardarReleasePendente,
@@ -62,21 +70,53 @@ const ORDEM_CADASTRO: EtapaRelease[] = [
 
 export default function NovoRelease() {
   const { usuario } = useAuth();
-  const conta = usuario ? usuario.assessoria_id + "-" + usuario.id : null;
+  const { editar } = useLocalSearchParams<{ editar?: string }>();
 
-  return <CadastroRelease key={conta ?? "sem-conta"} conta={conta} />;
+  const conta = usuario
+    ? usuario.assessoria_id + "-" + usuario.id
+    : null;
+
+  if (editar !== undefined) {
+    const numero =
+      typeof editar === "string" && /^[1-9]\d*$/.test(editar)
+        ? Number(editar)
+        : 0;
+
+    return (
+      <ReleaseEdicao
+        key={conta + "-editar-" + editar}
+        id={
+          Number.isSafeInteger(numero) && numero > 0
+            ? numero
+            : 0
+        }
+      />
+    );
+  }
+
+  return (
+    <CadastroRelease
+      key={conta ?? "sem-conta"}
+      conta={conta}
+    />
+  );
 }
 
 function CadastroRelease({ conta }: { conta: string | null }) {
   const router = useRouter();
   const navigation = useNavigation();
+  const retornar = useRetornoSeguro("/releases");
   const scrollRef = useRef<ScrollView>(null);
   const conteudoScrollRef = useRef<View>(null);
   const { theme } = useTheme();
   const { temPermissao, usuario } = useAuth();
+  const [
+    chaveRascunho,
+    setChaveRascunho,
+  ] = useState(() => Crypto.randomUUID());
 
   const [etapa, setEtapa] = useState<EtapaRelease>("DESTINO");
-  
+
   // etapa 1
   const [titulo, setTitulo] = useState("");
   const [cliente, setCliente] = useState<{
@@ -96,13 +136,13 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   } | null>(null);
 
   // etapa 3
-  const dadosEnvioIniciais = useRef<DadosEnvioRelease>({
+  const [dadosEnvioIniciais] = useState<DadosEnvioRelease>({
     assunto: "",
     primeira_linha: "",
     nome_remetente: (usuario?.nome ?? "").slice(0, 100),
     responder_para: usuario?.email ?? "",
   });
-  const [dadosEnvio, setDadosEnvio] = useState(dadosEnvioIniciais.current);
+  const [dadosEnvio, setDadosEnvio] = useState(dadosEnvioIniciais);
 
   const [selecionados, setSelecionados] = useState<
     DestinatarioRelease[]
@@ -118,6 +158,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
   const [avisoSaidaAberto, setAvisoSaidaAberto] = useState(false);
+  const [confirmarRecuperacao, setConfirmarRecuperacao] = useState(false);
 
   // resultados
   const [resultado, setResultado] = useState<{
@@ -130,7 +171,6 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const trava = useRef(false);
   const acaoSaida = useRef<NavigationAction | null>(null);
   const confirmando = pendente !== null;
-  const bloqueado = salvando || confirmando || sucesso || imagemOcupada || confirmacaoEnvio;
   const podeCriar = temPermissao("RELEASES", "CRIAR");
   const podeEnviar =
     temPermissao("RELEASES", "ENVIAR") &&
@@ -157,10 +197,107 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       selecionados.length ||
       dadosEnvio.assunto ||
       dadosEnvio.primeira_linha ||
-      dadosEnvio.nome_remetente !== dadosEnvioIniciais.current.nome_remetente ||
-      dadosEnvio.responder_para !== dadosEnvioIniciais.current.responder_para
+      dadosEnvio.nome_remetente !== dadosEnvioIniciais.nome_remetente ||
+      dadosEnvio.responder_para !== dadosEnvioIniciais.responder_para
     );
 
+  const restaurarFormulario = useCallback(
+    (registro: ReleasePendente) => {
+      const { dados } = registro;
+      const salvos = dados.blocos ?? [];
+
+      setChaveRascunho(
+        dados.chave_rascunho
+      );
+
+      setTitulo(dados.titulo);
+      setCliente(registro.cliente);
+
+      setTemplate(
+        registro.template
+          ? {
+              ...registro.template,
+              blocos: salvos,
+            }
+          : null
+      );
+
+      setBlocos(salvos);
+      setDadosEnvio(dados.dados_envio);
+      setSelecionados(registro.selecionados);
+      setConteudoEditado(
+        registro.conteudoEditado
+      );
+      setEtapa(registro.etapa);
+    },
+    []
+  );
+
+  const copiaAtual: ReleasePendente = {
+    dados: {
+      titulo,
+      cliente_id: cliente?.id ?? null,
+      jornalistas_ids: selecionados.map(
+        (contato) => contato.id
+      ),
+      chave_rascunho: chaveRascunho,
+      template_id: template?.id ?? null,
+      template_codigo:
+        template?.codigo ?? null,
+      template_assinatura:
+        template?.assinatura ?? "",
+      blocos: template ? blocos : [],
+      dados_envio: dadosEnvio,
+    },
+    etapa,
+    cliente,
+    selecionados,
+    conteudoEditado,
+    template: template
+      ? {
+          id: template.id,
+          codigo: template.codigo,
+          nome: template.nome,
+          origem: template.origem,
+          assinatura: template.assinatura,
+          disponivel: template.disponivel,
+        }
+      : null,
+  };
+
+  const automatico = useRascunhoRelease({
+    conta,
+    identidade: "novo",
+    valor: copiaAtual,
+    iniciar: recuperacao === "pronta" && !confirmando && !sucesso,
+    temAlteracoes: temAlteracoesNaoSalvas || etapa !== "DESTINO",
+    podeMailing: temPermissao("MAILING", "VISUALIZAR"),
+    habilitado:
+      recuperacao === "pronta" &&
+      !confirmando &&
+      !sucesso &&
+      !salvando &&
+      podeCriar,
+    ocupado:
+      imagemOcupada || confirmacaoEnvio,
+    onRecuperar: (registro) => {
+      if (!pendente) {
+        restaurarFormulario(registro);
+      }
+    },
+  });
+
+  const bloqueado =
+    salvando ||
+    confirmando ||
+    sucesso ||
+    imagemOcupada ||
+    confirmacaoEnvio ||
+    confirmarRecuperacao ||
+    (
+      !confirmando &&
+      !automatico.pronto
+    );
   usePreventRemove(salvando || imagemOcupada || temAlteracoesNaoSalvas, ({ data }) => {
     if (trava.current || imagemOcupada || acaoSaida.current) return;
 
@@ -178,17 +315,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       if (!ativa) return;
 
       if (registro) {
-        const { dados } = registro;
-        const blocosSalvos = dados.blocos ?? [];
-
-        setTitulo(dados.titulo);
-        setCliente(registro.cliente);
-        setTemplate(registro.template ? { ...registro.template, blocos: blocosSalvos } : null);
-        setBlocos(blocosSalvos);
-        setDadosEnvio(dados.dados_envio);
-        setSelecionados(registro.selecionados);
-        setConteudoEditado(registro.conteudoEditado);
-        setEtapa(registro.etapa);
+        restaurarFormulario(registro);
         setPendente(registro);
       }
 
@@ -198,7 +325,11 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     });
 
     return () => { ativa = false; };
-  }, [conta, tentativasRecuperacao]);
+  }, [
+    conta,
+    tentativasRecuperacao,
+    restaurarFormulario,
+  ]);
 
   const etapasDisponiveis = template
   ? ORDEM_CADASTRO
@@ -226,7 +357,12 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       return;
     }
 
-    if (acao === "ENVIAR" && !podeEnviar) return;
+    if (
+      acao === "ENVIAR" &&
+      !podeEnviar
+    ) {
+      return;
+    }
 
     if (
       pendente &&
@@ -235,6 +371,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       setErro(
         "Conclua a tentativa pendente antes de iniciar outra ação."
       );
+
       return;
     }
 
@@ -243,61 +380,79 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setErro("");
 
     let registro = pendente;
-    let fase: "CRIAR" | "ENVIAR" | "LIMPAR" = "CRIAR";
+
+    let fase:
+      | "GUARDAR"
+      | "CRIAR"
+      | "ENVIAR"
+      | "LIMPAR" = "GUARDAR";
 
     try {
       if (!registro) {
-        const novo: ReleasePendente = {
+        const remoto =
+          await automatico.confirmar();
+
+        registro = {
+          ...copiaAtual,
           acao,
-          dados: {
-            titulo,
-            cliente_id: cliente?.id ?? null,
-            jornalistas_ids: selecionados.map(
-              (contato) => contato.id
-            ),
-            template_id: template?.id ?? null,
-            template_codigo: template?.codigo ?? null,
-            template_assinatura: template?.assinatura ?? null,
-            blocos: template ? blocos : undefined,
-            chave_rascunho: Crypto.randomUUID(),
-            dados_envio: dadosEnvio,
-          },
-          etapa,
-          cliente,
-          template: template && {
-            id: template.id,
-            codigo: template.codigo,
-            nome: template.nome,
-            origem: template.origem,
-            assinatura: template.assinatura,
-            disponivel: template.disponivel,
-          },
-          selecionados,
-          conteudoEditado,
+          release_id: remoto.id,
+          versao_envio: remoto.versao_edicao,
         };
 
-        await guardarReleasePendente(conta, novo);
-        registro = novo;
-        setPendente(novo);
+        await guardarReleasePendente(
+          conta,
+          registro
+        );
+
+        setPendente(registro);
       }
 
-      // a mesma chave recupera o mesmo cadastro em uma repetição
-      const criado = await criarRelease(registro.dados);
+      // Recupera tentativas criadas pela versão anterior.
+      if (!registro.release_id) {
+        fase = "CRIAR";
 
-      registro = {
-        ...registro,
-        release_id: criado.id,
-      };
+        const criado = await criarRelease(
+          registro.dados
+        );
 
-      await guardarReleasePendente(conta, registro);
-      setPendente(registro);
+        registro = {
+          ...registro,
+          release_id: criado.id,
+          versao_envio: criado.versao_edicao,
+        };
+
+        await guardarReleasePendente(
+          conta,
+          registro
+        );
+
+        setPendente(registro);
+      }
+
+      const id = registro.release_id;
+
+      if (
+        typeof id !== "number" ||
+        !Number.isSafeInteger(id) ||
+        id < 1
+      ) {
+        throw new Error(
+          "O servidor não confirmou o rascunho."
+        );
+      }
 
       if (acao === "ENVIAR") {
         fase = "ENVIAR";
-        await solicitarEnvioRelease(criado.id);
+        await solicitarEnvioRelease(id, registro.versao_envio);
       }
 
       fase = "LIMPAR";
+
+      await encerrarCopiaRelease(
+        conta,
+        "novo",
+        id
+      );
 
       await removerReleasePendente(
         conta,
@@ -305,22 +460,25 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       );
 
       setPendente(null);
-      setResultado({ acao, id: criado.id });
+      setResultado({ acao, id });
       setSucesso(true);
     } catch (falha) {
-      if (!registro) {
-        setErro(
-          "Não foi possível guardar a tentativa neste dispositivo. Tente novamente."
-        );
-        return;
-      }
-
       if (
         fase === "CRIAR" &&
+        registro &&
         falha instanceof ErroApiRelease &&
         (
-          [400, 404, 409, 413, 422].includes(falha.status) ||
-          (!pendente && falha.status === 403)
+          [
+            400,
+            404,
+            409,
+            413,
+            422,
+          ].includes(falha.status) ||
+          (
+            !pendente &&
+            falha.status === 403
+          )
         )
       ) {
         try {
@@ -328,11 +486,13 @@ function CadastroRelease({ conta }: { conta: string | null }) {
             conta,
             registro.dados.chave_rascunho
           );
+
           setPendente(null);
         } catch {
           setErro(
-            "Não foi possível atualizar a tentativa salva neste dispositivo."
+            "Não foi possível atualizar a tentativa salva neste aparelho."
           );
+
           return;
         }
       }
@@ -344,7 +504,8 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
       setErro(
         fase === "ENVIAR"
-          ? "O release foi salvo, mas o envio ainda não foi confirmado. " +
+          ? "O rascunho está salvo, mas o envio " +
+              "ainda não foi confirmado. " +
               mensagem
           : mensagem
       );
@@ -536,45 +697,102 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setAvisoSaidaAberto(false);
   }
 
-  function descartarESair() {
-    const acao = acaoSaida.current;
-    continuarEditando();
-    if (acao) navigation.dispatch(acao);
+  async function descartarESair() {
+    if (trava.current) return;
+
+    trava.current = true;
+    setSalvando(true);
+
+    try {
+      await automatico.guardarLocal();
+
+      const acao = acaoSaida.current;
+      continuarEditando();
+
+      if (acao) {
+        navigation.dispatch(acao);
+      }
+    } catch {
+      continuarEditando();
+
+      setErro(
+        "Não foi possível guardar a cópia local. " +
+          "Salve o rascunho antes de sair."
+      );
+    } finally {
+      trava.current = false;
+      setSalvando(false);
+    }
   }
 
   function voltarParaLista() {
     router.dismissTo("/releases");
   }
 
+  async function usarVersaoServidor() {
+    if (trava.current || imagemOcupada || confirmando) return;
+    trava.current = true;
+    setSalvando(true);
+    setErro("");
+    try {
+      if (automatico.remotoAusente) {
+        if (!podeCriar) throw new Error("Você precisa da permissão de criar releases para recuperar este conteúdo.");
+        await automatico.recuperarComoNovo();
+      } else {
+        await automatico.recarregarDoServidor();
+      }
+      setConfirmarRecuperacao(false);
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : "Não foi possível carregar a versão do servidor.");
+      setConfirmarRecuperacao(false);
+    } finally { trava.current = false; setSalvando(false); }
+  }
+
   function voltar() {
-    if (trava.current || sucesso || imagemOcupada) return;
+    if (trava.current || sucesso || imagemOcupada || confirmarRecuperacao) return;
 
     if (!confirmando && recuperacao === "pronta" && etapaAnterior) {
       mudarEtapa(etapaAnterior);
       return;
     }
 
-    if (router.canGoBack()) router.back();
-    else voltarParaLista();
+    retornar();
   }
 
-  if (recuperacao !== "pronta") {
+  if (
+    recuperacao !== "pronta" ||
+    (
+      !confirmando &&
+      !automatico.pronto
+    )
+  ) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Header title="Novo release" showBackButton onBackPress={voltar} />
         <View style={styles.content}>
-          {recuperacao === "carregando" ? (
+          {(
+            recuperacao === "carregando" ||
+            (recuperacao === "pronta" && !automatico.pronto && !automatico.erro)
+          ) ? (
             <Text>Verificando rascunhos neste dispositivo…</Text>
           ) : (
             <>
               <Text style={{ color: theme.erro }}>
-                Não foi possível recuperar o rascunho salvo neste dispositivo.
+                {automatico.mensagem ||
+               "Não foi possível recuperar o rascunho salvo neste dispositivo."}
               </Text>
               <Button
                 title="TENTAR NOVAMENTE"
                 onPress={() => {
+                  if (!automatico.pronto) {
+                    automatico.tentarRecuperar();
+                  }
+
                   setRecuperacao("carregando");
-                  setTentativasRecuperacao((atual) => atual + 1);
+
+                  setTentativasRecuperacao(
+                    (atual) => atual + 1
+                  );
                 }}
               />
             </>
@@ -893,9 +1111,27 @@ function CadastroRelease({ conta }: { conta: string | null }) {
               ) : null}
             </View>
 
-                <Text style={{ color: theme.textoSub }}>
-                    Você pode salvar o rascunho com o preenchimento incompleto.
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    color: automatico.erro
+                      ? theme.aviso
+                      : theme.textoSub,
+                  }}
+                >
+                  {automatico.mensagem ||
+                    "O preenchimento será salvo automaticamente, mesmo incompleto."}
                 </Text>
+
+                {automatico.conflito && automatico.idRemoto && !confirmando ? (
+                  <Button title="CONFERIR" variant="outline" disabled={bloqueado}
+                    onPress={() => setConfirmarRecuperacao(true)} />
+                ) : null}
+
+                {automatico.remotoAusente && podeCriar && !confirmando ? (
+                  <Button title="RECUPERAR" variant="outline" disabled={bloqueado}
+                    onPress={() => setConfirmarRecuperacao(true)} />
+                ) : null}
 
                 {erro ? (
                     <Text style={{ color: theme.erro }}>{erro}</Text>
@@ -951,14 +1187,36 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       />
 
       <FeedbackAlert
+        visible={confirmarRecuperacao}
+        variant="warning"
+        title={automatico.remotoAusente ? "Recuperar este rascunho?" : "Usar a versão do servidor?"}
+        message={automatico.remotoAusente
+          ? "O release não está mais disponível no servidor. Seu conteúdo local será recuperado como um novo rascunho, mantendo os campos preenchidos."
+          : "O preenchimento desta tela será substituído pela versão salva no servidor. Suas alterações locais só serão substituídas depois que essa versão for carregada com sucesso."}
+        primaryLabel={automatico.remotoAusente ? "RECUPERAR" : "USAR"}
+        secondaryLabel="MANTER"
+        primaryDanger
+        loading={salvando}
+        onPrimary={() => void usarVersaoServidor()}
+        onClose={() => setConfirmarRecuperacao(false)}
+        onSecondary={() => setConfirmarRecuperacao(false)}
+      />
+
+      <FeedbackAlert
         visible={avisoSaidaAberto}
         variant="warning"
         title="Sair do novo release?"
-        message="Se sair agora, você perderá tudo o que preencheu neste release."
+        loading={salvando}
+        message={
+          "Seu preenchimento será guardado neste aparelho " +
+          "para continuar depois. Se a sincronização estiver " +
+          "pendente, ele ainda não estará atualizado em " +
+          "outros dispositivos."
+        }
         primaryLabel="SAIR"
         secondaryLabel="CONTINUAR"
         primaryDanger
-        onPrimary={descartarESair}
+        onPrimary={() => void descartarESair()}
         onSecondary={continuarEditando}
         onClose={continuarEditando}
       />

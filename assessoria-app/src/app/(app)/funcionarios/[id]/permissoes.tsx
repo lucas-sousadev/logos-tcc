@@ -9,12 +9,14 @@ import {
 import { useEffect, useState, useCallback } from "react";
 import {
   useLocalSearchParams,
-  useRouter,
 } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
@@ -29,7 +31,6 @@ import {
 
 export default function Permissoes() {
    const { theme } = useTheme();
-   const router  = useRouter();
    const { id } =
     useLocalSearchParams<{
       id: string;
@@ -228,12 +229,13 @@ export default function Permissoes() {
     
   }
 
-  function handleBack() {
-  if (possuiAlteracoes) {
-    return;
-  }
+  const retornar = useRetornoSeguro({
+    pathname: "/funcionarios/[id]", params: { id: String(id) },
+  });
+  const saida = useSaidaFormulario(possuiAlteracoes, salvando);
 
-  router.back();
+  function handleBack() {
+  retornar();
 }
 
   function possuiVisualizar(
@@ -336,6 +338,7 @@ export default function Permissoes() {
             Você não possui permissão para gerenciar permissões.
           </Text>
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -708,7 +711,8 @@ export default function Permissoes() {
           />
         </ScrollView>
       )}
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

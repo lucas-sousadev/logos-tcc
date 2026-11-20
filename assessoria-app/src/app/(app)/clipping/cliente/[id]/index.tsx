@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useConsultaClipping } from "@/hooks/useConsultaClipping";
 import AvisoClippingSalvo from "@/components/clipping/avisoClippingSalvo";
 import Header from "@/components/layout/Header";
+import { useVoltarNaPilha } from "@/hooks/useNavegacaoModulos";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -27,6 +28,7 @@ import ClippingFilterModal, { novosFiltrosClippings, converterFiltrosClipping, p
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ContadorLista from "@/components/ui/ContadorLista";
+import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
 
 import { useSelecaoClippings } from "@/hooks/useSelecaoClipping";
 import { useExportacaoClippings } from "@/hooks/useExportacaoClippings";
@@ -58,6 +60,7 @@ export default function ClippingsDoCliente() {
 
 function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
   const router = useRouter();
+  const voltarNaPilha = useVoltarNaPilha();
   const { width } = useWindowDimensions();
   const compacto = width < 380;
   const { theme } = useTheme();
@@ -314,10 +317,7 @@ function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
       return;
     }
 
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    if (voltarNaPilha()) return;
 
     if (Number.isInteger(ano) && ano >= 1000 && ano <= 9999) {
       router.replace({
@@ -721,10 +721,8 @@ function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Selecionar clippings"
+              <SelecaoListaButton
+                title="SELECIONAR CLIPPINGS"
                 disabled={
                   selecao.excluindo ||
                   atualizando ||
@@ -734,27 +732,7 @@ function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
                   setExpandido(null);
                   selecao.alternarModo();
                 }}
-                style={[
-                  styles.selectionStartButton,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={19}
-                  color={theme.texto}
-                />
-
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.selectionStartText,
-                    { color: theme.texto },
-                  ]}
-                >
-                  SELECIONAR CLIPPINGS
-                </Text>
-              </TouchableOpacity>
+              />
             )
           ) : null}
 

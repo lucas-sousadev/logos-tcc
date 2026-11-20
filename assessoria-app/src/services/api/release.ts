@@ -139,7 +139,7 @@ export async function listarReleases(
 
 export async function criarRelease(
   dados: DadosNovoRelease
-): Promise<ResumoRelease> {
+): Promise<DetalheRelease> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -156,7 +156,7 @@ export async function criarRelease(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dados),
       signal: controller.signal,
-    }).then(lerResposta<{ release: ResumoRelease }>);
+    }).then(lerResposta<{ release: DetalheRelease }>);
 
     const { release } = await Promise.race([envio, prazo]);
 
@@ -386,11 +386,24 @@ export function obterEndpointImagemRelease(url: string): string | null {
 }
 
 export interface DetalheRelease extends ResumoRelease {
+  chave_rascunho?: string | null;
+  template_id: number | null;
+  template_codigo: string | null;
+  versao_edicao: string;
   blocos: BlocoTemplateRelease[];
   primeira_linha: string;
   nome_remetente: string;
   responder_para: string;
-  destinatarios: { email: string }[];
+  destinatarios: {
+    id: number;
+    jornalista_id: number | null;
+    jornalista_nome: string | null;
+    jornalista_ativo: number | null;
+    jornalista_email: string | null;
+    veiculo_nome: string | null;
+    email: string;
+    status: StatusDestinatarioRelease;
+  }[];
 }
 
 export type StatusDestinatarioRelease =
@@ -468,7 +481,8 @@ export async function consultarEnvioRelease(
 }
 
 export async function solicitarEnvioRelease(
-  id: number
+  id: number,
+  versao?: string
 ): Promise<SituacaoEnvioRelease> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -492,7 +506,7 @@ export async function solicitarEnvioRelease(
         headers: {
           "Content-Type": "application/json",
         },
-        body: "{}",
+        body: JSON.stringify(versao ? { versao_edicao: versao } : {}),
         signal: controller.signal,
       }
     ).then(
@@ -502,6 +516,105 @@ export async function solicitarEnvioRelease(
     return (
       await Promise.race([requisicao, prazo])
     ).envio;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export type DadosEdicaoRelease = Omit<
+  DadosNovoRelease,
+  "chave_rascunho" | "template_id" | "template_codigo" | "blocos" | "dados_envio"
+> & {
+  versao_edicao: string;
+  template_id: number | null;
+  template_codigo: string | null;
+  blocos: BlocoTemplateRelease[];
+  dados_envio: DadosEnvioRelease;
+};
+
+async function alterarRelease<T>(
+  id: number,
+  method: "PUT" | "DELETE",
+  dados: unknown
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    return await lerResposta<T>(
+      await authenticatedFetch(API_URL + "/api/releases/" + id, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+        signal: controller.signal,
+      })
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function atualizarRelease(
+  id: number,
+  dados: DadosEdicaoRelease
+): Promise<DetalheRelease> {
+  return (
+    await alterarRelease<{ release: DetalheRelease }>(id, "PUT", dados)
+  ).release;
+}
+
+export async function excluirRelease(
+  id: number,
+  versao: string
+): Promise<void> {
+  await alterarRelease(id, "DELETE", {
+    versao_edicao: versao,
+  });
+}
+export interface PedidoRascunhoRelease {
+  id: number | null;
+  chave: string;
+  versao: string | null;
+  dados: Omit<DadosEdicaoRelease, "versao_edicao">;
+}
+
+export async function sincronizarRascunhoRelease(
+  pedido: PedidoRascunhoRelease
+): Promise<DetalheRelease> {
+  const controller = new AbortController();
+
+  const timer = setTimeout(
+    () => controller.abort(),
+    30_000
+  );
+
+  try {
+    const resposta = await authenticatedFetch(
+      API_URL + "/api/releases/rascunho",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(pedido),
+        signal: controller.signal,
+      }
+    );
+
+    const { release } = await lerResposta<{
+      release: DetalheRelease;
+    }>(resposta);
+
+    if (
+      !Number.isSafeInteger(release?.id) ||
+      !/^[a-f0-9]{64}$/.test(release.versao_edicao)
+    ) {
+      throw new Error(
+        "O servidor não confirmou a versão do rascunho."
+      );
+    }
+
+    return release;
   } finally {
     clearTimeout(timer);
   }

@@ -8,9 +8,11 @@ import {
 import {
   useFocusEffect,
   useLocalSearchParams,
+  useRouter
 } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
@@ -21,11 +23,14 @@ import ReleaseResumoCard from "@/components/releases/ReleaseResumoCard";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { encerrarCopiaRelease } from "@/services/rascunhoRelease";
+import { lerReleasePendente, removerReleasePendente } from "@/services/releasePendente";
 import {
   buscarRelease,
   consultarEnvioRelease,
   solicitarEnvioRelease,
   ErroApiRelease,
+  excluirRelease,
   type DetalheRelease,
   type SituacaoEnvioRelease,
   type StatusDestinatarioRelease,
@@ -77,8 +82,8 @@ export default function DetalhesRelease() {
 
 function ConteudoRelease({ id }: { id: number }) {
   const { theme } = useTheme();
-  const { temPermissao } = useAuth();
-
+  const { temPermissao, usuario } = useAuth();
+  const router = useRouter();
   const podeVer = temPermissao("RELEASES", "VISUALIZAR");
   const podeEnviar = temPermissao("RELEASES", "ENVIAR");
   const trava = useRef(false);
@@ -101,6 +106,14 @@ function ConteudoRelease({ id }: { id: number }) {
   const avisoDominios = avisoDominiosRelease(
     (release?.destinatarios ?? []).map((d) => d.email)
   );
+
+  const podeEditar = temPermissao("RELEASES", "EDITAR");
+  const podeExcluir = temPermissao("RELEASES", "EXCLUIR");
+
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState("");
+  const saida = useSaidaFormulario(false, enviando || excluindo);
 
   useFocusEffect(
     useCallback(() => {
@@ -221,7 +234,8 @@ function ConteudoRelease({ id }: { id: number }) {
     setErroEnvio("");
 
     try {
-      setEnvio(await solicitarEnvioRelease(id));
+      setEnvio(await solicitarEnvioRelease(id, release?.versao_edicao));
+      await encerrarRascunhoLocal();
       setConfirmar(false);
     } catch (falha) {
       setErroEnvio(
@@ -237,6 +251,80 @@ function ConteudoRelease({ id }: { id: number }) {
     }
   }
 
+  async function pedirExclusao() {
+    if (trava.current || !podeExcluir) return;
+
+    trava.current = true;
+    setExcluindo(true);
+    setErroExclusao("");
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const atual = await buscarRelease(id, controller.signal);
+
+      if (
+        !["RASCUNHO", "ENVIADO", "PARCIAL", "FALHOU"].includes(
+          atual.status
+        )
+      ) {
+        throw new Error(
+          "Não é possível excluir um release agendado, na fila ou em processamento."
+        );
+      }
+
+      setRelease(atual);
+      setConfirmarExclusao(true);
+    } catch (falha) {
+      setErroExclusao(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível consultar o release."
+      );
+    } finally {
+      clearTimeout(timer);
+      trava.current = false;
+      setExcluindo(false);
+    }
+  }
+
+  async function excluir() {
+    if (trava.current || !podeExcluir || !release) return;
+
+    trava.current = true;
+    setExcluindo(true);
+    setErroExclusao("");
+
+    try {
+      await excluirRelease(id, release.versao_edicao);
+      await encerrarRascunhoLocal();
+      setConfirmarExclusao(false);
+      saida.concluirSaida(() => router.dismissTo("/releases"));
+    } catch (falha) {
+      setErroExclusao(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível excluir o release."
+      );
+    } finally {
+      trava.current = false;
+      setExcluindo(false);
+    }
+  }
+
+  async function encerrarRascunhoLocal() {
+    if (!usuario) return;
+    const conta = usuario.assessoria_id + "-" + usuario.id;
+    const chavePropria = release?.criado_por === usuario.id ? release.chave_rascunho ?? undefined : undefined;
+    await encerrarCopiaRelease(conta, "editar-" + id, id, chavePropria);
+    await encerrarCopiaRelease(conta, "novo", id, chavePropria);
+    const pendente = await lerReleasePendente(conta);
+    if (pendente && (pendente.release_id === id ||
+      pendente.dados.chave_rascunho === chavePropria)) {
+      await removerReleasePendente(conta, pendente.dados.chave_rascunho);
+    }
+  }
   return (
     <View
       style={[
@@ -276,6 +364,44 @@ function ConteudoRelease({ id }: { id: number }) {
 
           {release && envio && podeVer ? (
             <>
+            <View style={styles.linha}>
+                {podeEditar && envio.release.status === "RASCUNHO" ? (
+                  <Button
+                    title="EDITAR"
+                    icon="create-outline"
+                    variant="outline"
+                    style={styles.botao}
+                    disabled={carregando || enviando || excluindo}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/releases/novo",
+                        params: { editar: String(id) },
+                      })
+                    }
+                  />
+                ) : null}
+
+                {podeExcluir &&
+                ["RASCUNHO", "ENVIADO", "PARCIAL", "FALHOU"].includes(
+                  envio.release.status
+                ) ? (
+                  <Button
+                    title="EXCLUIR"
+                    variant="danger"
+                    style={styles.botao}
+                    loading={excluindo}
+                    disabled={carregando || enviando}
+                    onPress={() => void pedirExclusao()}
+                  />
+                ) : null}
+              </View>
+
+              {erroExclusao ? (
+                <Text style={{ color: theme.erro }}>
+                  {erroExclusao}
+                </Text>
+              ) : null}
+
               <ReleaseResumoCard
                 release={release}
                 status={envio.release.status}
@@ -345,6 +471,7 @@ function ConteudoRelease({ id }: { id: number }) {
                   loading={enviando}
                   disabled={
                     carregando ||
+                    excluindo ||
                     envio.totais.total === 0
                   }
                   onPress={() => {
@@ -479,6 +606,33 @@ function ConteudoRelease({ id }: { id: number }) {
           if (!trava.current) setConfirmar(false);
         }}
       />
+      <FeedbackAlert
+        visible={confirmarExclusao}
+        variant="warning"
+        title="Excluir este release?"
+        message={
+          'O release "' +
+          (release?.titulo || "Sem título") +
+          '" e o histórico de destinatários serão removidos. ' +
+          "Esta ação não pode ser desfeita." +
+          (release?.status !== "RASCUNHO"
+            ? " Os e-mails já enviados não serão cancelados."
+            : "") +
+          (erroExclusao ? "\n\n" + erroExclusao : "")
+        }
+        primaryLabel="EXCLUIR"
+        secondaryLabel="CANCELAR"
+        primaryDanger
+        loading={excluindo}
+        onPrimary={() => void excluir()}
+        onClose={() => {
+          if (!trava.current) setConfirmarExclusao(false);
+        }}
+        onSecondary={() => {
+          if (!trava.current) setConfirmarExclusao(false);
+        }}
+      />
+
     </View>
   );
 }

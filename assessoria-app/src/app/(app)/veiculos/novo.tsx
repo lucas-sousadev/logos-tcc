@@ -6,10 +6,12 @@ import {
 } from "react-native";
 
 import { useState } from "react";
-import { useRouter } from "expo-router";
 
 import EnderecosVeiculoCadastro, { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -21,7 +23,6 @@ import { ArquivoLogoVeiculo, criarVeiculo, NovoEnderecoVeiculo } from "@/service
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function NovoVeiculo() {
-  const router = useRouter();
   const { theme } = useTheme();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -41,6 +42,9 @@ export default function NovoVeiculo() {
       incluir_subdominios: false,
     },
   ]);
+
+  const retornar = useRetornoSeguro("/veiculos");
+  const saida = useSaidaFormulario(Boolean(nome || descricao || alcance || tier !== null || !ativo || logo || enderecos.some((e) => e.host || e.caminho_prefixo || e.incluir_subdominios)), salvando);
 
   async function cadastrar() {
     const nomeFormatado = nome.trim();
@@ -64,7 +68,7 @@ export default function NovoVeiculo() {
       },
         logo ?? undefined
     );
-      router.dismissTo("/veiculos");
+      saida.concluirSaida(retornar);
     } catch (error) {
       setErroGeral(
         error instanceof Error
@@ -174,12 +178,7 @@ export default function NovoVeiculo() {
             title="CANCELAR"
             variant="outline"
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-                return;
-              }
-
-              router.dismissTo("/veiculos");
+              retornar();
             }}
             style={styles.actionButton}
           />
@@ -191,7 +190,8 @@ export default function NovoVeiculo() {
           />
         </View>
       </ScrollView>
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

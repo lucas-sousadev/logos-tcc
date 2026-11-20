@@ -8,6 +8,11 @@ tests/
 !/logos-api/tests/webscraping.php
 !/logos-api/tests/resolver_dominio.php
 !/logos-api/tests/releases.php
+!/logos-api/tests/releases_rascunho.php
+!/assessoria-app/tests/
+/assessoria-app/tests/*
+!/assessoria-app/tests/navegacao.test.cjs
+!/assessoria-app/tests/rascunho-release.test.cjs
 
 
 .expo/

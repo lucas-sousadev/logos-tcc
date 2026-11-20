@@ -40,7 +40,7 @@ class ReleaseController
         if (!$dados instanceof \stdClass) {
             throw new \UnexpectedValueException('Envie um objeto JSON no corpo da requisição.');
         }
-    
+
         return json_decode($corpo, true, 512, JSON_THROW_ON_ERROR);
     }
 
@@ -136,19 +136,32 @@ class ReleaseController
 
     public function templates(): void
     {
-        $this->executar(
-            fn(int $assessoriaId, int $usuarioId) =>
-                TemplateService::listar($assessoriaId, $_GET)
-        );
+        $this->executar(function (
+            int $assessoriaId,
+            int $usuarioId,
+            string $perfil
+        ): array {
+            $this->exigirCriacaoOuEdicao($usuarioId, $perfil);
+
+            return TemplateService::listar($assessoriaId, $_GET);
+        });
     }
 
     public function carregarImagem(): void
     {
-        $this->executar(fn(int $assessoriaId) => [
-            'caminho' => ReleaseImagemService::salvar($assessoriaId),
-        ], 201);
+        $this->executar(function (
+            int $assessoriaId,
+            int $usuarioId,
+            string $perfil
+        ): array {
+            $this->exigirCriacaoOuEdicao($usuarioId, $perfil);
+
+            return [
+                'caminho' => ReleaseImagemService::salvar($assessoriaId),
+            ];
+        }, 201);
     }
-    
+
     public function enviar(array $rota): void
     {
         $this->executar(
@@ -157,7 +170,8 @@ class ReleaseController
                 int $usuarioId,
                 string $perfil
             ) use ($rota): array {
-                if ($this->corpo() !== []) {
+                $dados = $this->corpo();
+                if (array_diff(array_keys($dados), ['versao_edicao']) !== []) {
                     throw new \InvalidArgumentException(
                         'O envio usa os dados do release salvo.'
                     );
@@ -180,7 +194,8 @@ class ReleaseController
                 return [
                     'envio' => ReleaseEnvioService::enfileirar(
                         $assessoriaId,
-                        $rota['id'] ?? null
+                        $rota['id'] ?? null,
+                        $dados['versao_edicao'] ?? null
                     ),
                 ];
             },
@@ -200,7 +215,7 @@ class ReleaseController
             ]
         );
     }
-    
+
     public function enviarTeste(): void
     {
         $this->executar(function (int $assessoriaId): array {
@@ -256,6 +271,116 @@ class ReleaseController
                 $rota['assessoria_id'] ?? null,
                 $rota['arquivo'] ?? null
             );
+        });
+    }
+
+    private function exigirCriacaoOuEdicao(
+        int $usuarioId,
+        string $perfil
+    ): void {
+        if (
+            !PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                $perfil,
+                'RELEASES',
+                'CRIAR'
+            )
+            && !PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                $perfil,
+                'RELEASES',
+                'EDITAR'
+            )
+        ) {
+            throw new \RuntimeException(
+                'Você não possui permissão para criar ou editar releases.',
+                403
+            );
+        }
+    }
+
+    public function atualizar(array $rota): void
+    {
+        $this->executar(function (
+            int $assessoriaId,
+            int $usuarioId,
+            string $perfil
+        ) use ($rota): array {
+            return [
+                'message' => 'Rascunho atualizado.',
+                'release' => ReleaseService::atualizar(
+                    $assessoriaId,
+                    $rota['id'] ?? null,
+                    $this->corpo(),
+                    PermissaoService::usuarioTemPermissao(
+                        $usuarioId,
+                        $perfil,
+                        'MAILING',
+                        'VISUALIZAR'
+                    ),
+                    PermissaoService::usuarioTemPermissao(
+                        $usuarioId,
+                        $perfil,
+                        'CLIENTES',
+                        'VISUALIZAR'
+                    )
+                ),
+            ];
+        });
+    }
+
+    public function excluir(array $rota): void
+    {
+        $this->executar(function (
+            int $assessoriaId
+        ) use ($rota): array {
+            $dados = $this->corpo();
+
+            if (array_keys($dados) !== ['versao_edicao']) {
+                throw new \InvalidArgumentException(
+                    'Informe apenas a versão do release para excluir.'
+                );
+            }
+
+            ReleaseService::excluir(
+                $assessoriaId,
+                $rota['id'] ?? null,
+                $dados['versao_edicao']
+            );
+
+            return ['message' => 'Release excluído.'];
+        });
+    }
+
+    public function salvarAutomaticamente(): void
+    {
+        $this->executar(function (
+            int $assessoriaId,
+            int $usuarioId,
+            string $perfil
+        ): array {
+            $pode = static fn(
+                string $modulo,
+                string $acao
+            ): bool => PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                $perfil,
+                $modulo,
+                $acao
+            );
+
+            return [
+                'release' => ReleaseService::salvarAutomaticamente(
+                    $assessoriaId,
+                    $usuarioId,
+                    $this->corpo(),
+                    $pode('RELEASES', 'CRIAR'),
+                    $pode('RELEASES', 'EDITAR')
+                        && $pode('RELEASES', 'VISUALIZAR'),
+                    $pode('MAILING', 'VISUALIZAR'),
+                    $pode('CLIENTES', 'VISUALIZAR')
+                ),
+            ];
         });
     }
 }

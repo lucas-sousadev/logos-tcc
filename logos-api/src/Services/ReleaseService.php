@@ -242,7 +242,8 @@ class ReleaseService
 
         $destinatarios = self::consultar('
             SELECT d.id, d.jornalista_id, d.email, d.status, d.enviado_em,
-                d.erro_mensagem, j.nome AS jornalista_nome, v.nome AS veiculo_nome
+                d.erro_mensagem, j.nome AS jornalista_nome, v.nome AS veiculo_nome,
+                j.ativo AS jornalista_ativo, j.email AS jornalista_email
             FROM release_destinatarios d
             LEFT JOIN jornalistas j
                 ON j.id = d.jornalista_id AND j.assessoria_id = d.assessoria_id
@@ -261,6 +262,7 @@ class ReleaseService
         unset($destinatario);
 
         $release['destinatarios'] = $destinatarios;
+        $release['versao_edicao'] = self::versaoEdicao($release);
 
         return $release;
     }
@@ -293,8 +295,11 @@ class ReleaseService
             throw new \DomainException('Esta chave de rascunho já foi usada com outros dados.');
         }
 
-        return self::buscar($assessoriaId, $existente['id']);
-    }   
+        return [
+            ...self::buscar($assessoriaId, $existente['id']),
+            'cadastro_repetido' => true,
+        ];
+    }
 
     public static function validarDadosEnvio(mixed $dados): array
     {
@@ -464,7 +469,7 @@ class ReleaseService
             'sha256',
             json_encode($dadosAssinatura, JSON_THROW_ON_ERROR)
         );
-        
+
         $existente = self::cadastroExistente($assessoriaId, $usuarioId, $chave, $assinatura);
 
         if ($existente !== null) {
@@ -544,7 +549,7 @@ class ReleaseService
                 'chave_rascunho' => $chave,
                 'assinatura_cadastro' => $chave === null ? null : $assinatura,
             ]);
-            
+
             $releaseId = (int) $db->lastInsertId();
             $emails = [];
 
@@ -599,7 +604,7 @@ class ReleaseService
             throw $erro;
         }
     }
-    
+
     private static function emailDestinatario(array $contato): ?string
     {
         $email = strtolower(trim($contato['email'] ?? ''));
@@ -724,5 +729,604 @@ class ReleaseService
 
             throw $erro;
         }
+    }
+
+    private static function versaoEdicao(array $release): string
+    {
+        $campos = [
+            'id', 'cliente_id', 'template_id', 'template_codigo', 'titulo',
+            'assunto', 'primeira_linha', 'nome_remetente', 'responder_para',
+            'blocos', 'status', 'updated_at',
+        ];
+
+        $dados = array_intersect_key($release, array_flip($campos));
+
+        $dados['destinatarios'] = array_map(
+            static fn(array $d) => [
+                $d['id'],
+                $d['jornalista_id'],
+                $d['email'],
+                $d['status'],
+            ],
+            $release['destinatarios']
+        );
+
+        return hash(
+            'sha256',
+            json_encode($dados, JSON_THROW_ON_ERROR)
+        );
+    }
+
+    private static function conferirVersao(
+        array $release,
+        mixed $versao
+    ): void {
+        if (
+            !is_string($versao)
+            || !preg_match('/^[a-f0-9]{64}$/D', $versao)
+        ) {
+            throw new \InvalidArgumentException(
+                'Reabra o release para carregar sua versão atual.'
+            );
+        }
+
+        if (!hash_equals(self::versaoEdicao($release), $versao)) {
+            throw new \DomainException(
+                'Este release foi alterado em outra sessão. '
+                . 'Reabra-o para conferir os dados atuais.'
+            );
+        }
+    }
+
+    public static function atualizar(
+        int $assessoriaId,
+        mixed $id,
+        array $dados,
+        bool $podeAlterarDestinatarios,
+        bool $podeAlterarCliente,
+        ?array $proprietario = null,
+        bool $repeticaoSegura = false,
+        bool $somenteConfirmar = false
+    ): array {
+        $releaseId = self::id($id, 'Release');
+
+        $obrigatorios = [
+            'versao_edicao',
+            'titulo',
+            'cliente_id',
+            'jornalistas_ids',
+            'template_id',
+            'template_codigo',
+            'blocos',
+            'dados_envio',
+        ];
+
+        if (
+            array_diff($obrigatorios, array_keys($dados)) !== []
+            || array_diff(
+                array_keys($dados),
+                [...$obrigatorios, 'template_assinatura']
+            ) !== []
+        ) {
+            throw new \InvalidArgumentException(
+                'Envie todos os campos da edição, sem campos adicionais.'
+            );
+        }
+
+        $titulo = self::texto(
+            $dados['titulo'],
+            'Título interno',
+            150
+        );
+
+        $clienteId = $dados['cliente_id'] === null
+            ? null
+            : self::id($dados['cliente_id'], 'Cliente');
+
+        $templateId = $dados['template_id'] === null
+            ? null
+            : self::id($dados['template_id'], 'Template');
+
+        $codigo = self::texto(
+            $dados['template_codigo'] ?? '',
+            'Código do template',
+            50
+        );
+        $codigo = $codigo === '' ? null : $codigo;
+
+        $assinatura = self::texto(
+            $dados['template_assinatura'] ?? '',
+            'Assinatura do template',
+            64
+        );
+
+        if (
+            ($templateId !== null && $codigo !== null)
+            || (
+                $assinatura !== ''
+                && !preg_match('/^[a-f0-9]{64}$/D', $assinatura)
+            )
+            || (
+                $templateId === null
+                && $codigo === null
+                && $assinatura !== ''
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Seleção de template inválida.'
+            );
+        }
+
+        $ids = $dados['jornalistas_ids'];
+
+        if (
+            !is_array($ids)
+            || !array_is_list($ids)
+            || count($ids) > 10000
+        ) {
+            throw new \InvalidArgumentException(
+                'Selecione até 10.000 jornalistas.'
+            );
+        }
+
+        $ids = array_values(array_unique(array_map(
+            static fn($valor) => self::id($valor, 'Jornalista'),
+            $ids
+        )));
+
+        sort($ids, SORT_NUMERIC);
+
+        $blocos = ReleaseBlocosService::validar($dados['blocos']);
+        $envio = self::validarDadosEnvio($dados['dados_envio']);
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $linha = self::consultar(
+                'SELECT id, status, criado_por, chave_rascunho
+                FROM releases
+                WHERE id = :id AND assessoria_id = :a
+                FOR UPDATE',
+                ['id' => $releaseId, 'a' => $assessoriaId]
+            )->fetch();
+
+            if (!$linha) {
+                throw new \OutOfBoundsException(
+                    'Release não encontrado nesta assessoria.'
+                );
+            }
+            if (
+                $proprietario !== null
+                && (
+                    (int) $linha['criado_por'] !== $proprietario['usuario']
+                    || !hash_equals(
+                        (string) $linha['chave_rascunho'],
+                        $proprietario['chave']
+                    )
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Você não possui permissão para editar este rascunho.',
+                    403
+                );
+            }
+
+            $atual = self::buscar($assessoriaId, $releaseId);
+
+            if (
+                $atual['status'] !== 'RASCUNHO'
+                || array_filter(
+                    $atual['destinatarios'],
+                    static fn($d) => $d['status'] !== 'PENDENTE'
+                )
+            ) {
+                throw new \DomainException(
+                    'Somente rascunhos que ainda não entraram '
+                    . 'no envio podem ser editados.'
+                );
+            }
+
+            if (!$repeticaoSegura) {
+                self::conferirVersao(
+                    $atual,
+                    $dados['versao_edicao']
+                );
+            }
+
+            $idsAtuais = array_values(array_filter(
+                array_column($atual['destinatarios'], 'jornalista_id')
+            ));
+            sort($idsAtuais, SORT_NUMERIC);
+
+            if (!$podeAlterarDestinatarios && $ids !== $idsAtuais) {
+                throw new \RuntimeException(
+                    'Você não possui acesso ao Mailing '
+                    . 'para alterar os destinatários.',
+                    403
+                );
+            }
+
+            if (!$podeAlterarCliente && $clienteId !== $atual['cliente_id']) {
+                throw new \RuntimeException(
+                    'Você não possui acesso a Clientes para alterar o vínculo.',
+                    403
+                );
+            }
+
+            if (
+                $clienteId !== null
+                && $clienteId !== $atual['cliente_id']
+                && !Cliente::buscarPorId($clienteId, $assessoriaId)
+            ) {
+                throw new \OutOfBoundsException(
+                    'Cliente não encontrado nesta assessoria.'
+                );
+            }
+
+            $mesmoTemplate =
+                $templateId === $atual['template_id']
+                && $codigo === $atual['template_codigo'];
+
+            if ($repeticaoSegura && $mesmoTemplate) {
+                $assinatura = '';
+            }
+            // mantém o conteúdo salvo quando o modelo não foi trocado
+            if (
+                ($templateId !== null || $codigo !== null)
+                && (!$mesmoTemplate || $assinatura !== '')
+            ) {
+                TemplateService::buscarParaRelease(
+                    $assessoriaId,
+                    $templateId,
+                    $codigo,
+                    $assinatura
+                );
+            }
+
+            $destinatarios = [];
+
+            if ($podeAlterarDestinatarios && $ids !== []) {
+                $params = ['a' => $assessoriaId];
+                $marcadores = [];
+
+                foreach ($ids as $indice => $jornalistaId) {
+                    $nome = 'j' . $indice;
+                    $marcadores[] = ':' . $nome;
+                    $params[$nome] = $jornalistaId;
+                }
+
+                $contatos = self::consultar(
+                    'SELECT id, email, ativo
+                    FROM jornalistas
+                    WHERE assessoria_id = :a
+                    AND id IN (' . implode(', ', $marcadores) . ')
+                    ORDER BY id ASC
+                    LOCK IN SHARE MODE',
+                    $params
+                )->fetchAll();
+
+                if (count($contatos) !== count($ids)) {
+                    throw new \InvalidArgumentException(
+                        'Revise os destinatários: há contatos indisponíveis.'
+                    );
+                }
+
+                foreach ($contatos as $contato) {
+                    $email = self::emailDestinatario($contato);
+
+                    if ($email === null) {
+                        throw new \InvalidArgumentException(
+                            'Selecione contatos ativos com e-mail válido.'
+                        );
+                    }
+
+                    $destinatarios[$email] ??= (int) $contato['id'];
+                }
+            }
+
+            if ($repeticaoSegura) {
+                $atuais = [];
+
+                foreach ($atual['destinatarios'] as $destinatario) {
+                    $atuais[$destinatario['email']] =
+                        $destinatario['jornalista_id'];
+                }
+
+                $esperados = $podeAlterarDestinatarios
+                    ? $destinatarios
+                    : $atuais;
+
+                ksort($atuais);
+                ksort($esperados);
+
+                if (
+                    $titulo === $atual['titulo']
+                    && $clienteId === $atual['cliente_id']
+                    && $templateId === $atual['template_id']
+                    && $codigo === $atual['template_codigo']
+                    && $blocos == $atual['blocos']
+                    && $envio == array_intersect_key($atual, $envio)
+                    && $atuais === $esperados
+                ) {
+                    $db->commit();
+
+                    return $atual;
+                }
+
+                if ($somenteConfirmar) {
+                    throw new \DomainException(
+                        'O rascunho já possui outras alterações. '
+                        . 'Sua cópia local foi preservada.'
+                    );
+                }
+
+                self::conferirVersao(
+                    $atual,
+                    $dados['versao_edicao']
+                );
+            }
+
+            self::consultar(
+                'UPDATE releases
+                SET titulo = :titulo,
+                    cliente_id = :cliente,
+                    template_id = :template,
+                    template_codigo = :codigo,
+                    assunto = :assunto,
+                    primeira_linha = :primeira_linha,
+                    nome_remetente = :nome_remetente,
+                    responder_para = :responder_para,
+                    blocos_json = :blocos,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id AND assessoria_id = :a',
+                [
+                    'titulo' => $titulo,
+                    'cliente' => $clienteId,
+                    'template' => $templateId,
+                    'codigo' => $codigo,
+                    ...$envio,
+                    'blocos' => json_encode(
+                        $blocos,
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                    ),
+                    'id' => $releaseId,
+                    'a' => $assessoriaId,
+                ]
+            );
+
+            if ($podeAlterarDestinatarios) {
+                self::consultar(
+                    'DELETE FROM release_destinatarios
+                    WHERE release_id = :id AND assessoria_id = :a',
+                    ['id' => $releaseId, 'a' => $assessoriaId]
+                );
+
+                foreach ($destinatarios as $email => $jornalistaId) {
+                    self::consultar(
+                        'INSERT INTO release_destinatarios (
+                            assessoria_id, release_id, jornalista_id, email
+                        ) VALUES (:a, :release, :jornalista, :email)',
+                        [
+                            'a' => $assessoriaId,
+                            'release' => $releaseId,
+                            'jornalista' => $jornalistaId,
+                            'email' => $email,
+                        ]
+                    );
+                }
+            }
+
+            $release = self::buscar($assessoriaId, $releaseId);
+
+            $db->commit();
+
+            return $release;
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $erro;
+        }
+    }
+
+    public static function excluir(
+        int $assessoriaId,
+        mixed $id,
+        mixed $versao
+    ): void {
+        $releaseId = self::id($id, 'Release');
+
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $linha = self::consultar(
+                'SELECT id, status
+                FROM releases
+                WHERE id = :id AND assessoria_id = :a
+                FOR UPDATE',
+                ['id' => $releaseId, 'a' => $assessoriaId]
+            )->fetch();
+
+            if ($linha) {
+                $atual = self::buscar($assessoriaId, $releaseId);
+
+                if (
+                    !in_array(
+                        $atual['status'],
+                        ['RASCUNHO', 'ENVIADO', 'PARCIAL', 'FALHOU'],
+                        true
+                    )
+                    || array_filter(
+                        $atual['destinatarios'],
+                        static fn($d) => $d['status'] === 'ENVIANDO'
+                    )
+                ) {
+                    throw new \DomainException(
+                        'Não é possível excluir um release agendado, '
+                        . 'na fila ou em processamento.'
+                    );
+                }
+
+                self::conferirVersao($atual, $versao);
+
+                self::consultar(
+                    'DELETE FROM releases
+                    WHERE id = :id AND assessoria_id = :a',
+                    ['id' => $releaseId, 'a' => $assessoriaId]
+                );
+            }
+
+            $db->commit();
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $erro;
+        }
+    }
+
+    public static function salvarAutomaticamente(
+        int $assessoriaId,
+        int $usuarioId,
+        array $pedido,
+        bool $podeCriar,
+        bool $podeEditar,
+        bool $podeMailing,
+        bool $podeClientes
+    ): array {
+        $campos = ['id', 'chave', 'versao', 'dados'];
+
+        if (
+            array_diff($campos, array_keys($pedido))
+            || array_diff(array_keys($pedido), $campos)
+            || !is_array($pedido['dados'])
+            || !is_string($pedido['chave'])
+            || !preg_match(
+                '/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD',
+                $pedido['chave']
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Rascunho automático inválido.'
+            );
+        }
+
+        $permitidos = [
+            'titulo',
+            'cliente_id',
+            'jornalistas_ids',
+            'template_id',
+            'template_codigo',
+            'template_assinatura',
+            'blocos',
+            'dados_envio',
+        ];
+
+        $obrigatorios = array_diff(
+            $permitidos,
+            ['template_assinatura']
+        );
+
+        if (
+            array_diff(array_keys($pedido['dados']), $permitidos)
+            || array_diff(
+                $obrigatorios,
+                array_keys($pedido['dados'])
+            )
+            || (
+                $pedido['id'] !== null
+                && (
+                    !is_string($pedido['versao'])
+                    || !preg_match(
+                        '/^[a-f0-9]{64}$/D',
+                        $pedido['versao']
+                    )
+                )
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Dados incompletos para salvar o rascunho.'
+            );
+        }
+
+        $dados = $pedido['dados'];
+        $chave = strtolower($pedido['chave']);
+        $id = $pedido['id'];
+
+        if ($id === null) {
+            if (!$podeCriar) {
+                throw new \RuntimeException(
+                    'Você não possui permissão para criar releases.',
+                    403
+                );
+            }
+
+            if (
+                (
+                    ($dados['jornalistas_ids'] ?? []) !== []
+                    && !$podeMailing
+                )
+                || (
+                    ($dados['cliente_id'] ?? null) !== null
+                    && !$podeClientes
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Você não possui acesso aos vínculos selecionados.',
+                    403
+                );
+            }
+
+            $criado = self::criar(
+                $assessoriaId,
+                $usuarioId,
+                [
+                    ...$dados,
+                    'chave_rascunho' => $chave,
+                ]
+            );
+
+            if (empty($criado['cadastro_repetido'])) {
+                return $criado;
+            }
+
+            // Confirma a tentativa original sem substituir
+            // alterações feitas depois dela.
+            $id = $criado['id'];
+            $pedido['versao'] = $criado['versao_edicao'];
+            $somenteConfirmar = true;
+        } else {
+            $somenteConfirmar = false;
+
+            if (!$podeEditar && !$podeCriar) {
+                throw new \RuntimeException(
+                    'Você não possui permissão para salvar releases.',
+                    403
+                );
+            }
+        }
+
+        return self::atualizar(
+            $assessoriaId,
+            $id,
+            [
+                ...$dados,
+                'versao_edicao' => $pedido['versao'],
+            ],
+            $podeMailing,
+            $podeClientes,
+            $podeEditar
+                ? null
+                : [
+                    'usuario' => $usuarioId,
+                    'chave' => $chave,
+                ],
+            true,
+            $somenteConfirmar
+        );
     }
 }

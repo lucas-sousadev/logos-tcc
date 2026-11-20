@@ -8,9 +8,10 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useAbrirModulo, useAbrirTelaInicial } from "@/hooks/useNavegacaoModulos";
 import Text from "@/components/ui/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -48,7 +49,8 @@ interface Modulo {
 }
 
 export default function Dashboard() {
-  const router = useRouter();
+  const abrirModulo = useAbrirModulo();
+  const abrirTela = useAbrirTelaInicial();
   const { theme } = useTheme();
   const { listarFuncionarios, temPermissao } = useAuth();
 
@@ -191,7 +193,7 @@ export default function Dashboard() {
       titulo: "Relatórios",
       detalhe: "cadastrados",
       icone: "bar-chart-outline",
-      abrir: () => router.navigate("/relatorios"),
+      abrir: () => abrirModulo("relatorios"),
     });
   }
   if (podeVerClippings) {
@@ -200,7 +202,7 @@ export default function Dashboard() {
       titulo: "Clippings",
       detalhe: "cadastrados",
       icone: "newspaper-outline",
-      abrir: () => router.navigate("/clipping"),
+      abrir: () => abrirModulo("clipping"),
     });
   }
   if (podeVerVeiculos) {
@@ -209,7 +211,7 @@ export default function Dashboard() {
       titulo: "Veículos",
       detalhe: "cadastrados",
       icone: "radio-outline",
-      abrir: () => router.navigate("/veiculos"),
+      abrir: () => abrirModulo("veiculos"),
     });
   }
   if (podeVerClientes) {
@@ -218,7 +220,7 @@ export default function Dashboard() {
       titulo: "Clientes",
       detalhe: "ativos",
       icone: "business-outline",
-      abrir: () => router.navigate("/clientes"),
+      abrir: () => abrirModulo("clientes"),
     });
   }
   if (podeVerContatos) {
@@ -227,7 +229,7 @@ export default function Dashboard() {
       titulo: "Contatos",
       detalhe: "ativos",
       icone: "people-outline",
-      abrir: () => router.navigate("/mailing"),
+      abrir: () => abrirModulo("mailing"),
     });
   }
   if (podeVerFuncionarios) {
@@ -236,7 +238,7 @@ export default function Dashboard() {
       titulo: "Equipe",
       detalhe: "na assessoria",
       icone: "person-outline",
-      abrir: () => router.navigate("/funcionarios"),
+      abrir: () => abrirModulo("funcionarios"),
     });
   }
 
@@ -405,7 +407,7 @@ export default function Dashboard() {
                       }
                       activeOpacity={0.75}
                       onPress={() =>
-                        router.push({
+                        abrirTela({
                           pathname: "/relatorios/[id]",
                           params: {
                             id: String(relatorio.id),
@@ -444,7 +446,7 @@ export default function Dashboard() {
                   accessibilityRole="button"
                   activeOpacity={0.75}
                   onPress={() =>
-                    router.push({
+                    abrirTela({
                       pathname: "/relatorios",
                       params: revisoes.total > 0 ? { pendencias: "com" } : {},
                     })
@@ -489,7 +491,7 @@ export default function Dashboard() {
                   titulo="Novo relatório"
                   descricao="Escolha o cliente e o período"
                   icone="add-circle-outline"
-                  onPress={() => router.push("/relatorios/novo")}
+                  onPress={() => abrirTela("/relatorios/novo")}
                 />
               ) : null}
               {podeCriarClipping ? (
@@ -498,7 +500,7 @@ export default function Dashboard() {
                   descricao="Cadastre uma matéria"
                   icone="newspaper-outline"
                   onPress={() =>
-                    router.push({
+                    abrirTela({
                       pathname: "/clipping/novo",
                       params: { ano: String(new Date().getFullYear()) },
                     })
@@ -510,7 +512,7 @@ export default function Dashboard() {
                   titulo="Novo contato"
                   descricao="Cadastre um jornalista no mailing"
                   icone="person-add-outline"
-                  onPress={() => router.push("/mailing/novo")}
+                  onPress={() => abrirTela("/mailing/novo")}
                 />
               ) : null}
               {podeImportarClipping ? (
@@ -519,7 +521,7 @@ export default function Dashboard() {
                   descricao="Adicione matérias em lote"
                   icone="download-outline"
                   onPress={() =>
-                    router.push({
+                    abrirTela({
                       pathname: "/clipping/importar",
                       params: { ano: String(new Date().getFullYear()) },
                     })
@@ -531,7 +533,7 @@ export default function Dashboard() {
                   titulo="Convites"
                   descricao="Gerenciar e convidar colaboradores"
                   icone="mail-outline"
-                  onPress={() => router.navigate("/convites")}
+                  onPress={() => abrirModulo("convites")}
                 />
               ) : null}
             </View>

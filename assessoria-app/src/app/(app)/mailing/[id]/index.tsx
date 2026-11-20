@@ -11,14 +11,14 @@ import {
 } from "react-native";
 
 import { useEffect, useState, useRef } from "react";
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -58,6 +58,8 @@ interface Formulario {
 
 export default function JornalistaDetalhes() {
     const router = useRouter();
+  const navigation = useNavigation();
+  const retornar = useRetornoSeguro("/mailing");
     const { theme } = useTheme();
     const { temPermissao } = useAuth();
 
@@ -72,6 +74,16 @@ export default function JornalistaDetalhes() {
     }>();
 
     const id = Number(params.id);
+
+  const veiculoOrigemId = Number(
+    params.veiculo_id
+  );
+
+  const veioDaTelaVeiculo =
+    params.origem === "veiculo" &&
+    Number.isInteger(veiculoOrigemId) &&
+    veiculoOrigemId > 0;
+
 
     const [jornalista, setJornalista] =
         useState<Jornalista | null>(null);
@@ -324,13 +336,16 @@ export default function JornalistaDetalhes() {
       return alteracoesSemVeiculo + (veiculoAlterado() ? 1 : 0);
     }
 
+  const saida = useSaidaFormulario(camposAlterados().length > 0, salvando || excluindo);
+
     function handleBack() {
+    if (salvando || excluindo) return;
       if (!modoEdicao) {
         voltarParaOrigem();
         return;
       }
 
-      if (camposAlterados().length > 0) return;
+      if (camposAlterados().length > 0) { saida.confirmarSaida(cancelarEdicao); return; }
       cancelarEdicao();
     }
 
@@ -478,7 +493,7 @@ export default function JornalistaDetalhes() {
       window.alert(
         "Contato excluído com sucesso."
       );
-      voltarParaOrigem();
+      saida.concluirSaida(voltarParaOrigem);
       return;
     }
 
@@ -488,7 +503,7 @@ export default function JornalistaDetalhes() {
       [
         {
           text: "OK",
-          onPress: () => voltarParaOrigem(),
+          onPress: () => saida.concluirSaida(voltarParaOrigem),
         },
       ]
     );
@@ -535,6 +550,7 @@ export default function JornalistaDetalhes() {
             color={theme.primaria}
           />
         </View>
+      <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -615,16 +631,8 @@ export default function JornalistaDetalhes() {
     }
   }
 
-  const veiculoOrigemId = Number(
-    params.veiculo_id
-  );
-
-  const veioDaTelaVeiculo =
-    params.origem === "veiculo" &&
-    Number.isInteger(veiculoOrigemId) &&
-    veiculoOrigemId > 0;
-
   function voltarParaOrigem() {
+    if (!navigation.isFocused()) return;
     if (veioDaTelaVeiculo) {
       router.replace({
         pathname: "/veiculos/[id]",
@@ -636,7 +644,7 @@ export default function JornalistaDetalhes() {
       return;
     }
 
-    router.back();
+    retornar();
   }
 
   // modo de ediçao
@@ -1062,7 +1070,8 @@ export default function JornalistaDetalhes() {
           </>
         )}
       </ScrollView>
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

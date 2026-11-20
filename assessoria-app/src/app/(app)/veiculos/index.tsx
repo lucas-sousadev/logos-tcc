@@ -21,6 +21,8 @@ import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/Vei
 import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
 import ContadorLista from "@/components/ui/ContadorLista";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
+
 import { useListaPaginada } from "@/hooks/useListaPaginada";
 
 import { useTheme } from "@/contexts/ThemeContext";
@@ -631,30 +633,10 @@ export default function Veiculos() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <SelecaoListaButton
+                title="SELECIONAR VEÍCULOS"
                 onPress={abrirModoSelecao}
-                style={[
-                  styles.selectionStartButton,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={19}
-                  color={theme.texto}
-                />
-
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.selectionStartText,
-                    { color: theme.texto },
-                  ]}
-                >
-                  SELECIONAR VEÍCULOS
-                </Text>
-              </TouchableOpacity>
+              />
             )
           ) : null}
 
@@ -783,7 +765,7 @@ export default function Veiculos() {
                       <Ionicons
                         name="link-outline"
                         size={13}
-                        color="#F59E0B"
+                        color={theme.alteracao}
                       />
 
                       <Text
@@ -791,7 +773,7 @@ export default function Veiculos() {
                         numberOfLines={1}
                         style={[
                           styles.linkedText,
-                          { color: "#F59E0B" },
+                          { color: theme.alteracao },
                         ]}
                       >
                         {resumoVinculos(veiculo)}

@@ -22,6 +22,7 @@ import Text from "@/components/ui/Text";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
+import SelecaoListaButton from "../ui/SelecaoListaButton";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -518,31 +519,11 @@ export default function ContatosVinculados({
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={abrirModoSelecao}
+          <SelecaoListaButton
+            title="SELECIONAR CONTATOS"
             disabled={carregando || excluindo || Boolean(erro)}
-            style={[
-              styles.selectionStartButton,
-              { borderColor: theme.borda },
-            ]}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={19}
-              color={theme.texto}
-            />
-
-            <Text
-              weight="SemiBold"
-              style={[
-                styles.selectionStartText,
-                { color: theme.texto },
-              ]}
-            >
-              SELECIONAR CONTATOS
-            </Text>
-          </TouchableOpacity>
+            onPress={abrirModoSelecao}
+          />
         )
       ) : null}
 

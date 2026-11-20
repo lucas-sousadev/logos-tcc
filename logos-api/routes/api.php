@@ -722,8 +722,7 @@ $router->get(
 $router->get(
     "/api/releases/templates",
     "ReleaseController:templates",
-    "RELEASES.CRIAR",
-    middleware: [$authMiddleware, $permissionMiddleware]
+    middleware: [$authMiddleware]
 );
 
 $router->get(
@@ -731,6 +730,12 @@ $router->get(
     "ReleaseController:destinatarios",
     "MAILING.VISUALIZAR",
     middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases/rascunho",
+    "ReleaseController:salvarAutomaticamente",
+    middleware: [$authMiddleware]
 );
 
 $router->post(
@@ -750,8 +755,7 @@ $router->post(
 $router->post(
     "/api/releases/imagens",
     "ReleaseController:carregarImagem",
-    "RELEASES.CRIAR",
-    middleware: [$authMiddleware, $permissionMiddleware]
+    middleware: [$authMiddleware]
 );
 
 $router->get(
@@ -772,6 +776,20 @@ $router->get(
     "/api/releases/{id}/envio",
     "ReleaseController:situacaoEnvio",
     "RELEASES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->put(
+    "/api/releases/{id}",
+    "ReleaseController:atualizar",
+    "RELEASES.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->delete(
+    "/api/releases/{id}",
+    "ReleaseController:excluir",
+    "RELEASES.EXCLUIR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 

@@ -22,6 +22,7 @@ export interface ReleasePendente {
   conteudoEditado: boolean;
   acao?: AcaoCadastroRelease;
   release_id?: number;
+  versao_envio?: string;
 }
 
 function prefixo(conta: string) {
@@ -79,6 +80,7 @@ export async function lerReleasePendente(conta: string): Promise<ReleasePendente
       ) ||
       !Array.isArray(tentativa.selecionados) ||
       !tentativa.dados.dados_envio ||
+      (tentativa.versao_envio !== undefined && !/^[a-f0-9]{64}$/.test(tentativa.versao_envio)) ||
       (
         tentativa.acao !== undefined &&
         !["RASCUNHO", "ENVIAR"].includes(tentativa.acao)

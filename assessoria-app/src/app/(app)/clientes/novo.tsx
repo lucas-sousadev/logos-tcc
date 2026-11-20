@@ -6,9 +6,11 @@ import {
 } from "react-native";
 
 import { useState } from "react";
-import { useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -42,7 +44,6 @@ const formularioInicial: DadosClienteParaValidacao = {
 };
 
 export default function NovoCliente() {
-  const router = useRouter();
   const { theme } = useTheme();
 
   const [formulario, setFormulario] = useState(
@@ -58,6 +59,9 @@ export default function NovoCliente() {
   const [erroGeral, setErroGeral] = useState("");
 
   const [salvando, setSalvando] = useState(false);
+
+  const retornar = useRetornoSeguro("/clientes");
+  const saida = useSaidaFormulario(JSON.stringify(formulario) !== JSON.stringify(formularioInicial) || !ativo || logo !== null, salvando);
 
   function alterarCampo(
     campo: CampoCliente,
@@ -160,7 +164,7 @@ export default function NovoCliente() {
         logo ?? undefined
       );
 
-      router.dismissTo("/clientes");
+      saida.concluirSaida(retornar);
     } catch (error) {
       mostrarErroApi(
         error instanceof Error
@@ -434,12 +438,7 @@ export default function NovoCliente() {
             title="CANCELAR"
             variant="outline"
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-                return;
-              }
-
-              router.dismissTo("/clientes");
+              retornar();
             }}
             style={styles.actionButton}
           />
@@ -452,7 +451,8 @@ export default function NovoCliente() {
           />
         </View>
       </ScrollView>
-    </View>
+    <FeedbackAlert {...saida.alertaProps} />
+      </View>
   );
 }
 

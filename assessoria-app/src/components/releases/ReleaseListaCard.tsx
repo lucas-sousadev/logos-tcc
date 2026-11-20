@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
 import {
@@ -14,11 +15,13 @@ import {
 interface Props {
   release: ResumoRelease;
   onPress: () => void;
+  onEditar?: () => void;
 }
 
 export default function ReleaseListaCard({
   release,
   onPress,
+  onEditar,
 }: Props) {
   const { theme } = useTheme();
 
@@ -68,159 +71,173 @@ export default function ReleaseListaCard({
   ).slice(0, 10);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        titulo +
-        ". " +
-        cliente +
-        ". " +
-        ROTULOS_STATUS[release.status] +
-        ". " +
-        release.total_destinatarios +
-        " destinatários."
-      }
-      accessibilityHint="Abrir detalhes do release"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          borderColor: theme.borda + "45",
-          backgroundColor: pressed
-            ? theme.primaria + "08"
-            : theme.backgroundSecundario,
-        },
-      ]}
-    >
-      <View style={styles.topo}>
-        <View
-          style={[
-            styles.status,
-            { backgroundColor: visual.cor + "12" },
-          ]}
-        >
-          <Ionicons
-            name={visual.icone}
-            size={13}
-            color={visual.cor}
-          />
-
-          <Text
-            weight="SemiBold"
-            style={[
-              styles.statusTexto,
-              { color: visual.cor },
-            ]}
-          >
-            {ROTULOS_STATUS[release.status]}
-          </Text>
-        </View>
-
-        <View style={styles.data}>
-          <Ionicons
-            name="calendar-outline"
-            size={12}
-            color={theme.textoSub}
-          />
-
-          <Text
-            style={[
-              styles.textoMenor,
-              { color: theme.textoSub },
-            ]}
-          >
-            {dataISOParaBR(data)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.tituloLinha}>
-        <Text
-          weight="Bold"
-          numberOfLines={2}
-          style={styles.titulo}
-        >
-          {titulo}
-        </Text>
-
-        <View
-          style={[
-            styles.abrir,
-            { backgroundColor: theme.primaria + "0C" },
-          ]}
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={17}
-            color={theme.textoTerciaria}
-          />
-        </View>
-      </View>
-
-      <View style={styles.cliente}>
-        <Ionicons
-          name="business-outline"
-          size={14}
-          color={theme.textoSub}
-        />
-
-        <Text
-          weight="Medium"
-          numberOfLines={1}
-          style={[
-            styles.clienteNome,
-            { color: theme.textoSub },
-          ]}
-        >
-          {cliente}
-        </Text>
-      </View>
-
       <View
         style={[
-          styles.rodape,
-          { borderTopColor: theme.borda + "25" },
+          styles.card,
+          {
+            borderColor: theme.borda + "45",
+            backgroundColor: theme.backgroundSecundario,
+          },
         ]}
       >
-        <View style={styles.destinatarios}>
-          <Ionicons
-            name="people-outline"
-            size={14}
-            color={theme.textoTerciaria}
-          />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            titulo +
+            ". " +
+            cliente +
+            ". " +
+            ROTULOS_STATUS[release.status] +
+            ". " +
+            release.total_destinatarios +
+            " destinatários."
+          }
+          accessibilityHint="Abrir detalhes do release"
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.conteudo,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <View style={styles.topo}>
+            <View
+              style={[
+                styles.status,
+                { backgroundColor: visual.cor + "12" },
+              ]}
+            >
+              <Ionicons
+                name={visual.icone}
+                size={13}
+                color={visual.cor}
+              />
 
-          <Text
+              <Text
+                weight="SemiBold"
+                style={[
+                  styles.statusTexto,
+                  { color: visual.cor },
+                ]}
+              >
+                {ROTULOS_STATUS[release.status]}
+              </Text>
+            </View>
+
+            <View style={styles.data}>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color={theme.textoSub}
+              />
+
+              <Text
+                style={[
+                  styles.textoMenor,
+                  { color: theme.textoSub },
+                ]}
+              >
+                {dataISOParaBR(data)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.tituloLinha}>
+            <Text
+              weight="Bold"
+              numberOfLines={2}
+              style={styles.titulo}
+            >
+              {titulo}
+            </Text>
+
+            <View
+              style={[
+                styles.abrir,
+                { backgroundColor: theme.primaria + "0C" },
+              ]}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={17}
+                color={theme.textoTerciaria}
+              />
+            </View>
+          </View>
+
+          <View style={styles.cliente}>
+            <Ionicons
+              name="business-outline"
+              size={14}
+              color={theme.textoSub}
+            />
+
+            <Text
+              weight="Medium"
+              numberOfLines={1}
+              style={[
+                styles.clienteNome,
+                { color: theme.textoSub },
+              ]}
+            >
+              {cliente}
+            </Text>
+          </View>
+
+          <View
             style={[
-              styles.textoMenor,
-              { color: theme.textoSub },
+              styles.rodape,
+              { borderTopColor: theme.borda + "25" },
             ]}
           >
-            {release.total_destinatarios}{" "}
-            {release.total_destinatarios === 1
-              ? "destinatário"
-              : "destinatários"}
-          </Text>
-        </View>
+            <View style={styles.destinatarios}>
+              <Ionicons
+                name="people-outline"
+                size={14}
+                color={theme.textoTerciaria}
+              />
 
-        <View style={styles.autor}>
-          <Ionicons
-            name="person-outline"
-            size={12}
-            color={theme.textoSub}
-          />
+              <Text
+                style={[
+                  styles.textoMenor,
+                  { color: theme.textoSub },
+                ]}
+              >
+                {release.total_destinatarios}{" "}
+                {release.total_destinatarios === 1
+                  ? "destinatário"
+                  : "destinatários"}
+              </Text>
+            </View>
 
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.autorNome,
-              { color: theme.textoSub },
-            ]}
-          >
-            {release.criado_por_nome}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+            <View style={styles.autor}>
+              <Ionicons
+                name="person-outline"
+                size={12}
+                color={theme.textoSub}
+              />
+
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.autorNome,
+                  { color: theme.textoSub },
+                ]}
+              >
+                {release.criado_por_nome}
+              </Text>
+            </View>
+          </View>
+          </Pressable>
+
+      {release.status === "RASCUNHO" && onEditar ? (
+        <Button
+          title="EDITAR RASCUNHO"
+          icon="create-outline"
+          size="small"
+          onPress={onEditar}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -229,6 +246,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
+    gap: 10,
+  },
+  conteudo: {
     gap: 10,
   },
   topo: {

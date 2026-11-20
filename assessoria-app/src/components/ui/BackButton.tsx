@@ -5,7 +5,7 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { useRouter } from "expo-router";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
@@ -21,7 +21,7 @@ export default function BackButton({
   style,
   color,
 }: BackButtonProps) {
-  const router = useRouter();
+  const retornar = useRetornoSeguro("/entrar");
   const { theme } = useTheme();
 
   function handlePress() {
@@ -30,7 +30,7 @@ export default function BackButton({
       return;
     }
 
-    router.back();
+    retornar();
   }
 
   return (

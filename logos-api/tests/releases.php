@@ -211,6 +211,30 @@ try {
     conferirRelease($status === 200 && $detalhe['release']['total_destinatarios'] === 1, 'A rota consulta o rascunho cadastrado.');
     conferirRelease(requisitarRelease($url . '/' . $outro['id'], 'GET', $token)[0] === 404, 'A rota protege registros de outra assessoria.');
     conferirRelease(requisitarRelease($url . '?status=RASCUNHO&limit=1', 'GET', $token)[0] === 200, 'A rota lista com filtros e paginação.');
+
+    $automatico = [
+        'id' => null, 'chave' => '00000000-0000-4000-8000-000000000099', 'versao' => null,
+        'dados' => [
+            'titulo' => 'Automático', 'cliente_id' => null, 'jornalistas_ids' => [],
+            'template_id' => null, 'template_codigo' => null, 'template_assinatura' => '', 'blocos' => [],
+            'dados_envio' => ['assunto' => '', 'primeira_linha' => '', 'nome_remetente' => '', 'responder_para' => ''],
+        ],
+    ];
+    conferirRelease(requisitarRelease($url . '/rascunho', 'POST', null, json_encode($automatico))[0] === 401, 'O salvamento automático exige autenticação.');
+    [$statusAuto, $salvoAuto] = requisitarRelease($url . '/rascunho', 'POST', $semPermissao, json_encode($automatico));
+    conferirRelease($statusAuto === 200 && $salvoAuto['release']['status'] === 'RASCUNHO', 'Criar permite iniciar o próprio rascunho automático.');
+    [$statusAuto, $repetidoAuto] = requisitarRelease($url . '/rascunho', 'POST', $semPermissao, json_encode($automatico));
+    conferirRelease($statusAuto === 200 && $repetidoAuto['release']['id'] === $salvoAuto['release']['id'], 'A rota automática não duplica uma tentativa repetida.');
+    $automatico['id'] = $salvoAuto['release']['id'];
+    $automatico['versao'] = $salvoAuto['release']['versao_edicao'];
+    $automatico['dados']['titulo'] = 'Continuado pelo criador';
+    conferirRelease(requisitarRelease($url . '/rascunho', 'POST', $semPermissao, json_encode($automatico))[0] === 200, 'O criador continua seu rascunho sem receber permissão geral de editar.');
+    $alheio = $automatico;
+    $alheio['id'] = $resposta['release']['id'];
+    $alheio['versao'] = $detalhe['release']['versao_edicao'];
+    conferirRelease(requisitarRelease($url . '/rascunho', 'POST', $semPermissao, json_encode($alheio))[0] === 403, 'Criar não permite alterar o rascunho de outro usuário.');
+    conferirRelease(requisitarRelease($url . '/' . $resposta['release']['id'] . '/enviar', 'POST', $token,
+        json_encode(['versao_edicao' => str_repeat('0', 64)]))[0] === 409, 'O envio rejeita uma versão diferente da revisada antes de transmitir e-mail.');
     echo "OK: rotas HTTP, autenticação, permissões e respostas de erro.\n";
 } finally {
     if (is_resource($processo)) {
