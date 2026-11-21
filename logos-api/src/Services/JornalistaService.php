@@ -977,7 +977,7 @@ class JornalistaService
         int $id,
         int $assessoriaId,
         array $dados
-    ): void {
+    ): array {
         $existente =
             Jornalista::buscarPorId(
                 $id,
@@ -1027,7 +1027,20 @@ class JornalistaService
                 $ativo
             );
 
+            $atualizado = Jornalista::buscarPorId(
+                $id,
+                $assessoriaId
+            );
+
+            if (!$atualizado) {
+                throw new \RuntimeException(
+                    'Não foi possível confirmar os dados atualizados.'
+                );
+            }
+
             $pdo->commit();
+
+            return $atualizado;
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

@@ -83,7 +83,18 @@ const AVISOS_CAPTURA: Record<AvisoCaptura, string> = {
     "Verifique a imagem antes de recortar ou refaça a captura.",
 };
 
-export default function CapturaPaginaModal({
+export default function CapturaPaginaModal(props: Props) {
+  if (!props.visivel) return null;
+
+  return (
+    <SessaoCaptura
+      key={JSON.stringify([props.link, props.origem])}
+      {...props}
+    />
+  );
+}
+
+function SessaoCaptura({
   visivel,
   link,
   origem,
@@ -93,20 +104,27 @@ export default function CapturaPaginaModal({
 }: Props) {
   const { theme } = useTheme();
   const tela = useWindowDimensions();
-  const inicio = useRef({ x: 0, y: 0 });
+  const gestoRecorte = useRef<{
+    identificador: GestureResponderEvent["nativeEvent"]["identifier"];
+    pageX: number;
+    pageY: number;
+    x: number;
+    y: number;
+    largura: number;
+    altura: number;
+    anterior: Area | null;
+    atual: Area | null;
+  } | null>(null);
 
   const [captura, setCaptura] = useState<CapturaPagina | null>(null);
   const [area, setArea] = useState<Area | null>(null);
   const [modo, setModo] = useState<"recortar" | "navegar">("recortar");
   const [zoom, setZoom] = useState(1);
-  useEffect(() => {
-    if (visivel) setZoom(1);
-  }, [visivel, link, origem]);
   const [trecho, setTrecho] = useState(0);
   const [trechoDigitado, setTrechoDigitado] = useState("1");
   const [erroTrecho, setErroTrecho] = useState("");
   const [tentativa, setTentativa] = useState(0);
-  const [carregando, setCarregando] = useState(false);
+  const [carregando, setCarregando] = useState(true);
   const [mensagemCaptura, setMensagemCaptura] = useState("Solicitando captura...");
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
@@ -118,34 +136,19 @@ export default function CapturaPaginaModal({
       : null;
 
   useEffect(() => {
-    if (!visivel) {
-      setCaptura(null);
-      setTrecho(0);
-      setTrechoDigitado("1");
-      setErroTrecho("");
-      return;
-    }
-
     let ativo = true;
     const controlador = new AbortController();
-
-    setCaptura(null);
-    setArea(null);
-    setModo("recortar");
-    setErro("");
-    setCarregando(true);
-    setMensagemCaptura("Solicitando captura...");
 
     capturarPagina(link, origem, trecho, {
       signal: controlador.signal,
       onProgresso: (estado) => {
-        if (ativo) {
-          setMensagemCaptura(
-            estado === "aguardando"
-              ? "Aguardando uma vaga para capturar..."
-              : "Carregando a página para captura..."
-          );
-        }
+        if (!ativo) return;
+
+        setMensagemCaptura(
+          estado === "aguardando"
+            ? "Aguardando uma vaga para capturar..."
+            : "Carregando a página para captura..."
+        );
       },
     })
       .then((resultado) => {
@@ -156,13 +159,13 @@ export default function CapturaPaginaModal({
         }
       })
       .catch((falha) => {
-        if (ativo) {
-          setErro(
-            falha instanceof Error
-              ? falha.message
-              : "Não foi possível capturar a página."
-          );
-        }
+        if (!ativo) return;
+
+        setErro(
+          falha instanceof Error
+            ? falha.message
+            : "Não foi possível capturar a página."
+        );
       })
       .finally(() => {
         if (ativo) setCarregando(false);
@@ -175,11 +178,6 @@ export default function CapturaPaginaModal({
   }, [visivel, link, origem, tentativa, trecho]);
 
   useEffect(() => {
-    setTrechoDigitado(String(trecho + 1));
-    setErroTrecho("");
-  }, [trecho]);
-
-  useEffect(() => {
     return () => captura?.liberar();
   }, [captura]);
 
@@ -188,6 +186,16 @@ export default function CapturaPaginaModal({
   const alturaImagem = captura
     ? larguraImagem * captura.altura / captura.largura
     : 0;
+  const podeRecortar =
+    Boolean(captura) &&
+    modo === "recortar" &&
+    !processando &&
+    larguraImagem > 0 &&
+    alturaImagem > 0;
+
+  useEffect(() => {
+    gestoRecorte.current = null;
+  }, [visivel, captura?.uri, modo, zoom]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || !visivel) return;
@@ -206,52 +214,137 @@ export default function CapturaPaginaModal({
     };
   }, [visivel]);
 
-  function irParaTrecho() {
-    if (carregando || processando) return;
+  function consultarTrecho(novoTrecho: number) {
+  if (carregando || processando) return;
 
-    const numero = Number(trechoDigitado);
-    if (
-      !/^\d{1,3}$/.test(trechoDigitado) ||
-      numero < 1 ||
-      numero > TOTAL_TRECHOS
-    ) {
-      setErroTrecho(`Informe um trecho de 1 a ${TOTAL_TRECHOS}.`);
-      return;
-    }
+  Keyboard.dismiss();
+  gestoRecorte.current = null;
 
-    Keyboard.dismiss();
-    setErroTrecho("");
+  setCaptura(null);
+  setArea(null);
+  setModo("recortar");
+  setErro("");
+  setErroTrecho("");
+  setCarregando(true);
+  setMensagemCaptura("Solicitando captura...");
+  setTrechoDigitado(String(novoTrecho + 1));
 
-    if (numero - 1 === trecho) {
-      setTentativa((atual) => atual + 1);
-    } else {
-      setTrecho(numero - 1);
-    }
+  if (novoTrecho === trecho) {
+    setTentativa((atual) => atual + 1);
+  } else {
+    setTrecho(novoTrecho);
+  }
+}
+
+function irParaTrecho() {
+  if (carregando || processando) return;
+
+  const numero = Number(trechoDigitado);
+
+  if (
+    !/^\d{1,3}$/.test(trechoDigitado) ||
+    numero < 1 ||
+    numero > TOTAL_TRECHOS
+  ) {
+    setErroTrecho(
+      `Informe um trecho de 1 a ${TOTAL_TRECHOS}.`
+    );
+    return;
   }
 
-  function ponto(evento: GestureResponderEvent) {
-    return {
-      x: limitar(evento.nativeEvent.locationX / larguraImagem),
-      y: limitar(evento.nativeEvent.locationY / alturaImagem),
-    };
-  }
+  consultarTrecho(numero - 1);
+}
 
-  function iniciarRecorte(evento: GestureResponderEvent) {
-    inicio.current = ponto(evento);
-    setArea(null);
-    setErro("");
-  }
+function iniciarRecorte(evento: GestureResponderEvent) {
+  if (!podeRecortar || gestoRecorte.current) return;
 
-  function moverRecorte(evento: GestureResponderEvent) {
-    const atual = ponto(evento);
+  const toque =
+    evento.nativeEvent.touches?.[0] ??
+    evento.nativeEvent;
 
-    setArea({
-      x: Math.min(inicio.current.x, atual.x),
-      y: Math.min(inicio.current.y, atual.y),
-      largura: Math.abs(atual.x - inicio.current.x),
-      altura: Math.abs(atual.y - inicio.current.y),
-    });
+  gestoRecorte.current = {
+    identificador: toque.identifier,
+    pageX: toque.pageX,
+    pageY: toque.pageY,
+    x: limitar(toque.locationX / larguraImagem),
+    y: limitar(toque.locationY / alturaImagem),
+    largura: larguraImagem,
+    altura: alturaImagem,
+    anterior: area,
+    atual: null,
+  };
+
+  setErro("");
+}
+
+function moverRecorte(evento: GestureResponderEvent) {
+  const gesto = gestoRecorte.current;
+
+  if (!gesto || !podeRecortar) return;
+
+  const toques = [
+    ...(evento.nativeEvent.touches ?? []),
+    ...(evento.nativeEvent.changedTouches ?? []),
+    evento.nativeEvent,
+  ];
+
+  const toque = toques.find(
+    (item) => item.identifier === gesto.identificador
+  );
+
+  if (!toque) return;
+
+  const x = limitar(
+    gesto.x +
+      (toque.pageX - gesto.pageX) / gesto.largura
+  );
+
+  const y = limitar(
+    gesto.y +
+      (toque.pageY - gesto.pageY) / gesto.altura
+  );
+
+  const deslocamento = Math.hypot(
+    (x - gesto.x) * gesto.largura,
+    (y - gesto.y) * gesto.altura
+  );
+
+  if (deslocamento < 4) return;
+
+  const proxima = {
+    x: Math.min(gesto.x, x),
+    y: Math.min(gesto.y, y),
+    largura: Math.abs(x - gesto.x),
+    altura: Math.abs(y - gesto.y),
+  };
+
+  gesto.atual = proxima;
+  setArea(proxima);
+}
+
+function finalizarRecorte(evento: GestureResponderEvent) {
+  moverRecorte(evento);
+
+  const gesto = gestoRecorte.current;
+  if (!gesto) return;
+
+  const valida =
+    gesto.atual &&
+    gesto.atual.largura * gesto.largura >= 4 &&
+    gesto.atual.altura * gesto.altura >= 4;
+
+  setArea(valida ? gesto.atual : gesto.anterior);
+  gestoRecorte.current = null;
+}
+
+function cancelarRecorte() {
+  const gesto = gestoRecorte.current;
+  gestoRecorte.current = null;
+
+  if (gesto) {
+    setArea(gesto.anterior);
   }
+}
 
   async function confirmar() {
     if (!captura || !area || processando) return;
@@ -379,6 +472,7 @@ export default function CapturaPaginaModal({
                         : theme.background,
                   },
                 ]}
+                disabled={processando}
               >
                 <Text
                   weight="SemiBold"
@@ -404,7 +498,7 @@ export default function CapturaPaginaModal({
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Diminuir zoom"
-              disabled={zoom <= ZOOM_MIN}
+              disabled={processando || zoom <= ZOOM_MIN}
               onPress={() =>
                 setZoom((atual) => Math.max(ZOOM_MIN, atual - ZOOM_PASSO))
               }
@@ -422,7 +516,7 @@ export default function CapturaPaginaModal({
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Aumentar zoom"
-              disabled={zoom >= ZOOM_MAX}
+              disabled={processando || zoom >= ZOOM_MAX}
               onPress={() =>
                 setZoom((atual) => Math.min(ZOOM_MAX, atual + ZOOM_PASSO))
               }
@@ -454,6 +548,7 @@ export default function CapturaPaginaModal({
                 ? ({ overscrollBehaviorX: "contain" } as any)
                 : null,
             ]}
+            scrollEnabled={modo === "navegar" && !processando}
           >
             <ScrollView
               nestedScrollEnabled
@@ -462,6 +557,7 @@ export default function CapturaPaginaModal({
                 width: Math.max(larguraBase, larguraImagem),
                 maxHeight: Math.min(tela.height * 0.58, 650),
               }}
+              scrollEnabled={modo === "navegar" && !processando}
             >
               <View
                 style={[
@@ -471,6 +567,15 @@ export default function CapturaPaginaModal({
                     height: alturaImagem,
                   },
                 ]}
+                pointerEvents={podeRecortar ? "auto" : "none"}
+                onStartShouldSetResponder={() => podeRecortar}
+                onStartShouldSetResponderCapture={() => podeRecortar}
+                onMoveShouldSetResponder={() => podeRecortar}
+                onResponderTerminationRequest={() => !podeRecortar}
+                onResponderGrant={iniciarRecorte}
+                onResponderMove={moverRecorte}
+                onResponderRelease={finalizarRecorte}
+                onResponderTerminate={cancelarRecorte}
               >
                 <Image
                   source={{ uri: captura.uri }}
@@ -523,9 +628,7 @@ export default function CapturaPaginaModal({
           <TouchableOpacity
             accessibilityRole="button"
             disabled={processando}
-            onPress={() =>
-              setTentativa((atual) => atual + 1)
-            }
+            onPress={() => consultarTrecho(trecho)}
             style={styles.refazer}
           >
             <Text
@@ -600,10 +703,9 @@ export default function CapturaPaginaModal({
             accessibilityRole="button"
             accessibilityLabel="Capturar trecho anterior da página"
             disabled={trecho === 0 || carregando || processando}
-            onPress={() => {
-              Keyboard.dismiss();
-              setTrecho((atual) => Math.max(0, atual - 1));
-            }}
+            onPress={() =>
+              consultarTrecho(Math.max(0, trecho - 1))
+            }
             style={[
               styles.botaoTrecho,
               {
@@ -683,10 +785,11 @@ export default function CapturaPaginaModal({
             disabled={
               !captura?.temProxima || carregando || processando
             }
-            onPress={() => {
-              Keyboard.dismiss();
-              setTrecho((atual) => Math.min(TOTAL_TRECHOS - 1, atual + 1));
-            }}
+            onPress={() =>
+              consultarTrecho(
+                Math.min(TOTAL_TRECHOS - 1, trecho + 1)
+              )
+            }
             style={[
               styles.botaoTrecho,
               {

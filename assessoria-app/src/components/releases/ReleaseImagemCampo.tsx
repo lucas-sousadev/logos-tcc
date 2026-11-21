@@ -7,7 +7,7 @@ import {
   Platform,
   type TextInput,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
+import * as DocumentPicker from "@/services/seletorArquivos";
 import { Ionicons } from "@expo/vector-icons";
 
 import Button from "@/components/ui/Button";

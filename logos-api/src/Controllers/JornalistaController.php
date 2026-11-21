@@ -629,7 +629,7 @@ class JornalistaController
         }
 
         try {
-            JornalistaService::atualizar(
+            $jornalista = JornalistaService::atualizar(
                 (int) $id,
                 (int) $usuario->assessoria_id,
                 $body
@@ -637,8 +637,8 @@ class JornalistaController
 
             echo json_encode([
                 'success' => true,
-                'message' =>
-                    'Contato atualizado com sucesso.'
+                'message' => 'Contato atualizado com sucesso.',
+                'jornalista' => $jornalista,
             ]);
 
         } catch (\InvalidArgumentException $e) {

@@ -12,7 +12,7 @@ import {
   type TextInput
 } from "react-native";
 import { useNavigation, useRouter, useLocalSearchParams } from "expo-router";
-import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
+import { useIsFocused, usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import * as Crypto from "expo-crypto";
 
 import Header from "@/components/layout/Header";
@@ -39,6 +39,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRascunhoRelease } from "@/hooks/useRascunhoRelease";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
+import { ehNavegacaoPelaBarra } from "@/utils/navegacaoModulos";
+import { pendenciasEnvioRelease,} from "@/utils/validarEnvioRelease";
 import type {
   DestinatarioRelease,
   TemplateRelease,
@@ -50,7 +52,7 @@ import {
   solicitarEnvioRelease,
   ErroApiRelease,
 } from "@/services/api/release";
-import { encerrarCopiaRelease } from "@/services/rascunhoRelease";
+import { descartarCopiaRelease, encerrarCopiaRelease } from "@/services/rascunhoRelease";
 
 import {
   guardarReleasePendente,
@@ -106,6 +108,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const router = useRouter();
   const navigation = useNavigation();
   const retornar = useRetornoSeguro("/releases");
+  const focada = useIsFocused();
   const scrollRef = useRef<ScrollView>(null);
   const conteudoScrollRef = useRef<View>(null);
   const { theme } = useTheme();
@@ -159,6 +162,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const [erro, setErro] = useState("");
   const [avisoSaidaAberto, setAvisoSaidaAberto] = useState(false);
   const [confirmarRecuperacao, setConfirmarRecuperacao] = useState(false);
+  const [saidaAposSalvar, setSaidaAposSalvar] = useState<NavigationAction | null>(null);
 
   // resultados
   const [resultado, setResultado] = useState<{
@@ -170,6 +174,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
   const trava = useRef(false);
   const acaoSaida = useRef<NavigationAction | null>(null);
+  const fechamentoExplicito = useRef(false);
   const confirmando = pendente !== null;
   const podeCriar = temPermissao("RELEASES", "CRIAR");
   const podeEnviar =
@@ -265,6 +270,14 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       : null,
   };
 
+  const pendenciasEnvio = pendenciasEnvioRelease({
+    titulo,
+    templateDefinido: Boolean(template),
+    dadosEnvio,
+    blocos,
+    destinatarios: selecionados,
+  });
+
   const automatico = useRascunhoRelease({
     conta,
     identidade: "novo",
@@ -279,7 +292,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       !salvando &&
       podeCriar,
     ocupado:
-      imagemOcupada || confirmacaoEnvio,
+      imagemOcupada || confirmacaoEnvio || avisoSaidaAberto,
     onRecuperar: (registro) => {
       if (!pendente) {
         restaurarFormulario(registro);
@@ -294,17 +307,63 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     imagemOcupada ||
     confirmacaoEnvio ||
     confirmarRecuperacao ||
+    avisoSaidaAberto ||
     (
       !confirmando &&
       !automatico.pronto
     );
-  usePreventRemove(salvando || imagemOcupada || temAlteracoesNaoSalvas, ({ data }) => {
-    if (trava.current || imagemOcupada || acaoSaida.current) return;
+  function continuarEditando() {
+    acaoSaida.current = null;
+    fechamentoExplicito.current = false;
+    setAvisoSaidaAberto(false);
+  }
+
+  async function preservarESair() {
+    if (trava.current) return;
+    trava.current = true;
+    setSalvando(true);
+    try {
+      if (automatico.pronto) {
+        if (temAlteracoesNaoSalvas || automatico.temRascunho || etapa !== "DESTINO") {
+          await automatico.guardarLocal();
+        }
+      } else if (!confirmando) {
+        throw new Error("Aguarde a recuperação do rascunho antes de sair.");
+      }
+      const acao = acaoSaida.current;
+      continuarEditando();
+      if (acao && navigation.isFocused()) navigation.dispatch(acao);
+    } catch (falha) {
+      continuarEditando();
+      setErro(falha instanceof Error ? falha.message : "Não foi possível preservar o rascunho neste aparelho.");
+    } finally { trava.current = false; setSalvando(false); }
+  }
+
+  const contaAtual = usuario ? usuario.assessoria_id + "-" + usuario.id : null;
+  usePreventRemove(Boolean(conta && contaAtual === conta && focada && !sucesso && (
+    salvando || imagemOcupada || temAlteracoesNaoSalvas || automatico.temRascunho ||
+    confirmando || etapa !== "DESTINO" || automatico.pronto
+  )), ({ data }) => {
+    if (trava.current || acaoSaida.current) return;
+    const pelaBarra = ehNavegacaoPelaBarra(data.action);
+    if (imagemOcupada && !pelaBarra) return;
 
     acaoSaida.current = data.action;
     Keyboard.dismiss();
-    setAvisoSaidaAberto(true);
+    if (pelaBarra || (fechamentoExplicito.current && (
+      temAlteracoesNaoSalvas || automatico.temRascunho || confirmando || etapa !== "DESTINO"
+    ))) {
+      setSeletorAberto(false);
+      setTrocaTemplate(null);
+      setConfirmacaoEnvio(false);
+      setConfirmarRecuperacao(false);
+      setAvisoSaidaAberto(true);
+    } else void preservarESair();
   });
+
+  useEffect(() => {
+    if (sucesso && saidaAposSalvar && !salvando && focada) navigation.dispatch(saidaAposSalvar);
+  }, [sucesso, saidaAposSalvar, salvando, focada, navigation]);
 
   useEffect(() => {
     if (!conta) return;
@@ -345,7 +404,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
   async function salvar(
     acao: AcaoCadastroRelease = "RASCUNHO"
-  ) {
+  ): Promise<boolean> {
     if (
       !conta ||
       trava.current ||
@@ -354,14 +413,14 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       sucesso ||
       recuperacao !== "pronta"
     ) {
-      return;
+      return false;
     }
 
     if (
       acao === "ENVIAR" &&
       !podeEnviar
     ) {
-      return;
+      return false;
     }
 
     if (
@@ -372,7 +431,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         "Conclua a tentativa pendente antes de iniciar outra ação."
       );
 
-      return;
+      return false;
     }
 
     trava.current = true;
@@ -462,6 +521,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       setPendente(null);
       setResultado({ acao, id });
       setSucesso(true);
+      return true;
     } catch (falha) {
       if (
         fase === "CRIAR" &&
@@ -493,7 +553,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
             "Não foi possível atualizar a tentativa salva neste aparelho."
           );
 
-          return;
+          return false;
         }
       }
 
@@ -509,6 +569,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
               mensagem
           : mensagem
       );
+      return false;
     } finally {
       trava.current = false;
       setSalvando(false);
@@ -535,37 +596,8 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       return;
     }
 
-    const temConteudo = blocos.some((bloco) => {
-      if (
-        ["imagem", "botao", "arquivo"].includes(bloco.tipo)
-      ) {
-        return Boolean(bloco.url?.trim());
-      }
-
-      return (
-        !["divisor", "espacamento"].includes(bloco.tipo) &&
-        Boolean(bloco.texto?.trim())
-      );
-    });
-
-    const temDestinatarioIndisponivel =
-      selecionados.some(
-        (contato) =>
-          !contato.email?.trim() ||
-          contato.elegivel === false
-      );
-
-    if (
-      !titulo.trim() ||
-      !dadosEnvio.assunto.trim() ||
-      !template ||
-      !selecionados.length ||
-      temDestinatarioIndisponivel ||
-      !temConteudo
-    ) {
-      setErro(
-        "Para enviar, preencha o título, o assunto, o conteúdo e os destinatários."
-      );
+    if (pendenciasEnvio.length > 0) {
+      setErro(pendenciasEnvio.join("\n"));
       return;
     }
 
@@ -692,9 +724,12 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     );
   }
 
-  function continuarEditando() {
-    acaoSaida.current = null;
-    setAvisoSaidaAberto(false);
+  async function salvarRascunhoESair() {
+    if (trava.current || envioPendente || !acaoSaida.current) return;
+    const acao = acaoSaida.current;
+    continuarEditando();
+    setSaidaAposSalvar(acao);
+    if (!await salvar()) setSaidaAposSalvar(null);
   }
 
   async function descartarESair() {
@@ -704,20 +739,23 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setSalvando(true);
 
     try {
-      await automatico.guardarLocal();
+      if (!conta) throw new Error("Não foi possível identificar a conta deste rascunho.");
+      if (automatico.pronto) await automatico.descartar();
+      else if (pendente) await descartarCopiaRelease(conta, "novo", pendente.dados.chave_rascunho);
+      else throw new Error("Aguarde a recuperação do rascunho antes de descartar.");
+      if (pendente) await removerReleasePendente(conta, pendente.dados.chave_rascunho).catch(() => {});
 
       const acao = acaoSaida.current;
       continuarEditando();
 
-      if (acao) {
+      if (acao && navigation.isFocused()) {
         navigation.dispatch(acao);
       }
-    } catch {
+    } catch (falha) {
       continuarEditando();
 
       setErro(
-        "Não foi possível guardar a cópia local. " +
-          "Salve o rascunho antes de sair."
+        falha instanceof Error ? falha.message : "Não foi possível confirmar o descarte. Seu preenchimento foi mantido."
       );
     } finally {
       trava.current = false;
@@ -749,13 +787,14 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   }
 
   function voltar() {
-    if (trava.current || sucesso || imagemOcupada || confirmarRecuperacao) return;
+    if (trava.current || sucesso || imagemOcupada || confirmarRecuperacao || avisoSaidaAberto) return;
 
     if (!confirmando && recuperacao === "pronta" && etapaAnterior) {
       mudarEtapa(etapaAnterior);
       return;
     }
 
+    fechamentoExplicito.current = true;
     retornar();
   }
 
@@ -1054,13 +1093,40 @@ function CadastroRelease({ conta }: { conta: string | null }) {
                     onPress={() => mudarEtapa(proximaEtapa)}
                 />
             ) : null} 
+            
+            {etapa === "REVISAO" &&
+              !confirmando &&
+              pendenciasEnvio.length > 0 ? (
+                <View style={{ gap: 4 }}>
+                  <Text weight="SemiBold">
+                    Para enviar, falta:
+                  </Text>
+
+                  {pendenciasEnvio.map((item) => (
+                    <Text
+                      key={item}
+                      style={{
+                        color: theme.textoSub,
+                        fontSize: 12,
+                      }}
+                    >
+                      {"• " + item}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+
             {etapa === "REVISAO" &&
               !confirmando &&
               podeEnviar ? (
                 <Button
                   title="ENVIAR RELEASE"
                   icon="paper-plane-outline"
-                  disabled={bloqueado || !podeCriar}
+                  disabled={
+                    bloqueado ||
+                    !podeCriar ||
+                    pendenciasEnvio.length > 0
+                  }
                   onPress={pedirEnvio}
                 />
               ) : null}
@@ -1206,18 +1272,19 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         visible={avisoSaidaAberto}
         variant="warning"
         title="Sair do novo release?"
-        loading={salvando}
+        loading={salvando || imagemOcupada}
         message={
-          "Seu preenchimento será guardado neste aparelho " +
-          "para continuar depois. Se a sincronização estiver " +
-          "pendente, ele ainda não estará atualizado em " +
-          "outros dispositivos."
+          envioPendente
+            ? "Sair descarta o cadastro pendente. Se o envio já tiver começado, ele não será cancelado."
+            : "Se sair, o progresso deste novo release será descartado. Para continuar depois, escolha Salvar Rascunho."
         }
         primaryLabel="SAIR"
         secondaryLabel="CONTINUAR"
+        tertiaryLabel={!envioPendente && podeCriar ? "SALVAR RASCUNHO" : undefined}
         primaryDanger
         onPrimary={() => void descartarESair()}
         onSecondary={continuarEditando}
+        onTertiary={() => void salvarRascunhoESair()}
         onClose={continuarEditando}
       />
 
@@ -1247,7 +1314,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       />
 
       <FeedbackAlert
-        visible={sucesso}
+        visible={sucesso && !saidaAposSalvar}
         variant="success"
         title={
           resultado?.acao === "ENVIAR"

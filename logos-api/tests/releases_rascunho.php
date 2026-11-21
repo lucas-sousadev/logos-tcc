@@ -112,6 +112,42 @@ try {
     $conferir($envio['release']['status'] === 'NA_FILA', 'Uma repetição deve consultar o envio já existente.');
     $rejeitar(fn() => ReleaseService::salvarAutomaticamente(1, 2, $edicao, false, true, true, true), DomainException::class);
     $conferir((int) $db->query('SELECT COUNT(*) FROM releases')->fetchColumn() === 1, 'Não deve duplicar releases.');
+
+    $preservado = ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => $pedido['chave']]);
+    $conferir(!$preservado['descartado'] && $preservado['envio_preservado'], 'SAIR não deve interromper um envio já iniciado.');
+    $conferir(ReleaseService::buscar(1, $r['id'])['status'] === 'NA_FILA', 'O envio existente deve permanecer intacto.');
+
+    $antes = ReleaseService::listar(1)['pagination']['total'];
+    $atrasado = $pedido; $atrasado['chave'] = '00000000-0000-4000-8000-000000000090';
+    $conferir(ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => $atrasado['chave']])['descartado'], 'Pode descartar antes de um cadastro atrasado chegar.');
+    $rejeitar(fn() => ReleaseService::salvarAutomaticamente(1, 1, $atrasado, true, false, false, false), DomainException::class);
+    $conferir(ReleaseService::listar(1)['pagination']['total'] === $antes, 'Reservas de descarte não aparecem na listagem nem na contagem.');
+
+    $cancelavel = $pedido; $cancelavel['chave'] = '00000000-0000-4000-8000-000000000091';
+    $cancelavel['dados']['titulo'] = 'Não conservar';
+    $cancelavel['dados']['blocos'] = [['id' => 'texto', 'tipo' => 'texto', 'texto' => 'Conteúdo descartado']];
+    $cancelavel['dados']['jornalistas_ids'] = [1];
+    $cadastro = ReleaseService::salvarAutomaticamente(1, 1, $cancelavel, true, false, true, false);
+    $conferir(ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => $cancelavel['chave']])['descartado'], 'Pode descartar o rascunho automático do criador.');
+    $rejeitar(fn() => ReleaseService::buscar(1, $cadastro['id']), OutOfBoundsException::class);
+    $rejeitar(fn() => ReleaseEnvioService::enfileirar(1, $cadastro['id']), OutOfBoundsException::class);
+    $rejeitar(fn() => ReleaseEnvioService::situacao(1, $cadastro['id']), OutOfBoundsException::class);
+    $rejeitar(fn() => ReleaseService::salvarAutomaticamente(1, 1, $cancelavel, true, false, true, false), DomainException::class);
+    $limpo = $db->query('SELECT titulo, blocos_json FROM releases WHERE id = ' . (int) $cadastro['id'])->fetch();
+    $conferir($limpo['titulo'] === '' && json_decode($limpo['blocos_json'], true) === [], 'Descartar remove o conteúdo do servidor.');
+    $conferir((int) $db->query('SELECT COUNT(*) FROM release_destinatarios WHERE release_id = ' . (int) $cadastro['id'])->fetchColumn() === 0, 'Descartar remove os destinatários do rascunho.');
+    $quantidade = (int) $db->query('SELECT COUNT(*) FROM releases')->fetchColumn();
+    ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => $cancelavel['chave']]);
+    $conferir((int) $db->query('SELECT COUNT(*) FROM releases')->fetchColumn() === $quantidade, 'Repetir descarte não duplica a reserva.');
+
+    $outro = $pedido; $outro['chave'] = '00000000-0000-4000-8000-000000000092';
+    $outro['dados']['titulo'] = 'Outro criador';
+    $alheio = ReleaseService::salvarAutomaticamente(1, 1, $outro, true, false, false, false);
+    ReleaseService::descartarCriacao(1, 2, ['chave_rascunho' => $outro['chave']]);
+    ReleaseService::descartarCriacao(2, 3, ['chave_rascunho' => $outro['chave']]);
+    $conferir(ReleaseService::buscar(1, $alheio['id'])['titulo'] === 'Outro criador', 'Descarte é isolado por criador e assessoria.');
+    $rejeitar(fn() => ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => 'invalida']), InvalidArgumentException::class);
+    $rejeitar(fn() => ReleaseService::descartarCriacao(1, 1, ['chave_rascunho' => $outro['chave'], 'id' => $r['id']]), InvalidArgumentException::class);
     echo "Rascunhos: {$verificacoes} verificações passaram.\n";
 } finally {
     if ($db->inTransaction()) $db->rollBack();

@@ -8,7 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
+import * as DocumentPicker from "@/services/seletorArquivos";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";

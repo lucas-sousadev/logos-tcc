@@ -87,6 +87,7 @@
   export interface AtualizarJornalistaResponse {
     success: boolean;
     message: string;
+    jornalista: Jornalista;
   }
 
   export interface ExcluirJornalistaResponse {
@@ -324,6 +325,12 @@
       throw new Error(
         data.message ||
           "Não foi possível atualizar o contato."
+      );
+    }
+
+    if (!data.jornalista) {
+      throw new Error(
+        "O servidor não retornou os dados atualizados do contato."
       );
     }
 

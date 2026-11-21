@@ -105,19 +105,18 @@ export default function JornalistaDetalhes() {
     const [formularioOriginal, setFormularioOriginal] =
         useState<Formulario | null>(null);
 
-    const [modoEdicao, setModoEdicao] =
-        useState(false);
-
-    const [carregando, setCarregando] =
-        useState(true);
-
-    const [salvando, setSalvando] =
-        useState(false);
-
-    const [excluindo, setExcluindo] =
-        useState(false);
+    const [modoEdicao, setModoEdicao] = useState(false);
+    const [carregando, setCarregando] = useState(true);
+    const [salvando, setSalvando] = useState(false);
+    const [excluindo, setExcluindo] = useState(false);
 
     const scrollRef = useRef<ScrollView>(null);
+
+    const [feedback, setFeedback] = useState<{
+      variant: "success" | "error";
+      title: string;
+      message: string;
+    } | null>(null);
 
     useEffect(() => {
       const frame = requestAnimationFrame(() => {
@@ -384,7 +383,7 @@ export default function JornalistaDetalhes() {
   try {
     setSalvando(true);
 
-    await atualizarJornalista(
+    const { jornalista: atualizado } = await atualizarJornalista(
       jornalista.id,
       {
         nome: formulario.nome.trim(),
@@ -407,8 +406,6 @@ export default function JornalistaDetalhes() {
             : null,
       }
     );
-
-    const atualizado = await buscarJornalista(jornalista.id);
 
     const novoFormularioOriginal: Formulario = {
         nome: atualizado.nome ?? "",
@@ -433,10 +430,11 @@ export default function JornalistaDetalhes() {
 
     setModoEdicao(false);
 
-    Alert.alert(
-      "Sucesso",
-      "Contato atualizado com sucesso."
-    );
+    setFeedback({
+      variant: "success",
+      title: "Contato atualizado",
+      message: "As alterações foram salvas com sucesso.",
+    });
   } catch (error) {
     const mensagem =
       error instanceof Error
@@ -444,6 +442,11 @@ export default function JornalistaDetalhes() {
         : "Não foi possível atualizar o contato.";
 
     exibirErroDaApi(mensagem);
+    setFeedback({
+      variant: "error",
+      title: "Não foi possível salvar",
+      message: mensagem,
+    });
   } finally {
     setSalvando(false);
   }
@@ -1070,8 +1073,17 @@ export default function JornalistaDetalhes() {
           </>
         )}
       </ScrollView>
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+      <FeedbackAlert
+        visible={feedback !== null}
+        variant={feedback?.variant ?? "success"}
+        title={feedback?.title ?? ""}
+        message={feedback?.message ?? ""}
+        primaryLabel="ENTENDI"
+        onClose={() => setFeedback(null)}
+      />
+
+      <FeedbackAlert {...saida.alertaProps} />
+    </View>
   );
 }
 

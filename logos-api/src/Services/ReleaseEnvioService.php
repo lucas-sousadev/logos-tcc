@@ -43,13 +43,13 @@ final class ReleaseEnvioService
         $stmt = Connection::get()->prepare($sql);
 
         foreach ($params as $key => $value) {
-            $stmt->bindValue(
-                ':' . $key,
-                $value,
-                is_int($value)
-                    ? PDO::PARAM_INT
-                    : PDO::PARAM_STR
-            );
+            $tipo = match (true) {
+                $value === null => PDO::PARAM_NULL,
+                is_int($value) => PDO::PARAM_INT,
+                default => PDO::PARAM_STR,
+            };
+
+            $stmt->bindValue(':' . $key, $value, $tipo);
         }
 
         $stmt->execute();
@@ -79,7 +79,7 @@ final class ReleaseEnvioService
                 ['id' => $id, 'a' => $assessoriaId]
             )->fetch();
 
-            if (!$release) {
+            if (!$release || ReleaseService::foiDescartado($release)) {
                 throw new \OutOfBoundsException(
                     'Release não encontrado nesta assessoria.'
                 );
@@ -146,6 +146,42 @@ final class ReleaseEnvioService
                     64,
                     JSON_THROW_ON_ERROR
                 );
+                
+                $blocos = ReleaseBlocosService::validar($blocos);
+
+                $temConteudo = false;
+
+                foreach ($blocos as $bloco) {
+                    if (
+                        in_array(
+                            $bloco['tipo'],
+                            ['imagem', 'botao', 'arquivo'],
+                            true
+                        )
+                    ) {
+                        $temConteudo =
+                            trim($bloco['url'] ?? '') !== '';
+                    } elseif (
+                        !in_array(
+                            $bloco['tipo'],
+                            ['divisor', 'espacamento'],
+                            true
+                        )
+                    ) {
+                        $temConteudo =
+                            trim($bloco['texto'] ?? '') !== '';
+                    }
+
+                    if ($temConteudo) {
+                        break;
+                    }
+                }
+
+                if (!$temConteudo) {
+                    throw new \InvalidArgumentException(
+                        'Adicione conteúdo ao release antes de enviar.'
+                    );
+                }
 
                 $mailer = ReleaseEmailService::preparar(
                     $assessoriaId,
@@ -229,19 +265,20 @@ final class ReleaseEnvioService
         $params = ['id' => $id, 'a' => $assessoriaId];
 
         $release = self::sql(
-            'SELECT id, status, iniciado_em, enviado_em
+            'SELECT id, status, iniciado_em, enviado_em, assinatura_cadastro
              FROM releases
              WHERE id = :id
                AND assessoria_id = :a',
             $params
         )->fetch();
 
-        if (!$release) {
+        if (!$release || ReleaseService::foiDescartado($release)) {
             throw new \OutOfBoundsException(
                 'Release não encontrado nesta assessoria.'
             );
         }
 
+        unset($release['assinatura_cadastro']);
         $release['id'] = (int) $release['id'];
         $totais = self::totais($assessoriaId, $id);
 
@@ -267,6 +304,11 @@ final class ReleaseEnvioService
                 d.status,
                 d.enviado_em,
                 d.erro_mensagem,
+                d.tentativas,
+                d.ultima_tentativa_em,
+                d.proxima_tentativa_em,
+                d.erro_tipo,
+                d.smtp_codigo,
                 j.nome
              FROM release_destinatarios d
              LEFT JOIN jornalistas j
@@ -284,7 +326,14 @@ final class ReleaseEnvioService
 
         foreach ($destinatarios as &$d) {
             $d['id'] = (int) $d['id'];
+            $d['tentativas'] = (int) $d['tentativas'];
+
+            $d['smtp_codigo'] = $d['smtp_codigo'] !== null
+                ? (int) $d['smtp_codigo']
+                : null;
         }
+
+        unset($d);
 
         return [
             'release' => $release,
@@ -305,21 +354,140 @@ final class ReleaseEnvioService
         $linha = self::sql(
             "SELECT
                 COUNT(*) AS total,
+
                 COALESCE(SUM(status = 'PENDENTE'), 0)
                     AS pendentes,
+
                 COALESCE(SUM(status = 'ENVIANDO'), 0)
                     AS processando,
+
                 COALESCE(SUM(status = 'ENVIADO'), 0)
                     AS aceitos,
+
                 COALESCE(SUM(status = 'ERRO'), 0)
-                    AS falhas
-             FROM release_destinatarios
-             WHERE release_id = :id
-               AND assessoria_id = :a",
-            ['id' => $id, 'a' => $assessoriaId]
+                    AS falhas,
+
+                COALESCE(SUM(
+                    status = 'ERRO'
+                    AND erro_tipo IN ('TEMPORARIA', 'CONFIGURACAO')
+                ), 0) AS repetiveis,
+
+                COALESCE(SUM(
+                    status = 'ERRO'
+                    AND (erro_tipo = 'INCERTA' OR erro_tipo IS NULL)
+                ), 0) AS incertos,
+
+                COALESCE(SUM(
+                    status = 'PENDENTE'
+                    AND proxima_tentativa_em IS NOT NULL
+                ), 0) AS aguardando_retentativa
+
+            FROM release_destinatarios
+            WHERE release_id = :id
+            AND assessoria_id = :a",
+            [
+                'id' => $id,
+                'a' => $assessoriaId,
+            ]
         )->fetch();
 
         return array_map('intval', $linha);
+    }
+
+    public static function reenfileirarFalhas(
+        int $assessoriaId,
+        mixed $id
+    ): array {
+        $id = self::numero($id);
+        $db = Connection::get();
+        $db->beginTransaction();
+
+        try {
+            $release = self::sql(
+                'SELECT *
+                FROM releases
+                WHERE id = :id
+                AND assessoria_id = :a
+                FOR UPDATE',
+                [
+                    'id' => $id,
+                    'a' => $assessoriaId,
+                ]
+            )->fetch();
+
+            if (!$release || ReleaseService::foiDescartado($release)) {
+                throw new \OutOfBoundsException(
+                    'Release não encontrado nesta assessoria.'
+                );
+            }
+
+            // Uma repetição da solicitação não duplica a fila.
+            if (
+                in_array(
+                    $release['status'],
+                    ['NA_FILA', 'ENVIANDO'],
+                    true
+                )
+            ) {
+                $db->commit();
+
+                return self::situacao($assessoriaId, $id);
+            }
+
+            if (
+                !in_array(
+                    $release['status'],
+                    ['PARCIAL', 'FALHOU'],
+                    true
+                )
+            ) {
+                throw new \DomainException(
+                    'Este release não possui um envio encerrado para tentar novamente.'
+                );
+            }
+
+            $alterados = self::sql(
+                "UPDATE release_destinatarios
+                SET status = 'PENDENTE',
+                    proxima_tentativa_em = NULL
+                WHERE release_id = :id
+                AND assessoria_id = :a
+                AND status = 'ERRO'
+                AND erro_tipo IN ('TEMPORARIA', 'CONFIGURACAO')",
+                [
+                    'id' => $id,
+                    'a' => $assessoriaId,
+                ]
+            )->rowCount();
+
+            if ($alterados === 0) {
+                throw new \DomainException(
+                    'Não há falhas disponíveis para uma nova tentativa segura.'
+                );
+            }
+
+            self::sql(
+                "UPDATE releases
+                SET status = 'NA_FILA',
+                    enviado_em = NULL
+                WHERE id = :id
+                AND assessoria_id = :a",
+                [
+                    'id' => $id,
+                    'a' => $assessoriaId,
+                ]
+            );
+
+            $db->commit();
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $erro;
+        }
+
+        return self::situacao($assessoriaId, $id);
     }
 
     private static function finalizar(
@@ -357,16 +525,14 @@ final class ReleaseEnvioService
         ?callable $transporte = null
     ): array {
         if (PHP_SAPI !== 'cli') {
-            throw new \RuntimeException(
-                'Execute o processamento pelo terminal.'
-            );
+            throw new \RuntimeException('Execute pelo terminal.');
         }
 
         if (
-            $limite < 1
-            || $limite > 1000
-            || $intervaloMs < 0
-            || $intervaloMs > 60000
+            $limite < 1 ||
+            $limite > 1000 ||
+            $intervaloMs < 0 ||
+            $intervaloMs > 60000
         ) {
             throw new \InvalidArgumentException(
                 'Limite ou intervalo inválido.'
@@ -388,44 +554,48 @@ final class ReleaseEnvioService
             32
         );
 
-        $lock = self::sql(
+        $lock = (int) self::sql(
             'SELECT GET_LOCK(:chave, 0)',
             ['chave' => $chave]
         )->fetchColumn();
 
         $resultado = [
-            'ocupado' => (int) $lock !== 1,
+            'ocupado' => $lock !== 1,
             'processados' => 0,
             'aceitos' => 0,
             'falhas' => 0,
+            'reagendados' => 0,
         ];
 
-        if ($resultado['ocupado']) {
+        if ($lock !== 1) {
             return $resultado;
         }
 
         try {
+            // Como temos a trava exclusiva, ENVIANDO remanescente
+            // pertence a uma execução anterior interrompida.
+            self::sql(
+                "UPDATE release_destinatarios d
+                JOIN releases r
+                ON r.id = d.release_id
+                AND r.assessoria_id = d.assessoria_id
+                SET d.status = 'ERRO',
+                    d.erro_tipo = 'INCERTA',
+                    d.smtp_codigo = NULL,
+                    d.proxima_tentativa_em = NULL,
+                    d.erro_mensagem =
+                        'A execução foi interrompida sem confirmação. Não houve repetição automática.'
+                WHERE r.status IN ('NA_FILA', 'ENVIANDO')
+                AND d.status = 'ENVIANDO'"
+            );
+
             $ativos = self::sql(
                 "SELECT id, assessoria_id
-                 FROM releases
-                 WHERE status IN ('NA_FILA', 'ENVIANDO')"
+                FROM releases
+                WHERE status IN ('NA_FILA', 'ENVIANDO')"
             )->fetchAll();
 
             foreach ($ativos as $r) {
-                self::sql(
-                    "UPDATE release_destinatarios
-                     SET status = 'ERRO',
-                         erro_mensagem =
-                         'A execução anterior terminou sem confirmar o envio. Não houve repetição automática.'
-                     WHERE release_id = :id
-                       AND assessoria_id = :a
-                       AND status = 'ENVIANDO'",
-                    [
-                        'id' => (int) $r['id'],
-                        'a' => (int) $r['assessoria_id'],
-                    ]
-                );
-
                 self::finalizar(
                     (int) $r['assessoria_id'],
                     (int) $r['id']
@@ -442,23 +612,27 @@ final class ReleaseEnvioService
                             d.release_id,
                             d.assessoria_id,
                             d.email,
+                            d.tentativas,
                             r.assunto,
                             r.primeira_linha,
                             r.nome_remetente,
                             r.responder_para,
                             r.blocos_json
-                         FROM release_destinatarios d
-                         JOIN releases r
-                            ON r.id = d.release_id
-                           AND r.assessoria_id = d.assessoria_id
-                         WHERE r.status IN (
-                            'NA_FILA',
-                            'ENVIANDO'
-                         )
-                           AND d.status = 'PENDENTE'
-                         ORDER BY r.id, d.id
-                         LIMIT 1
-                         FOR UPDATE"
+                        FROM release_destinatarios d
+                        JOIN releases r
+                        ON r.id = d.release_id
+                        AND r.assessoria_id = d.assessoria_id
+                        WHERE r.status IN ('NA_FILA', 'ENVIANDO')
+                        AND d.status = 'PENDENTE'
+                        AND (
+                                d.proxima_tentativa_em IS NULL
+                                OR d.proxima_tentativa_em <= NOW()
+                        )
+                        ORDER BY
+                            COALESCE(d.proxima_tentativa_em, d.created_at),
+                            d.id
+                        LIMIT 1
+                        FOR UPDATE"
                     )->fetch();
 
                     if (!$d) {
@@ -468,18 +642,21 @@ final class ReleaseEnvioService
 
                     self::sql(
                         "UPDATE release_destinatarios
-                         SET status = 'ENVIANDO'
-                         WHERE id = :id",
+                        SET status = 'ENVIANDO',
+                            tentativas = tentativas + 1,
+                            ultima_tentativa_em = NOW(),
+                            proxima_tentativa_em = NULL
+                        WHERE id = :id
+                        AND status = 'PENDENTE'",
                         ['id' => (int) $d['id']]
                     );
 
                     self::sql(
                         "UPDATE releases
-                         SET status = 'ENVIANDO',
-                             iniciado_em =
-                                COALESCE(iniciado_em, NOW())
-                         WHERE id = :id
-                           AND assessoria_id = :a",
+                        SET status = 'ENVIANDO',
+                            iniciado_em = COALESCE(iniciado_em, NOW())
+                        WHERE id = :id
+                        AND assessoria_id = :a",
                         [
                             'id' => (int) $d['release_id'],
                             'a' => (int) $d['assessoria_id'],
@@ -495,11 +672,23 @@ final class ReleaseEnvioService
                     throw $erro;
                 }
 
-                $falhou = false;
+                $tentativas = (int) $d['tentativas'] + 1;
+
+                $smtp = new ReleaseSmtpSeguro();
+                $smtp->Timelimit = 60;
+
+                $mailer = null;
+                $preparado = false;
 
                 try {
                     if ($transporte !== null) {
                         $transporte($d);
+
+                        $situacao = [
+                            'tipo' => 'ACEITO',
+                            'codigo' => null,
+                            'mensagem' => null,
+                        ];
                     } else {
                         $mailer = ReleaseEmailService::preparar(
                             (int) $d['assessoria_id'],
@@ -521,6 +710,11 @@ final class ReleaseEnvioService
                             $d['email']
                         );
 
+                        $mailer->setSMTPInstance($smtp);
+                        $mailer->SMTPDebug = 0;
+                        $mailer->SMTPKeepAlive = false;
+                        $mailer->Timeout = 60;
+
                         $dominio = substr(
                             strrchr($mailer->From, '@'),
                             1
@@ -532,64 +726,137 @@ final class ReleaseEnvioService
                             $d['id'] . '@' .
                             $dominio . '>';
 
-                        if (!$mailer->send()) {
+                        if (!$mailer->preSend()) {
                             throw new \RuntimeException(
-                                'SMTP não confirmou o envio.'
+                                'Não foi possível preparar o e-mail.'
                             );
                         }
+
+                        $preparado = true;
+
+                        if (!$mailer->postSend()) {
+                            throw new \RuntimeException(
+                                'Envio não confirmado.'
+                            );
+                        }
+
+                        $situacao = $smtp->resultado($preparado);
                     }
                 } catch (\Throwable $erro) {
-                    $falhou = true;
+                    $situacao = $transporte === null
+                        ? $smtp->resultado($preparado)
+                        : [
+                            'tipo' => 'INCERTA',
+                            'codigo' => null,
+                            'mensagem' =>
+                                'O transporte não confirmou o resultado.',
+                        ];
 
                     error_log(
-                        'Falha ao enviar destinatário ' .
-                        $d['id'] . ': ' .
-                        $erro->getMessage()
+                        'Release ' . $d['release_id'] .
+                        ', destinatário ' . $d['id'] .
+                        ': ' . $situacao['tipo'] .
+                        ', código ' .
+                        ($situacao['codigo'] ?? 'ausente')
                     );
                 } finally {
-                    if (isset($mailer)) {
-                        $mailer->smtpClose();
-                        unset($mailer);
+                    if ($mailer !== null) {
+                        try {
+                            $mailer->smtpClose();
+                        } catch (\Throwable) {
+                            // O encerramento não muda o aceite já recebido.
+                        }
                     }
                 }
 
-                // Uma falha no banco depois do aceite não deve
-                // disparar uma segunda tentativa de transmissão.
-                self::sql(
-                    $falhou
-                        ? "UPDATE release_destinatarios
-                           SET status = 'ERRO',
-                               erro_mensagem =
-                               'O servidor não confirmou o resultado do envio. Confira antes de reenviar.'
-                           WHERE id = :id
-                             AND status = 'ENVIANDO'"
-                        : "UPDATE release_destinatarios
-                           SET status = 'ENVIADO',
-                               enviado_em = NOW(),
-                               erro_mensagem = NULL
-                           WHERE id = :id
-                             AND status = 'ENVIANDO'",
-                    ['id' => (int) $d['id']]
-                );
+                $aceito = $situacao['tipo'] === 'ACEITO';
+
+                $espera =
+                    $situacao['tipo'] === 'TEMPORARIA' &&
+                    $tentativas < 3
+                        ? ($tentativas === 1 ? 300 : 900)
+                        : null;
+
+                $params = ['id' => (int) $d['id']];
+
+                if ($aceito) {
+                    self::sql(
+                        "UPDATE release_destinatarios
+                        SET status = 'ENVIADO',
+                            enviado_em = NOW(),
+                            erro_tipo = NULL,
+                            smtp_codigo = NULL,
+                            erro_mensagem = NULL,
+                            proxima_tentativa_em = NULL
+                        WHERE id = :id
+                        AND status = 'ENVIANDO'",
+                        $params
+                    );
+                } else {
+                    $params['tipo'] = $situacao['tipo'];
+                    $params['mensagem'] = $situacao['mensagem'];
+                    $params['codigo'] = $situacao['codigo'];
+                    $params['status'] = $espera === null
+                        ? 'ERRO'
+                        : 'PENDENTE';
+
+                    // $espera vem exclusivamente das constantes acima.
+                    $proxima = $espera === null
+                        ? 'NULL'
+                        : 'DATE_ADD(NOW(), INTERVAL ' .
+                            $espera . ' SECOND)';
+
+                    self::sql(
+                        "UPDATE release_destinatarios
+                        SET status = :status,
+                            erro_tipo = :tipo,
+                            smtp_codigo = :codigo,
+                            erro_mensagem = :mensagem,
+                            proxima_tentativa_em = $proxima
+                        WHERE id = :id
+                        AND status = 'ENVIANDO'",
+                        $params
+                    );
+                }
+
+                if ($situacao['tipo'] === 'CONFIGURACAO') {
+                    // Interrompe o restante deste release até a correção.
+                    self::sql(
+                        "UPDATE release_destinatarios
+                        SET status = 'ERRO',
+                            erro_tipo = 'CONFIGURACAO',
+                            smtp_codigo = NULL,
+                            proxima_tentativa_em = NULL,
+                            erro_mensagem =
+                                'O envio deste release foi interrompido. Corrija a configuração ou o conteúdo antes de tentar novamente.'
+                        WHERE release_id = :id
+                        AND assessoria_id = :a
+                        AND status = 'PENDENTE'",
+                        [
+                            'id' => (int) $d['release_id'],
+                            'a' => (int) $d['assessoria_id'],
+                        ]
+                    );
+                }
 
                 $resultado['processados']++;
-                $resultado[
-                    $falhou ? 'falhas' : 'aceitos'
-                ]++;
+
+                $contador = $aceito
+                    ? 'aceitos'
+                    : ($espera !== null ? 'reagendados' : 'falhas');
+
+                $resultado[$contador]++;
 
                 self::finalizar(
                     (int) $d['assessoria_id'],
                     (int) $d['release_id']
                 );
 
-                if ($falhou) {
+                if ($situacao['tipo'] === 'CONFIGURACAO') {
                     break;
                 }
 
-                if (
-                    $i + 1 < $limite
-                    && $intervaloMs > 0
-                ) {
+                if ($intervaloMs > 0 && $i + 1 < $limite) {
                     usleep($intervaloMs * 1000);
                 }
             }

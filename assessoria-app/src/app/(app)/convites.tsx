@@ -28,6 +28,14 @@ import type { ConviteHistorico } from "@/services/api/auth";
 
 const LIMITE_PAGINA = 20;
 
+function conviteDisponivel(convite: ConviteHistorico): boolean {
+  return (
+    convite.status === "ATIVO" &&
+    !convite.utilizado_em &&
+    convite.codigo.trim().length > 0
+  );
+}
+
 function formatarData(data: string | null): string {
   if (!data) return "Data não informada";
 
@@ -64,8 +72,15 @@ export default function Convites() {
     expira_em: string;
   } | null>(null);
   const [codigoCopiado, setCodigoCopiado] = useState(false);
+  const [copiandoId, setCopiandoId] = useState<number | null>(null);
+  const [conviteCopiadoId, setConviteCopiadoId] = useState<number | null>(null);
+  const [erroCopia, setErroCopia] = useState<{
+    id: number;
+    mensagem: string;
+  } | null>(null);
 
   const requisicaoAtual = useRef(0);
+  const travaCopia = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
   function renderizarDataDestacada(data: string | null) {
@@ -180,6 +195,63 @@ export default function Convites() {
     } catch {
       setCodigoCopiado(false);
       setErroCriacao("Não foi possível copiar o código. Tente selecioná-lo manualmente.");
+    }
+  }
+
+  async function copiarConviteHistorico(item: ConviteHistorico) {
+    if (!podeVisualizar || travaCopia.current || !conviteDisponivel(item)) return;
+
+    travaCopia.current = true;
+    const requisicao = requisicaoAtual.current;
+    let temporizador: ReturnType<typeof setTimeout> | undefined;
+    setCopiandoId(item.id);
+    setConviteCopiadoId(null);
+    setErroCopia(null);
+
+    try {
+      const resposta = await Promise.race([
+        listarConvites(pagina, LIMITE_PAGINA),
+        new Promise<never>((_, reject) => {
+          temporizador = setTimeout(() => {
+            reject(new Error("Não foi possível verificar o convite. Confira sua conexão e tente novamente."));
+          }, 15000);
+        }),
+      ]);
+
+      if (requisicao !== requisicaoAtual.current) return;
+
+      const convite = resposta.convites?.find((atual) => atual.id === item.id);
+
+      if (!convite || !conviteDisponivel(convite)) {
+        setErroCopia({
+          id: item.id,
+          mensagem: !convite
+            ? "A lista de convites mudou. Atualize a seleção e tente novamente."
+            : convite.status === "EXPIRADO"
+              ? "Este convite expirou. Gere um novo convite."
+              : "Este convite já foi utilizado e não pode ser copiado.",
+        });
+        setConsulta((atual) => ({ ...atual, versao: atual.versao + 1 }));
+        return;
+      }
+
+      const copiou = await Clipboard.setStringAsync(convite.codigo);
+      if (requisicao !== requisicaoAtual.current) return;
+      if (!copiou) throw new Error("Não foi possível copiar o código. Tente selecioná-lo manualmente.");
+
+      setConviteCopiadoId(item.id);
+    } catch (error) {
+      if (requisicao !== requisicaoAtual.current) return;
+      setErroCopia({
+        id: item.id,
+        mensagem: error instanceof Error
+          ? error.message
+          : "Não foi possível copiar o convite. Tente novamente.",
+      });
+    } finally {
+      clearTimeout(temporizador);
+      travaCopia.current = false;
+      setCopiandoId(null);
     }
   }
 
@@ -637,6 +709,25 @@ export default function Convites() {
                         {renderizarDataDestacada(item.utilizado_em)}
                       </Text>
                     </View>
+                  ) : null}
+
+                  {conviteDisponivel(item) ? (
+                    <Button
+                      title={conviteCopiadoId === item.id ? "COPIADO" : "COPIAR CONVITE"}
+                      icon={conviteCopiadoId === item.id ? "checkmark-outline" : "copy-outline"}
+                      variant="outline"
+                      size="small"
+                      loading={copiandoId === item.id}
+                      disabled={copiandoId !== null || criando}
+                      onPress={() => void copiarConviteHistorico(item)}
+                      style={{ marginTop: 12 }}
+                    />
+                  ) : null}
+
+                  {erroCopia?.id === item.id ? (
+                    <Text style={{ color: theme.erro, fontSize: 12, marginTop: 8 }}>
+                      {erroCopia.mensagem}
+                    </Text>
                   ) : null}
                 </View>
               );

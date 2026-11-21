@@ -6,7 +6,7 @@ import {
 } from "react-native";
 
 import { useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
+import * as DocumentPicker from "@/services/seletorArquivos";
 import { Ionicons } from "@expo/vector-icons";
 
 import Text from "@/components/ui/Text";

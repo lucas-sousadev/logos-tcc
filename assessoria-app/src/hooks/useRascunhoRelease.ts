@@ -3,7 +3,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { useIsFocused } from "expo-router/react-navigation";
 
 import type { DetalheRelease } from "@/services/api/release";
@@ -51,6 +51,7 @@ export function useRascunhoRelease({
     erro: false,
     conflito: false,
     remotoAusente: false,
+    temRascunho: false,
     idRemoto: base?.id ?? null,
   });
 
@@ -86,6 +87,7 @@ export function useRascunhoRelease({
           chave: chaveAtual,
           conflito: instancia.emConflito,
           remotoAusente: instancia.remotoAusente,
+          temRascunho: instancia.temRascunho,
           idRemoto: instancia.idRemoto,
           mensagem,
           erro,
@@ -109,6 +111,7 @@ export function useRascunhoRelease({
           chave: chaveAtual,
           conflito: instancia.emConflito,
           remotoAusente: instancia.remotoAusente,
+          temRascunho: instancia.temRascunho,
           idRemoto: instancia.idRemoto,
           pronto: true,
         }));
@@ -122,6 +125,7 @@ export function useRascunhoRelease({
           erro: true,
           conflito: false,
           remotoAusente: false,
+          temRascunho: false,
           idRemoto: null,
           mensagem:
             erro instanceof Error
@@ -197,13 +201,23 @@ export function useRascunhoRelease({
         }
       }
     );
-    if (typeof window !== "undefined") window.addEventListener("online", sincronizar);
+
+    const navegador =
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      typeof window.addEventListener === "function" &&
+      typeof window.removeEventListener === "function"
+        ? window
+        : null;
+
+    navegador?.addEventListener("online", sincronizar);
 
     return () => {
       clearTimeout(timer);
       clearInterval(intervalo);
       app.remove();
-      if (typeof window !== "undefined") window.removeEventListener("online", sincronizar);
+
+      navegador?.removeEventListener("online", sincronizar);
 
       instancia.permitida = false;
     };
@@ -240,6 +254,7 @@ export function useRascunhoRelease({
         erro: false,
         conflito: false,
         remotoAusente: false,
+        temRascunho: false,
         idRemoto: null,
       });
 
@@ -254,6 +269,8 @@ export function useRascunhoRelease({
 
     concluir: () =>
       atual().concluir(),
+
+    descartar: () => atual().descartar(),
 
     recarregarDoServidor: async () => {
       const instancia = atual();

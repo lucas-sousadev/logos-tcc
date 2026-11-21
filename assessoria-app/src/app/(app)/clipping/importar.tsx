@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
+import * as DocumentPicker from "@/services/seletorArquivos";
 import {
   useLocalSearchParams,
   useRouter,

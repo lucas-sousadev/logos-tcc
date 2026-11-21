@@ -3,12 +3,11 @@ import {
   useState,
   type ComponentProps,
 } from "react";
+import { useNavigation } from "expo-router";
 
-import { Platform } from "react-native";
 import { usePreventRemove } from "expo-router/react-navigation";
-import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 
+import { salvarArquivo } from "@/services/salvarArquivo";
 import type FeedbackAlert from "@/components/forms/FeedbackAlert";
 
 import {
@@ -41,7 +40,7 @@ export function useExportacaoClippings({
   permitido,
 }: Opcoes) {
   const trava = useRef(false);
-
+  const navigation = useNavigation();
   const [exportando, setExportando] = useState(false);
   const [aviso, setAviso] = useState<Aviso | null>(null);
 
@@ -57,15 +56,6 @@ export function useExportacaoClippings({
     setAviso(null);
 
     try {
-      if (
-        Platform.OS !== "web" &&
-        !(await Sharing.isAvailableAsync())
-      ) {
-        throw new Error(
-          "O compartilhamento de arquivos não está disponível neste dispositivo."
-        );
-      }
-
       const pedido: PedidoExportacaoClipping =
         ids !== undefined
           ? {
@@ -86,51 +76,30 @@ export function useExportacaoClippings({
       const nomeArquivo =
         `clippings-${clienteId}-${ano}-${Date.now()}.csv`;
 
-      if (Platform.OS === "web") {
-        const blob = new Blob([conteudo], {
-          type: "text/csv;charset=utf-8",
-        });
+      if (!navigation.isFocused()) return;
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
+      const resultado = await salvarArquivo(
+        conteudo,
+        nomeArquivo,
+        "text/csv"
+      );
 
-        try {
-          link.href = url;
-          link.download = nomeArquivo;
-
-          document.body.appendChild(link);
-          link.click();
-        } finally {
-          link.remove();
-
-          // Dá ao navegador tempo para iniciar o download.
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-
-        setAviso({
-          variant: "success",
-          title: "CSV gerado",
-          message:
-            `O download de ${nomeArquivo} foi solicitado ao navegador.`,
-        });
-      } else {
-        const arquivo = new File(Paths.cache, nomeArquivo);
-
-        arquivo.write(new Uint8Array(conteudo));
-
-        await Sharing.shareAsync(arquivo.uri, {
-          mimeType: "text/csv",
-          dialogTitle: "Exportar clippings",
-        });
-
-        setAviso({
-          variant: "info",
-          title: "Arquivo preparado",
-          message:
-            "O CSV foi gerado e disponibilizado na janela de compartilhamento. " +
-            "Salvar ou enviar depende da opção escolhida nessa janela.",
-        });
+      if (
+        resultado.status === "cancelado" ||
+        !navigation.isFocused()
+      ) {
+        return;
       }
+
+      setAviso({
+        variant:
+          resultado.status === "salvo" ? "success" : "info",
+        title:
+          resultado.status === "salvo"
+            ? "Arquivo salvo"
+            : "Download solicitado",
+        message: resultado.mensagem,
+      });
     } catch (error) {
       setAviso({
         variant: "error",

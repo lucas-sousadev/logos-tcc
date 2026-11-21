@@ -26,8 +26,10 @@ interface FeedbackAlertProps {
   onClose: () => void;
   primaryLabel?: string;
   secondaryLabel?: string;
+  tertiaryLabel?: string;
   onPrimary?: () => void;
   onSecondary?: () => void;
+  onTertiary?: () => void;
   primaryDanger?: boolean;
   loading?: boolean;
   inline?: boolean;
@@ -41,8 +43,10 @@ export default function FeedbackAlert({
   onClose,
   primaryLabel = "ENTENDI",
   secondaryLabel,
+  tertiaryLabel,
   onPrimary,
   onSecondary,
+  onTertiary,
   primaryDanger = false,
   loading = false,
   inline = false,
@@ -124,7 +128,21 @@ export default function FeedbackAlert({
             </Text>
           </ScrollView>
 
-          <View style={styles.actions}>
+          {tertiaryLabel && onTertiary ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              activeOpacity={0.8}
+              disabled={loading}
+              onPress={onTertiary}
+              style={[styles.button, styles.tertiaryButton, { backgroundColor: theme.primaria }]}
+            >
+              <Text weight="SemiBold" style={[styles.buttonText, { color: "#FFFFFF" }]}>
+                {tertiaryLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <View style={[styles.actions, tertiaryLabel && onTertiary ? styles.actionsWithTertiary : undefined]}>
             {secondaryLabel && onSecondary ? (
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -265,6 +283,16 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 1.5,
+  },
+
+  tertiaryButton: {
+    flex: 0,
+    marginTop: 22,
+    paddingVertical: 10,
+  },
+
+  actionsWithTertiary: {
+    marginTop: 10,
   },
 
   buttonText: {

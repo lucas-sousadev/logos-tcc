@@ -1706,7 +1706,7 @@ const [tier, setTier] = useState<Tier | null>(
           style={styles.textArea}
           error={erros.observacoes}
           editable={!bloqueado}
-          showChanged={campoAlterado("link")}
+          showChanged={campoAlterado("observacoes")}
           clearable
         />  
         {erroGeral ? (

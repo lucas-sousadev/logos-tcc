@@ -10,6 +10,7 @@ import {
   authenticatedFetch,
   getToken,
 } from "@/services/api/auth";
+import { anexarArquivo } from "@/services/arquivoUpload";
 import type { Tier } from "@/constants/tier";
 
 interface ApiEnvelope {
@@ -777,14 +778,10 @@ export async function inspecionarColunasClipping(
 ): Promise<EstruturaImportacaoClipping> {
   const formulario = new FormData();
 
-  formulario.append(
-    "arquivo",
-    (arquivo.file ?? {
-      uri: arquivo.uri,
-      name: arquivo.nome,
-      type: "text/csv",
-    }) as unknown as Blob
-  );
+  anexarArquivo(formulario, "arquivo", {
+    ...arquivo,
+    mimeType: "text/csv",
+  });
 
   if (linhaCabecalho !== undefined) {
     formulario.append(
@@ -906,14 +903,10 @@ export async function obterPreviaImportacaoClipping(
 ): Promise<PreviaImportacaoClipping> {
   const formulario = new FormData();
 
-  formulario.append(
-    "arquivo",
-    (arquivo.file ?? {
-      uri: arquivo.uri,
-      name: arquivo.nome,
-      type: "text/csv",
-    }) as unknown as Blob
-  );
+  anexarArquivo(formulario, "arquivo", {
+    ...arquivo,
+    mimeType: "text/csv",
+  });
 
   if (clienteId !== null) {
     formulario.append("cliente_id", String(clienteId));

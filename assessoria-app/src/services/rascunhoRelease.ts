@@ -11,6 +11,7 @@ import {
   type PedidoRascunhoRelease,
 } from "@/services/api/release";
 import type { ReleasePendente } from "@/services/releasePendente";
+import { aguardarDescartesRelease, descarteRegistrado, registrarDescarteRelease } from "@/services/releaseDescarte";
 
 export interface CopiaRascunhoRelease {
   seq: number;
@@ -173,10 +174,11 @@ export async function lerCopiaRelease(
     );
   }
 
-  return (
-    copias.sort((a, b) => b.seq - a.seq)[0] ??
-    null
-  );
+  const copia = copias.sort((a, b) => b.seq - a.seq)[0] ?? null;
+  if (copia && !copia.encerrado && await descarteRegistrado(conta, copia.valor.dados.chave_rascunho)) {
+    return { ...copia, encerrado: true };
+  }
+  return copia;
 }
 
 async function escreverCopia(
@@ -241,13 +243,17 @@ export class SessaoRascunhoRelease {
   private carregamento: Promise<ReleasePendente | null> | null = null;
   private possuiCopia = false;
   private dadosIniciais: string;
+  private descartando = false;
+  private descarteConfirmado = false;
 
   pronta = false;
 
   permitida = false;
 
   get idRemoto() { return this.copia.remoto?.id ?? this.base?.id ?? null; }
+  get chaveRascunho() { return this.copia.valor.dados.chave_rascunho; }
   get remotoAusente() { return this.copia.remoto_ausente === true; }
+  get temRascunho() { return this.possuiCopia && !this.copia.encerrado; }
   get emConflito() { return !this.remotoAusente && [404, 409].includes(this.copia.bloqueio?.status ?? 0); }
 
   constructor(
@@ -288,7 +294,10 @@ export class SessaoRascunhoRelease {
     sessoes.set(chave, this);
 
     // Uma resposta da tela anterior pode ainda estar atualizando a cópia local.
-    if (anterior && anterior !== this) await anterior.aguardar();
+    if (anterior && anterior !== this) {
+      if (anterior.descarteConfirmado) await anterior.fila.catch(() => {});
+      else await anterior.aguardar();
+    }
 
     const salva = await lerCopiaRelease(
       this.conta,
@@ -339,6 +348,7 @@ export class SessaoRascunhoRelease {
 
   private mostrar() {
     if (!this.viva) return;
+    if (this.descarteConfirmado) { this.avisar("Preenchimento descartado.", false); return; }
 
     const atualizado =
       JSON.stringify(
@@ -365,7 +375,8 @@ export class SessaoRascunhoRelease {
     );
   }
 
-  private gravar() {
+  private gravar(forcarDescarte = false) {
+    if (this.descarteConfirmado && !forcarDescarte) return Promise.resolve();
     const geracao = ++this.geracao;
 
     const copia = JSON.parse(
@@ -375,6 +386,7 @@ export class SessaoRascunhoRelease {
     const trabalho = this.fila
       .catch(() => {})
       .then(async () => {
+        if (this.descarteConfirmado && !forcarDescarte) return;
         copia.seq = this.seqGravada + 1;
 
         await escreverCopia(
@@ -414,7 +426,7 @@ export class SessaoRascunhoRelease {
 
   async registrar(valor: ReleasePendente, alterado = true) {
     if (!this.pronta || !this.viva) throw new Error("A recuperação do rascunho ainda não terminou.");
-    if (this.copia.encerrado) return;
+    if (this.copia.encerrado || this.descartando) return;
     if (!alterado && !this.possuiCopia) return;
     this.possuiCopia = true;
 
@@ -465,6 +477,7 @@ export class SessaoRascunhoRelease {
 
     while (
       this.viva &&
+      !this.descartando &&
       !this.copia.encerrado &&
       (forcar || this.permitida)
     ) {
@@ -509,12 +522,14 @@ export class SessaoRascunhoRelease {
       await this.gravar();
 
       const tentativa = this.copia.pedido;
+      if (this.descartando || this.copia.encerrado) return this.copia.remoto;
 
       try {
         const remoto =
           await sincronizarRascunhoRelease(
             tentativa
           );
+        if (this.descarteConfirmado) return null;
 
         verificou = true;
 
@@ -529,6 +544,7 @@ export class SessaoRascunhoRelease {
 
         await this.gravar();
       } catch (erro) {
+        if (this.descarteConfirmado) return null;
         if (
           erro instanceof ErroApiRelease &&
           [
@@ -702,6 +718,38 @@ export class SessaoRascunhoRelease {
     }
   }
 
+  async descartar() {
+    if (this.descarteConfirmado) return;
+    if (!this.pronta) throw new Error("A recuperação do rascunho ainda não terminou.");
+    const permitida = this.permitida;
+    this.permitida = false;
+    this.descartando = true;
+    try {
+      // Esta marca é a confirmação local da escolha SAIR e independe da conexão.
+      await registrarDescarteRelease(this.conta, this.copia.valor.dados.chave_rascunho);
+    } catch (erro) {
+      this.descartando = false;
+      this.permitida = permitida;
+      throw erro;
+    }
+    this.descarteConfirmado = true;
+    const chave = this.copia.valor.dados.chave_rascunho;
+    this.base = null;
+    this.copia = {
+      seq: this.copia.seq, encerrado: true, remoto: null, confirmado: "", pedido: null, bloqueio: null,
+      valor: {
+        etapa: "DESTINO", cliente: null, template: null, selecionados: [], conteudoEditado: false,
+        dados: { titulo: "", chave_rascunho: chave, cliente_id: null, jornalistas_ids: [],
+          template_id: null, template_codigo: null, template_assinatura: "", blocos: [],
+          dados_envio: { assunto: "", primeira_linha: "", nome_remetente: "", responder_para: "" } },
+      },
+    };
+    // A marca acima impede recuperar qualquer cópia antiga, mesmo se esta gravação falhar.
+    await this.gravar(true).catch(() => {});
+    await this.gravar(true).catch(() => {});
+    await aguardarDescartesRelease(this.conta);
+  }
+
   private async aguardar() {
     await this.carregamento?.catch(() => {});
     await this.rede?.catch(() => {});
@@ -716,6 +764,16 @@ export class SessaoRascunhoRelease {
       if (sessoes.get(chave) === this) sessoes.delete(chave);
     });
   }
+}
+
+export async function descartarCopiaRelease(conta: string, identidade: string, chave: string) {
+  const sessao = sessoes.get(chaveSessao(conta, identidade));
+  if (sessao?.pronta && sessao.chaveRascunho === chave) {
+    await sessao.descartar();
+    return;
+  }
+  await registrarDescarteRelease(conta, chave);
+  await aguardarDescartesRelease(conta);
 }
 
 export async function encerrarCopiaRelease(

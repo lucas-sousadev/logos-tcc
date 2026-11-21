@@ -425,6 +425,9 @@ export interface SituacaoEnvioRelease {
     processando: number;
     aceitos: number;
     falhas: number;
+    repetiveis: number;
+    incertos: number;
+    aguardando_retentativa: number;
   };
   destinatarios: {
     id: number;
@@ -433,6 +436,11 @@ export interface SituacaoEnvioRelease {
     status: StatusDestinatarioRelease;
     enviado_em: string | null;
     erro_mensagem: string | null;
+    tentativas: number;
+    ultima_tentativa_em: string | null;
+    proxima_tentativa_em: string | null;
+    erro_tipo: TipoFalhaRelease | null;
+    smtp_codigo: number | null;
   }[];
   pagination: {
     page: number;
@@ -578,6 +586,21 @@ export interface PedidoRascunhoRelease {
   dados: Omit<DadosEdicaoRelease, "versao_edicao">;
 }
 
+export async function descartarRascunhoRelease(chave: string, conta: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const resposta = await authenticatedFetch(API_URL + "/api/releases/rascunho/descartar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chave_rascunho: chave, conta }), signal: controller.signal,
+    });
+    const resultado = await lerResposta<{ descartado: boolean; envio_preservado: boolean }>(resposta);
+    if (typeof resultado.descartado !== "boolean" || typeof resultado.envio_preservado !== "boolean") {
+      throw new Error("O servidor não confirmou o descarte do rascunho.");
+    }
+  } finally { clearTimeout(timer); }
+}
+
 export async function sincronizarRascunhoRelease(
   pedido: PedidoRascunhoRelease
 ): Promise<DetalheRelease> {
@@ -615,6 +638,53 @@ export async function sincronizarRascunhoRelease(
     }
 
     return release;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+  
+export type TipoFalhaRelease =
+  | "TEMPORARIA"
+  | "PERMANENTE"
+  | "CONFIGURACAO"
+  | "INCERTA";
+
+  export async function repetirFalhasRelease(
+  id: number
+): Promise<SituacaoEnvioRelease> {
+  const controller = new AbortController();
+
+  const timer = setTimeout(
+    () => controller.abort(),
+    30_000
+  );
+
+  try {
+    const resposta = await authenticatedFetch(
+      API_URL + "/api/releases/" + id + "/repetir-falhas",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      }
+    );
+
+    const dados = await lerResposta<{
+      envio: SituacaoEnvioRelease;
+    }>(resposta);
+
+    return dados.envio;
+  } catch (erro) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        "A solicitação demorou para responder. Atualize o acompanhamento antes de tentar novamente."
+      );
+    }
+
+    throw erro;
   } finally {
     clearTimeout(timer);
   }

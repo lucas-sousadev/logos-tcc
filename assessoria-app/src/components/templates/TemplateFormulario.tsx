@@ -221,7 +221,6 @@ export default function TemplateFormulario({
       <Header
         title={editar ? "Editar template" : "Novo template"}
         showBackButton
-        showSettings={false}
         onBackPress={sair}
       />
 

@@ -1,6 +1,7 @@
 import {
   CommonActions,
   type NavigationProp,
+  type NavigationAction,
   type NavigationState,
   type ParamListBase,
   type TabNavigationState,
@@ -13,6 +14,12 @@ export const MODULOS_APP = [
 
 export type ModuloApp = (typeof MODULOS_APP)[number];
 export type OrigemModulo = "inicio" | "mais";
+
+type AcaoModulo = NavigationAction & { origemBarra?: boolean };
+
+export function ehNavegacaoPelaBarra(acao: NavigationAction): boolean {
+  return (acao as AcaoModulo).origemBarra === true;
+}
 
 type NavegacaoModulo = {
   getState: () => NavigationState | undefined;
@@ -78,7 +85,8 @@ export function abrirModuloNaNavegacao(
   modulo: ModuloApp,
   origem: OrigemModulo = "inicio",
   tela = "index",
-  parametros: Record<string, unknown> = {}
+  parametros: Record<string, unknown> = {},
+  pelaBarra = false
 ): boolean {
   let atual: NavegacaoModulo | undefined = navigation;
   while (atual) {
@@ -87,10 +95,18 @@ export function abrirModuloNaNavegacao(
       const proximo = criarEntradaModulo(
         estado as TabNavigationState<ParamListBase>, modulo, origem, tela, parametros
       );
-      atual.dispatch({ ...CommonActions.reset(proximo), target: estado.key });
+      const acao: AcaoModulo = {
+        ...CommonActions.reset(proximo), target: estado.key,
+        ...(pelaBarra ? { origemBarra: true } : {}),
+      };
+      atual.dispatch(acao);
       return true;
     }
     atual = atual.getParent();
   }
   return false;
+}
+
+export function abrirModuloPelaBarra(navigation: NavegacaoModulo, modulo: ModuloApp) {
+  return abrirModuloNaNavegacao(navigation, modulo, "inicio", "index", {}, true);
 }

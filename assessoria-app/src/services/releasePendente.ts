@@ -3,6 +3,7 @@ import { File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 
 import { API_URL } from "@/constants/api";
+import { descarteRegistrado } from "@/services/releaseDescarte";
 import type { EtapaRelease } from "@/components/releases/ReleaseEtapas";
 import type {
   DadosEnvioRelease,
@@ -72,6 +73,9 @@ export async function lerReleasePendente(conta: string): Promise<ReleasePendente
     };
 
     if (api !== API_URL) continue;
+    const chave = tentativa?.dados?.chave_rascunho;
+    if (typeof chave === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(chave)
+      && await descarteRegistrado(conta, chave)) continue;
 
     if (
       nome !== nomeTentativa(

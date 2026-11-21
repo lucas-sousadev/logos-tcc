@@ -733,6 +733,13 @@ $router->get(
 );
 
 $router->post(
+    "/api/releases/rascunho/descartar",
+    "ReleaseController:descartarCriacao",
+    "RELEASES.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
     "/api/releases/rascunho",
     "ReleaseController:salvarAutomaticamente",
     middleware: [$authMiddleware]
@@ -776,6 +783,13 @@ $router->get(
     "/api/releases/{id}/envio",
     "ReleaseController:situacaoEnvio",
     "RELEASES.VISUALIZAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases/{id}/repetir-falhas",
+    "ReleaseController:repetirFalhas",
+    "RELEASES.ENVIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 

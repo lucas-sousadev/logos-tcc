@@ -130,6 +130,11 @@ export default function VeiculoDetalhes() {
   const [formularioOriginal, setFormularioOriginal] =
     useState<Formulario | null>(null);
   const [modoEdicao, setModoEdicao] = useState(false);
+  const [feedbackEdicao, setFeedbackEdicao] = useState<{
+    variant: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -318,12 +323,13 @@ export default function VeiculoDetalhes() {
       setErroEnderecos("");
       setModoEdicao(true);
     } catch (error) {
-      Alert.alert(
-        "Erro",
-        error instanceof Error
+      setFeedbackEdicao({
+        variant: "error",
+        title: "Não foi possível abrir a edição",
+        message: error instanceof Error
           ? error.message
-          : "Não foi possível carregar os endereços."
-      );
+          : "Não foi possível carregar os endereços.",
+      });
     }
   }
 
@@ -539,10 +545,11 @@ export default function VeiculoDetalhes() {
       }
       setModoEdicao(false);
 
-      Alert.alert(
-        "Sucesso",
-        "Veículo atualizado com sucesso."
-      );
+      setFeedbackEdicao({
+        variant: "success",
+        title: "Veículo atualizado",
+        message: "As alterações foram salvas com sucesso.",
+      });
     } catch (error) {
       const mensagem =
         error instanceof Error
@@ -550,6 +557,11 @@ export default function VeiculoDetalhes() {
           : "Não foi possível atualizar o veículo.";
 
       mostrarErroApi(mensagem);
+      setFeedbackEdicao({
+        variant: "error",
+        title: "Não foi possível salvar",
+        message: mensagem,
+      });
     } finally {
       setSalvando(false);
     }
@@ -955,6 +967,13 @@ export default function VeiculoDetalhes() {
         )}
       </ScrollView>
     <FeedbackAlert {...saida.alertaProps} />
+      <FeedbackAlert
+        visible={feedbackEdicao !== null}
+        variant={feedbackEdicao?.variant ?? "success"}
+        title={feedbackEdicao?.title ?? ""}
+        message={feedbackEdicao?.message ?? ""}
+        onClose={() => setFeedbackEdicao(null)}
+      />
       </View>
   );
 }

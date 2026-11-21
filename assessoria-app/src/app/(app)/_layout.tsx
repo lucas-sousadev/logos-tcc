@@ -12,9 +12,11 @@ import { useFonts } from "expo-font";
 import { Fonts } from "@/constants/fonts"
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { abrirModuloNaNavegacao, ehModuloApp } from "@/utils/navegacaoModulos";
+import { useDescartesRelease } from "@/hooks/useDescartesRelease";
+import { abrirModuloPelaBarra, ehModuloApp } from "@/utils/navegacaoModulos";
 
 export default function AppLayout() {
+    useDescartesRelease();
     const { temPermissao } = useAuth();
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
@@ -57,7 +59,7 @@ export default function AppLayout() {
         tabPress: (evento) => {
           if (!ehModuloApp(route.name)) return;
           evento.preventDefault();
-          abrirModuloNaNavegacao(navigation, route.name);
+          abrirModuloPelaBarra(navigation, route.name);
         },
       })}
     >

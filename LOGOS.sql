@@ -410,6 +410,11 @@ CREATE TABLE release_destinatarios (
         'ENVIADO',
         'ERRO'
     ) NOT NULL DEFAULT 'PENDENTE',
+    tentativas INT UNSIGNED NOT NULL DEFAULT 0,
+    ultima_tentativa_em DATETIME NULL,
+    proxima_tentativa_em DATETIME NULL,
+    erro_tipo VARCHAR(20) NULL,
+    smtp_codigo SMALLINT UNSIGNED NULL,
 
     enviado_em DATETIME NULL,
 
@@ -444,7 +449,8 @@ CREATE TABLE release_destinatarios (
 
     INDEX idx_release_destinatarios_release (release_id),
     INDEX idx_release_destinatarios_jornalista (jornalista_id),
-    INDEX idx_release_destinatarios_status (status)
+    INDEX idx_release_destinatarios_status (status),
+    INDEX idx_release_destinatarios_fila (status, proxima_tentativa_em, release_id)
 ) ENGINE=InnoDB;
 
 -- 12. Clippings

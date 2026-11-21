@@ -14,10 +14,9 @@ import {
   useIsFocused,
   useLocalSearchParams,
   useRouter,
+  useNavigation
 } from "expo-router";
 import { Platform } from "react-native";
-import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 
 import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
@@ -47,6 +46,7 @@ import {
   type DecisaoRevisaoSlide,
 } from "@/services/api/relatorio";
 import { excluirRelatorio } from "@/services/api/relatorio";
+import { salvarArquivo } from "@/services/salvarArquivo";
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 
@@ -408,6 +408,8 @@ function CartaoSlide({
 export default function DetalheRelatorio() {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
+
+  const navigation = useNavigation();
   const router = useRouter();
   const voltarNaPilha = useVoltarNaPilha();
   const abrirModulo = useAbrirModulo();
@@ -578,9 +580,22 @@ export default function DetalheRelatorio() {
       };
     }, [id, pagina, tentativa, buscaAplicada, filtroRevisao, origensRevisao])
   );
-  useEffect(() => {
+  
+  const chaveDaSelecao = JSON.stringify([
+    id,
+    pagina,
+    buscaAplicada,
+    filtroRevisao,
+    origensRevisao,
+  ]);
+
+  const [chaveAnterior, setChaveAnterior] =
+    useState(chaveDaSelecao);
+
+  if (chaveAnterior !== chaveDaSelecao) {
+    setChaveAnterior(chaveDaSelecao);
     setIdsSelecionados([]);
-  }, [pagina, buscaAplicada, filtroRevisao, origensRevisao]);
+  }
 
   function alternarSlideSelecionado(slideId: number) {
     setIdsSelecionados((atuais) =>
@@ -832,49 +847,21 @@ export default function DetalheRelatorio() {
     setErroAcao("");
 
     try {
-      if (
-        Platform.OS !== "web" &&
-        !(await Sharing.isAvailableAsync())
-      ) {
-        throw new Error(
-          "O compartilhamento de arquivos não está disponível neste dispositivo."
-        );
-      }
-
       const conteudo = await gerarPptxTeste(relatorio.id);
       const nomeArquivo = `relatorio-${relatorio.id}-teste.pptx`;
       const tipo =
         "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-      if (Platform.OS === "web") {
-        const url = URL.createObjectURL(
-          new Blob([conteudo], { type: tipo })
-        );
-        const link = document.createElement("a");
+      if (!navigation.isFocused()) return;
 
-        try {
-          link.href = url;
-          link.download = nomeArquivo;
-          document.body.appendChild(link);
-          link.click();
-        } finally {
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
+      const resultado = await salvarArquivo(
+        conteudo,
+        nomeArquivo,
+        tipo
+      );
 
-        setMensagemPptx("O download do PPTX foi iniciado.");
-      } else {
-        const arquivo = new File(Paths.cache, nomeArquivo);
-        arquivo.write(new Uint8Array(conteudo));
-
-        await Sharing.shareAsync(arquivo.uri, {
-          mimeType: tipo,
-          dialogTitle: "Exportar relatório",
-        });
-
-        setMensagemPptx(
-          "PPTX preparado. Escolha onde salvar ou enviar o arquivo."
-        );
+      if (navigation.isFocused()) {
+        setMensagemPptx(resultado.mensagem);
       }
     } catch (error) {
       setErroAcao(

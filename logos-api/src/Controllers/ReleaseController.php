@@ -352,6 +352,57 @@ class ReleaseController
         });
     }
 
+    public function repetirFalhas(array $rota): void
+    {
+        $this->executar(
+            function (
+                int $assessoriaId,
+                int $usuarioId,
+                string $perfil
+            ) use ($rota): array {
+                if ($this->corpo() !== []) {
+                    throw new \InvalidArgumentException(
+                        'A nova tentativa usa os destinatários do release salvo.'
+                    );
+                }
+
+                if (
+                    !PermissaoService::usuarioTemPermissao(
+                        $usuarioId,
+                        $perfil,
+                        'RELEASES',
+                        'VISUALIZAR'
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'Você precisa da permissão de visualizar releases.',
+                        403
+                    );
+                }
+
+                return [
+                    'envio' => ReleaseEnvioService::reenfileirarFalhas(
+                        $assessoriaId,
+                        $rota['id'] ?? null
+                    ),
+                ];
+            },
+            202
+        );
+    }
+
+    public function descartarCriacao(): void
+    {
+        $this->executar(function (int $a, int $u): array {
+            $dados = $this->corpo();
+            if (($dados['conta'] ?? null) !== $a . '-' . $u) {
+                throw new \RuntimeException('A conta foi alterada. O descarte será retomado na conta original.', 403);
+            }
+            unset($dados['conta']);
+            return ReleaseService::descartarCriacao($a, $u, $dados);
+        });
+    }
+
     public function salvarAutomaticamente(): void
     {
         $this->executar(function (

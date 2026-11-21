@@ -7,11 +7,11 @@ import {
   Platform
 } from "react-native";
 
-import * as DocumentPicker from "expo-document-picker";
-import * as Sharing from "expo-sharing";
-import { File, Paths,} from "expo-file-system";
+import * as DocumentPicker from "@/services/seletorArquivos";
+import { File} from "expo-file-system";
 import React, { useState, useCallback, useRef} from "react";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useNavigation } from "expo-router";
+import { salvarArquivo } from "@/services/salvarArquivo";
 import MailingFilterModal from "@/components/ui/Filtros/MailingFilterModal";
 import type {
   FiltrosMailing,
@@ -76,6 +76,8 @@ const LIMITE_SELECAO_EM_LOTE = 100;
 export default function Mailing() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const navigation = useNavigation();
+  const travaExportacao = useRef(false);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
 
@@ -219,11 +221,13 @@ export default function Mailing() {
       );
     }
   async function exportarMailing() {
+    if (travaExportacao.current) return;
+
+    travaExportacao.current = true;
     sairModoSelecao();
+    setExportando(true);
 
     try {
-      setExportando(true);
-
       const response = await exportarJornalistas({
         busca: buscaAplicada,
         estado: filtros.estado,
@@ -234,83 +238,47 @@ export default function Mailing() {
       });
 
       const conteudo = await response.arrayBuffer();
-      const nomeArquivo = nomeArquivoMailing();
 
-      if (Platform.OS === "web") {
-        const blob = new Blob(
-          [conteudo],
-          {
-            type: "text/csv;charset=utf-8",
-          }
-        );
+      if (!navigation.isFocused()) return;
 
-        const url = URL.createObjectURL(blob);
+      const resultado = await salvarArquivo(
+        conteudo,
+        nomeArquivoMailing(),
+        "text/csv"
+      );
 
-        const link = document.createElement("a");
-
-        link.href = url;
-        link.download = nomeArquivo;
-
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        URL.revokeObjectURL(url);
-
-        mostrarFeedback({
-          variant: "success",
-          title: "Exportação concluída",
-          message: mensagemExportacao(nomeArquivo),
-        });
-
+      if (
+        resultado.status === "cancelado" ||
+        !navigation.isFocused()
+      ) {
         return;
       }
 
-      const compartilhamentoDisponivel =
-        await Sharing.isAvailableAsync();
-
-
-      if (!compartilhamentoDisponivel) {
-        throw new Error(
-          "O compartilhamento de arquivos não está disponível neste dispositivo."
-        );
-      }
-
-      const arquivo = new File(
-        Paths.cache,
-        nomeArquivo
-      );
-
-      arquivo.write(
-        new Uint8Array(conteudo)
-      );
-
-      await Sharing.shareAsync(
-      arquivo.uri,
-      {
-        mimeType: "text/csv",
-        dialogTitle:
-          "Exportar contatos do mailing",
-      }
-    );
-
-    mostrarFeedback({
-      variant: "info",
-      title: "Arquivo preparado",
-      message:
-        `O arquivo ${nomeArquivo} foi gerado. ` +
-        "Use a janela de compartilhamento para salvá-lo ou enviá-lo.",
-    });
-    } catch (error) {
       mostrarFeedback({
-        variant: "error",
-        title: "Não foi possível exportar",
+        variant:
+          resultado.status === "salvo" ? "success" : "info",
+        title:
+          resultado.status === "salvo"
+            ? "Arquivo salvo"
+            : "Download solicitado",
         message:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível exportar os contatos.",
+          resultado.status === "solicitado"
+            ? mensagemExportacao(resultado.nome)
+            : resultado.mensagem,
       });
+    } catch (error) {
+      if (navigation.isFocused()) {
+        mostrarFeedback({
+          variant: "error",
+          title: "Não foi possível exportar",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Não foi possível exportar os contatos.",
+        });
+      }
     } finally {
+      travaExportacao.current = false;
       setExportando(false);
     }
   }

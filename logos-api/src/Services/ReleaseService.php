@@ -9,6 +9,15 @@ use PDOStatement;
 
 class ReleaseService
 {
+    // Reserva a chave cancelada para impedir que um POST atrasado recrie o cadastro.
+    // O conteúdo é apagado; esta reserva interna não participa das listagens.
+    private const ASSINATURA_DESCARTADA = '0000000000000000000000000000000000000000000000000000000000000000';
+    private const VISIVEL = "(r.assinatura_cadastro IS NULL OR r.assinatura_cadastro <> '" . self::ASSINATURA_DESCARTADA . "')";
+
+    public static function foiDescartado(array $release): bool
+    {
+        return ($release['assinatura_cadastro'] ?? null) === self::ASSINATURA_DESCARTADA;
+    }
     private const STATUS = [
         'RASCUNHO',
         'AGENDADO',
@@ -134,7 +143,7 @@ class ReleaseService
             throw new \InvalidArgumentException('Paginação inválida. Use até 100 releases por página.');
         }
 
-        $where = ' WHERE r.assessoria_id = :assessoria_id';
+        $where = ' WHERE r.assessoria_id = :assessoria_id AND ' . self::VISIVEL;
         $parametros = ['assessoria_id' => $assessoriaId];
         $busca = self::texto($dados['busca'] ?? '', 'Busca', 255);
 
@@ -228,7 +237,7 @@ class ReleaseService
         $release = self::consultar(
             'SELECT ' . self::CAMPOS
                 . ', r.blocos_json, r.primeira_linha, r.nome_remetente, r.responder_para'
-                . self::ORIGEM . ' WHERE r.id = :id AND r.assessoria_id = :assessoria_id',
+                . self::ORIGEM . ' WHERE r.id = :id AND r.assessoria_id = :assessoria_id AND ' . self::VISIVEL,
             ['id' => $releaseId, 'assessoria_id' => $assessoriaId]
         )->fetch();
 
@@ -289,6 +298,10 @@ class ReleaseService
 
         if (!$existente) {
             return null;
+        }
+
+        if (self::foiDescartado($existente)) {
+            throw new \DomainException('Este cadastro foi descartado. Inicie um novo release.');
         }
 
         if (!hash_equals((string) $existente['assinatura_cadastro'], $assinatura)) {
@@ -1127,6 +1140,50 @@ class ReleaseService
                 $db->rollBack();
             }
 
+            throw $erro;
+        }
+    }
+
+    public static function descartarCriacao(int $assessoriaId, int $usuarioId, array $dados): array
+    {
+        $chave = $dados['chave_rascunho'] ?? null;
+        if (array_keys($dados) !== ['chave_rascunho'] || !is_string($chave)
+            || !preg_match('/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $chave)) {
+            throw new \InvalidArgumentException('Informe apenas a chave válida do cadastro a descartar.');
+        }
+        $chave = strtolower($chave);
+        $db = Connection::get();
+        $db->beginTransaction();
+        try {
+            self::consultar("INSERT INTO releases (
+                    assessoria_id, criado_por, titulo, assunto, blocos_json, chave_rascunho, assinatura_cadastro
+                ) VALUES (:a, :u, '', '', '[]', :chave, :assinatura)
+                ON DUPLICATE KEY UPDATE id = id", [
+                'a' => $assessoriaId, 'u' => $usuarioId, 'chave' => $chave, 'assinatura' => self::ASSINATURA_DESCARTADA,
+            ]);
+            $linha = self::consultar('SELECT id, status, assinatura_cadastro FROM releases
+                WHERE assessoria_id = :a AND criado_por = :u AND chave_rascunho = :chave FOR UPDATE',
+                ['a' => $assessoriaId, 'u' => $usuarioId, 'chave' => $chave])->fetch();
+
+            $emProcessamento = (int) self::consultar("SELECT COUNT(*) FROM release_destinatarios
+                WHERE release_id = :id AND assessoria_id = :a AND status <> 'PENDENTE'",
+                ['id' => (int) $linha['id'], 'a' => $assessoriaId])->fetchColumn();
+            if ($linha['status'] !== 'RASCUNHO' || $emProcessamento > 0) {
+                $db->commit();
+                return ['descartado' => false, 'envio_preservado' => true];
+            }
+            self::consultar('DELETE FROM release_destinatarios WHERE release_id = :id AND assessoria_id = :a',
+                ['id' => (int) $linha['id'], 'a' => $assessoriaId]);
+            self::consultar("UPDATE releases SET cliente_id = NULL, template_id = NULL, template_codigo = NULL,
+                titulo = '', assunto = '', primeira_linha = '', nome_remetente = '', responder_para = '',
+                blocos_json = '[]', assinatura_cadastro = :assinatura, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id AND assessoria_id = :a", [
+                'id' => (int) $linha['id'], 'a' => $assessoriaId, 'assinatura' => self::ASSINATURA_DESCARTADA,
+            ]);
+            $db->commit();
+            return ['descartado' => true, 'envio_preservado' => false];
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) $db->rollBack();
             throw $erro;
         }
     }

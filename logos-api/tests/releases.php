@@ -235,6 +235,13 @@ try {
     conferirRelease(requisitarRelease($url . '/rascunho', 'POST', $semPermissao, json_encode($alheio))[0] === 403, 'Criar não permite alterar o rascunho de outro usuário.');
     conferirRelease(requisitarRelease($url . '/' . $resposta['release']['id'] . '/enviar', 'POST', $token,
         json_encode(['versao_edicao' => str_repeat('0', 64)]))[0] === 409, 'O envio rejeita uma versão diferente da revisada antes de transmitir e-mail.');
+    $descarte = ['conta' => '1-3', 'chave_rascunho' => $automatico['chave']];
+    conferirRelease(requisitarRelease($url . '/rascunho/descartar', 'POST', null, json_encode($descarte))[0] === 401, 'Descartar exige autenticação.');
+    $contaErrada = $descarte; $contaErrada['conta'] = '1-1';
+    conferirRelease(requisitarRelease($url . '/rascunho/descartar', 'POST', $semPermissao, json_encode($contaErrada))[0] === 403, 'A troca de conta não pode descartar uma criação de outra sessão.');
+    [$statusDescarte, $descartado] = requisitarRelease($url . '/rascunho/descartar', 'POST', $semPermissao, json_encode($descarte));
+    conferirRelease($statusDescarte === 200 && $descartado['descartado'], 'Criar permite descartar o próprio cadastro sem permissão geral de excluir.');
+    conferirRelease(requisitarRelease($url . '/' . $automatico['id'], 'GET', $token)[0] === 404, 'O cadastro descartado não é mais exibido.');
     echo "OK: rotas HTTP, autenticação, permissões e respostas de erro.\n";
 } finally {
     if (is_resource($processo)) {

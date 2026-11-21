@@ -1,6 +1,10 @@
 import {
   authenticatedFetch,
 } from "@/services/api/auth";
+import {
+  anexarArquivo,
+  fetchUpload,
+} from "@/services/arquivoUpload";
 
 import { API_URL } from "@/constants/api";
 import type { Tier } from "@/constants/tier";
@@ -207,10 +211,7 @@ export async function criarVeiculo(
     logo
       ? {
           method: "POST",
-          body: criarFormDataVeiculo(
-            dados,
-            logo
-          ),
+          body: criarFormDataVeiculo(dados, logo),
         }
       : {
           method: "POST",
@@ -218,7 +219,8 @@ export async function criarVeiculo(
             "Content-Type": "application/json",
           },
           body: JSON.stringify(dados),
-        }
+        },
+    fetchUpload
   );
 
   return lerRespostaVeiculo(
@@ -289,7 +291,8 @@ export async function atualizarVeiculoComLogo(
         logo,
         removerLogo
       ),
-    }
+    },
+    fetchUpload
   );
 
   return lerRespostaVeiculo(
@@ -438,16 +441,7 @@ function criarFormDataVeiculo(
   }
 
   if (logo) {
-    const arquivo = logo.file ?? {
-      uri: logo.uri,
-      name: logo.nome,
-      type: logo.mimeType,
-    };
-
-    formData.append(
-      "logo",
-      arquivo as unknown as Blob
-    );
+    anexarArquivo(formData, "logo", logo);
   }
 
   return formData;

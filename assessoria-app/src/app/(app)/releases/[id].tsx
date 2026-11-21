@@ -20,6 +20,7 @@ import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ReleaseBlocosPrevia from "@/components/releases/ReleaseBlocosPrevia";
 import ReleaseResumoCard from "@/components/releases/ReleaseResumoCard";
 
+import { pendenciasEnvioRelease,} from "@/utils/validarEnvioRelease";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -31,6 +32,7 @@ import {
   solicitarEnvioRelease,
   ErroApiRelease,
   excluirRelease,
+  repetirFalhasRelease,
   type DetalheRelease,
   type SituacaoEnvioRelease,
   type StatusDestinatarioRelease,
@@ -51,7 +53,7 @@ const ROTULOS_DESTINATARIO: Record<
   PENDENTE: "Na fila",
   ENVIANDO: "Processando",
   ENVIADO: "Aceito para encaminhamento",
-  ERRO: "Falha ou envio sem confirmação",
+  ERRO: "Falha no envio",
 };
 
 export default function DetalhesRelease() {
@@ -88,10 +90,29 @@ function ConteudoRelease({ id }: { id: number }) {
   const podeEnviar = temPermissao("RELEASES", "ENVIAR");
   const trava = useRef(false);
 
-  const [release, setRelease] =
-    useState<DetalheRelease | null>(null);
-  const [envio, setEnvio] =
-    useState<SituacaoEnvioRelease | null>(null);
+  const [release, setRelease] = useState<DetalheRelease | null>(null);
+  const [envio, setEnvio] = useState<SituacaoEnvioRelease | null>(null);
+  const pendenciasEnvio = release
+    ? pendenciasEnvioRelease({
+        titulo: release.titulo,
+
+        templateDefinido: Boolean(
+          release.template_id ||
+          release.template_codigo ||
+          release.blocos.length
+        ),
+
+        dadosEnvio: {
+          assunto: release.assunto,
+          primeira_linha: release.primeira_linha,
+          nome_remetente: release.nome_remetente,
+          responder_para: release.responder_para,
+        },
+
+        blocos: release.blocos,
+        destinatarios: release.destinatarios,
+      })
+    : ["Aguarde o carregamento do release."];
 
   const [consulta, setConsulta] = useState<{
     page: number;
@@ -110,11 +131,16 @@ function ConteudoRelease({ id }: { id: number }) {
   const podeEditar = temPermissao("RELEASES", "EDITAR");
   const podeExcluir = temPermissao("RELEASES", "EXCLUIR");
 
+  const [repetindo, setRepetindo] = useState(false);
+  const [confirmarRepeticao, setConfirmarRepeticao] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
-  const saida = useSaidaFormulario(false, enviando || excluindo);
-
+  const saida = useSaidaFormulario(
+    false,
+    enviando || excluindo || repetindo
+  );
+    
   useFocusEffect(
     useCallback(() => {
       if (!podeVer || !id) {
@@ -229,6 +255,11 @@ function ConteudoRelease({ id }: { id: number }) {
       return;
     }
 
+    if (pendenciasEnvio.length > 0) {
+      setErroEnvio(pendenciasEnvio.join("\n"));
+      return;
+    }
+
     trava.current = true;
     setEnviando(true);
     setErroEnvio("");
@@ -325,6 +356,39 @@ function ConteudoRelease({ id }: { id: number }) {
       await removerReleasePendente(conta, pendente.dados.chave_rascunho);
     }
   }
+
+  async function repetirFalhas() {
+    if (
+      trava.current ||
+      !podeEnviar ||
+      !envio ||
+      !["PARCIAL", "FALHOU"].includes(envio.release.status) ||
+      envio.totais.repetiveis === 0
+    ) {
+      return;
+    }
+
+    trava.current = true;
+    setRepetindo(true);
+    setErroEnvio("");
+
+    try {
+      const atualizado = await repetirFalhasRelease(id);
+      setEnvio(atualizado);
+    } catch (falha) {
+      setErroEnvio(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível solicitar uma nova tentativa."
+      );
+    } finally {
+      setConfirmarRepeticao(false);
+      setConsulta({ page: 1, status: "TODOS" });
+      trava.current = false;
+      setRepetindo(false);
+    }
+  }
+
   return (
     <View
       style={[
@@ -456,11 +520,69 @@ function ConteudoRelease({ id }: { id: number }) {
                 encaminhamento. A entrega ao destinatário ainda não
                 está confirmada.
               </Text>
+              {envio.totais.aguardando_retentativa > 0 ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: theme.textoSub,
+                  }}
+                >
+                  {envio.totais.aguardando_retentativa} destinatário(s)
+                  aguardando uma nova tentativa automática.
+                </Text>
+              ) : null}
+
+              {envio.totais.incertos > 0 ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: theme.aviso,
+                  }}
+                >
+                  Há envios sem confirmação. Confira esses casos antes
+                  de realizar outro envio para os mesmos destinatários.
+                </Text>
+              ) : null}
+
+              {podeEnviar &&
+              ["PARCIAL", "FALHOU"].includes(envio.release.status) &&
+              envio.totais.repetiveis > 0 ? (
+                <Button
+                  title="TENTAR NOVAMENTE"
+                  icon="refresh-outline"
+                  variant="outline"
+                  loading={repetindo}
+                  disabled={carregando || enviando || excluindo}
+                  onPress={() => {
+                    setErroEnvio("");
+                    setConfirmarRepeticao(true);
+                  }}
+                />
+              ) : null}
 
               {erroEnvio ? (
                 <Text style={{ color: theme.erro }}>
                   {erroEnvio}
                 </Text>
+              ) : null}
+              {envio.release.status === "RASCUNHO" && pendenciasEnvio.length > 0 ? (
+                <View style={{ gap: 4 }}>
+                  <Text weight="SemiBold">
+                    Para enviar, falta:
+                  </Text>
+
+                  {pendenciasEnvio.map((item) => (
+                    <Text
+                      key={item}
+                      style={{
+                        color: theme.textoSub,
+                        fontSize: 12,
+                      }}
+                    >
+                      {"• " + item}
+                    </Text>
+                  ))}
+                </View>
               ) : null}
 
               {envio.release.status === "RASCUNHO" &&
@@ -472,7 +594,9 @@ function ConteudoRelease({ id }: { id: number }) {
                   disabled={
                     carregando ||
                     excluindo ||
-                    envio.totais.total === 0
+                    repetindo ||
+                    envio.totais.total === 0 ||
+                    pendenciasEnvio.length > 0
                   }
                   onPress={() => {
                     setErroEnvio("");
@@ -536,8 +660,26 @@ function ConteudoRelease({ id }: { id: number }) {
                       fontSize: 12,
                     }}
                   >
-                    {ROTULOS_DESTINATARIO[d.status]}
+                    {d.status === "PENDENTE" && d.proxima_tentativa_em
+                      ? "Aguardando nova tentativa"
+                      : d.status === "ERRO" && d.erro_tipo === "INCERTA"
+                      ? "Envio sem confirmação"
+                      : d.status === "ERRO" && d.erro_tipo === "CONFIGURACAO"
+                      ? "Aguardando correção"
+                      : ROTULOS_DESTINATARIO[d.status]}
                   </Text>
+
+                  {d.tentativas > 0 ? (
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: theme.textoSub,
+                      }}
+                    >
+                      {d.tentativas} tentativa(s)
+                      {d.smtp_codigo ? ` · Código SMTP ${d.smtp_codigo}` : ""}
+                    </Text>
+                  ) : null}
 
                   {d.erro_mensagem ? (
                     <Text
@@ -582,7 +724,7 @@ function ConteudoRelease({ id }: { id: number }) {
           ) : null}
         </View>
       </ScrollView>
-
+        
       <FeedbackAlert
         visible={confirmar}
         variant="warning"
@@ -630,6 +772,29 @@ function ConteudoRelease({ id }: { id: number }) {
         }}
         onSecondary={() => {
           if (!trava.current) setConfirmarExclusao(false);
+        }}
+      />
+
+      <FeedbackAlert
+        visible={confirmarRepeticao}
+        variant="warning"
+        title="Tentar novamente?"
+        message={
+          "Serão colocados na fila " +
+          (envio?.totais.repetiveis ?? 0) +
+          " destinatário(s) com falhas que permitem uma nova tentativa. " +
+          "Os envios já aceitos e os sem confirmação serão preservados. " +
+          "Se houve falha de configuração, corrija-a antes de continuar."
+        }
+        primaryLabel="TENTAR"
+        secondaryLabel="CANCELAR"
+        loading={repetindo}
+        onPrimary={() => void repetirFalhas()}
+        onClose={() => {
+          if (!trava.current) setConfirmarRepeticao(false);
+        }}
+        onSecondary={() => {
+          if (!trava.current) setConfirmarRepeticao(false);
         }}
       />
 

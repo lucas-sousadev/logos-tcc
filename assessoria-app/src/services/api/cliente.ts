@@ -1,6 +1,10 @@
 import {
   authenticatedFetch,
 } from "@/services/api/auth";
+import {
+  anexarArquivo,
+  fetchUpload,
+} from "@/services/arquivoUpload";
 
 import { API_URL } from "@/constants/api";
 
@@ -184,12 +188,13 @@ export async function criarCliente(
   dados: DadosCliente,
   logo?: ArquivoLogoCliente
 ): Promise<Cliente> {
-  const response = await authenticatedFetch(
+    const response = await authenticatedFetch(
     `${API_URL}/api/clientes`,
     {
       method: "POST",
       body: criarFormDataCliente(dados, logo),
-    }
+    },
+    fetchUpload
   );
 
   return lerRespostaCliente(
@@ -213,7 +218,8 @@ export async function atualizarClienteComLogo(
         logo,
         removerLogo
       ),
-    }
+    },
+    fetchUpload
   );
 
   return lerRespostaCliente(
@@ -352,16 +358,7 @@ function criarFormDataCliente(
   }
 
   if (logo) {
-    const arquivo = logo.file ?? {
-      uri: logo.uri,
-      name: logo.nome,
-      type: logo.mimeType,
-    };
-
-    formData.append(
-      "logo",
-      arquivo as unknown as Blob
-    );
+    anexarArquivo(formData, "logo", logo);
   }
 
   return formData;
