@@ -29,6 +29,7 @@ import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ContadorLista from "@/components/ui/ContadorLista";
 import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
+import BotaoTransferencia from "@/components/ui/BotaoTransferencia";
 
 import { useSelecaoClippings } from "@/hooks/useSelecaoClipping";
 import { useExportacaoClippings } from "@/hooks/useExportacaoClippings";
@@ -464,50 +465,29 @@ function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
             </ContadorLista>
 
             <View style={[styles.topActions, compacto && styles.topActionsCompact]}>
-              {!selecao.ativo &&
-                temPermissao("CLIPPING", "IMPORTAR") ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Importar clippings de um arquivo CSV"
-                    disabled={
-                      carregando ||
-                      atualizando ||
-                      Boolean(erro) ||
-                      selecao.excluindo ||
-                      exportacao.exportando
-                    }
-                    onPress={abrirImportacao}
-                    style={[
-                      styles.exportButton,
-                    compacto && styles.exportButtonCompact,
-                      {
-                        backgroundColor: theme.background,
-                        borderColor: theme.borda,
-                        opacity:
-                          carregando ||
-                          atualizando ||
-                          Boolean(erro) ||
-                          selecao.excluindo ||
-                          exportacao.exportando
-                            ? 0.5
-                            : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="download-outline"
-                      size={20}
-                      color={theme.texto}
-                    />
-                  </TouchableOpacity>
-                ) : null}
+              {!selecao.ativo && temPermissao("CLIPPING", "IMPORTAR") ? (
+                <BotaoTransferencia
+                  tipo="importar"
+                  label="Importar clippings de um arquivo CSV"
+                  compacto={compacto}
+                  onPress={abrirImportacao}
+                  disabled={
+                    carregando ||
+                    atualizando ||
+                    Boolean(erro) ||
+                    selecao.excluindo ||
+                    exportacao.exportando
+                  }
+                />
+              ) : null}
 
               {podeExportar && !selecao.ativo ? (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Exportar resultados filtrados de todas as páginas"
+                <BotaoTransferencia
+                  tipo="exportar"
+                  label="Exportar resultados filtrados de todas as páginas"
+                  compacto={compacto}
+                  onPress={exportarResultados}
+                  loading={exportacao.exportando}
                   disabled={
                     total === 0 ||
                     carregando ||
@@ -516,31 +496,7 @@ function ConteudoClippingsDoCliente({ params }: { params: RotaClippings }) {
                     selecao.excluindo ||
                     exportacao.exportando
                   }
-                  onPress={exportarResultados}
-                  style={[
-                    styles.exportButton,
-                      compacto && styles.exportButtonCompact,
-                    {
-                      backgroundColor: theme.background,
-                      borderColor: theme.borda,
-                      opacity:
-                        total === 0 ||
-                        carregando ||
-                        atualizando ||
-                        Boolean(erro) ||
-                        selecao.excluindo ||
-                        exportacao.exportando
-                          ? 0.5
-                          : 1,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="cloud-upload-outline"
-                    size={20}
-                    color={theme.texto}
-                  />
-                </TouchableOpacity>
+                />
               ) : null}
               
               {!selecao.ativo && temPermissao("CLIPPING", "CRIAR") ? (

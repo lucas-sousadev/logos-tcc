@@ -7,6 +7,192 @@ use PDO;
 
 final class ReleaseEnvioService
 {
+    private static function bloquearRelease(int $assessoriaId, int $id): array
+    {
+        $release = self::sql(
+            'SELECT * FROM releases WHERE id = :id AND assessoria_id = :a FOR UPDATE',
+            ['id' => $id, 'a' => $assessoriaId]
+        )->fetch();
+        if (!$release || ReleaseService::foiDescartado($release)) {
+            throw new \OutOfBoundsException('Release não encontrado nesta assessoria.');
+        }
+        return $release;
+    }
+
+    private static function conferirVersao(
+        int $assessoriaId,
+        int $id,
+        mixed $versao
+    ): void
+    {
+        if (!is_string($versao) || !preg_match('/^[a-f0-9]{64}$/D', $versao)) {
+            throw new \InvalidArgumentException('Reabra o release para conferir sua versão.');
+        }
+        if (!hash_equals(ReleaseService::buscar($assessoriaId, $id)['versao_edicao'], $versao)) {
+            throw new \DomainException(
+                'O release foi alterado. Atualize a tela antes de continuar.'
+            );
+        }
+    }
+
+    private static function horarioAgendamento(
+        mixed $data,
+        mixed $hora
+    ): \DateTimeImmutable
+    {
+        if (
+            !is_string($data) || !is_string($hora)
+            || !preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/D', $data)
+            || !preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $hora)
+        ) {
+            throw new \InvalidArgumentException('Informe uma data e um horário válidos.');
+        }
+        $texto = $data . ' ' . $hora;
+        $instante = \DateTimeImmutable::createFromFormat(
+            '!Y-m-d H:i',
+            $texto,
+            new \DateTimeZone('America/Sao_Paulo')
+        );
+        if (!$instante || $instante->format('Y-m-d H:i') !== $texto) {
+            throw new \InvalidArgumentException(
+                'Informe uma data e um horário válidos em Brasília.'
+            );
+        }
+        return $instante;
+    }
+
+    public static function agendar(int $assessoriaId, mixed $id, array $dados): array
+    {
+        $id = self::numero($id);
+        $instante = self::horarioAgendamento(
+            $dados['data'] ?? null,
+            $dados['hora'] ?? null
+        );
+        $horario = $instante->format('Y-m-d H:i:s');
+        $db = Connection::get();
+        $db->beginTransaction();
+        try {
+            $release = self::bloquearRelease($assessoriaId, $id);
+            // Repetir uma solicitação já confirmada não altera nem duplica o envio.
+            $repetido = $release['agendado_para'] === $horario
+                && in_array(
+                    $release['status'],
+                    ['AGENDADO', 'NA_FILA', 'ENVIANDO', 'ENVIADO', 'PARCIAL', 'FALHOU'],
+                    true
+                );
+            if (!$repetido) {
+                self::conferirVersao($assessoriaId, $id, $dados['versao_edicao'] ?? null);
+                if (!in_array($release['status'], ['RASCUNHO', 'AGENDADO'], true)) {
+                    throw new \DomainException(
+                        'Este release já entrou no processamento e não pode ser agendado.'
+                    );
+                }
+                if ($instante->getTimestamp() < time() + 60) {
+                    throw new \InvalidArgumentException(
+                        'Escolha um horário com pelo menos um minuto de antecedência.'
+                    );
+                }
+                self::validarPronto($assessoriaId, $id, $release);
+                self::sql(
+                    "UPDATE releases
+                     SET status = 'AGENDADO', agendado_para = :horario,
+                         versao_programacao = versao_programacao + 1
+                     WHERE id = :id AND assessoria_id = :a",
+                    ['horario' => $horario, 'id' => $id, 'a' => $assessoriaId]
+                );
+            }
+            $db->commit();
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $erro;
+        }
+        return self::situacao($assessoriaId, $id);
+    }
+
+    public static function cancelarAgendamento(
+        int $assessoriaId,
+        mixed $id,
+        mixed $versao
+    ): array
+    {
+        $id = self::numero($id);
+        $db = Connection::get();
+        $db->beginTransaction();
+        try {
+            $release = self::bloquearRelease($assessoriaId, $id);
+            if ($release['status'] !== 'RASCUNHO' || $release['agendado_para'] !== null) {
+                self::conferirVersao($assessoriaId, $id, $versao);
+                if ($release['status'] !== 'AGENDADO') {
+                    throw new \DomainException(
+                        'O envio já saiu do agendamento. Atualize a tela e confira a opção de cancelar envio.'
+                    );
+                }
+                self::sql(
+                    "UPDATE releases
+                     SET status = 'RASCUNHO', agendado_para = NULL,
+                         versao_programacao = versao_programacao + 1
+                     WHERE id = :id AND assessoria_id = :a",
+                    ['id' => $id, 'a' => $assessoriaId]
+                );
+            }
+            $db->commit();
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $erro;
+        }
+        return self::situacao($assessoriaId, $id);
+    }
+
+    public static function cancelarEnvio(
+        int $assessoriaId,
+        mixed $id,
+        mixed $versao
+    ): array
+    {
+        $id = self::numero($id);
+        $db = Connection::get();
+        $db->beginTransaction();
+        try {
+            $release = self::bloquearRelease($assessoriaId, $id);
+            if ($release['status'] !== 'CANCELADO') {
+                self::conferirVersao($assessoriaId, $id, $versao);
+                if (!in_array($release['status'], ['NA_FILA', 'ENVIANDO'], true)) {
+                    throw new \DomainException('Não há um envio na fila para cancelar.');
+                }
+                $totais = self::totais($assessoriaId, $id);
+                if ($totais['pendentes'] + $totais['processando'] === 0) {
+                    throw new \DomainException(
+                        'O processamento já terminou. Atualize a tela.'
+                    );
+                }
+                self::sql(
+                    "UPDATE releases
+                     SET status = 'CANCELADO', versao_programacao = versao_programacao + 1
+                     WHERE id = :id AND assessoria_id = :a",
+                    ['id' => $id, 'a' => $assessoriaId]
+                );
+                self::sql(
+                    "UPDATE release_destinatarios
+                     SET status = 'CANCELADO', proxima_tentativa_em = NULL,
+                         erro_tipo = NULL, smtp_codigo = NULL, erro_mensagem = NULL
+                     WHERE release_id = :id AND assessoria_id = :a AND status = 'PENDENTE'",
+                    ['id' => $id, 'a' => $assessoriaId]
+                );
+            }
+            $db->commit();
+        } catch (\Throwable $erro) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $erro;
+        }
+        return self::situacao($assessoriaId, $id);
+    }
+
     private static function numero(mixed $valor): int
     {
         if (
@@ -64,7 +250,9 @@ final class ReleaseEnvioService
     ): array {
         $id = self::numero($id);
         if ($versao !== null && (!is_string($versao) || !preg_match('/^[a-f0-9]{64}$/D', $versao))) {
-            throw new \InvalidArgumentException('Reabra o release para conferir sua versão antes de enviar.');
+            throw new \InvalidArgumentException(
+                'Reabra o release para conferir sua versão antes de enviar.'
+            );
         }
         $db = Connection::get();
         $db->beginTransaction();
@@ -96,115 +284,11 @@ final class ReleaseEnvioService
                     ReleaseService::buscar($assessoriaId, $id)['versao_edicao'],
                     $versao
                 )) {
-                    throw new \DomainException('Este release foi alterado após a revisão. Confira o conteúdo atual antes de enviar.');
-                }
-                if (trim($release['titulo']) === '') {
-                    throw new \InvalidArgumentException(
-                        'Preencha o título interno antes de enviar.'
+                    throw new \DomainException(
+                        'Este release foi alterado após a revisão. Confira o conteúdo atual antes de enviar.'
                     );
                 }
-
-                $destinatarios = self::sql(
-                    'SELECT email, status
-                     FROM release_destinatarios
-                     WHERE release_id = :id
-                       AND assessoria_id = :a
-                     FOR UPDATE',
-                    ['id' => $id, 'a' => $assessoriaId]
-                )->fetchAll();
-
-                if (!$destinatarios) {
-                    throw new \InvalidArgumentException(
-                        'Selecione pelo menos um destinatário.'
-                    );
-                }
-
-                $emails = [];
-
-                foreach ($destinatarios as $d) {
-                    $email = strtolower(trim($d['email']));
-
-                    if (
-                        $d['status'] !== 'PENDENTE'
-                        || !filter_var(
-                            $email,
-                            FILTER_VALIDATE_EMAIL
-                        )
-                        || isset($emails[$email])
-                    ) {
-                        throw new \InvalidArgumentException(
-                            'Revise os destinatários do release.'
-                        );
-                    }
-
-                    $emails[$email] = true;
-                }
-
-                $blocos = json_decode(
-                    $release['blocos_json'],
-                    true,
-                    64,
-                    JSON_THROW_ON_ERROR
-                );
-                
-                $blocos = ReleaseBlocosService::validar($blocos);
-
-                $temConteudo = false;
-
-                foreach ($blocos as $bloco) {
-                    if (
-                        in_array(
-                            $bloco['tipo'],
-                            ['imagem', 'botao', 'arquivo'],
-                            true
-                        )
-                    ) {
-                        $temConteudo =
-                            trim($bloco['url'] ?? '') !== '';
-                    } elseif (
-                        !in_array(
-                            $bloco['tipo'],
-                            ['divisor', 'espacamento'],
-                            true
-                        )
-                    ) {
-                        $temConteudo =
-                            trim($bloco['texto'] ?? '') !== '';
-                    }
-
-                    if ($temConteudo) {
-                        break;
-                    }
-                }
-
-                if (!$temConteudo) {
-                    throw new \InvalidArgumentException(
-                        'Adicione conteúdo ao release antes de enviar.'
-                    );
-                }
-
-                $mailer = ReleaseEmailService::preparar(
-                    $assessoriaId,
-                    array_intersect_key(
-                        $release,
-                        array_flip([
-                            'assunto',
-                            'primeira_linha',
-                            'nome_remetente',
-                            'responder_para',
-                        ])
-                    ),
-                    $blocos,
-                    $destinatarios[0]['email']
-                );
-
-                // Gera e valida o MIME sem transmitir o e-mail.
-                if (!$mailer->preSend()) {
-                    throw new \RuntimeException(
-                        'Não foi possível preparar o e-mail.',
-                        503
-                    );
-                }
+                self::validarPronto($assessoriaId, $id, $release);
 
                 self::sql(
                     "UPDATE releases
@@ -226,6 +310,122 @@ final class ReleaseEnvioService
 
         // Solicitações repetidas consultam o envio existente.
         return self::situacao($assessoriaId, $id);
+    }
+
+    private static function validarPronto(
+        int $assessoriaId,
+        int $id,
+        array $release
+    ): void
+    {
+        if (trim($release['titulo']) === '') {
+            throw new \InvalidArgumentException(
+                'Preencha o título interno antes de enviar.'
+            );
+        }
+
+        $destinatarios = self::sql(
+            'SELECT email, status
+             FROM release_destinatarios
+             WHERE release_id = :id
+               AND assessoria_id = :a
+             FOR UPDATE',
+            ['id' => $id, 'a' => $assessoriaId]
+        )->fetchAll();
+
+        if (!$destinatarios) {
+            throw new \InvalidArgumentException(
+                'Selecione pelo menos um destinatário.'
+            );
+        }
+
+        $emails = [];
+
+        foreach ($destinatarios as $d) {
+            $email = strtolower(trim($d['email']));
+
+            if (
+                $d['status'] !== 'PENDENTE'
+                || !filter_var(
+                    $email,
+                    FILTER_VALIDATE_EMAIL
+                )
+                || isset($emails[$email])
+            ) {
+                throw new \InvalidArgumentException(
+                    'Revise os destinatários do release.'
+                );
+            }
+
+            $emails[$email] = true;
+        }
+
+        $blocos = json_decode(
+            $release['blocos_json'],
+            true,
+            64,
+            JSON_THROW_ON_ERROR
+        );
+
+        $blocos = ReleaseBlocosService::validar($blocos);
+
+        $temConteudo = false;
+
+        foreach ($blocos as $bloco) {
+            if (
+                in_array(
+                    $bloco['tipo'],
+                    ['imagem', 'botao', 'arquivo'],
+                    true
+                )
+            ) {
+                $temConteudo =
+                    trim($bloco['url'] ?? '') !== '';
+            } elseif (
+                !in_array(
+                    $bloco['tipo'],
+                    ['divisor', 'espacamento'],
+                    true
+                )
+            ) {
+                $temConteudo =
+                    trim($bloco['texto'] ?? '') !== '';
+            }
+
+            if ($temConteudo) {
+                break;
+            }
+        }
+
+        if (!$temConteudo) {
+            throw new \InvalidArgumentException(
+                'Adicione conteúdo ao release antes de enviar.'
+            );
+        }
+
+        $mailer = ReleaseEmailService::preparar(
+            $assessoriaId,
+            array_intersect_key(
+                $release,
+                array_flip([
+                    'assunto',
+                    'primeira_linha',
+                    'nome_remetente',
+                    'responder_para',
+                ])
+            ),
+            $blocos,
+            $destinatarios[0]['email']
+        );
+
+        // Gera e valida o MIME sem transmitir o e-mail.
+        if (!$mailer->preSend()) {
+            throw new \RuntimeException(
+                'Não foi possível preparar o e-mail.',
+                503
+            );
+        }
+
     }
 
     public static function situacao(
@@ -253,6 +453,7 @@ final class ReleaseEnvioService
                     'ENVIANDO',
                     'ENVIADO',
                     'ERRO',
+                    'CANCELADO',
                 ],
                 true
             )
@@ -265,7 +466,7 @@ final class ReleaseEnvioService
         $params = ['id' => $id, 'a' => $assessoriaId];
 
         $release = self::sql(
-            'SELECT id, status, iniciado_em, enviado_em, assinatura_cadastro
+            'SELECT id, status, agendado_para, iniciado_em, enviado_em, assinatura_cadastro
              FROM releases
              WHERE id = :id
                AND assessoria_id = :a',
@@ -280,6 +481,7 @@ final class ReleaseEnvioService
 
         unset($release['assinatura_cadastro']);
         $release['id'] = (int) $release['id'];
+        $release['agendamento_fuso'] = 'America/Sao_Paulo';
         $totais = self::totais($assessoriaId, $id);
 
         $where =
@@ -309,6 +511,9 @@ final class ReleaseEnvioService
                 d.proxima_tentativa_em,
                 d.erro_tipo,
                 d.smtp_codigo,
+                d.aberto_em,
+                d.aberturas_quantidade,
+                (d.tracking_token IS NOT NULL) AS rastreamento_abertura,
                 j.nome
              FROM release_destinatarios d
              LEFT JOIN jornalistas j
@@ -327,6 +532,11 @@ final class ReleaseEnvioService
         foreach ($destinatarios as &$d) {
             $d['id'] = (int) $d['id'];
             $d['tentativas'] = (int) $d['tentativas'];
+            $d['rastreamento_abertura'] = (bool) $d['rastreamento_abertura'];
+            $d['aberturas_quantidade'] = (int) $d['aberturas_quantidade'];
+            $d['aberto_em'] = $d['aberto_em'] !== null
+                ? str_replace(' ', 'T', $d['aberto_em']) . 'Z'
+                : null;
 
             $d['smtp_codigo'] = $d['smtp_codigo'] !== null
                 ? (int) $d['smtp_codigo']
@@ -338,6 +548,7 @@ final class ReleaseEnvioService
         return [
             'release' => $release,
             'totais' => $totais,
+            'aberturas' => ReleaseAberturaService::metricas($assessoriaId, $id),
             'destinatarios' => $destinatarios,
             'pagination' => [
                 'page' => $page,
@@ -366,6 +577,8 @@ final class ReleaseEnvioService
 
                 COALESCE(SUM(status = 'ERRO'), 0)
                     AS falhas,
+
+                COALESCE(SUM(status = 'CANCELADO'), 0) AS cancelados,
 
                 COALESCE(SUM(
                     status = 'ERRO'
@@ -542,6 +755,8 @@ final class ReleaseEnvioService
         if ($transporte === null) {
             ReleaseEmailService::validarConfiguracao();
         }
+        ReleaseAberturaService::validarConfiguracao();
+        $rastrearAberturas = ReleaseAberturaService::basePublica() !== null;
 
         $db = Connection::get();
 
@@ -585,8 +800,14 @@ final class ReleaseEnvioService
                     d.proxima_tentativa_em = NULL,
                     d.erro_mensagem =
                         'A execução foi interrompida sem confirmação. Não houve repetição automática.'
-                WHERE r.status IN ('NA_FILA', 'ENVIANDO')
+                WHERE r.status IN ('NA_FILA', 'ENVIANDO', 'CANCELADO')
                 AND d.status = 'ENVIANDO'"
+            );
+
+            self::sql(
+                "UPDATE releases SET status = 'NA_FILA'
+                 WHERE status = 'AGENDADO' AND agendado_para <= :agora",
+                ['agora' => (new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d H:i:s')]
             );
 
             $ativos = self::sql(
@@ -606,49 +827,60 @@ final class ReleaseEnvioService
                 $db->beginTransaction();
 
                 try {
-                    $d = self::sql(
-                        "SELECT
-                            d.id,
-                            d.release_id,
-                            d.assessoria_id,
-                            d.email,
-                            d.tentativas,
-                            r.assunto,
-                            r.primeira_linha,
-                            r.nome_remetente,
-                            r.responder_para,
-                            r.blocos_json
-                        FROM release_destinatarios d
-                        JOIN releases r
-                        ON r.id = d.release_id
-                        AND r.assessoria_id = d.assessoria_id
-                        WHERE r.status IN ('NA_FILA', 'ENVIANDO')
-                        AND d.status = 'PENDENTE'
-                        AND (
-                                d.proxima_tentativa_em IS NULL
-                                OR d.proxima_tentativa_em <= NOW()
-                        )
-                        ORDER BY
-                            COALESCE(d.proxima_tentativa_em, d.created_at),
-                            d.id
-                        LIMIT 1
-                        FOR UPDATE"
+                    $candidato = self::sql(
+                        "SELECT d.id, d.release_id, d.assessoria_id
+                         FROM release_destinatarios d
+                         JOIN releases r ON r.id = d.release_id AND r.assessoria_id = d.assessoria_id
+                         WHERE r.status IN ('NA_FILA', 'ENVIANDO') AND d.status = 'PENDENTE'
+                           AND (d.proxima_tentativa_em IS NULL OR d.proxima_tentativa_em <= NOW())
+                         ORDER BY COALESCE(d.proxima_tentativa_em, d.created_at), d.id LIMIT 1"
                     )->fetch();
 
-                    if (!$d) {
+                    if (!$candidato) {
                         $db->commit();
                         break;
                     }
+                    $r = self::bloquearRelease(
+                        (int) $candidato['assessoria_id'],
+                        (int) $candidato['release_id']
+                    );
+                    if (!in_array($r['status'], ['NA_FILA', 'ENVIANDO'], true)) {
+                        $db->commit();
+                        continue;
+                    }
+                    $destinatario = self::sql(
+                        "SELECT id, release_id, assessoria_id, email, tentativas, tracking_token
+                         FROM release_destinatarios
+                         WHERE id = :id AND status = 'PENDENTE'
+                           AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= NOW()) FOR UPDATE",
+                        ['id' => (int) $candidato['id']]
+                    )->fetch();
+                    if (!$destinatario) {
+                        $db->commit();
+                        continue;
+                    }
+                    $tokenAnterior = $destinatario['tracking_token'];
+                    $token = $rastrearAberturas
+                        ? (ReleaseAberturaService::tokenValido($tokenAnterior)
+                            ? $tokenAnterior
+                            : bin2hex(random_bytes(32)))
+                        : null;
+                    $limparAbertura = $token !== $tokenAnterior
+                        ? ', aberto_em = NULL, aberturas_quantidade = 0'
+                        : '';
+                    $destinatario['tracking_token'] = $token;
+                    $d = [...$r, ...$destinatario];
 
                     self::sql(
                         "UPDATE release_destinatarios
                         SET status = 'ENVIANDO',
                             tentativas = tentativas + 1,
                             ultima_tentativa_em = NOW(),
-                            proxima_tentativa_em = NULL
+                            proxima_tentativa_em = NULL,
+                            tracking_token = :token $limparAbertura
                         WHERE id = :id
                         AND status = 'PENDENTE'",
-                        ['id' => (int) $d['id']]
+                        ['id' => (int) $d['id'], 'token' => $token]
                     );
 
                     self::sql(
@@ -707,7 +939,9 @@ final class ReleaseEnvioService
                                 64,
                                 JSON_THROW_ON_ERROR
                             ),
-                            $d['email']
+                            $d['email'],
+                            false,
+                            $d['tracking_token']
                         );
 
                         $mailer->setSMTPInstance($smtp);
@@ -769,10 +1003,17 @@ final class ReleaseEnvioService
                     }
                 }
 
+                // Serializa a conclusão com o cancelamento antes de reagendar uma falha.
+                $db->beginTransaction();
+                $releaseAtual = self::bloquearRelease(
+                    (int) $d['assessoria_id'],
+                    (int) $d['release_id']
+                );
                 $aceito = $situacao['tipo'] === 'ACEITO';
 
                 $espera =
                     $situacao['tipo'] === 'TEMPORARIA' &&
+                    $releaseAtual['status'] !== 'CANCELADO' &&
                     $tentativas < 3
                         ? ($tentativas === 1 ? 300 : 900)
                         : null;
@@ -805,6 +1046,9 @@ final class ReleaseEnvioService
                         ? 'NULL'
                         : 'DATE_ADD(NOW(), INTERVAL ' .
                             $espera . ' SECOND)';
+                    $limparAbertura = $situacao['tipo'] !== 'INCERTA'
+                        ? ', aberto_em = NULL, aberturas_quantidade = 0'
+                        : '';
 
                     self::sql(
                         "UPDATE release_destinatarios
@@ -812,7 +1056,7 @@ final class ReleaseEnvioService
                             erro_tipo = :tipo,
                             smtp_codigo = :codigo,
                             erro_mensagem = :mensagem,
-                            proxima_tentativa_em = $proxima
+                            proxima_tentativa_em = $proxima $limparAbertura
                         WHERE id = :id
                         AND status = 'ENVIANDO'",
                         $params
@@ -851,6 +1095,8 @@ final class ReleaseEnvioService
                     (int) $d['assessoria_id'],
                     (int) $d['release_id']
                 );
+
+                $db->commit();
 
                 if ($situacao['tipo'] === 'CONFIGURACAO') {
                     break;

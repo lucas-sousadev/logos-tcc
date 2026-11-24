@@ -1,18 +1,17 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Keyboard,
   ScrollView,
   StyleSheet,
   View,
-  type TextInput
+  type TextInput,
 } from "react-native";
 import { useNavigation, useRouter, useLocalSearchParams } from "expo-router";
-import { useIsFocused, usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
+import {
+  useIsFocused,
+  usePreventRemove,
+  type NavigationAction,
+} from "expo-router/react-navigation";
 import * as Crypto from "expo-crypto";
 
 import Header from "@/components/layout/Header";
@@ -33,6 +32,8 @@ import ReleaseEtapas, {
 import ReleaseDestinatariosCampo from "@/components/releases/ReleaseDestinatariosCampo";
 import ReleaseTemplateEtapa from "@/components/releases/ReleaseTemplateEtapa";
 import ReleaseConteudoEditor from "@/components/releases/ReleaseConteudoEditor";
+import ReleaseAgendamentoModal from "@/components/releases/ReleaseAgendamentoModal";
+import type { HorarioRelease } from "@/utils/agendamentoRelease";
 import ReleaseEnvioTeste from "@/components/releases/ReleaseEnvioTeste";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,7 +41,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useRascunhoRelease } from "@/hooks/useRascunhoRelease";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
 import { ehNavegacaoPelaBarra } from "@/utils/navegacaoModulos";
-import { pendenciasEnvioRelease,} from "@/utils/validarEnvioRelease";
+import { pendenciasEnvioRelease } from "@/utils/validarEnvioRelease";
 import type {
   DestinatarioRelease,
   TemplateRelease,
@@ -49,17 +50,22 @@ import type {
 } from "@/services/api/release";
 import {
   criarRelease,
+  buscarRelease,
   solicitarEnvioRelease,
+  agendarRelease,
   ErroApiRelease,
 } from "@/services/api/release";
-import { descartarCopiaRelease, encerrarCopiaRelease } from "@/services/rascunhoRelease";
+import {
+  descartarCopiaRelease,
+  encerrarCopiaRelease,
+} from "@/services/rascunhoRelease";
 
 import {
   guardarReleasePendente,
   lerReleasePendente,
   removerReleasePendente,
   type ReleasePendente,
-  type AcaoCadastroRelease
+  type AcaoCadastroRelease,
 } from "@/services/releasePendente";
 
 const ORDEM_CADASTRO: EtapaRelease[] = [
@@ -74,9 +80,7 @@ export default function NovoRelease() {
   const { usuario } = useAuth();
   const { editar } = useLocalSearchParams<{ editar?: string }>();
 
-  const conta = usuario
-    ? usuario.assessoria_id + "-" + usuario.id
-    : null;
+  const conta = usuario ? usuario.assessoria_id + "-" + usuario.id : null;
 
   if (editar !== undefined) {
     const numero =
@@ -87,21 +91,12 @@ export default function NovoRelease() {
     return (
       <ReleaseEdicao
         key={conta + "-editar-" + editar}
-        id={
-          Number.isSafeInteger(numero) && numero > 0
-            ? numero
-            : 0
-        }
+        id={Number.isSafeInteger(numero) && numero > 0 ? numero : 0}
       />
     );
   }
 
-  return (
-    <CadastroRelease
-      key={conta ?? "sem-conta"}
-      conta={conta}
-    />
-  );
+  return <CadastroRelease key={conta ?? "sem-conta"} conta={conta} />;
 }
 
 function CadastroRelease({ conta }: { conta: string | null }) {
@@ -113,10 +108,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const conteudoScrollRef = useRef<View>(null);
   const { theme } = useTheme();
   const { temPermissao, usuario } = useAuth();
-  const [
-    chaveRascunho,
-    setChaveRascunho,
-  ] = useState(() => Crypto.randomUUID());
+  const [chaveRascunho, setChaveRascunho] = useState(() => Crypto.randomUUID());
 
   const [etapa, setEtapa] = useState<EtapaRelease>("DESTINO");
 
@@ -129,9 +121,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
   // etapa 2
   const [template, setTemplate] = useState<TemplateRelease | null>(null);
-  const [blocos, setBlocos] = useState<
-    BlocoTemplateRelease[]
-  >([]);
+  const [blocos, setBlocos] = useState<BlocoTemplateRelease[]>([]);
   const [conteudoEditado, setConteudoEditado] = useState(false);
   const [trocaTemplate, setTrocaTemplate] = useState<{
     modelo: TemplateRelease;
@@ -147,9 +137,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   });
   const [dadosEnvio, setDadosEnvio] = useState(dadosEnvioIniciais);
 
-  const [selecionados, setSelecionados] = useState<
-    DestinatarioRelease[]
-  >([]);
+  const [selecionados, setSelecionados] = useState<DestinatarioRelease[]>([]);
   const [seletorAberto, setSeletorAberto] = useState(false);
   const [imagemOcupada, setImagemOcupada] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -162,15 +150,17 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const [erro, setErro] = useState("");
   const [avisoSaidaAberto, setAvisoSaidaAberto] = useState(false);
   const [confirmarRecuperacao, setConfirmarRecuperacao] = useState(false);
-  const [saidaAposSalvar, setSaidaAposSalvar] = useState<NavigationAction | null>(null);
+  const [saidaAposSalvar, setSaidaAposSalvar] =
+    useState<NavigationAction | null>(null);
 
   // resultados
   const [resultado, setResultado] = useState<{
     acao: AcaoCadastroRelease;
     id: number;
+    apenasConsulta?: boolean;
   } | null>(null);
-  const [confirmacaoEnvio, setConfirmacaoEnvio] =
-    useState(false);
+  const [agendamentoAberto, setAgendamentoAberto] = useState(false);
+  const [confirmacaoEnvio, setConfirmacaoEnvio] = useState(false);
 
   const trava = useRef(false);
   const acaoSaida = useRef<NavigationAction | null>(null);
@@ -180,15 +170,14 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   const podeEnviar =
     temPermissao("RELEASES", "ENVIAR") &&
     temPermissao("RELEASES", "VISUALIZAR");
-  const envioPendente = pendente?.acao === "ENVIAR";
+  const agendamentoPendente = pendente?.acao === "AGENDAR";
+  const envioPendente = pendente?.acao === "ENVIAR" || agendamentoPendente;
   const avisoDominios = avisoDominiosRelease(
     selecionados.map((contato) => contato.email)
   );
   const totalEnvio = new Set(
     selecionados
-      .map((contato) =>
-        (contato.email ?? "").trim().toLowerCase()
-      )
+      .map((contato) => (contato.email ?? "").trim().toLowerCase())
       .filter(Boolean)
   ).size;
 
@@ -206,51 +195,40 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       dadosEnvio.responder_para !== dadosEnvioIniciais.responder_para
     );
 
-  const restaurarFormulario = useCallback(
-    (registro: ReleasePendente) => {
-      const { dados } = registro;
-      const salvos = dados.blocos ?? [];
+  const restaurarFormulario = useCallback((registro: ReleasePendente) => {
+    const { dados } = registro;
+    const salvos = dados.blocos ?? [];
 
-      setChaveRascunho(
-        dados.chave_rascunho
-      );
+    setChaveRascunho(dados.chave_rascunho);
 
-      setTitulo(dados.titulo);
-      setCliente(registro.cliente);
+    setTitulo(dados.titulo);
+    setCliente(registro.cliente);
 
-      setTemplate(
-        registro.template
-          ? {
-              ...registro.template,
-              blocos: salvos,
-            }
-          : null
-      );
+    setTemplate(
+      registro.template
+        ? {
+            ...registro.template,
+            blocos: salvos,
+          }
+        : null
+    );
 
-      setBlocos(salvos);
-      setDadosEnvio(dados.dados_envio);
-      setSelecionados(registro.selecionados);
-      setConteudoEditado(
-        registro.conteudoEditado
-      );
-      setEtapa(registro.etapa);
-    },
-    []
-  );
+    setBlocos(salvos);
+    setDadosEnvio(dados.dados_envio);
+    setSelecionados(registro.selecionados);
+    setConteudoEditado(registro.conteudoEditado);
+    setEtapa(registro.etapa);
+  }, []);
 
   const copiaAtual: ReleasePendente = {
     dados: {
       titulo,
       cliente_id: cliente?.id ?? null,
-      jornalistas_ids: selecionados.map(
-        (contato) => contato.id
-      ),
+      jornalistas_ids: selecionados.map((contato) => contato.id),
       chave_rascunho: chaveRascunho,
       template_id: template?.id ?? null,
-      template_codigo:
-        template?.codigo ?? null,
-      template_assinatura:
-        template?.assinatura ?? "",
+      template_codigo: template?.codigo ?? null,
+      template_assinatura: template?.assinatura ?? "",
       blocos: template ? blocos : [],
       dados_envio: dadosEnvio,
     },
@@ -292,7 +270,10 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       !salvando &&
       podeCriar,
     ocupado:
-      imagemOcupada || confirmacaoEnvio || avisoSaidaAberto,
+      imagemOcupada ||
+      confirmacaoEnvio ||
+      agendamentoAberto ||
+      avisoSaidaAberto,
     onRecuperar: (registro) => {
       if (!pendente) {
         restaurarFormulario(registro);
@@ -306,12 +287,10 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     sucesso ||
     imagemOcupada ||
     confirmacaoEnvio ||
+    agendamentoAberto ||
     confirmarRecuperacao ||
     avisoSaidaAberto ||
-    (
-      !confirmando &&
-      !automatico.pronto
-    );
+    (!confirmando && !automatico.pronto);
   function continuarEditando() {
     acaoSaida.current = null;
     fechamentoExplicito.current = false;
@@ -324,7 +303,11 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setSalvando(true);
     try {
       if (automatico.pronto) {
-        if (temAlteracoesNaoSalvas || automatico.temRascunho || etapa !== "DESTINO") {
+        if (
+          temAlteracoesNaoSalvas ||
+          automatico.temRascunho ||
+          etapa !== "DESTINO"
+        ) {
           await automatico.guardarLocal();
         }
       } else if (!confirmando) {
@@ -335,34 +318,60 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       if (acao && navigation.isFocused()) navigation.dispatch(acao);
     } catch (falha) {
       continuarEditando();
-      setErro(falha instanceof Error ? falha.message : "Não foi possível preservar o rascunho neste aparelho.");
-    } finally { trava.current = false; setSalvando(false); }
+      setErro(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível preservar o rascunho neste aparelho."
+      );
+    } finally {
+      trava.current = false;
+      setSalvando(false);
+    }
   }
 
   const contaAtual = usuario ? usuario.assessoria_id + "-" + usuario.id : null;
-  usePreventRemove(Boolean(conta && contaAtual === conta && focada && !sucesso && (
-    salvando || imagemOcupada || temAlteracoesNaoSalvas || automatico.temRascunho ||
-    confirmando || etapa !== "DESTINO" || automatico.pronto
-  )), ({ data }) => {
-    if (trava.current || acaoSaida.current) return;
-    const pelaBarra = ehNavegacaoPelaBarra(data.action);
-    if (imagemOcupada && !pelaBarra) return;
+  usePreventRemove(
+    Boolean(
+      conta &&
+      contaAtual === conta &&
+      focada &&
+      !sucesso &&
+      (salvando ||
+        imagemOcupada ||
+        temAlteracoesNaoSalvas ||
+        automatico.temRascunho ||
+        confirmando ||
+        etapa !== "DESTINO" ||
+        automatico.pronto)
+    ),
+    ({ data }) => {
+      if (trava.current || acaoSaida.current) return;
+      const pelaBarra = ehNavegacaoPelaBarra(data.action);
+      if (imagemOcupada && !pelaBarra) return;
 
-    acaoSaida.current = data.action;
-    Keyboard.dismiss();
-    if (pelaBarra || (fechamentoExplicito.current && (
-      temAlteracoesNaoSalvas || automatico.temRascunho || confirmando || etapa !== "DESTINO"
-    ))) {
-      setSeletorAberto(false);
-      setTrocaTemplate(null);
-      setConfirmacaoEnvio(false);
-      setConfirmarRecuperacao(false);
-      setAvisoSaidaAberto(true);
-    } else void preservarESair();
-  });
+      acaoSaida.current = data.action;
+      Keyboard.dismiss();
+      if (
+        pelaBarra ||
+        (fechamentoExplicito.current &&
+          (temAlteracoesNaoSalvas ||
+            automatico.temRascunho ||
+            confirmando ||
+            etapa !== "DESTINO"))
+      ) {
+        setSeletorAberto(false);
+        setTrocaTemplate(null);
+        setConfirmacaoEnvio(false);
+        setAgendamentoAberto(false);
+        setConfirmarRecuperacao(false);
+        setAvisoSaidaAberto(true);
+      } else void preservarESair();
+    }
+  );
 
   useEffect(() => {
-    if (sucesso && saidaAposSalvar && !salvando && focada) navigation.dispatch(saidaAposSalvar);
+    if (sucesso && saidaAposSalvar && !salvando && focada)
+      navigation.dispatch(saidaAposSalvar);
   }, [sucesso, saidaAposSalvar, salvando, focada, navigation]);
 
   useEffect(() => {
@@ -370,29 +379,29 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
     let ativa = true;
 
-    lerReleasePendente(conta).then((registro) => {
-      if (!ativa) return;
+    lerReleasePendente(conta)
+      .then((registro) => {
+        if (!ativa) return;
 
-      if (registro) {
-        restaurarFormulario(registro);
-        setPendente(registro);
-      }
+        if (registro) {
+          restaurarFormulario(registro);
+          setPendente(registro);
+        }
 
-      setRecuperacao("pronta");
-    }).catch(() => {
-      if (ativa) setRecuperacao("falhou");
-    });
+        setRecuperacao("pronta");
+      })
+      .catch(() => {
+        if (ativa) setRecuperacao("falhou");
+      });
 
-    return () => { ativa = false; };
-  }, [
-    conta,
-    tentativasRecuperacao,
-    restaurarFormulario,
-  ]);
+    return () => {
+      ativa = false;
+    };
+  }, [conta, tentativasRecuperacao, restaurarFormulario]);
 
   const etapasDisponiveis = template
-  ? ORDEM_CADASTRO
-  : ORDEM_CADASTRO.slice(0, 2);
+    ? ORDEM_CADASTRO
+    : ORDEM_CADASTRO.slice(0, 2);
 
   const indiceEtapa = ORDEM_CADASTRO.indexOf(etapa);
 
@@ -403,7 +412,8 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     ORDEM_CADASTRO[indiceEtapa + 1];
 
   async function salvar(
-    acao: AcaoCadastroRelease = "RASCUNHO"
+    acao: AcaoCadastroRelease = "RASCUNHO",
+    horario?: HorarioRelease
   ): Promise<boolean> {
     if (
       !conta ||
@@ -416,20 +426,12 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       return false;
     }
 
-    if (
-      acao === "ENVIAR" &&
-      !podeEnviar
-    ) {
+    if (acao !== "RASCUNHO" && !podeEnviar) {
       return false;
     }
 
-    if (
-      pendente &&
-      (pendente.acao ?? "RASCUNHO") !== acao
-    ) {
-      setErro(
-        "Conclua a tentativa pendente antes de iniciar outra ação."
-      );
+    if (pendente && (pendente.acao ?? "RASCUNHO") !== acao) {
+      setErro("Conclua a tentativa pendente antes de iniciar outra ação.");
 
       return false;
     }
@@ -440,28 +442,21 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
     let registro = pendente;
 
-    let fase:
-      | "GUARDAR"
-      | "CRIAR"
-      | "ENVIAR"
-      | "LIMPAR" = "GUARDAR";
+    let fase: "GUARDAR" | "CRIAR" | "ENVIAR" | "AGENDAR" | "LIMPAR" = "GUARDAR";
 
     try {
       if (!registro) {
-        const remoto =
-          await automatico.confirmar();
+        const remoto = await automatico.confirmar();
 
         registro = {
           ...copiaAtual,
           acao,
+          agendamento: horario,
           release_id: remoto.id,
           versao_envio: remoto.versao_edicao,
         };
 
-        await guardarReleasePendente(
-          conta,
-          registro
-        );
+        await guardarReleasePendente(conta, registro);
 
         setPendente(registro);
       }
@@ -470,9 +465,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       if (!registro.release_id) {
         fase = "CRIAR";
 
-        const criado = await criarRelease(
-          registro.dados
-        );
+        const criado = await criarRelease(registro.dados);
 
         registro = {
           ...registro,
@@ -480,24 +473,21 @@ function CadastroRelease({ conta }: { conta: string | null }) {
           versao_envio: criado.versao_edicao,
         };
 
-        await guardarReleasePendente(
-          conta,
-          registro
-        );
+        await guardarReleasePendente(conta, registro);
 
+        setPendente(registro);
+      }
+
+      if (acao === "AGENDAR" && horario) {
+        registro = { ...registro, agendamento: horario };
+        await guardarReleasePendente(conta, registro);
         setPendente(registro);
       }
 
       const id = registro.release_id;
 
-      if (
-        typeof id !== "number" ||
-        !Number.isSafeInteger(id) ||
-        id < 1
-      ) {
-        throw new Error(
-          "O servidor não confirmou o rascunho."
-        );
+      if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) {
+        throw new Error("O servidor não confirmou o rascunho.");
       }
 
       if (acao === "ENVIAR") {
@@ -505,18 +495,22 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         await solicitarEnvioRelease(id, registro.versao_envio);
       }
 
+      if (acao === "AGENDAR") {
+        fase = "AGENDAR";
+        if (!registro.agendamento || !registro.versao_envio) {
+          throw new Error(
+            "Confira o horário e a versão do rascunho antes de agendar."
+          );
+        }
+        await agendarRelease(id, registro.versao_envio, registro.agendamento);
+        setAgendamentoAberto(false);
+      }
+
       fase = "LIMPAR";
 
-      await encerrarCopiaRelease(
-        conta,
-        "novo",
-        id
-      );
+      await encerrarCopiaRelease(conta, "novo", id);
 
-      await removerReleasePendente(
-        conta,
-        registro.dados.chave_rascunho
-      );
+      await removerReleasePendente(conta, registro.dados.chave_rascunho);
 
       setPendente(null);
       setResultado({ acao, id });
@@ -527,25 +521,11 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         fase === "CRIAR" &&
         registro &&
         falha instanceof ErroApiRelease &&
-        (
-          [
-            400,
-            404,
-            409,
-            413,
-            422,
-          ].includes(falha.status) ||
-          (
-            !pendente &&
-            falha.status === 403
-          )
-        )
+        ([400, 404, 409, 413, 422].includes(falha.status) ||
+          (!pendente && falha.status === 403))
       ) {
         try {
-          await removerReleasePendente(
-            conta,
-            registro.dados.chave_rascunho
-          );
+          await removerReleasePendente(conta, registro.dados.chave_rascunho);
 
           setPendente(null);
         } catch {
@@ -563,11 +543,13 @@ function CadastroRelease({ conta }: { conta: string | null }) {
           : "Não foi possível concluir a operação.";
 
       setErro(
-        fase === "ENVIAR"
-          ? "O rascunho está salvo, mas o envio " +
+        fase === "AGENDAR"
+          ? "O rascunho está salvo. Confira o agendamento: " + mensagem
+          : fase === "ENVIAR"
+            ? "O rascunho está salvo, mas o envio " +
               "ainda não foi confirmado. " +
               mensagem
-          : mensagem
+            : mensagem
       );
       return false;
     } finally {
@@ -590,9 +572,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     }
 
     if (pendente && pendente.acao !== "ENVIAR") {
-      setErro(
-        "Confirme primeiro o salvamento pendente."
-      );
+      setErro("Confirme primeiro o salvamento pendente.");
       return;
     }
 
@@ -607,7 +587,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   }
 
   function abrirResultado() {
-    if (resultado?.acao === "ENVIAR") {
+    if (resultado && resultado.acao !== "RASCUNHO") {
       router.replace({
         pathname: "/releases/[id]",
         params: {
@@ -619,33 +599,54 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     }
   }
 
-  function alternarContato(
-    contato: DestinatarioRelease
-  ) {
-    setSelecionados((atuais) => {
-        const existe = atuais.some(
-        (item) => item.id === contato.id
-        );
+  async function conferirAgendamento() {
+    if (trava.current || !conta || !pendente?.release_id) return;
 
-        return existe
+    trava.current = true;
+    setSalvando(true);
+    setErro("");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const atual = await buscarRelease(pendente.release_id, controller.signal);
+      await encerrarCopiaRelease(conta, "novo", atual.id);
+      await removerReleasePendente(conta, pendente.dados.chave_rascunho);
+      setPendente(null);
+      setResultado({ acao: "AGENDAR", id: atual.id, apenasConsulta: true });
+      setSucesso(true);
+    } catch (falha) {
+      setErro(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível conferir o release."
+      );
+    } finally {
+      clearTimeout(timer);
+      trava.current = false;
+      setSalvando(false);
+    }
+  }
+
+  function alternarContato(contato: DestinatarioRelease) {
+    setSelecionados((atuais) => {
+      const existe = atuais.some((item) => item.id === contato.id);
+
+      return existe
         ? atuais.filter((item) => item.id !== contato.id)
         : [...atuais, contato];
     });
   }
 
-  function adicionarContatos(
-    contatos: DestinatarioRelease[]
-  ) {
+  function adicionarContatos(contatos: DestinatarioRelease[]) {
     setSelecionados((atuais) => {
-        const porId = new Map(
-        atuais.map((contato) => [contato.id, contato])
-        );
+      const porId = new Map(atuais.map((contato) => [contato.id, contato]));
 
-        for (const contato of contatos) {
+      for (const contato of contatos) {
         porId.set(contato.id, contato);
-        }
+      }
 
-        return [...porId.values()];
+      return [...porId.values()];
     });
   }
 
@@ -655,57 +656,49 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setEtapa(nova);
 
     scrollRef.current?.scrollTo({
-        y: 0,
-        animated: false,
+      y: 0,
+      animated: false,
     });
   }
 
-  function aplicarTemplate(
-    modelo: TemplateRelease,
-    editar: boolean
-  ) {
+  function aplicarTemplate(modelo: TemplateRelease, editar: boolean) {
     setTemplate(modelo);
 
-    setBlocos(
-        modelo.blocos.map((bloco) => ({ ...bloco }))
-    );
+    setBlocos(modelo.blocos.map((bloco) => ({ ...bloco })));
 
     setConteudoEditado(false);
     setErro("");
 
     if (editar) {
-        setEtapa("CONTEUDO");
+      setEtapa("CONTEUDO");
 
-        scrollRef.current?.scrollTo({
+      scrollRef.current?.scrollTo({
         y: 0,
         animated: false,
-        });
+      });
     }
   }
 
-    function selecionarTemplate(
-    modelo: TemplateRelease,
-    editar = false
-    ) {
+  function selecionarTemplate(modelo: TemplateRelease, editar = false) {
     if (bloqueado || !modelo.disponivel) return;
 
     const mesmo =
-        template?.id === modelo.id &&
-        template?.codigo === modelo.codigo &&
-        template?.assinatura === modelo.assinatura;
+      template?.id === modelo.id &&
+      template?.codigo === modelo.codigo &&
+      template?.assinatura === modelo.assinatura;
 
     if (mesmo) {
-        if (editar) mudarEtapa("CONTEUDO");
-        return;
+      if (editar) mudarEtapa("CONTEUDO");
+      return;
     }
 
     if (conteudoEditado) {
-        setTrocaTemplate({ modelo, editar });
-        return;
+      setTrocaTemplate({ modelo, editar });
+      return;
     }
 
     aplicarTemplate(modelo, editar);
-}
+  }
 
   function mostrarCampo(campo: TextInput) {
     const conteudo = conteudoScrollRef.current;
@@ -713,14 +706,14 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     if (!conteudo || bloqueado) return;
 
     campo.measureLayout(
-        conteudo,
-        (_x, y) => {
+      conteudo,
+      (_x, y) => {
         scrollRef.current?.scrollTo({
-            y: Math.max(0, y - 48),
-            animated: false,
+          y: Math.max(0, y - 48),
+          animated: false,
         });
-        },
-        () => {}
+      },
+      () => {}
     );
   }
 
@@ -729,7 +722,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     const acao = acaoSaida.current;
     continuarEditando();
     setSaidaAposSalvar(acao);
-    if (!await salvar()) setSaidaAposSalvar(null);
+    if (!(await salvar())) setSaidaAposSalvar(null);
   }
 
   async function descartarESair() {
@@ -739,11 +732,24 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setSalvando(true);
 
     try {
-      if (!conta) throw new Error("Não foi possível identificar a conta deste rascunho.");
+      if (!conta)
+        throw new Error("Não foi possível identificar a conta deste rascunho.");
       if (automatico.pronto) await automatico.descartar();
-      else if (pendente) await descartarCopiaRelease(conta, "novo", pendente.dados.chave_rascunho);
-      else throw new Error("Aguarde a recuperação do rascunho antes de descartar.");
-      if (pendente) await removerReleasePendente(conta, pendente.dados.chave_rascunho).catch(() => {});
+      else if (pendente)
+        await descartarCopiaRelease(
+          conta,
+          "novo",
+          pendente.dados.chave_rascunho
+        );
+      else
+        throw new Error(
+          "Aguarde a recuperação do rascunho antes de descartar."
+        );
+      if (pendente)
+        await removerReleasePendente(
+          conta,
+          pendente.dados.chave_rascunho
+        ).catch(() => {});
 
       const acao = acaoSaida.current;
       continuarEditando();
@@ -755,7 +761,9 @@ function CadastroRelease({ conta }: { conta: string | null }) {
       continuarEditando();
 
       setErro(
-        falha instanceof Error ? falha.message : "Não foi possível confirmar o descarte. Seu preenchimento foi mantido."
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível confirmar o descarte. Seu preenchimento foi mantido."
       );
     } finally {
       trava.current = false;
@@ -774,20 +782,37 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     setErro("");
     try {
       if (automatico.remotoAusente) {
-        if (!podeCriar) throw new Error("Você precisa da permissão de criar releases para recuperar este conteúdo.");
+        if (!podeCriar)
+          throw new Error(
+            "Você precisa da permissão de criar releases para recuperar este conteúdo."
+          );
         await automatico.recuperarComoNovo();
       } else {
         await automatico.recarregarDoServidor();
       }
       setConfirmarRecuperacao(false);
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : "Não foi possível carregar a versão do servidor.");
+      setErro(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível carregar a versão do servidor."
+      );
       setConfirmarRecuperacao(false);
-    } finally { trava.current = false; setSalvando(false); }
+    } finally {
+      trava.current = false;
+      setSalvando(false);
+    }
   }
 
   function voltar() {
-    if (trava.current || sucesso || imagemOcupada || confirmarRecuperacao || avisoSaidaAberto) return;
+    if (
+      trava.current ||
+      sucesso ||
+      imagemOcupada ||
+      confirmarRecuperacao ||
+      avisoSaidaAberto
+    )
+      return;
 
     if (!confirmando && recuperacao === "pronta" && etapaAnterior) {
       mudarEtapa(etapaAnterior);
@@ -798,27 +823,21 @@ function CadastroRelease({ conta }: { conta: string | null }) {
     retornar();
   }
 
-  if (
-    recuperacao !== "pronta" ||
-    (
-      !confirmando &&
-      !automatico.pronto
-    )
-  ) {
+  if (recuperacao !== "pronta" || (!confirmando && !automatico.pronto)) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Header title="Novo release" showBackButton onBackPress={voltar} />
         <View style={styles.content}>
-          {(
-            recuperacao === "carregando" ||
-            (recuperacao === "pronta" && !automatico.pronto && !automatico.erro)
-          ) ? (
+          {recuperacao === "carregando" ||
+          (recuperacao === "pronta" &&
+            !automatico.pronto &&
+            !automatico.erro) ? (
             <Text>Verificando rascunhos neste dispositivo…</Text>
           ) : (
             <>
               <Text style={{ color: theme.erro }}>
                 {automatico.mensagem ||
-               "Não foi possível recuperar o rascunho salvo neste dispositivo."}
+                  "Não foi possível recuperar o rascunho salvo neste dispositivo."}
               </Text>
               <Button
                 title="TENTAR NOVAMENTE"
@@ -829,9 +848,7 @@ function CadastroRelease({ conta }: { conta: string | null }) {
 
                   setRecuperacao("carregando");
 
-                  setTentativasRecuperacao(
-                    (atual) => atual + 1
-                  );
+                  setTentativasRecuperacao((atual) => atual + 1);
                 }}
               />
             </>
@@ -842,387 +859,394 @@ function CadastroRelease({ conta }: { conta: string | null }) {
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
-       <Header
-        title="Novo release"
-        showBackButton
-        onBackPress={voltar}
-      />
-      
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Header title="Novo release" showBackButton onBackPress={voltar} />
+
       <View style={styles.etapas}>
         <ReleaseEtapas
-            atual={etapa}
-            disponiveis={etapasDisponiveis}
-            disabled={bloqueado}
-            onSelecionar={mudarEtapa}
+          atual={etapa}
+          disponiveis={etapasDisponiveis}
+          disabled={bloqueado}
+          onSelecionar={mudarEtapa}
         />
       </View>
 
-    <ScrollView
-      ref={scrollRef}
-      keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
-      keyboardDismissMode="on-drag"
-    >   
+      <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="on-drag"
+      >
         <View
           ref={conteudoScrollRef}
           collapsable={false}
           style={styles.content}
         >
-            {etapa === "DESTINO" ? (
+          {etapa === "DESTINO" ? (
             <>
-                <View style={styles.cabecalho}>
-                    <Text weight="Bold" style={styles.titulo}>
-                        Destinatários
-                    </Text>
-
-                    <Text
-                        style={{
-                        color: theme.textoSub,
-                        fontSize: 12,
-                        }}
-                    >
-                        Etapa 1 de 5
-                    </Text>
-                </View>
-
-                <Input
-                    label="TÍTULO INTERNO"
-                    value={titulo}
-                    onChangeText={setTitulo}
-                    maxLength={150}
-                    editable={!bloqueado}
-                    placeholder="Identifique esse release"
-                    containerStyle={styles.campo}
-                    clearable
-                />
-
-                {temPermissao("CLIENTES", "VISUALIZAR") ? (
-                <ClippingContexto
-                    apenasCliente
-                    clienteId={cliente?.id ?? null}
-                    clienteNome={cliente?.nome ?? ""}
-                    ano={new Date().getFullYear()}
-                    anoPelaData={false}
-                    disabled={bloqueado}
-                    buscarClientes={listarClientes}
-                    onCliente={(valor) =>
-                    setCliente({
-                        id: valor.id,
-                        nome: valor.nome,
-                    })
-                    }
-                    style={styles.campo}
-                />
-                ) : (
-                <Text>
-                    Solicite acesso a Clientes para escolher o
-                    cliente.
-                </Text>
-                )}
-
-                {cliente ? (
-                <Button
-                    title="REMOVER CLIENTE"
-                    size="small"
-                    variant="outline"
-                    disabled={bloqueado}
-                    onPress={() => setCliente(null)}
-                />
-                ) : null}
-
-                <ReleaseDestinatariosCampo
-                    selecionados={selecionados}
-                    disabled={
-                        bloqueado ||
-                        !temPermissao("MAILING", "VISUALIZAR")
-                    }
-                    onPress={() => setSeletorAberto(true)}
-                />
-
-                {!temPermissao("MAILING", "VISUALIZAR") ? (
-                    <Text style={{ color: theme.textoSub }}>
-                        Solicite acesso ao Mailing para escolher destinatários.
-                    </Text>
-                ) : null}
-            </>
-            ) : etapa === "TEMPLATE" ? (
-            <>
-                <View style={styles.cabecalho}>
-                    <Text weight="Bold" style={styles.titulo}>
-                        Template
-                    </Text>
-
-                    <Text
-                        style={{
-                        color: theme.textoSub,
-                        fontSize: 12,
-                        }}
-                    >
-                        Etapa 2 de 5
-                    </Text>
-                    </View>
-
-                    <ReleaseTemplateEtapa
-                        selecionado={template}
-                        disabled={bloqueado}
-                        onSelecionar={(modelo) =>
-                            selecionarTemplate(modelo)
-                        }
-                        onEditar={(modelo) =>
-                            selecionarTemplate(modelo, true)
-                        }
-                    />
-                </>
-            ) : etapa === "CONTEUDO" ? (
-                <>
-                    <View style={styles.cabecalho}>
-                    <Text
-                        weight="Bold"
-                        style={styles.titulo}
-                    >
-                        Conteúdo
-                    </Text>
-
-                    <Text
-                        style={{
-                        color: theme.textoSub,
-                        fontSize: 12,
-                        }}
-                    >
-                        Etapa 3 de 5
-                    </Text>
-                    </View>
-
-                    <ReleaseConteudoEditor
-                      blocos={blocos}
-                      nomeTemplate={template?.nome ?? ""}
-                      disabled={bloqueado}
-                      imagemOcupada={imagemOcupada}
-                      onImagemOcupadaChange={setImagemOcupada}
-                      onChange={(alterar) => {
-                        if (salvando || confirmando || sucesso) return;
-
-                        setBlocos(alterar);
-                        setConteudoEditado(true);
-                        setErro("");
-                      }}
-                      onMostrarCampo={mostrarCampo}
-                    />
-                  </>
-            ) : etapa === "ENVIO" ? (
-            <>
-                <View style={styles.cabecalho}>
+              <View style={styles.cabecalho}>
                 <Text weight="Bold" style={styles.titulo}>
-                    Dados do e-mail
+                  Destinatários
+                </Text>
+
+                <Text
+                  style={{
+                    color: theme.textoSub,
+                    fontSize: 12,
+                  }}
+                >
+                  Etapa 1 de 5
+                </Text>
+              </View>
+
+              <Input
+                label="TÍTULO INTERNO"
+                value={titulo}
+                onChangeText={setTitulo}
+                maxLength={150}
+                editable={!bloqueado}
+                placeholder="Identifique esse release"
+                containerStyle={styles.campo}
+                clearable
+              />
+
+              {temPermissao("CLIENTES", "VISUALIZAR") ? (
+                <ClippingContexto
+                  apenasCliente
+                  clienteId={cliente?.id ?? null}
+                  clienteNome={cliente?.nome ?? ""}
+                  ano={new Date().getFullYear()}
+                  anoPelaData={false}
+                  disabled={bloqueado}
+                  buscarClientes={listarClientes}
+                  onCliente={(valor) =>
+                    setCliente({
+                      id: valor.id,
+                      nome: valor.nome,
+                    })
+                  }
+                  style={styles.campo}
+                />
+              ) : (
+                <Text>Solicite acesso a Clientes para escolher o cliente.</Text>
+              )}
+
+              {cliente ? (
+                <Button
+                  title="REMOVER CLIENTE"
+                  size="small"
+                  variant="outline"
+                  disabled={bloqueado}
+                  onPress={() => setCliente(null)}
+                />
+              ) : null}
+
+              <ReleaseDestinatariosCampo
+                selecionados={selecionados}
+                disabled={bloqueado || !temPermissao("MAILING", "VISUALIZAR")}
+                onPress={() => setSeletorAberto(true)}
+              />
+
+              {!temPermissao("MAILING", "VISUALIZAR") ? (
+                <Text style={{ color: theme.textoSub }}>
+                  Solicite acesso ao Mailing para escolher destinatários.
+                </Text>
+              ) : null}
+            </>
+          ) : etapa === "TEMPLATE" ? (
+            <>
+              <View style={styles.cabecalho}>
+                <Text weight="Bold" style={styles.titulo}>
+                  Template
+                </Text>
+
+                <Text
+                  style={{
+                    color: theme.textoSub,
+                    fontSize: 12,
+                  }}
+                >
+                  Etapa 2 de 5
+                </Text>
+              </View>
+
+              <ReleaseTemplateEtapa
+                selecionado={template}
+                disabled={bloqueado}
+                onSelecionar={(modelo) => selecionarTemplate(modelo)}
+                onEditar={(modelo) => selecionarTemplate(modelo, true)}
+              />
+            </>
+          ) : etapa === "CONTEUDO" ? (
+            <>
+              <View style={styles.cabecalho}>
+                <Text weight="Bold" style={styles.titulo}>
+                  Conteúdo
+                </Text>
+
+                <Text
+                  style={{
+                    color: theme.textoSub,
+                    fontSize: 12,
+                  }}
+                >
+                  Etapa 3 de 5
+                </Text>
+              </View>
+
+              <ReleaseConteudoEditor
+                blocos={blocos}
+                nomeTemplate={template?.nome ?? ""}
+                disabled={bloqueado}
+                imagemOcupada={imagemOcupada}
+                onImagemOcupadaChange={setImagemOcupada}
+                onChange={(alterar) => {
+                  if (salvando || confirmando || sucesso) return;
+
+                  setBlocos(alterar);
+                  setConteudoEditado(true);
+                  setErro("");
+                }}
+                onMostrarCampo={mostrarCampo}
+              />
+            </>
+          ) : etapa === "ENVIO" ? (
+            <>
+              <View style={styles.cabecalho}>
+                <Text weight="Bold" style={styles.titulo}>
+                  Dados do e-mail
                 </Text>
 
                 <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-                    Etapa 4 de 5
+                  Etapa 4 de 5
                 </Text>
-                </View>
+              </View>
 
-                <ReleaseDadosEnvioEtapa
+              <ReleaseDadosEnvioEtapa
                 dados={dadosEnvio}
                 disabled={bloqueado}
                 onChange={(campo, valor) => {
-                    if (bloqueado) return;
+                  if (bloqueado) return;
 
-                    setDadosEnvio((atuais) => ({
+                  setDadosEnvio((atuais) => ({
                     ...atuais,
                     [campo]: valor,
-                    }));
+                  }));
 
-                    setErro("");
+                  setErro("");
                 }}
-                />
+              />
             </>
-            ) : (
-              <>
-                <View style={styles.cabecalho}>
-                  <Text weight="Bold" style={styles.titulo}>Revisão</Text>
-                  <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-                    Etapa 5 de 5
-                  </Text>
-                </View>
+          ) : (
+            <>
+              <View style={styles.cabecalho}>
+                <Text weight="Bold" style={styles.titulo}>
+                  Revisão
+                </Text>
+                <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+                  Etapa 5 de 5
+                </Text>
+              </View>
 
-                <ReleaseRevisaoEtapa
-                  titulo={titulo}
-                  clienteNome={cliente?.nome ?? null}
-                  templateNome={template?.nome ?? ""}
-                  dadosEnvio={dadosEnvio}
-                  blocos={blocos}
-                  selecionados={selecionados}
-                  disabled={bloqueado}
-                  podeSelecionarDestinatarios={temPermissao("MAILING", "VISUALIZAR")}
-                  onEditar={mudarEtapa}
-                  onVerDestinatarios={() => setSeletorAberto(true)}
-                />
-
-                {temPermissao("RELEASES", "ENVIAR") ? (
-                  <ReleaseEnvioTeste
-                    emailInicial={usuario?.email ?? ""}
-                    dadosEnvio={dadosEnvio}
-                    blocos={blocos}
-                    disabled={bloqueado}
-                  />
-                ) : null}
-              </>
-            )}
-
-            {etapaAnterior && proximaEtapa ? (
-                <Button
-                    title={
-                    proximaEtapa === "REVISAO"
-                        ? "AVANÇAR PARA REVISÃO"
-                        : proximaEtapa === "ENVIO"
-                        ? "AVANÇAR PARA DADOS DO E-MAIL"
-                        : proximaEtapa === "CONTEUDO"
-                        ? "AVANÇAR PARA EDITAR CONTEÚDO"
-                        : "PRÓXIMO"
-                    }
-                    disabled={
-                    bloqueado ||
-                    (proximaEtapa === "CONTEUDO" && !template)
-                    }
-                    onPress={() => mudarEtapa(proximaEtapa)}
-                />
-            ) : null} 
-            
-            {etapa === "REVISAO" &&
-              !confirmando &&
-              pendenciasEnvio.length > 0 ? (
-                <View style={{ gap: 4 }}>
-                  <Text weight="SemiBold">
-                    Para enviar, falta:
-                  </Text>
-
-                  {pendenciasEnvio.map((item) => (
-                    <Text
-                      key={item}
-                      style={{
-                        color: theme.textoSub,
-                        fontSize: 12,
-                      }}
-                    >
-                      {"• " + item}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-
-            {etapa === "REVISAO" &&
-              !confirmando &&
-              podeEnviar ? (
-                <Button
-                  title="ENVIAR RELEASE"
-                  icon="paper-plane-outline"
-                  disabled={
-                    bloqueado ||
-                    !podeCriar ||
-                    pendenciasEnvio.length > 0
-                  }
-                  onPress={pedirEnvio}
-                />
-              ) : null}
-
-            <View style={styles.acoesRodape}>
-              {etapaAnterior || confirmando ? (
-                <Button
-                  title={confirmando ? "SAIR" : "VOLTAR"}
-                  variant="outline"
-                  style={styles.botaoRodape}
-                  disabled={salvando || sucesso || imagemOcupada}
-                  onPress={voltar}
-                />
-              ) : null}
-
-              <Button
-                title={
-                  confirmando
-                    ? envioPendente
-                      ? "CONFIRMAR ENVIO"
-                      : "CONFIRMAR SALVAMENTO"
-                    : "SALVAR RASCUNHO"
-                }
-                style={styles.botaoRodape}
-                loading={salvando}
-                disabled={
-                  !conta ||
-                  !podeCriar ||
-                  sucesso ||
-                  imagemOcupada ||
-                  (envioPendente && !podeEnviar)
-                }
-                onPress={
-                  envioPendente
-                    ? pedirEnvio
-                    : () => void salvar()
-                }
-                variant={envioPendente ? "primary" : "outline"}
+              <ReleaseRevisaoEtapa
+                titulo={titulo}
+                clienteNome={cliente?.nome ?? null}
+                templateNome={template?.nome ?? ""}
+                dadosEnvio={dadosEnvio}
+                blocos={blocos}
+                selecionados={selecionados}
+                disabled={bloqueado}
+                podeSelecionarDestinatarios={temPermissao(
+                  "MAILING",
+                  "VISUALIZAR"
+                )}
+                onEditar={mudarEtapa}
+                onVerDestinatarios={() => setSeletorAberto(true)}
               />
 
-              {!etapaAnterior && !confirmando && proximaEtapa ? (
-                <Button
-                  title="PRÓXIMO"
-                  style={styles.botaoRodape}
+              {temPermissao("RELEASES", "ENVIAR") ? (
+                <ReleaseEnvioTeste
+                  emailInicial={usuario?.email ?? ""}
+                  dadosEnvio={dadosEnvio}
+                  blocos={blocos}
                   disabled={bloqueado}
-                  onPress={() => mudarEtapa(proximaEtapa)}
                 />
               ) : null}
-            </View>
+            </>
+          )}
 
+          {etapaAnterior && proximaEtapa ? (
+            <Button
+              title={
+                proximaEtapa === "REVISAO"
+                  ? "AVANÇAR PARA REVISÃO"
+                  : proximaEtapa === "ENVIO"
+                    ? "AVANÇAR PARA DADOS DO E-MAIL"
+                    : proximaEtapa === "CONTEUDO"
+                      ? "AVANÇAR PARA EDITAR CONTEÚDO"
+                      : "PRÓXIMO"
+              }
+              disabled={bloqueado || (proximaEtapa === "CONTEUDO" && !template)}
+              onPress={() => mudarEtapa(proximaEtapa)}
+            />
+          ) : null}
+
+          {etapa === "REVISAO" && !confirmando && pendenciasEnvio.length > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text weight="SemiBold">Para enviar ou agendar, falta:</Text>
+
+              {pendenciasEnvio.map((item) => (
                 <Text
-                  accessibilityLiveRegion="polite"
+                  key={item}
                   style={{
-                    color: automatico.erro
-                      ? theme.aviso
-                      : theme.textoSub,
+                    color: theme.textoSub,
+                    fontSize: 12,
                   }}
                 >
-                  {automatico.mensagem ||
-                    "O preenchimento será salvo automaticamente, mesmo incompleto."}
+                  {"• " + item}
                 </Text>
+              ))}
+            </View>
+          ) : null}
 
-                {automatico.conflito && automatico.idRemoto && !confirmando ? (
-                  <Button title="CONFERIR" variant="outline" disabled={bloqueado}
-                    onPress={() => setConfirmarRecuperacao(true)} />
-                ) : null}
+          {etapa === "REVISAO" && !confirmando && podeEnviar ? (
+            <Button
+              title="ENVIAR RELEASE"
+              icon="paper-plane-outline"
+              disabled={bloqueado || !podeCriar || pendenciasEnvio.length > 0}
+              onPress={pedirEnvio}
+            />
+          ) : null}
 
-                {automatico.remotoAusente && podeCriar && !confirmando ? (
-                  <Button title="RECUPERAR" variant="outline" disabled={bloqueado}
-                    onPress={() => setConfirmarRecuperacao(true)} />
-                ) : null}
+          {etapa === "REVISAO" && !confirmando && podeEnviar ? (
+            <Button
+              title="AGENDAR RELEASE"
+              icon="calendar-outline"
+              variant="outline"
+              disabled={bloqueado || !podeCriar || pendenciasEnvio.length > 0}
+              onPress={() => {
+                setErro("");
+                setAgendamentoAberto(true);
+              }}
+            />
+          ) : null}
 
-                {erro ? (
-                    <Text style={{ color: theme.erro }}>{erro}</Text>
-                ) : null}
+          <View style={styles.acoesRodape}>
+            {etapaAnterior || confirmando ? (
+              <Button
+                title={confirmando ? "SAIR" : "VOLTAR"}
+                variant="outline"
+                style={styles.botaoRodape}
+                disabled={salvando || sucesso || imagemOcupada}
+                onPress={voltar}
+              />
+            ) : null}
 
-                {confirmando ? (
-                  <Text style={{ color: theme.aviso }}>
-                    {envioPendente
-                      ? "A tentativa está guardada. Confirme novamente para consultar ou concluir o mesmo envio."
-                      : "A tentativa está guardada. Confirme o salvamento agora ou reabra Novo release para tentar depois."}
-                  </Text>
-                ) : null}
+            <Button
+              title={
+                confirmando
+                  ? agendamentoPendente
+                    ? "CONFERIR AGENDA"
+                    : envioPendente
+                      ? "CONFIRMAR ENVIO"
+                      : "CONFIRMAR SALVAMENTO"
+                  : "SALVAR RASCUNHO"
+              }
+              style={styles.botaoRodape}
+              loading={salvando}
+              disabled={
+                !conta ||
+                !podeCriar ||
+                sucesso ||
+                imagemOcupada ||
+                (envioPendente && !podeEnviar)
+              }
+              onPress={
+                agendamentoPendente
+                  ? () => {
+                      setErro("");
+                      setAgendamentoAberto(true);
+                    }
+                  : envioPendente
+                    ? pedirEnvio
+                    : () => void salvar()
+              }
+              variant={envioPendente ? "primary" : "outline"}
+            />
 
-                {!podeCriar ? (
-                    <Text style={{ color: theme.erro }}>
-                        Você precisa da permissão de criar releases.
-                    </Text>
-                ) : null}
+            {!etapaAnterior && !confirmando && proximaEtapa ? (
+              <Button
+                title="PRÓXIMO"
+                style={styles.botaoRodape}
+                disabled={bloqueado}
+                onPress={() => mudarEtapa(proximaEtapa)}
+              />
+            ) : null}
+          </View>
+
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{
+              color: automatico.erro ? theme.aviso : theme.textoSub,
+            }}
+          >
+            {automatico.mensagem ||
+              "O preenchimento será salvo automaticamente, mesmo incompleto."}
+          </Text>
+
+          {automatico.conflito && automatico.idRemoto && !confirmando ? (
+            <Button
+              title="CONFERIR"
+              variant="outline"
+              disabled={bloqueado}
+              onPress={() => setConfirmarRecuperacao(true)}
+            />
+          ) : null}
+
+          {automatico.remotoAusente && podeCriar && !confirmando ? (
+            <Button
+              title="RECUPERAR"
+              variant="outline"
+              disabled={bloqueado}
+              onPress={() => setConfirmarRecuperacao(true)}
+            />
+          ) : null}
+
+          {erro ? <Text style={{ color: theme.erro }}>{erro}</Text> : null}
+
+          {agendamentoPendente && pendente?.release_id && podeEnviar ? (
+            <Button
+              title="VER RELEASE"
+              variant="outline"
+              disabled={salvando || sucesso}
+              onPress={() => void conferirAgendamento()}
+            />
+          ) : null}
+
+          {confirmando ? (
+            <Text style={{ color: theme.aviso }}>
+              {agendamentoPendente
+                ? "A tentativa de agendamento está guardada. Confira o horário para tentar novamente ou abra o release salvo para consultar o estado atual."
+                : envioPendente
+                  ? "A tentativa está guardada. Confirme novamente para consultar ou concluir o mesmo envio."
+                  : "A tentativa está guardada. Confirme o salvamento agora ou reabra Novo release para tentar depois."}
+            </Text>
+          ) : null}
+
+          {!podeCriar ? (
+            <Text style={{ color: theme.erro }}>
+              Você precisa da permissão de criar releases.
+            </Text>
+          ) : null}
         </View>
-    </ScrollView>
+      </ScrollView>
 
       {seletorAberto ? (
         <ReleaseDestinatariosModal
           selecionados={selecionados}
-          iniciarComSelecionados={etapa === "REVISAO" && selecionados.length > 0}
+          iniciarComSelecionados={
+            etapa === "REVISAO" && selecionados.length > 0
+          }
           onAlternar={alternarContato}
           onClose={() => setSeletorAberto(false)}
           onAdicionar={adicionarContatos}
@@ -1241,24 +1265,27 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         onClose={() => setTrocaTemplate(null)}
         onSecondary={() => setTrocaTemplate(null)}
         onPrimary={() => {
-            if (bloqueado || !trocaTemplate) return;
+          if (bloqueado || !trocaTemplate) return;
 
-            aplicarTemplate(
-            trocaTemplate.modelo,
-            trocaTemplate.editar
-            );
+          aplicarTemplate(trocaTemplate.modelo, trocaTemplate.editar);
 
-            setTrocaTemplate(null);
+          setTrocaTemplate(null);
         }}
       />
 
       <FeedbackAlert
         visible={confirmarRecuperacao}
         variant="warning"
-        title={automatico.remotoAusente ? "Recuperar este rascunho?" : "Usar a versão do servidor?"}
-        message={automatico.remotoAusente
-          ? "O release não está mais disponível no servidor. Seu conteúdo local será recuperado como um novo rascunho, mantendo os campos preenchidos."
-          : "O preenchimento desta tela será substituído pela versão salva no servidor. Suas alterações locais só serão substituídas depois que essa versão for carregada com sucesso."}
+        title={
+          automatico.remotoAusente
+            ? "Recuperar este rascunho?"
+            : "Usar a versão do servidor?"
+        }
+        message={
+          automatico.remotoAusente
+            ? "O release não está mais disponível no servidor. Seu conteúdo local será recuperado como um novo rascunho, mantendo os campos preenchidos."
+            : "O preenchimento desta tela será substituído pela versão salva no servidor. Suas alterações locais só serão substituídas depois que essa versão for carregada com sucesso."
+        }
         primaryLabel={automatico.remotoAusente ? "RECUPERAR" : "USAR"}
         secondaryLabel="MANTER"
         primaryDanger
@@ -1274,13 +1301,17 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         title="Sair do novo release?"
         loading={salvando || imagemOcupada}
         message={
-          envioPendente
-            ? "Sair descarta o cadastro pendente. Se o envio já tiver começado, ele não será cancelado."
-            : "Se sair, o progresso deste novo release será descartado. Para continuar depois, escolha Salvar Rascunho."
+          agendamentoPendente
+            ? "A tentativa local será descartada. Um agendamento já confirmado no servidor será mantido; você poderá cancelá-lo nos detalhes do release."
+            : envioPendente
+              ? "Sair descarta o cadastro pendente. Se o envio já tiver começado, ele não será cancelado."
+              : "Se sair, o progresso deste novo release será descartado. Para continuar depois, escolha Salvar Rascunho."
         }
         primaryLabel="SAIR"
         secondaryLabel="CONTINUAR"
-        tertiaryLabel={!envioPendente && podeCriar ? "SALVAR RASCUNHO" : undefined}
+        tertiaryLabel={
+          !envioPendente && podeCriar ? "SALVAR RASCUNHO" : undefined
+        }
         primaryDanger
         onPrimary={() => void descartarESair()}
         onSecondary={continuarEditando}
@@ -1313,28 +1344,48 @@ function CadastroRelease({ conta }: { conta: string | null }) {
         }}
       />
 
+      <ReleaseAgendamentoModal
+        visible={agendamentoAberto}
+        inicial={
+          pendente?.agendamento
+            ? pendente.agendamento.data + " " + pendente.agendamento.hora
+            : null
+        }
+        loading={salvando}
+        erro={erro}
+        onClose={() => {
+          if (!trava.current) setAgendamentoAberto(false);
+        }}
+        onConfirm={(horario) => void salvar("AGENDAR", horario)}
+      />
+
       <FeedbackAlert
         visible={sucesso && !saidaAposSalvar}
         variant="success"
         title={
-          resultado?.acao === "ENVIAR"
-            ? "Solicitação registrada"
-            : "Rascunho salvo"
+          resultado?.apenasConsulta
+            ? "Release localizado"
+            : resultado?.acao === "AGENDAR"
+              ? "Agendamento registrado"
+              : resultado?.acao === "ENVIAR"
+                ? "Solicitação registrada"
+                : "Rascunho salvo"
         }
         message={
-          resultado?.acao === "ENVIAR"
-            ? "A solicitação de envio foi registrada. Acompanhe o processamento na tela do release."
-            : "O release foi cadastrado e está disponível na listagem."
+          resultado?.apenasConsulta
+            ? "O preenchimento já está salvo no servidor. Confira o estado atual nos detalhes do release."
+            : resultado?.acao === "AGENDAR"
+              ? "O agendamento foi registrado. Confira o horário e acompanhe o processamento nos detalhes do release."
+              : resultado?.acao === "ENVIAR"
+                ? "A solicitação de envio foi registrada. Acompanhe o processamento na tela do release."
+                : "O release foi cadastrado e está disponível na listagem."
         }
         primaryLabel={
-          resultado?.acao === "ENVIAR"
-            ? "ACOMPANHAR ENVIO"
-            : "VER RELEASES"
+          resultado?.acao !== "RASCUNHO" ? "VER RELEASE" : "VER RELEASES"
         }
         onPrimary={abrirResultado}
         onClose={abrirResultado}
       />
-
     </View>
   );
 }
@@ -1370,7 +1421,7 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: 8,
   },
-    botaoRodape: {
+  botaoRodape: {
     flex: 1,
     width: "auto",
     minWidth: 0,

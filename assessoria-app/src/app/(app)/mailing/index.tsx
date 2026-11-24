@@ -28,8 +28,9 @@ import Text from "@/components/ui/Text";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import FeedbackAlert, { type FeedbackAlertVariant,} from "@/components/forms/FeedbackAlert";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
-import { useListaPaginada } from "@/hooks/useListaPaginada";
+import BotaoTransferencia from "@/components/ui/BotaoTransferencia";
 
+import { useListaPaginada } from "@/hooks/useListaPaginada";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -712,75 +713,25 @@ export default function Mailing() {
           </ContadorLista>
 
           <View style={styles.topActions}>
-            {temPermissao(
-              "MAILING",
-              "IMPORTAR"
-            ) && (
-              <TouchableOpacity
+            {temPermissao("MAILING", "IMPORTAR") ? (
+              <BotaoTransferencia
+                tipo="importar"
+                label="Importar contatos para o mailing"
                 onPress={selecionarEImportarArquivo}
+                loading={importando}
                 disabled={importando || exportando}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Importar contatos para o mailing"
-                style={[
-                  styles.exportButton,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
-                    opacity:
-                    exportando || importando
-                      ? 0.5
-                      : 1,
-                  },
-                ]}
-              >
-                {importando ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.primaria}
-                  />
-                ) : (
-                  <Ionicons
-                    name="download-outline"
-                    size={20}
-                    color={theme.texto}
-                  />
-                )}
-              </TouchableOpacity>
-            )}
-            {temPermissao(
-              "MAILING",
-              "EXPORTAR"
-            ) && (
-              <TouchableOpacity
+              />
+            ) : null}
+
+            {temPermissao("MAILING", "EXPORTAR") ? (
+              <BotaoTransferencia
+                tipo="exportar"
+                label="Exportar contatos do mailing"
                 onPress={exportarMailing}
-                disabled={exportando || importando}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Exportar contatos do mailing"
-                style={[
-                  styles.exportButton,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
-                    opacity: exportando ? 0.5 : 1,
-                  },
-                ]}
-              >
-                {exportando ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.primaria}
-                  />
-                ) : (
-                  <Ionicons
-                    name="cloud-upload-outline"
-                    size={20}
-                    color={theme.texto}
-                  />
-                )}
-              </TouchableOpacity>
-            )}
+                loading={exportando}
+                disabled={importando || exportando}
+              />
+            ) : null}
 
             {temPermissao("MAILING", "CRIAR") && (
               <Button

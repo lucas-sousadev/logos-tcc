@@ -162,7 +162,16 @@ try {
     $wrapper = tempnam(sys_get_temp_dir(), 'logos-release-router-');
     $log = tempnam(sys_get_temp_dir(), 'logos-release-log-');
     $arquivosTemporarios = [$wrapper, $log];
-    file_put_contents($wrapper, '<?php $_ENV["DB_NAME"] = getenv("LOGOS_RELEASES_TEST_DB"); require '
+    $smtpSimulado = [
+        'RELEASE_SMTP_HOST' => 'localhost',
+        'RELEASE_SMTP_PORT' => '2525',
+        'RELEASE_SMTP_USER' => 'teste',
+        'RELEASE_SMTP_PASSWORD' => 'teste',
+        'RELEASE_SMTP_FROM' => 'teste@example.com',
+        'RELEASE_SMTP_SECURITY' => 'starttls',
+    ];
+    file_put_contents($wrapper, '<?php $_ENV["DB_NAME"] = getenv("LOGOS_RELEASES_TEST_DB"); '
+        . 'foreach (' . var_export($smtpSimulado, true) . ' as $chave => $valor) { $_ENV[$chave] = $valor; } require '
         . var_export(dirname(__DIR__) . '/public/index.php', true) . ';');
     $processo = proc_open([PHP_BINARY, '-S', $endereco, $wrapper], [
         0 => ['pipe', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a'],
@@ -242,7 +251,47 @@ try {
     [$statusDescarte, $descartado] = requisitarRelease($url . '/rascunho/descartar', 'POST', $semPermissao, json_encode($descarte));
     conferirRelease($statusDescarte === 200 && $descartado['descartado'], 'Criar permite descartar o próprio cadastro sem permissão geral de excluir.');
     conferirRelease(requisitarRelease($url . '/' . $automatico['id'], 'GET', $token)[0] === 404, 'O cadastro descartado não é mais exibido.');
-    echo "OK: rotas HTTP, autenticação, permissões e respostas de erro.\n";
+    $idAgenda = $resposta['release']['id'];
+    $quando = new DateTimeImmutable('+2 hours', new DateTimeZone('America/Sao_Paulo'));
+    foreach (['agendar', 'cancelar-agendamento', 'cancelar-envio'] as $acao) {
+        $corpo = ['versao_edicao' => str_repeat('0', 64)];
+        if ($acao === 'agendar') {
+            $corpo['data'] = $quando->format('Y-m-d');
+            $corpo['hora'] = $quando->format('H:i');
+        }
+        $json = json_encode($corpo);
+        $rota = $url . '/' . $idAgenda . '/' . $acao;
+        conferirRelease(requisitarRelease($rota, 'POST', null, $json)[0] === 401, $acao . ' exige autenticação.');
+        conferirRelease(requisitarRelease($rota, 'POST', $semPermissao, $json)[0] === 403, $acao . ' exige permissão de enviar.');
+        conferirRelease(requisitarRelease($url . '/' . $outro['id'] . '/' . $acao, 'POST', $token, $json)[0] === 404, $acao . ' protege outra assessoria.');
+        conferirRelease(requisitarRelease($rota, 'POST', $token, '{"status":"ENVIADO"}')[0] === 422, $acao . ' rejeita campos extras.');
+    }
+    $db->prepare('UPDATE releases SET assunto = :assunto, blocos_json = :blocos WHERE id = :id')->execute([
+        'assunto' => 'Teste HTTP de agendamento',
+        'blocos' => json_encode([['id' => 'texto', 'tipo' => 'texto', 'texto' => 'Conteúdo HTTP']]),
+        'id' => $idAgenda,
+    ]);
+    $agenda = ReleaseService::buscar(1, $idAgenda);
+    [$statusAgenda, $programado] = requisitarRelease($url . '/' . $idAgenda . '/agendar', 'POST', $token, json_encode([
+        'data' => $quando->format('Y-m-d'),
+        'hora' => $quando->format('H:i'),
+        'versao_edicao' => $agenda['versao_edicao'],
+    ]));
+    conferirRelease($statusAgenda === 200 && $programado['envio']['release']['status'] === 'AGENDADO', 'A rota agenda usando o release salvo.');
+    [$statusAgenda, $semAgenda] = requisitarRelease($url . '/' . $idAgenda . '/cancelar-agendamento', 'POST', $token, json_encode([
+        'versao_edicao' => $programado['release']['versao_edicao'],
+    ]));
+    conferirRelease($statusAgenda === 200 && $semAgenda['release']['status'] === 'RASCUNHO', 'A rota remove o agendamento.');
+    [$statusEnvio] = requisitarRelease($url . '/' . $idAgenda . '/enviar', 'POST', $token, json_encode([
+        'versao_edicao' => $semAgenda['release']['versao_edicao'],
+    ]));
+    conferirRelease($statusEnvio === 202, 'A rota coloca o rascunho na fila sem transmitir.');
+    $naFila = ReleaseService::buscar(1, $idAgenda);
+    [$statusCancelamento, $filaCancelada] = requisitarRelease($url . '/' . $idAgenda . '/cancelar-envio', 'POST', $token, json_encode([
+        'versao_edicao' => $naFila['versao_edicao'],
+    ]));
+    conferirRelease($statusCancelamento === 200 && $filaCancelada['envio']['totais']['cancelados'] === 1, 'A rota cancela os destinatários pendentes.');
+    echo "OK: rotas HTTP, autenticação, permissões, agendamento, cancelamento e respostas de erro.\n";
 } finally {
     if (is_resource($processo)) {
         proc_terminate($processo);

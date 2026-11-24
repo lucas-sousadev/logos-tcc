@@ -16,7 +16,8 @@ export type StatusRelease =
   | "ENVIANDO"
   | "ENVIADO"
   | "PARCIAL"
-  | "FALHOU";
+  | "FALHOU"
+  | "CANCELADO";
 
 export const ROTULOS_STATUS: Record<StatusRelease, string> = {
   RASCUNHO: "Rascunho",
@@ -26,6 +27,7 @@ export const ROTULOS_STATUS: Record<StatusRelease, string> = {
   ENVIADO: "Encaminhado ao servidor",
   PARCIAL: "Concluído com falhas",
   FALHOU: "Falha no envio",
+  CANCELADO: "Cancelado",
 };
 
 export interface ResumoRelease {
@@ -40,6 +42,7 @@ export interface ResumoRelease {
   total_destinatarios: number;
   created_at: string;
   updated_at: string;
+  agendado_para: string | null;
   data_referencia?: string;
 }
 
@@ -181,9 +184,11 @@ export async function enviarTesteRelease(
   try {
     const prazo = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(
-          "O envio ainda não foi confirmado. Confira a caixa de entrada antes de tentar novamente."
-        ));
+        reject(
+          new Error(
+            "O envio ainda não foi confirmado. Confira a caixa de entrada antes de tentar novamente."
+          )
+        );
         controller.abort();
       }, 45_000);
     });
@@ -317,7 +322,8 @@ export async function carregarImagemRelease(
   contexto: "RELEASES" | "TEMPLATES" = "RELEASES"
 ): Promise<string> {
   const formulario = new FormData();
-  const imagem = Platform.OS === "web" ? arquivo.file : new ExpoFile(arquivo.uri);
+  const imagem =
+    Platform.OS === "web" ? arquivo.file : new ExpoFile(arquivo.uri);
 
   if (!imagem) {
     throw new Error("A imagem selecionada não está disponível.");
@@ -338,16 +344,20 @@ export async function carregarImagemRelease(
 
     const envio = authenticatedFetch(
       API_URL +
-      (contexto === "TEMPLATES"
-        ? "/api/templates/imagens"
-        : "/api/releases/imagens"),
+        (contexto === "TEMPLATES"
+          ? "/api/templates/imagens"
+          : "/api/releases/imagens"),
       { method: "POST", body: formulario, signal: controller.signal },
       Platform.OS === "web" ? fetch : expoFetch
     ).then(lerResposta<{ caminho: string }>);
 
     const { caminho } = await Promise.race([envio, prazo]);
 
-    if (!/^\/api\/releases\/imagens\/[1-9]\d*\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(caminho)) {
+    if (
+      !/^\/api\/releases\/imagens\/[1-9]\d*\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(
+        caminho
+      )
+    ) {
       throw new Error("A API não retornou o endereço da imagem.");
     }
 
@@ -410,12 +420,16 @@ export type StatusDestinatarioRelease =
   | "PENDENTE"
   | "ENVIANDO"
   | "ENVIADO"
-  | "ERRO";
+  | "ERRO"
+  | "CANCELADO";
 
 export interface SituacaoEnvioRelease {
+  aberturas: MetricasAberturaRelease;
   release: {
     id: number;
     status: StatusRelease;
+    agendado_para: string | null;
+    agendamento_fuso: "America/Sao_Paulo";
     iniciado_em: string | null;
     enviado_em: string | null;
   };
@@ -425,6 +439,7 @@ export interface SituacaoEnvioRelease {
     processando: number;
     aceitos: number;
     falhas: number;
+    cancelados: number;
     repetiveis: number;
     incertos: number;
     aguardando_retentativa: number;
@@ -441,6 +456,9 @@ export interface SituacaoEnvioRelease {
     proxima_tentativa_em: string | null;
     erro_tipo: TipoFalhaRelease | null;
     smtp_codigo: number | null;
+    rastreamento_abertura: boolean;
+    aberto_em: string | null;
+    aberturas_quantidade: number;
   }[];
   pagination: {
     page: number;
@@ -449,18 +467,23 @@ export interface SituacaoEnvioRelease {
   };
 }
 
+export interface MetricasAberturaRelease {
+  coleta_configurada: boolean;
+  envios_rastreados: number;
+  envios_sem_rastreamento: number;
+  destinatarios_abertos: number;
+  carregamentos_registrados: number;
+  aberturas_sem_confirmacao: number;
+  taxa_percentual: number | null;
+}
+
 export async function buscarRelease(
   id: number,
   signal?: AbortSignal
 ): Promise<DetalheRelease> {
   const dados = await lerResposta<{
     release: DetalheRelease;
-  }>(
-    await authenticatedFetch(
-      API_URL + "/api/releases/" + id,
-      { signal }
-    )
-  );
+  }>(await authenticatedFetch(API_URL + "/api/releases/" + id, { signal }));
 
   return dados.release;
 }
@@ -517,13 +540,9 @@ export async function solicitarEnvioRelease(
         body: JSON.stringify(versao ? { versao_edicao: versao } : {}),
         signal: controller.signal,
       }
-    ).then(
-      lerResposta<{ envio: SituacaoEnvioRelease }>
-    );
+    ).then(lerResposta<{ envio: SituacaoEnvioRelease }>);
 
-    return (
-      await Promise.race([requisicao, prazo])
-    ).envio;
+    return (await Promise.race([requisicao, prazo])).envio;
   } finally {
     clearTimeout(timer);
   }
@@ -531,7 +550,11 @@ export async function solicitarEnvioRelease(
 
 export type DadosEdicaoRelease = Omit<
   DadosNovoRelease,
-  "chave_rascunho" | "template_id" | "template_codigo" | "blocos" | "dados_envio"
+  | "chave_rascunho"
+  | "template_id"
+  | "template_codigo"
+  | "blocos"
+  | "dados_envio"
 > & {
   versao_edicao: string;
   template_id: number | null;
@@ -566,9 +589,8 @@ export async function atualizarRelease(
   id: number,
   dados: DadosEdicaoRelease
 ): Promise<DetalheRelease> {
-  return (
-    await alterarRelease<{ release: DetalheRelease }>(id, "PUT", dados)
-  ).release;
+  return (await alterarRelease<{ release: DetalheRelease }>(id, "PUT", dados))
+    .release;
 }
 
 export async function excluirRelease(
@@ -586,19 +608,35 @@ export interface PedidoRascunhoRelease {
   dados: Omit<DadosEdicaoRelease, "versao_edicao">;
 }
 
-export async function descartarRascunhoRelease(chave: string, conta: string): Promise<void> {
+export async function descartarRascunhoRelease(
+  chave: string,
+  conta: string
+): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    const resposta = await authenticatedFetch(API_URL + "/api/releases/rascunho/descartar", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chave_rascunho: chave, conta }), signal: controller.signal,
-    });
-    const resultado = await lerResposta<{ descartado: boolean; envio_preservado: boolean }>(resposta);
-    if (typeof resultado.descartado !== "boolean" || typeof resultado.envio_preservado !== "boolean") {
+    const resposta = await authenticatedFetch(
+      API_URL + "/api/releases/rascunho/descartar",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chave_rascunho: chave, conta }),
+        signal: controller.signal,
+      }
+    );
+    const resultado = await lerResposta<{
+      descartado: boolean;
+      envio_preservado: boolean;
+    }>(resposta);
+    if (
+      typeof resultado.descartado !== "boolean" ||
+      typeof resultado.envio_preservado !== "boolean"
+    ) {
       throw new Error("O servidor não confirmou o descarte do rascunho.");
     }
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function sincronizarRascunhoRelease(
@@ -606,10 +644,7 @@ export async function sincronizarRascunhoRelease(
 ): Promise<DetalheRelease> {
   const controller = new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    30_000
-  );
+  const timer = setTimeout(() => controller.abort(), 30_000);
 
   try {
     const resposta = await authenticatedFetch(
@@ -632,9 +667,7 @@ export async function sincronizarRascunhoRelease(
       !Number.isSafeInteger(release?.id) ||
       !/^[a-f0-9]{64}$/.test(release.versao_edicao)
     ) {
-      throw new Error(
-        "O servidor não confirmou a versão do rascunho."
-      );
+      throw new Error("O servidor não confirmou a versão do rascunho.");
     }
 
     return release;
@@ -642,22 +675,76 @@ export async function sincronizarRascunhoRelease(
     clearTimeout(timer);
   }
 }
-  
+
 export type TipoFalhaRelease =
   | "TEMPORARIA"
   | "PERMANENTE"
   | "CONFIGURACAO"
   | "INCERTA";
 
-  export async function repetirFalhasRelease(
+export interface ResultadoProgramacaoRelease {
+  release: DetalheRelease;
+  envio: SituacaoEnvioRelease;
+}
+
+async function alterarProgramacaoRelease(
+  id: number,
+  acao: "agendar" | "cancelar-agendamento" | "cancelar-envio",
+  dados: { versao_edicao: string; data?: string; hora?: string }
+): Promise<ResultadoProgramacaoRelease> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    return await lerResposta<ResultadoProgramacaoRelease>(
+      await authenticatedFetch(API_URL + "/api/releases/" + id + "/" + acao, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+        signal: controller.signal,
+      })
+    );
+  } catch (erro) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        "A operação ainda não foi confirmada. Atualize o release para conferir o resultado antes de tentar novamente."
+      );
+    }
+    throw erro;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function agendarRelease(
+  id: number,
+  versao: string,
+  horario: { data: string; hora: string }
+) {
+  return alterarProgramacaoRelease(id, "agendar", {
+    versao_edicao: versao,
+    ...horario,
+  });
+}
+
+export function cancelarAgendamentoRelease(id: number, versao: string) {
+  return alterarProgramacaoRelease(id, "cancelar-agendamento", {
+    versao_edicao: versao,
+  });
+}
+
+export function cancelarEnvioRelease(id: number, versao: string) {
+  return alterarProgramacaoRelease(id, "cancelar-envio", {
+    versao_edicao: versao,
+  });
+}
+
+export async function repetirFalhasRelease(
   id: number
 ): Promise<SituacaoEnvioRelease> {
   const controller = new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    30_000
-  );
+  const timer = setTimeout(() => controller.abort(), 30_000);
 
   try {
     const resposta = await authenticatedFetch(

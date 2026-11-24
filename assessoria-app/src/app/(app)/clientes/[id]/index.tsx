@@ -1,24 +1,20 @@
 import {
+  ResumoCadastro,
+  InformacoesCadastro,
+} from "@/components/ui/DetalhesCadastro";
+import {
   ActivityIndicator,
   Image,
   Linking,
   ScrollView,
   StyleSheet,
   Switch,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import {
-  useEffect,
-  useState,
-  useRef
-} from "react";
+import { useEffect, useState, useRef } from "react";
 
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -35,7 +31,6 @@ import FeedbackAlert, {
 import LogoPicker from "@/components/forms/LogoPicker";
 import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
 import RelatoriosVinculados from "@/components/relatorios/RelatoriosVinculados";
-import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -49,10 +44,7 @@ import {
   obterUrlLogoCliente,
 } from "@/services/api/cliente";
 
-import {
-  ErrosCliente,
-  validarFormularioCliente,
-} from "@/utils/validarCliente";
+import { ErrosCliente, validarFormularioCliente } from "@/utils/validarCliente";
 
 interface FormularioCliente {
   nome: string;
@@ -86,17 +78,18 @@ export default function ClienteDetalhes() {
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const { id: idParam, vinculo } =
-    useLocalSearchParams<{ id: string; vinculo?: string }>();
+  const { id: idParam, vinculo } = useLocalSearchParams<{
+    id: string;
+    vinculo?: string;
+  }>();
 
   const id = Number(idParam);
   const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
   const podeVerRelatorios = temPermissao("RELATORIOS", "VISUALIZAR");
 
-  const [abaVinculos, setAbaVinculos] =
-    useState<"clippings" | "relatorios">(
-      vinculo === "relatorios" ? "relatorios" : "clippings"
-    );
+  const [abaVinculos, setAbaVinculos] = useState<"clippings" | "relatorios">(
+    vinculo === "relatorios" ? "relatorios" : "clippings"
+  );
   const [excluindoVinculos, setExcluindoVinculos] = useState(false);
 
   const abaVinculosAtiva =
@@ -104,59 +97,46 @@ export default function ClienteDetalhes() {
       ? "clippings"
       : "relatorios";
 
-  const [cliente, setCliente] =
-    useState<Cliente | null>(null);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
 
-  const [formulario, setFormulario] =
-    useState<FormularioCliente>({
-      nome: "",
-      email: "",
-      telefone: "",
-      cnpj: "",
-      site: "",
-      cidade: "",
-      estado: "",
-      descricao: "",
-      segmento: "",
-      responsavel: "",
-      logo_path: "",
-      ativo: true,
-    });
+  const [formulario, setFormulario] = useState<FormularioCliente>({
+    nome: "",
+    email: "",
+    telefone: "",
+    cnpj: "",
+    site: "",
+    cidade: "",
+    estado: "",
+    descricao: "",
+    segmento: "",
+    responsavel: "",
+    logo_path: "",
+    ativo: true,
+  });
 
-  const [
-    formularioOriginal,
-    setFormularioOriginal,
-  ] = useState<FormularioCliente | null>(null);
+  const [formularioOriginal, setFormularioOriginal] =
+    useState<FormularioCliente | null>(null);
 
-  const [novoLogo, setNovoLogo] =
-    useState<ArquivoLogoCliente | null>(null);
+  const [novoLogo, setNovoLogo] = useState<ArquivoLogoCliente | null>(null);
 
-  const [logoRemovido, setLogoRemovido] =
-    useState(false);
+  const [logoRemovido, setLogoRemovido] = useState(false);
 
-  const [erros, setErros] =
-    useState<ErrosCliente>({});
+  const [erros, setErros] = useState<ErrosCliente>({});
 
   const [erroLogo, setErroLogo] = useState("");
   const [erroGeral, setErroGeral] = useState("");
 
-  const [modoEdicao, setModoEdicao] =
-    useState(false);
+  const [modoEdicao, setModoEdicao] = useState(false);
 
-  const [carregando, setCarregando] =
-    useState(true);
+  const [carregando, setCarregando] = useState(true);
 
-  const [erroCarregamento, setErroCarregamento] =
-    useState("");
+  const [erroCarregamento, setErroCarregamento] = useState("");
 
-  const [salvando, setSalvando] =
-    useState(false);
+  const [salvando, setSalvando] = useState(false);
 
-  const [excluindo, setExcluindo] =
-    useState(false);
+  const [excluindo, setExcluindo] = useState(false);
 
-  const [feedback, setFeedback] =
-    useState<FeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -176,9 +156,7 @@ export default function ClienteDetalhes() {
     setAbaVinculos(vinculo === "relatorios" ? "relatorios" : "clippings");
   }, [id, vinculo]);
 
-  function dadosFormulario(
-    dados: Cliente
-  ): FormularioCliente {
+  function dadosFormulario(dados: Cliente): FormularioCliente {
     return {
       nome: dados.nome ?? "",
       email: dados.email ?? "",
@@ -208,8 +186,7 @@ export default function ClienteDetalhes() {
       setErroCarregamento("");
 
       const dados = await buscarCliente(id);
-      const novoFormulario =
-        dadosFormulario(dados);
+      const novoFormulario = dadosFormulario(dados);
 
       setCliente(dados);
       setFormulario(novoFormulario);
@@ -228,9 +205,7 @@ export default function ClienteDetalhes() {
     }
   }
 
-  function mostrarFeedback(
-    dados: FeedbackState
-  ) {
+  function mostrarFeedback(dados: FeedbackState) {
     setFeedback(dados);
   }
 
@@ -242,10 +217,7 @@ export default function ClienteDetalhes() {
   }
 
   function atualizarCampo(
-    campo: Exclude<
-      keyof FormularioCliente,
-      "logo_path"
-    >,
+    campo: Exclude<keyof FormularioCliente, "logo_path">,
     valor: string | boolean
   ) {
     setFormulario((atual) => ({
@@ -258,9 +230,7 @@ export default function ClienteDetalhes() {
     }
   }
 
-  function limparErro(
-    campo: keyof ErrosCliente
-  ) {
+  function limparErro(campo: keyof ErrosCliente) {
     setErros((atual) => ({
       ...atual,
       [campo]: undefined,
@@ -269,45 +239,32 @@ export default function ClienteDetalhes() {
     setErroGeral("");
   }
 
-  function campoAlterado(
-    campo: keyof FormularioCliente
-  ): boolean {
+  function campoAlterado(campo: keyof FormularioCliente): boolean {
     if (campo === "logo_path") {
       return novoLogo !== null || logoRemovido;
     }
 
     return formularioOriginal
-      ? formulario[campo] !==
-          formularioOriginal[campo]
+      ? formulario[campo] !== formularioOriginal[campo]
       : false;
   }
 
-  function camposAlterados(): (
-    keyof FormularioCliente
-  )[] {
+  function camposAlterados(): (keyof FormularioCliente)[] {
     if (!formularioOriginal) {
       return [];
     }
 
     const campos = (
-      Object.keys(formulario) as (
-        keyof FormularioCliente
-      )[]
+      Object.keys(formulario) as (keyof FormularioCliente)[]
     ).filter((campo) => {
       if (campo === "logo_path") {
         return false;
       }
 
-      return (
-        formulario[campo] !==
-        formularioOriginal[campo]
-      );
+      return formulario[campo] !== formularioOriginal[campo];
     });
 
-    if (
-      (novoLogo !== null || logoRemovido) &&
-      !campos.includes("logo_path")
-    ) {
+    if ((novoLogo !== null || logoRemovido) && !campos.includes("logo_path")) {
       campos.push("logo_path");
     }
 
@@ -334,7 +291,10 @@ export default function ClienteDetalhes() {
     setModoEdicao(false);
   }
 
-  const saida = useSaidaFormulario(camposAlterados().length > 0, salvando || excluindo || excluindoVinculos);
+  const saida = useSaidaFormulario(
+    camposAlterados().length > 0,
+    salvando || excluindo || excluindoVinculos
+  );
 
   function handleBack() {
     if (salvando || excluindo || excluindoVinculos) return;
@@ -363,28 +323,27 @@ export default function ClienteDetalhes() {
       return;
     }
 
-    const campo: keyof ErrosCliente | null =
-      texto.includes("cnpj")
-        ? "cnpj"
-        : texto.includes("e-mail")
-          ? "email"
-          : texto.includes("telefone")
-            ? "telefone"
-            : texto.includes("site")
-              ? "site"
-              : texto.includes("cidade")
-                ? "cidade"
-                : texto.includes("estado")
-                  ? "estado"
-                  : texto.includes("segmento")
-                    ? "segmento"
-                    : texto.includes("responsável")
-                      ? "responsavel"
-                      : texto.includes("descrição")
-                        ? "descricao"
-                        : texto.includes("nome")
-                          ? "nome"
-                          : null;
+    const campo: keyof ErrosCliente | null = texto.includes("cnpj")
+      ? "cnpj"
+      : texto.includes("e-mail")
+        ? "email"
+        : texto.includes("telefone")
+          ? "telefone"
+          : texto.includes("site")
+            ? "site"
+            : texto.includes("cidade")
+              ? "cidade"
+              : texto.includes("estado")
+                ? "estado"
+                : texto.includes("segmento")
+                  ? "segmento"
+                  : texto.includes("responsável")
+                    ? "responsavel"
+                    : texto.includes("descrição")
+                      ? "descricao"
+                      : texto.includes("nome")
+                        ? "nome"
+                        : null;
 
     if (campo) {
       setErros({
@@ -402,19 +361,18 @@ export default function ClienteDetalhes() {
       return;
     }
 
-    const errosValidacao =
-      validarFormularioCliente({
-        nome: formulario.nome,
-        email: formulario.email,
-        telefone: formulario.telefone,
-        cnpj: formulario.cnpj,
-        site: formulario.site,
-        cidade: formulario.cidade,
-        estado: formulario.estado,
-        descricao: formulario.descricao,
-        segmento: formulario.segmento,
-        responsavel: formulario.responsavel,
-      });
+    const errosValidacao = validarFormularioCliente({
+      nome: formulario.nome,
+      email: formulario.email,
+      telefone: formulario.telefone,
+      cnpj: formulario.cnpj,
+      site: formulario.site,
+      cidade: formulario.cidade,
+      estado: formulario.estado,
+      descricao: formulario.descricao,
+      segmento: formulario.segmento,
+      responsavel: formulario.responsavel,
+    });
 
     setErros(errosValidacao);
     setErroLogo("");
@@ -427,37 +385,26 @@ export default function ClienteDetalhes() {
     try {
       setSalvando(true);
 
-      const atualizado =
-        await atualizarClienteComLogo(
-          cliente.id,
-          {
-            nome: formulario.nome.trim(),
-            email:
-              formulario.email.trim() || undefined,
-            telefone:
-              formulario.telefone.trim() || undefined,
-            cnpj:
-              formulario.cnpj.trim() || undefined,
-            site:
-              formulario.site.trim() || undefined,
-            cidade:
-              formulario.cidade.trim() || undefined,
-            estado:
-              formulario.estado.trim() || undefined,
-            descricao:
-              formulario.descricao.trim() || undefined,
-            segmento:
-              formulario.segmento.trim() || undefined,
-            responsavel:
-              formulario.responsavel.trim() || undefined,
-            ativo: formulario.ativo,
-          },
-          novoLogo ?? undefined,
-          logoRemovido
-        );
+      const atualizado = await atualizarClienteComLogo(
+        cliente.id,
+        {
+          nome: formulario.nome.trim(),
+          email: formulario.email.trim() || undefined,
+          telefone: formulario.telefone.trim() || undefined,
+          cnpj: formulario.cnpj.trim() || undefined,
+          site: formulario.site.trim() || undefined,
+          cidade: formulario.cidade.trim() || undefined,
+          estado: formulario.estado.trim() || undefined,
+          descricao: formulario.descricao.trim() || undefined,
+          segmento: formulario.segmento.trim() || undefined,
+          responsavel: formulario.responsavel.trim() || undefined,
+          ativo: formulario.ativo,
+        },
+        novoLogo ?? undefined,
+        logoRemovido
+      );
 
-      const novoFormulario =
-        dadosFormulario(atualizado);
+      const novoFormulario = dadosFormulario(atualizado);
 
       setCliente(atualizado);
       setFormulario(novoFormulario);
@@ -471,8 +418,7 @@ export default function ClienteDetalhes() {
       mostrarFeedback({
         variant: "success",
         title: "Cliente atualizado",
-        message:
-          "As alterações foram salvas com sucesso.",
+        message: "As alterações foram salvas com sucesso.",
       });
     } catch (error) {
       mostrarErroApi(
@@ -519,12 +465,10 @@ export default function ClienteDetalhes() {
       mostrarFeedback({
         variant: "success",
         title: "Cliente excluído",
-        message:
-          "O cliente foi excluído com sucesso.",
+        message: "O cliente foi excluído com sucesso.",
         onPrimary: () =>
           saida.concluirSaida(() => router.dismissTo("/clientes")),
-        onClose: () =>
-          saida.concluirSaida(() => router.dismissTo("/clientes")),
+        onClose: () => saida.concluirSaida(() => router.dismissTo("/clientes")),
       });
     } catch (error) {
       mostrarFeedback({
@@ -547,20 +491,13 @@ export default function ClienteDetalhes() {
       return;
     }
 
-    const numeroLimpo = telefone.replace(
-      /\D/g,
-      ""
-    );
+    const numeroLimpo = telefone.replace(/\D/g, "");
 
-    if (
-      numeroLimpo.length < 10 ||
-      numeroLimpo.length > 13
-    ) {
+    if (numeroLimpo.length < 10 || numeroLimpo.length > 13) {
       mostrarFeedback({
         variant: "warning",
         title: "Telefone inválido",
-        message:
-          "Não foi possível abrir o WhatsApp para este cliente.",
+        message: "Não foi possível abrir o WhatsApp para este cliente.",
       });
 
       return;
@@ -568,23 +505,17 @@ export default function ClienteDetalhes() {
 
     const numeroWhatsApp =
       numeroLimpo.startsWith("55") &&
-      (
-        numeroLimpo.length === 12 ||
-        numeroLimpo.length === 13
-      )
+      (numeroLimpo.length === 12 || numeroLimpo.length === 13)
         ? numeroLimpo
         : `55${numeroLimpo}`;
 
     try {
-      await Linking.openURL(
-        `https://wa.me/${numeroWhatsApp}`
-      );
+      await Linking.openURL(`https://wa.me/${numeroWhatsApp}`);
     } catch {
       mostrarFeedback({
         variant: "error",
         title: "WhatsApp indisponível",
-        message:
-          "Não foi possível abrir o WhatsApp.",
+        message: "Não foi possível abrir o WhatsApp.",
       });
     }
   }
@@ -597,15 +528,12 @@ export default function ClienteDetalhes() {
     }
 
     try {
-      await Linking.openURL(
-        `mailto:${encodeURIComponent(email)}`
-      );
+      await Linking.openURL(`mailto:${encodeURIComponent(email)}`);
     } catch {
       mostrarFeedback({
         variant: "error",
         title: "E-mail indisponível",
-        message:
-          "Não foi possível abrir o aplicativo de e-mail.",
+        message: "Não foi possível abrir o aplicativo de e-mail.",
       });
     }
   }
@@ -623,8 +551,7 @@ export default function ClienteDetalhes() {
       mostrarFeedback({
         variant: "error",
         title: "Site indisponível",
-        message:
-          "Não foi possível abrir o site do cliente.",
+        message: "Não foi possível abrir o site do cliente.",
       });
     }
   }
@@ -639,18 +566,12 @@ export default function ClienteDetalhes() {
           },
         ]}
       >
-        <Header
-          title="Cliente"
-          showBackButton
-        />
+        <Header title="Cliente" showBackButton />
 
         <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.primaria}
-          />
+          <ActivityIndicator size="large" color={theme.primaria} />
         </View>
-      <FeedbackAlert {...saida.alertaProps} />
+        <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -665,34 +586,17 @@ export default function ClienteDetalhes() {
           },
         ]}
       >
-        <Header
-          title="Cliente"
-          showBackButton
-          backFallback="/clientes"
-        />
+        <Header title="Cliente" showBackButton backFallback="/clientes" />
 
         <View style={styles.errorContainer}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={34}
-            color="#EF4444"
-          />
+          <Ionicons name="alert-circle-outline" size={34} color="#EF4444" />
 
-          <Text
-            weight="SemiBold"
-            style={styles.errorTitle}
-          >
+          <Text weight="SemiBold" style={styles.errorTitle}>
             Não foi possível carregar
           </Text>
 
-          <Text
-            style={[
-              styles.errorDescription,
-              { color: theme.textoSub },
-            ]}
-          >
-            {erroCarregamento ||
-              "O cliente não está disponível."}
+          <Text style={[styles.errorDescription, { color: theme.textoSub }]}>
+            {erroCarregamento || "O cliente não está disponível."}
           </Text>
 
           <View style={styles.errorActions}>
@@ -707,26 +611,19 @@ export default function ClienteDetalhes() {
 
             <Button
               title="TENTAR NOVAMENTE"
-              onPress={() =>
-                void carregarCliente()
-              }
+              onPress={() => void carregarCliente()}
               style={styles.actionButton}
             />
           </View>
         </View>
-      <FeedbackAlert {...saida.alertaProps} />
+        <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
 
-  const logoPerfil = obterUrlLogoCliente(
-    cliente.logo_path
-  );
+  const logoPerfil = obterUrlLogoCliente(cliente.logo_path);
 
-  const localizacao = [
-    cliente.cidade,
-    cliente.estado,
-  ]
+  const localizacao = [cliente.cidade, cliente.estado]
     .filter(Boolean)
     .join(" - ");
 
@@ -740,11 +637,7 @@ export default function ClienteDetalhes() {
       ]}
     >
       <Header
-        title={
-          modoEdicao
-            ? "Editar cliente"
-            : "Cliente"
-        }
+        title={modoEdicao ? "Editar cliente" : "Cliente"}
         showBackButton
         onBackPress={handleBack}
       />
@@ -755,107 +648,62 @@ export default function ClienteDetalhes() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-      {!modoEdicao ? (
-        <AcoesDetalhes
-          onEditar={
-            temPermissao("CLIENTES", "EDITAR")
-              ? () => setModoEdicao(true)
-              : undefined
-          }
-          onExcluir={
-            temPermissao("CLIENTES", "EXCLUIR")
-              ? confirmarExclusao
-              : undefined
-          }
-          excluindo={excluindo}
-        />
-      ) : null }
-        <View
-          style={[
-            styles.profile,
-            {
-              borderColor: theme.borda,
-              backgroundColor: theme.backgroundSecundario
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor:
-                  theme.backgroundContainer,
-              },
-            ]}
-          >
-            {logoPerfil ? (
-              <Image
-                source={{ uri: logoPerfil }}
-                style={styles.logoProfileImage}
-                resizeMode="contain"
+        {!modoEdicao ? (
+          <View style={styles.acoesDetalhes}>
+            {temPermissao("CLIENTES", "EDITAR") ? (
+              <Button
+                title="EDITAR"
+                icon="create-outline"
+                variant="outline"
+                onPress={() => setModoEdicao(true)}
+                disabled={excluindo || excluindoVinculos}
+                style={styles.botaoDetalhes}
               />
-            ) : (
-              <Ionicons
-                name="briefcase-outline"
-                size={29}
-                color={theme.textoContainer}
+            ) : null}
+            {temPermissao("CLIENTES", "EXCLUIR") ? (
+              <Button
+                title="EXCLUIR"
+                variant="danger"
+                onPress={confirmarExclusao}
+                loading={excluindo}
+                disabled={excluindoVinculos}
+                style={styles.botaoDetalhes}
               />
-            )}
+            ) : null}
           </View>
-
-          <View style={styles.profileInfo}>
-            <Text
-              weight="Bold"
-              style={styles.profileName}
-            >
-              {cliente.nome}
-            </Text>
-
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.profileSubtitle,
-                { color: theme.textoSub },
-              ]}
-            >
-              {cliente.segmento ||
-                "Segmento não informado"}
-            </Text>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    cliente.ativo === 1
-                      ? theme.backgroundContainer
-                      : theme.surface,
-                },
-              ]}
-            >
-              <Text
-                weight="SemiBold"
-                style={{
-                  color:
-                    cliente.ativo === 1
-                      ? theme.textoContainer
-                      : theme.textoSub,
-                  fontSize: 11,
-                }}
-              >
-                {cliente.ativo === 1
-                  ? "ATIVO"
-                  : "INATIVO"}
-              </Text>
-            </View>
-          </View>
+        ) : null}
+        <View style={styles.resumoCadastro}>
+          <ResumoCadastro
+            nome={cliente.nome}
+            categoria="CLIENTE"
+            ativo={cliente.ativo === 1}
+            avatar={
+              logoPerfil ? (
+                <Image
+                  source={{ uri: logoPerfil }}
+                  style={styles.logoProfileImage}
+                  resizeMode="contain"
+                  accessibilityLabel={"Logo de " + cliente.nome}
+                />
+              ) : (
+                <Ionicons
+                  name="briefcase-outline"
+                  size={24}
+                  color={theme.textoContainer}
+                />
+              )
+            }
+          />
         </View>
 
         {modoEdicao ? (
           <>
             <Text
               weight="Bold"
-              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
+              style={[
+                styles.sectionTitle,
+                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
+              ]}
             >
               DADOS PRINCIPAIS
             </Text>
@@ -863,9 +711,7 @@ export default function ClienteDetalhes() {
             <Input
               label="NOME"
               value={formulario.nome}
-              onChangeText={(texto) =>
-                atualizarCampo("nome", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("nome", texto)}
               placeholder="Nome do cliente"
               autoCapitalize="words"
               error={erros.nome}
@@ -876,39 +722,29 @@ export default function ClienteDetalhes() {
             <Input
               label="SEGMENTO"
               value={formulario.segmento}
-              onChangeText={(texto) =>
-                atualizarCampo("segmento", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("segmento", texto)}
               placeholder="Ex.: Tecnologia, Saúde, Varejo"
               autoCapitalize="words"
               error={erros.segmento}
-              showChanged={campoAlterado(
-                "segmento"
-              )}
-              clearable              
+              showChanged={campoAlterado("segmento")}
+              clearable
             />
 
             <Input
               label="RESPONSÁVEL"
               value={formulario.responsavel}
-              onChangeText={(texto) =>
-                atualizarCampo("responsavel", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("responsavel", texto)}
               placeholder="Nome do responsável"
               autoCapitalize="words"
               error={erros.responsavel}
-              showChanged={campoAlterado(
-                "responsavel"
-              )}
+              showChanged={campoAlterado("responsavel")}
               clearable
             />
 
             <Input
               label="CNPJ"
               value={formulario.cnpj}
-              onChangeText={(texto) =>
-                atualizarCampo("cnpj", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("cnpj", texto)}
               placeholder="Ex.: 12.345.678/0001-95"
               autoCapitalize="characters"
               autoCorrect={false}
@@ -920,23 +756,22 @@ export default function ClienteDetalhes() {
             <Input
               label="DESCRIÇÃO"
               value={formulario.descricao}
-              onChangeText={(texto) =>
-                atualizarCampo("descricao", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("descricao", texto)}
               placeholder="Informações sobre o cliente"
               multiline
               textAlignVertical="top"
               style={styles.textArea}
               error={erros.descricao}
-              showChanged={campoAlterado(
-                "descricao"
-              )}
+              showChanged={campoAlterado("descricao")}
               clearable
             />
 
             <Text
               weight="Bold"
-              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
+              style={[
+                styles.sectionTitle,
+                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
+              ]}
             >
               CONTATO
             </Text>
@@ -944,9 +779,7 @@ export default function ClienteDetalhes() {
             <Input
               label="E-MAIL"
               value={formulario.email}
-              onChangeText={(texto) =>
-                atualizarCampo("email", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("email", texto)}
               placeholder="contato@cliente.com.br"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -959,24 +792,18 @@ export default function ClienteDetalhes() {
             <Input
               label="TELEFONE"
               value={formulario.telefone}
-              onChangeText={(texto) =>
-                atualizarCampo("telefone", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("telefone", texto)}
               placeholder="Ex.: (11) 99999-9999"
               keyboardType="phone-pad"
               error={erros.telefone}
-              showChanged={campoAlterado(
-                "telefone"
-              )}
+              showChanged={campoAlterado("telefone")}
               clearable
             />
 
             <Input
               label="SITE"
               value={formulario.site}
-              onChangeText={(texto) =>
-                atualizarCampo("site", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("site", texto)}
               placeholder="https://www.exemplo.com.br"
               keyboardType="url"
               autoCapitalize="none"
@@ -988,7 +815,10 @@ export default function ClienteDetalhes() {
 
             <Text
               weight="Bold"
-              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
+              style={[
+                styles.sectionTitle,
+                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
+              ]}
             >
               LOCALIZAÇÃO
             </Text>
@@ -996,9 +826,7 @@ export default function ClienteDetalhes() {
             <Input
               label="CIDADE"
               value={formulario.cidade}
-              onChangeText={(texto) =>
-                atualizarCampo("cidade", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("cidade", texto)}
               placeholder="Ex.: São Paulo"
               autoCapitalize="words"
               error={erros.cidade}
@@ -1009,9 +837,7 @@ export default function ClienteDetalhes() {
             <Input
               label="ESTADO"
               value={formulario.estado}
-              onChangeText={(texto) =>
-                atualizarCampo("estado", texto)
-              }
+              onChangeText={(texto) => atualizarCampo("estado", texto)}
               placeholder="Ex.: São Paulo"
               autoCapitalize="words"
               error={erros.estado}
@@ -1021,18 +847,17 @@ export default function ClienteDetalhes() {
 
             <Text
               weight="Bold"
-              style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
+              style={[
+                styles.sectionTitle,
+                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
+              ]}
             >
               IDENTIDADE VISUAL
             </Text>
 
             <LogoPicker
               logoAtualUri={
-                logoRemovido
-                  ? null
-                  : obterUrlLogoCliente(
-                      formulario.logo_path
-                    )
+                logoRemovido ? null : obterUrlLogoCliente(formulario.logo_path)
               }
               logoSelecionado={novoLogo}
               onSelect={(arquivo) => {
@@ -1043,17 +868,13 @@ export default function ClienteDetalhes() {
               onRemove={() => {
                 setNovoLogo(null);
 
-                setLogoRemovido(
-                  Boolean(formulario.logo_path)
-                );
+                setLogoRemovido(Boolean(formulario.logo_path));
 
                 setErroLogo("");
               }}
               disabled={salvando}
               error={erroLogo}
-              showChanged={campoAlterado(
-                "logo_path"
-              )}
+              showChanged={campoAlterado("logo_path")}
             />
 
             <View
@@ -1066,10 +887,7 @@ export default function ClienteDetalhes() {
             >
               <View style={styles.statusInfo}>
                 <View style={styles.statusTitleRow}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.statusTitle}
-                  >
+                  <Text weight="SemiBold" style={styles.statusTitle}>
                     STATUS
                   </Text>
 
@@ -1096,9 +914,7 @@ export default function ClienteDetalhes() {
 
               <Switch
                 value={formulario.ativo}
-                onValueChange={(valor) =>
-                  atualizarCampo("ativo", valor)
-                }
+                onValueChange={(valor) => atualizarCampo("ativo", valor)}
                 trackColor={{
                   false: theme.surface,
                   true: theme.primaria,
@@ -1108,10 +924,7 @@ export default function ClienteDetalhes() {
             </View>
 
             {erroGeral ? (
-              <Text
-                weight="Medium"
-                style={styles.errorGeral}
-              >
+              <Text weight="Medium" style={styles.errorGeral}>
                 {erroGeral}
               </Text>
             ) : null}
@@ -1142,120 +955,118 @@ export default function ClienteDetalhes() {
           </>
         ) : (
           <>
-          
-            <Text
-              weight="Bold"
-              style={[styles.sectionTitle, {color: theme.texto, borderBottomColor: theme.borda, borderBottomWidth: 0, textAlign: "left"}]}
-            >
-              INFORMAÇÕES
-            </Text>
-            <InfoRow
-              icon="person-outline"
-              label="RESPONSÁVEL"
-              value={
-                cliente.responsavel ||
-                "Não informado"
-              }
+            <InformacoesCadastro
+              grupos={[
+                {
+                  id: "contato",
+                  titulo: "Contato",
+                  campos: [
+                    {
+                      id: "responsavel",
+                      icone: "person-outline",
+                      rotulo: "Responsável",
+                      valor: cliente.responsavel || "Não informado",
+                    },
+                    {
+                      id: "email",
+                      icone: "mail-outline",
+                      rotulo: "E-mail",
+                      valor: cliente.email || "Não informado",
+                      acao: cliente.email
+                        ? {
+                            icone: "mail-outline",
+                            rotulo: "Enviar e-mail para o cliente",
+                            onPress: abrirEmail,
+                          }
+                        : undefined,
+                    },
+                    {
+                      id: "telefone",
+                      icone: "call-outline",
+                      rotulo: "Telefone",
+                      valor: cliente.telefone || "Não informado",
+                      acao: cliente.telefone
+                        ? {
+                            icone: "logo-whatsapp",
+                            rotulo: "Abrir conversa no WhatsApp",
+                            onPress: abrirWhatsApp,
+                          }
+                        : undefined,
+                    },
+                    {
+                      id: "site",
+                      icone: "globe-outline",
+                      rotulo: "Site",
+                      valor: cliente.site || "Não informado",
+                      acao: cliente.site
+                        ? {
+                            icone: "open-outline",
+                            rotulo: "Abrir site do cliente",
+                            onPress: abrirSite,
+                          }
+                        : undefined,
+                    },
+                  ],
+                },
+                {
+                  id: "cadastro",
+                  titulo: "Dados do cliente",
+                  campos: [
+                    {
+                      id: "segmento",
+                      icone: "briefcase-outline",
+                      rotulo: "Segmento",
+                      valor: cliente.segmento || "Não informado",
+                    },
+                    {
+                      id: "cnpj",
+                      icone: "card-outline",
+                      rotulo: "CNPJ",
+                      valor: cliente.cnpj || "Não informado",
+                    },
+                    {
+                      id: "localizacao",
+                      icone: "location-outline",
+                      rotulo: "Localização",
+                      valor: localizacao || "Não informada",
+                    },
+                    {
+                      id: "logo",
+                      icone: "image-outline",
+                      rotulo: "Logo",
+                      valor: cliente.logo_path
+                        ? "Logo cadastrado"
+                        : "Não informado",
+                    },
+                  ],
+                },
+                ...(cliente.descricao
+                  ? [
+                      {
+                        id: "descricao",
+                        titulo: "Sobre o cliente",
+                        campos: [
+                          {
+                            id: "descricao",
+                            icone: "document-text-outline" as const,
+                            rotulo: "Descrição",
+                            valor: cliente.descricao,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
+              ]}
             />
-
-            <InfoRow
-              icon="briefcase-outline"
-              label="SEGMENTO"
-              value={
-                cliente.segmento ||
-                "Não informado"
-              }
-            />
-
-            <InfoRow
-              icon="card-outline"
-              label="CNPJ"
-              value={cliente.cnpj || "Não informado"}
-            />
-
-            <InfoRow
-              icon="mail-outline"
-              label="E-MAIL"
-              value={cliente.email || "Não informado"}
-              actionIcon={
-                cliente.email
-                  ? "mail-outline"
-                  : undefined
-              }
-              actionLabel="Enviar e-mail para o cliente"
-              onActionPress={
-                cliente.email
-                  ? abrirEmail
-                  : undefined
-              }
-            />
-
-            <InfoRow
-              icon="call-outline"
-              label="TELEFONE"
-              value={
-                cliente.telefone || "Não informado"
-              }
-              actionIcon={
-                cliente.telefone
-                  ? "logo-whatsapp"
-                  : undefined
-              }
-              actionLabel="Abrir conversa no WhatsApp"
-              onActionPress={
-                cliente.telefone
-                  ? abrirWhatsApp
-                  : undefined
-              }
-            />
-
-            <InfoRow
-              icon="globe-outline"
-              label="SITE"
-              value={cliente.site || "Não informado"}
-              actionIcon={
-                cliente.site
-                  ? "open-outline"
-                  : undefined
-              }
-              actionLabel="Abrir site do cliente"
-              onActionPress={
-                cliente.site
-                  ? abrirSite
-                  : undefined
-              }
-            />
-
-            <InfoRow
-              icon="location-outline"
-              label="LOCALIZAÇÃO"
-              value={
-                localizacao || "Não informada"
-              }
-            />
-
-            <InfoRow
-              icon="image-outline"
-              label="LOGO"
-              value={
-                cliente.logo_path
-                  ? "Logo cadastrado"
-                  : "Não informado"
-              }
-            />
-
-            {cliente.descricao ? (
-              <InfoRow
-                icon="document-text-outline"
-                label="DESCRIÇÃO"
-                value={cliente.descricao}
-              />
-            ) : null}
-
             {podeVerClippings || podeVerRelatorios ? (
-              <View style={styles.vinculos}>
-                <Text weight="Bold" style={styles.sectionTitle}>
-                  VÍNCULOS DO CLIENTE
+              <View
+                style={[
+                  styles.vinculos,
+                  { borderTopColor: theme.borda + "25" },
+                ]}
+              >
+                <Text weight="SemiBold" style={styles.tituloVinculos}>
+                  Vínculos do cliente
                 </Text>
 
                 {podeVerClippings && podeVerRelatorios ? (
@@ -1263,7 +1074,9 @@ export default function ClienteDetalhes() {
                     <Button
                       title="CLIPPINGS"
                       size="small"
-                      variant={abaVinculosAtiva === "clippings" ? "primary" : "outline"}
+                      variant={
+                        abaVinculosAtiva === "clippings" ? "primary" : "outline"
+                      }
                       disabled={excluindo || excluindoVinculos}
                       onPress={() => setAbaVinculos("clippings")}
                       style={styles.actionButton}
@@ -1271,7 +1084,11 @@ export default function ClienteDetalhes() {
                     <Button
                       title="RELATÓRIOS"
                       size="small"
-                      variant={abaVinculosAtiva === "relatorios" ? "primary" : "outline"}
+                      variant={
+                        abaVinculosAtiva === "relatorios"
+                          ? "primary"
+                          : "outline"
+                      }
                       disabled={excluindo || excluindoVinculos}
                       onPress={() => setAbaVinculos("relatorios")}
                       style={styles.actionButton}
@@ -1318,101 +1135,17 @@ export default function ClienteDetalhes() {
         }}
         onSecondary={fecharFeedback}
       />
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
-  );
-}
-
-interface InfoRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  actionIcon?: keyof typeof Ionicons.glyphMap;
-  actionLabel?: string;
-  onActionPress?: () => void;
-}
-
-function InfoRow({
-  icon,
-  label,
-  value,
-  actionIcon,
-  actionLabel,
-  onActionPress,
-}: InfoRowProps) {
-  const { theme } = useTheme();
-
-  return (
-    <View
-      style={[
-        styles.infoRow,
-        {
-          borderColor: theme.borda,
-          backgroundColor: theme.backgroundSecundario
-        },
-      ]}
-    >
-      <View
-        style={[
-          styles.infoIcon,
-          {
-            backgroundColor:
-              theme.backgroundContainer,
-          },
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={19}
-          color={theme.textoContainer}
-        />
-      </View>
-
-      <View style={styles.infoContent}>
-        <Text
-          weight="SemiBold"
-          style={[styles.infoLabel, {color: theme.textoTerciaria}]}
-        >
-          {label}
-        </Text>
-
-        <Text
-          style={[
-            styles.infoValue,
-            {
-              color: theme.texto,
-            },
-          ]}
-        >
-          {value}
-        </Text>
-      </View>
-
-      {actionIcon && onActionPress ? (
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={onActionPress}
-          accessibilityLabel={actionLabel}
-          style={[
-            styles.infoActionButton,
-            {
-              backgroundColor:
-                theme.backgroundContainer,
-            },
-          ]}
-        >
-          <Ionicons
-            name={actionIcon}
-            size={18}
-            color={theme.textoContainer}
-          />
-        </TouchableOpacity>
-      ) : null}
+      <FeedbackAlert {...saida.alertaProps} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  resumoCadastro: { marginBottom: 12 },
+  informacoesCadastro: { marginBottom: 12 },
+  acoesDetalhes: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  botaoDetalhes: { flex: 1, width: "auto", minWidth: 0 },
+
   container: {
     flex: 1,
   },
@@ -1454,50 +1187,7 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
 
-  profile: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-
-  logoProfileImage: {
-    width: "100%",
-    height: "100%",
-  },
-
-  profileInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-
-  profileName: {
-    fontSize: 19,
-  },
-
-  profileSubtitle: {
-    fontSize: 12,
-    marginTop: 3,
-  },
-
-  statusBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 7,
-    marginTop: 8,
-  },
+  logoProfileImage: { width: "100%", height: "100%" },
 
   sectionTitle: {
     fontSize: 13,
@@ -1507,48 +1197,14 @@ const styles = StyleSheet.create({
   },
 
   vinculos: {
-    marginTop: 5,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    gap: 12,
   },
-
-  infoRow: {
-    minHeight: 68,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  infoContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  infoLabel: {
-    fontSize: 10,
-    marginBottom: 3,
-  },
-
-  infoValue: {
-    fontSize: 14,
-  },
-
-  infoActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
+  tituloVinculos: {
+    fontSize: 13,
+    lineHeight: 19,
   },
 
   textArea: {

@@ -19,11 +19,11 @@ import {
   adicionarEnderecoVeiculo,
   listarEnderecosVeiculo,
   removerEnderecoVeiculo,
-  atualizarEnderecoVeiculo
+  atualizarEnderecoVeiculo,
 } from "@/services/api/veiculo";
 import type {
   EnderecoVeiculo,
-  NovoEnderecoVeiculo
+  NovoEnderecoVeiculo,
 } from "@/services/api/veiculo";
 
 interface Props {
@@ -31,36 +31,24 @@ interface Props {
   editavel: boolean;
 }
 
-export default function EnderecosVeiculo({
-  veiculoId,
-  editavel,
-}: Props) {
+export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
   const { theme } = useTheme();
 
-  const [enderecos, setEnderecos] = useState<
-    EnderecoVeiculo[]
-  >([]);
+  const [enderecos, setEnderecos] = useState<EnderecoVeiculo[]>([]);
   const [host, setHost] = useState("");
   const [caminho, setCaminho] = useState("");
-  const [incluirSubdominios, setIncluirSubdominios] =
-    useState(false);
+  const [incluirSubdominios, setIncluirSubdominios] = useState(false);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [removendoId, setRemovendoId] = useState<
-    number | null
-  >(null);
+  const [removendoId, setRemovendoId] = useState<number | null>(null);
   const [erro, setErro] = useState("");
   const [edicao, setEdicao] = useState<
     (NovoEnderecoVeiculo & { id: number }) | null
-    >(null);
-  const [salvandoEdicao, setSalvandoEdicao] =
-    useState(false);
+  >(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
-  const ocupado =
-    salvando ||
-    salvandoEdicao ||
-    removendoId !== null;
+  const ocupado = salvando || salvandoEdicao || removendoId !== null;
 
   useEffect(() => {
     let ativo = true;
@@ -105,14 +93,11 @@ export default function EnderecosVeiculo({
     setSalvando(true);
 
     try {
-      const novo = await adicionarEnderecoVeiculo(
-        veiculoId,
-        {
-          host: host.trim(),
-          caminho_prefixo: caminho.trim(),
-          incluir_subdominios: incluirSubdominios,
-        }
-      );
+      const novo = await adicionarEnderecoVeiculo(veiculoId, {
+        host: host.trim(),
+        caminho_prefixo: caminho.trim(),
+        incluir_subdominios: incluirSubdominios,
+      });
 
       setEnderecos((anteriores) =>
         [...anteriores, novo].sort((a, b) =>
@@ -141,15 +126,10 @@ export default function EnderecosVeiculo({
     setRemovendoId(enderecoId);
 
     try {
-      await removerEnderecoVeiculo(
-        veiculoId,
-        enderecoId
-      );
+      await removerEnderecoVeiculo(veiculoId, enderecoId);
 
       setEnderecos((anteriores) =>
-        anteriores.filter(
-          (endereco) => endereco.id !== enderecoId
-        )
+        anteriores.filter((endereco) => endereco.id !== enderecoId)
       );
     } catch (falha) {
       setErro(
@@ -166,77 +146,65 @@ export default function EnderecosVeiculo({
     if (ocupado) return;
 
     if (edicao?.id === endereco.id) {
-        setEdicao(null);
-        setErro("");
-        return;
+      setEdicao(null);
+      setErro("");
+      return;
     }
 
     if (edicao !== null) return;
 
     setEdicao({
-        id: endereco.id,
-        host: `${endereco.protocolo}://${endereco.host}`,
-        caminho_prefixo: endereco.caminho_prefixo,
-        incluir_subdominios:
-        endereco.incluir_subdominios,
+      id: endereco.id,
+      host: `${endereco.protocolo}://${endereco.host}`,
+      caminho_prefixo: endereco.caminho_prefixo,
+      incluir_subdominios: endereco.incluir_subdominios,
     });
     setErro("");
-    }
+  }
 
-    async function salvarEdicao() {
+  async function salvarEdicao() {
     if (!edicao || ocupado) return;
 
     if (!edicao.host.trim()) {
-        setErro("Informe o domínio do site.");
-        return;
+      setErro("Informe o domínio do site.");
+      return;
     }
 
     setErro("");
     setSalvandoEdicao(true);
 
     try {
-        const atualizado =
-        await atualizarEnderecoVeiculo(
-            veiculoId,
-            edicao.id,
-            {
-            host: edicao.host.trim(),
-            caminho_prefixo:
-                edicao.caminho_prefixo.trim(),
-            incluir_subdominios:
-                edicao.incluir_subdominios,
-            }
-        );
+      const atualizado = await atualizarEnderecoVeiculo(veiculoId, edicao.id, {
+        host: edicao.host.trim(),
+        caminho_prefixo: edicao.caminho_prefixo.trim(),
+        incluir_subdominios: edicao.incluir_subdominios,
+      });
 
-        setEnderecos((anteriores) =>
+      setEnderecos((anteriores) =>
         anteriores
-            .map((endereco) =>
-            endereco.id === atualizado.id
-                ? atualizado
-                : endereco
-            )
-            .sort((a, b) =>
+          .map((endereco) =>
+            endereco.id === atualizado.id ? atualizado : endereco
+          )
+          .sort((a, b) =>
             `${a.host}${a.caminho_prefixo}`.localeCompare(
-                `${b.host}${b.caminho_prefixo}`
+              `${b.host}${b.caminho_prefixo}`
             )
-            )
-        );
+          )
+      );
 
-        setEdicao(null);
+      setEdicao(null);
     } catch (falha) {
-        setErro(
+      setErro(
         falha instanceof Error
-            ? falha.message
-            : "Não foi possível atualizar o endereço."
-        );
+          ? falha.message
+          : "Não foi possível atualizar o endereço."
+      );
     } finally {
-        setSalvandoEdicao(false);
+      setSalvandoEdicao(false);
     }
-    }
+  }
 
-    async function abrirSite(
-    endereco: EnderecoVeiculo
-    ) {
+  async function abrirSite(endereco: EnderecoVeiculo) {
     const url = encodeURI(
       `${endereco.protocolo}://${endereco.host}${
         endereco.caminho_prefixo || "/"
@@ -244,44 +212,33 @@ export default function EnderecosVeiculo({
     );
 
     try {
-        await Linking.openURL(url);
+      await Linking.openURL(url);
     } catch {
-        setErro(
-        "Não foi possível abrir o site deste veículo."
-        );
+      setErro("Não foi possível abrir o site deste veículo.");
     }
-    }
+  }
 
   function confirmarRemocao(endereco: EnderecoVeiculo) {
-    const identificacao =
-      endereco.host + endereco.caminho_prefixo;
+    const identificacao = endereco.host + endereco.caminho_prefixo;
 
     if (Platform.OS === "web") {
-      if (
-        window.confirm(
-          `Remover ${identificacao} deste veículo?`
-        )
-      ) {
+      if (window.confirm(`Remover ${identificacao} deste veículo?`)) {
         void remover(endereco.id);
       }
 
       return;
     }
 
-    Alert.alert(
-      "Remover endereço",
-      `Remover ${identificacao} deste veículo?`,
-      [
-        { text: "CANCELAR", style: "cancel" },
-        {
-          text: "REMOVER",
-          style: "destructive",
-          onPress: () => {
-            void remover(endereco.id);
-          },
+    Alert.alert("Remover endereço", `Remover ${identificacao} deste veículo?`, [
+      { text: "CANCELAR", style: "cancel" },
+      {
+        text: "REMOVER",
+        style: "destructive",
+        onPress: () => {
+          void remover(endereco.id);
         },
-      ]
-    );
+      },
+    ]);
   }
 
   return (
@@ -290,256 +247,226 @@ export default function EnderecosVeiculo({
         styles.card,
         {
           backgroundColor: theme.backgroundSecundario,
-          borderColor: theme.borda,
+          borderColor: theme.borda + "40",
         },
       ]}
     >
-      <Text weight="Bold" style={styles.titulo}>
-        ENDEREÇOS DO SITE
+      <Text weight="SemiBold" style={styles.titulo}>
+        Endereços do site
       </Text>
 
-      <Text
-        style={[
-          styles.descricao,
-          { color: theme.textoSub },
-        ]}
-      >
-        Usados para reconhecer o veículo. Se o site usar apenas HTTP, informe http:// antes do domínio.
+      <Text style={[styles.descricao, { color: theme.textoSub }]}>
+        Usados para reconhecer o veículo. Se o site usar apenas HTTP, informe
+        http:// antes do domínio.
       </Text>
 
       {carregando ? (
-        <ActivityIndicator
-          color={theme.primaria}
-          style={styles.carregando}
-        />
+        <ActivityIndicator color={theme.primaria} style={styles.carregando} />
       ) : enderecos.length === 0 && !erro ? (
-        <Text
-          style={[
-            styles.vazio,
-            { color: theme.textoSub },
-          ]}
-        >
+        <Text style={[styles.vazio, { color: theme.textoSub }]}>
           Nenhum endereço associado.
         </Text>
       ) : (
-        enderecos.map((endereco) => (
-  <View
-    key={endereco.id}
-    style={[
-      styles.registro,
-      { borderTopColor: theme.borda },
-    ]}
-  >
-    <View style={styles.linha}>
-      <Ionicons
-        name="globe-outline"
-        size={19}
-        color={theme.textoTerciaria}
-        style={styles.icone}
-      />
-
-      <View style={styles.dadosEndereco}>
-        <Text
-          weight="SemiBold"
-          style={{ color: theme.texto }}
-          selectable
-        >
-          {endereco.protocolo}://{endereco.host}
-          {endereco.caminho_prefixo}
-        </Text>
-
-        <Text
-          style={[
-            styles.detalhe,
-            { color: theme.textoSub },
-          ]}
-        >
-          {endereco.incluir_subdominios
-            ? "Inclui subdomínios"
-            : "Somente este domínio"}
-        </Text>
-      </View>
-
-      <View style={styles.acoesEndereco}>
-        {editavel ? (
-          <>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Editar ${endereco.host}${endereco.caminho_prefixo}`}
-              disabled={
-                ocupado ||
-                (edicao !== null &&
-                  edicao.id !== endereco.id)
-              }
-              onPress={() =>
-                iniciarEdicao(endereco)
-              }
-              style={styles.acaoIcone}
-            >
-              <Ionicons
-                name="create-outline"
-                size={19}
-                color={theme.textoTerciaria}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Remover ${endereco.host}${endereco.caminho_prefixo}`}
-              disabled={ocupado || edicao !== null}
-              onPress={() =>
-                confirmarRemocao(endereco)
-              }
-              style={styles.acaoIcone}
-            >
-              {removendoId === endereco.id ? (
-                <ActivityIndicator
-                  size="small"
-                  color={theme.erro}
-                />
-              ) : (
-                <Ionicons
-                  name="trash-outline"
-                  size={19}
-                  color={theme.erro}
-                />
-              )}
-            </TouchableOpacity>
-          </>
-        ) : null}
-
-        <TouchableOpacity
-          accessibilityRole="link"
-          accessibilityLabel={`Abrir site ${endereco.host}${endereco.caminho_prefixo}`}
-          onPress={() => {
-            void abrirSite(endereco);
-          }}
-          style={styles.acaoIcone}
-        >
-          <Ionicons
-            name="open-outline"
-            size={19}
-            color={theme.textoTerciaria}
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-
-    {editavel && edicao?.id === endereco.id ? (
-      <View
-        style={[
-          styles.formEdicao,
-          { borderTopColor: theme.borda },
-        ]}
-      >
-        <Input
-          label="DOMÍNIO"
-          value={edicao.host}
-          onChangeText={(valor) => {
-            setEdicao((atual) =>
-              atual
-                ? { ...atual, host: valor }
-                : atual
-            );
-            setErro("");
-          }}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!salvandoEdicao}
-        />
-
-        <Input
-          label="SEÇÃO DO SITE (OPCIONAL)"
-          value={edicao.caminho_prefixo}
-          onChangeText={(valor) => {
-            setEdicao((atual) =>
-              atual
-                ? {
-                    ...atual,
-                    caminho_prefixo: valor,
-                  }
-                : atual
-            );
-            setErro("");
-          }}
-          placeholder="Ex.: /agro"
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!salvandoEdicao}
-        />
-
-        <View style={styles.opcao}>
-          <View style={styles.opcaoTexto}>
-            <Text weight="SemiBold">
-              Incluir subdomínios
-            </Text>
-          </View>
-
-          <Switch
-            value={edicao.incluir_subdominios}
-            onValueChange={(valor) =>
-              setEdicao((atual) =>
-                atual
-                  ? {
-                      ...atual,
-                      incluir_subdominios: valor,
-                    }
-                  : atual
-              )
-            }
-            disabled={salvandoEdicao}
-            trackColor={{
-              false: theme.surface,
-              true: theme.primaria,
-            }}
-            thumbColor={theme.branco}
-          />
-        </View>
-
-        {erro ? (
-          <Text
+        enderecos.map((endereco, indice) => (
+          <View
+            key={endereco.id}
             style={[
-              styles.erro,
-              { color: theme.erro },
+              styles.registro,
+              { borderTopColor: theme.borda + "20" },
+              indice === enderecos.length - 1 && styles.ultimoRegistro,
             ]}
           >
-            {erro}
-          </Text>
-        ) : null}
+            <View style={styles.linha}>
+              <View
+                style={[
+                  styles.icone,
+                  { backgroundColor: theme.textoTerciaria + "0D" },
+                ]}
+              >
+                <Ionicons
+                  name="globe-outline"
+                  size={17}
+                  color={theme.textoTerciaria}
+                />
+              </View>
 
-        <View style={styles.botoesEdicao}>
-          <Button
-            title="CANCELAR"
-            variant="outline"
-            size="small"
-            disabled={salvandoEdicao}
-            onPress={() => {
-              setEdicao(null);
-              setErro("");
-            }}
-            style={styles.botaoEdicao}
-          />
-          <Button
-            title="SALVAR"
-            size="small"
-            loading={salvandoEdicao}
-            onPress={() => void salvarEdicao()}
-            style={styles.botaoEdicao}
-          />
-        </View>
-      </View>
-    ) : null}
-  </View>
-))
+              <View style={styles.dadosEndereco}>
+                <Text
+                  style={[styles.endereco, { color: theme.texto }]}
+                  selectable
+                >
+                  {endereco.protocolo}://{endereco.host}
+                  {endereco.caminho_prefixo}
+                </Text>
+
+                <Text style={[styles.detalhe, { color: theme.textoSub }]}>
+                  {endereco.incluir_subdominios
+                    ? "Inclui subdomínios"
+                    : "Somente este domínio"}
+                </Text>
+              </View>
+
+              <View style={styles.acoesEndereco}>
+                {editavel ? (
+                  <>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Editar ${endereco.host}${endereco.caminho_prefixo}`}
+                      disabled={
+                        ocupado ||
+                        (edicao !== null && edicao.id !== endereco.id)
+                      }
+                      onPress={() => iniciarEdicao(endereco)}
+                      style={styles.acaoIcone}
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={19}
+                        color={theme.textoTerciaria}
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remover ${endereco.host}${endereco.caminho_prefixo}`}
+                      disabled={ocupado || edicao !== null}
+                      onPress={() => confirmarRemocao(endereco)}
+                      style={styles.acaoIcone}
+                    >
+                      {removendoId === endereco.id ? (
+                        <ActivityIndicator size="small" color={theme.erro} />
+                      ) : (
+                        <Ionicons
+                          name="trash-outline"
+                          size={19}
+                          color={theme.erro}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : null}
+
+                <TouchableOpacity
+                  accessibilityRole="link"
+                  accessibilityLabel={`Abrir site ${endereco.host}${endereco.caminho_prefixo}`}
+                  onPress={() => {
+                    void abrirSite(endereco);
+                  }}
+                  style={[
+                    styles.acaoAbrir,
+                    {
+                      borderColor: theme.primaria + "30",
+                      backgroundColor: theme.primaria + "0A",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="open-outline"
+                    size={19}
+                    color={theme.textoTerciaria}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {editavel && edicao?.id === endereco.id ? (
+              <View
+                style={[styles.formEdicao, { borderTopColor: theme.borda }]}
+              >
+                <Input
+                  label="DOMÍNIO"
+                  value={edicao.host}
+                  onChangeText={(valor) => {
+                    setEdicao((atual) =>
+                      atual ? { ...atual, host: valor } : atual
+                    );
+                    setErro("");
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!salvandoEdicao}
+                />
+
+                <Input
+                  label="SEÇÃO DO SITE (OPCIONAL)"
+                  value={edicao.caminho_prefixo}
+                  onChangeText={(valor) => {
+                    setEdicao((atual) =>
+                      atual
+                        ? {
+                            ...atual,
+                            caminho_prefixo: valor,
+                          }
+                        : atual
+                    );
+                    setErro("");
+                  }}
+                  placeholder="Ex.: /agro"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!salvandoEdicao}
+                />
+
+                <View style={styles.opcao}>
+                  <View style={styles.opcaoTexto}>
+                    <Text weight="SemiBold">Incluir subdomínios</Text>
+                  </View>
+
+                  <Switch
+                    value={edicao.incluir_subdominios}
+                    onValueChange={(valor) =>
+                      setEdicao((atual) =>
+                        atual
+                          ? {
+                              ...atual,
+                              incluir_subdominios: valor,
+                            }
+                          : atual
+                      )
+                    }
+                    disabled={salvandoEdicao}
+                    trackColor={{
+                      false: theme.surface,
+                      true: theme.primaria,
+                    }}
+                    thumbColor={theme.branco}
+                  />
+                </View>
+
+                {erro ? (
+                  <Text style={[styles.erro, { color: theme.erro }]}>
+                    {erro}
+                  </Text>
+                ) : null}
+
+                <View style={styles.botoesEdicao}>
+                  <Button
+                    title="CANCELAR"
+                    variant="outline"
+                    size="small"
+                    disabled={salvandoEdicao}
+                    onPress={() => {
+                      setEdicao(null);
+                      setErro("");
+                    }}
+                    style={styles.botaoEdicao}
+                  />
+                  <Button
+                    title="SALVAR"
+                    size="small"
+                    loading={salvandoEdicao}
+                    onPress={() => void salvarEdicao()}
+                    style={styles.botaoEdicao}
+                  />
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ))
       )}
 
       {editavel && edicao === null ? (
-        <View
-          style={[
-            styles.formulario,
-            { borderTopColor: theme.borda },
-          ]}
-        >
+        <View style={[styles.formulario, { borderTopColor: theme.borda }]}>
           <Input
             label="DOMÍNIO"
             value={host}
@@ -568,17 +495,9 @@ export default function EnderecosVeiculo({
 
           <View style={styles.opcao}>
             <View style={styles.opcaoTexto}>
-              <Text weight="SemiBold">
-                Incluir subdomínios
-              </Text>
-              <Text
-                style={[
-                  styles.detalhe,
-                  { color: theme.textoSub },
-                ]}
-              >
-                Ex.: portal.exemplo.com também
-                pertence a exemplo.com
+              <Text weight="SemiBold">Incluir subdomínios</Text>
+              <Text style={[styles.detalhe, { color: theme.textoSub }]}>
+                Ex.: portal.exemplo.com também pertence a exemplo.com
               </Text>
             </View>
 
@@ -595,14 +514,7 @@ export default function EnderecosVeiculo({
           </View>
 
           {erro ? (
-            <Text
-              style={[
-                styles.erro,
-                { color: theme.erro },
-              ]}
-            >
-              {erro}
-            </Text>
+            <Text style={[styles.erro, { color: theme.erro }]}>{erro}</Text>
           ) : null}
 
           <Button
@@ -613,26 +525,13 @@ export default function EnderecosVeiculo({
             disabled={carregando || removendoId !== null}
           />
 
-          <Text
-            style={[
-              styles.aviso,
-              { color: theme.textoSub },
-            ]}
-          >
-            O endereço é salvo ao adicionar.
-            Cancelar a edição dos outros campos
+          <Text style={[styles.aviso, { color: theme.textoSub }]}>
+            O endereço é salvo ao adicionar. Cancelar a edição dos outros campos
             não o remove.
           </Text>
         </View>
       ) : erro ? (
-        <Text
-          style={[
-            styles.erro,
-            { color: theme.erro },
-          ]}
-        >
-          {erro}
-        </Text>
+        <Text style={[styles.erro, { color: theme.erro }]}>{erro}</Text>
       ) : null}
     </View>
   );
@@ -640,17 +539,19 @@ export default function EnderecosVeiculo({
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1.5,
-    borderRadius: 15,
+    borderWidth: 1,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 14,
+    paddingBottom: 12,
+    minWidth: 0,
   },
   titulo: {
     fontSize: 13,
+    lineHeight: 19,
   },
   descricao: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 17,
     marginTop: 4,
     marginBottom: 10,
   },
@@ -664,35 +565,57 @@ const styles = StyleSheet.create({
   linha: {
     flexDirection: "row",
     alignItems: "center",
-    },
-registro: {
-  borderTopWidth: 1,
-  paddingVertical: 11,
-},
-acoesEndereco: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginLeft: 4,
-},
-acaoIcone: {
-  width: 34,
-  height: 36,
-  alignItems: "center",
-  justifyContent: "center",
-},
-formEdicao: {
-  borderTopWidth: 1,
-  marginTop: 10,
-  paddingTop: 14,
-},
-botoesEdicao: {
-  flexDirection: "row",
-  gap: 8,
-},
-botaoEdicao: {
-  flex: 1,
-},
+  },
+  registro: {
+    borderTopWidth: 1,
+    paddingVertical: 11,
+  },
+  ultimoRegistro: {
+    paddingBottom: 0,
+  },
+  endereco: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  acoesEndereco: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 4,
+  },
+  acaoIcone: {
+    width: 34,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  acaoAbrir: {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  formEdicao: {
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 14,
+  },
+  botoesEdicao: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  botaoEdicao: {
+    flex: 1,
+  },
   icone: {
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
   dadosEndereco: {
@@ -700,8 +623,8 @@ botaoEdicao: {
     minWidth: 0,
   },
   detalhe: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 15,
     marginTop: 3,
   },
   formulario: {

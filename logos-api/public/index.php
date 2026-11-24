@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 header('Access-Control-Allow-Origin: http://localhost:8081');
-header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+header('Access-Control-Allow-Methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, Range');
 header('Access-Control-Expose-Headers: Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Captura-Largura, X-Captura-Altura, X-Captura-Incompleta, X-Captura-Tem-Proxima, X-Captura-Aviso, X-Captura-Limite-Trechos');
 header('Access-Control-Max-Age: 86400');
@@ -13,13 +13,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-use CoffeeCode\Router\Router;
+use Logos\AssessoriaApi\Routing\ApiRouter;
 use Dotenv\Dotenv;
 
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
-$router = new Router("http://localhost/LOGOS/logos-api/public");
+$router = new ApiRouter("http://localhost/LOGOS/logos-api/public");
 
 $router->namespace("Logos\\AssessoriaApi\\Controllers");
 

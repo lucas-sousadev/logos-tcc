@@ -759,6 +759,10 @@ $router->post(
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 
+// O cliente de e-mail acessa somente o pixel opaco, sem sessão do aplicativo.
+$router->get("/api/releases/aberturas/{token}", "ReleaseAberturaController:registrar");
+$router->head("/api/releases/aberturas/{token}", "ReleaseAberturaController:registrar");
+
 $router->post(
     "/api/releases/imagens",
     "ReleaseController:carregarImagem",
@@ -789,6 +793,25 @@ $router->get(
 $router->post(
     "/api/releases/{id}/repetir-falhas",
     "ReleaseController:repetirFalhas",
+    "RELEASES.ENVIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases/{id}/agendar",
+    "ReleaseController:agendar",
+    "RELEASES.ENVIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+$router->post(
+    "/api/releases/{id}/cancelar-agendamento",
+    "ReleaseController:cancelarAgendamento",
+    "RELEASES.ENVIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+$router->post(
+    "/api/releases/{id}/cancelar-envio",
+    "ReleaseController:cancelarEnvio",
     "RELEASES.ENVIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );

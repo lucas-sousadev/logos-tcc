@@ -203,6 +203,74 @@ class ReleaseController
         );
     }
 
+    private function alterarProgramacao(array $rota, string $acao): void
+    {
+        $this->executar(function (
+            int $assessoriaId,
+            int $usuarioId,
+            string $perfil
+        ) use ($rota, $acao): array {
+            if (!PermissaoService::usuarioTemPermissao(
+                $usuarioId,
+                $perfil,
+                'RELEASES',
+                'VISUALIZAR'
+            )) {
+                throw new \RuntimeException(
+                    'Você precisa da permissão de visualizar releases.',
+                    403
+                );
+            }
+            $dados = $this->corpo();
+            $campos = $acao === 'agendar'
+                ? ['data', 'hora', 'versao_edicao']
+                : ['versao_edicao'];
+            if (array_diff(array_keys($dados), $campos) !== []) {
+                throw new \InvalidArgumentException(
+                    'A operação usa os dados do release salvo.'
+                );
+            }
+            $id = $rota['id'] ?? null;
+            $versao = $dados['versao_edicao'] ?? null;
+            if (!is_string($versao) || !preg_match('/^[a-f0-9]{64}$/D', $versao)) {
+                throw new \InvalidArgumentException(
+                    'Reabra o release para conferir sua versão.'
+                );
+            }
+            $envio = match ($acao) {
+                'agendar' => ReleaseEnvioService::agendar(
+                    $assessoriaId, $id, $dados
+                ),
+                'cancelar-agendamento' => ReleaseEnvioService::cancelarAgendamento(
+                    $assessoriaId, $id, $versao
+                ),
+                'cancelar-envio' => ReleaseEnvioService::cancelarEnvio(
+                    $assessoriaId, $id, $versao
+                ),
+            };
+
+            return [
+                'envio' => $envio,
+                'release' => ReleaseService::buscar($assessoriaId, $id),
+            ];
+        });
+    }
+
+    public function agendar(array $rota): void
+    {
+        $this->alterarProgramacao($rota, 'agendar');
+    }
+
+    public function cancelarAgendamento(array $rota): void
+    {
+        $this->alterarProgramacao($rota, 'cancelar-agendamento');
+    }
+
+    public function cancelarEnvio(array $rota): void
+    {
+        $this->alterarProgramacao($rota, 'cancelar-envio');
+    }
+
     public function situacaoEnvio(array $rota): void
     {
         $this->executar(

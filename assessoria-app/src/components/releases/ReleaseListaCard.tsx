@@ -1,3 +1,4 @@
+import { formatarAgendamentoRelease } from "@/utils/agendamentoRelease";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,6 +57,7 @@ export default function ReleaseListaCard({
       cor: theme.aviso,
       icone: "alert-circle-outline",
     },
+    CANCELADO: { cor: theme.textoSub, icone: "stop-circle-outline" },
     FALHOU: {
       cor: theme.erro,
       icone: "close-circle-outline",
@@ -66,168 +68,123 @@ export default function ReleaseListaCard({
   const titulo = release.titulo || "Release sem título";
   const cliente = release.cliente_nome || "Cliente a definir";
 
-  const data = (
-    release.data_referencia || release.updated_at
-  ).slice(0, 10);
+  const data = (release.data_referencia || release.updated_at).slice(0, 10);
 
   return (
-      <View
-        style={[
-          styles.card,
-          {
-            borderColor: theme.borda + "45",
-            backgroundColor: theme.backgroundSecundario,
-          },
+    <View
+      style={[
+        styles.card,
+        {
+          borderColor: theme.borda + "45",
+          backgroundColor: theme.backgroundSecundario,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          titulo +
+          ". " +
+          cliente +
+          ". " +
+          ROTULOS_STATUS[release.status] +
+          ". " +
+          release.total_destinatarios +
+          " destinatários."
+        }
+        accessibilityHint="Abrir detalhes do release"
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.conteudo,
+          { opacity: pressed ? 0.8 : 1 },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            titulo +
-            ". " +
-            cliente +
-            ". " +
-            ROTULOS_STATUS[release.status] +
-            ". " +
-            release.total_destinatarios +
-            " destinatários."
-          }
-          accessibilityHint="Abrir detalhes do release"
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.conteudo,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <View style={styles.topo}>
-            <View
-              style={[
-                styles.status,
-                { backgroundColor: visual.cor + "12" },
-              ]}
-            >
-              <Ionicons
-                name={visual.icone}
-                size={13}
-                color={visual.cor}
-              />
+        <View style={styles.topo}>
+          <View style={[styles.status, { backgroundColor: visual.cor + "12" }]}>
+            <Ionicons name={visual.icone} size={13} color={visual.cor} />
 
-              <Text
-                weight="SemiBold"
-                style={[
-                  styles.statusTexto,
-                  { color: visual.cor },
-                ]}
-              >
-                {ROTULOS_STATUS[release.status]}
-              </Text>
-            </View>
-
-            <View style={styles.data}>
-              <Ionicons
-                name="calendar-outline"
-                size={12}
-                color={theme.textoSub}
-              />
-
-              <Text
-                style={[
-                  styles.textoMenor,
-                  { color: theme.textoSub },
-                ]}
-              >
-                {dataISOParaBR(data)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.tituloLinha}>
             <Text
-              weight="Bold"
-              numberOfLines={2}
-              style={styles.titulo}
+              weight="SemiBold"
+              style={[styles.statusTexto, { color: visual.cor }]}
             >
-              {titulo}
+              {ROTULOS_STATUS[release.status]}
             </Text>
-
-            <View
-              style={[
-                styles.abrir,
-                { backgroundColor: theme.primaria + "0C" },
-              ]}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={17}
-                color={theme.textoTerciaria}
-              />
-            </View>
           </View>
 
-          <View style={styles.cliente}>
+          <View style={styles.data}>
             <Ionicons
-              name="business-outline"
-              size={14}
+              name="calendar-outline"
+              size={12}
               color={theme.textoSub}
             />
 
-            <Text
-              weight="Medium"
-              numberOfLines={1}
-              style={[
-                styles.clienteNome,
-                { color: theme.textoSub },
-              ]}
-            >
-              {cliente}
+            <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
+              {dataISOParaBR(data)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.tituloLinha}>
+          <Text weight="Bold" numberOfLines={2} style={styles.titulo}>
+            {titulo}
+          </Text>
+
+          <View
+            style={[styles.abrir, { backgroundColor: theme.primaria + "0C" }]}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={17}
+              color={theme.textoTerciaria}
+            />
+          </View>
+        </View>
+
+        <View style={styles.cliente}>
+          <Ionicons name="business-outline" size={14} color={theme.textoSub} />
+
+          <Text
+            weight="Medium"
+            numberOfLines={1}
+            style={[styles.clienteNome, { color: theme.textoSub }]}
+          >
+            {cliente}
+          </Text>
+        </View>
+
+        <View style={[styles.rodape, { borderTopColor: theme.borda + "25" }]}>
+          <View style={styles.destinatarios}>
+            <Ionicons
+              name="people-outline"
+              size={14}
+              color={theme.textoTerciaria}
+            />
+
+            <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
+              {release.total_destinatarios}{" "}
+              {release.total_destinatarios === 1
+                ? "destinatário"
+                : "destinatários"}
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.rodape,
-              { borderTopColor: theme.borda + "25" },
-            ]}
-          >
-            <View style={styles.destinatarios}>
-              <Ionicons
-                name="people-outline"
-                size={14}
-                color={theme.textoTerciaria}
-              />
+          <View style={styles.autor}>
+            <Ionicons name="person-outline" size={12} color={theme.textoSub} />
 
-              <Text
-                style={[
-                  styles.textoMenor,
-                  { color: theme.textoSub },
-                ]}
-              >
-                {release.total_destinatarios}{" "}
-                {release.total_destinatarios === 1
-                  ? "destinatário"
-                  : "destinatários"}
-              </Text>
-            </View>
-
-            <View style={styles.autor}>
-              <Ionicons
-                name="person-outline"
-                size={12}
-                color={theme.textoSub}
-              />
-
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.autorNome,
-                  { color: theme.textoSub },
-                ]}
-              >
-                {release.criado_por_nome}
-              </Text>
-            </View>
+            <Text
+              numberOfLines={1}
+              style={[styles.autorNome, { color: theme.textoSub }]}
+            >
+              {release.criado_por_nome}
+            </Text>
           </View>
-          </Pressable>
+        </View>
+        {release.status === "AGENDADO" && release.agendado_para ? (
+          <Text style={{ color: theme.textoTerciaria, fontSize: 12 }}>
+            {formatarAgendamentoRelease(release.agendado_para)} · Brasília
+          </Text>
+        ) : null}
+      </Pressable>
 
       {release.status === "RASCUNHO" && onEditar ? (
         <Button

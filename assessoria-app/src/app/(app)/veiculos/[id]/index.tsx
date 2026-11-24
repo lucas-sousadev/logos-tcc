@@ -1,4 +1,8 @@
 import {
+  ResumoCadastro,
+  InformacoesCadastro,
+} from "@/components/ui/DetalhesCadastro";
+import {
   ActivityIndicator,
   Alert,
   BackHandler,
@@ -14,10 +18,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import EnderecosVeiculo from
-  "@/components/veiculos/EnderecosVeiculo";
+import EnderecosVeiculo from "@/components/veiculos/EnderecosVeiculo";
 import EnderecosVeiculoRascunho from "@/components/veiculos/EnderecosVeiculoRascunho";
-import { prepararEnderecosCadastro,} from "@/components/veiculos/EnderecosVeiculoCadastro";
+import { prepararEnderecosCadastro } from "@/components/veiculos/EnderecosVeiculoCadastro";
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
 import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
@@ -28,7 +31,6 @@ import Text from "@/components/ui/Text";
 import UnsavedChanges from "@/components/forms/UnsavedChanges";
 import LogoPicker from "@/components/forms/LogoPicker";
 import TierSelector from "@/components/forms/TierSelector";
-import AcoesDetalhes from "@/components/ui/AcoesDetalhes";
 import ContatosVinculados from "@/components/veiculos/ContatosVinculados";
 import ClippingsVinculados from "@/components/clipping/ClippingsVinculados";
 
@@ -51,13 +53,9 @@ import type {
   ArquivoLogoVeiculo,
   EnderecoVeiculo,
   NovoEnderecoVeiculo,
-  DadosVeiculo
+  DadosVeiculo,
 } from "@/services/api/veiculo";
-import {
-  ErrosVeiculo,
-  validarFormularioVeiculo,
-} from "@/utils/validarVeiculo";
-
+import { ErrosVeiculo, validarFormularioVeiculo } from "@/utils/validarVeiculo";
 
 interface Formulario {
   nome: string;
@@ -69,28 +67,24 @@ interface Formulario {
 }
 
 function dadosFormulario(dados: Veiculo): Formulario {
-    return {
-      nome: dados.nome,
-      descricao: dados.descricao ?? "",
-      logo_path: dados.logo_path ?? "",
-      alcance: dados.alcance ?? "",
-      tier: dados.tier ?? null,
-      ativo: dados.ativo === 1,
-    };
-  }
+  return {
+    nome: dados.nome,
+    descricao: dados.descricao ?? "",
+    logo_path: dados.logo_path ?? "",
+    alcance: dados.alcance ?? "",
+    tier: dados.tier ?? null,
+    ativo: dados.ativo === 1,
+  };
+}
 
-  function enderecosParaEdicao(
-    lista: EnderecoVeiculo[]
-  ): NovoEnderecoVeiculo[] {
-    return lista.map((endereco) => ({
-      id: endereco.id,
-      host: `${endereco.protocolo}://${endereco.host}`,
-      caminho_prefixo:
-        endereco.caminho_prefixo,
-      incluir_subdominios:
-        endereco.incluir_subdominios,
-    }));
-  }
+function enderecosParaEdicao(lista: EnderecoVeiculo[]): NovoEnderecoVeiculo[] {
+  return lista.map((endereco) => ({
+    id: endereco.id,
+    host: `${endereco.protocolo}://${endereco.host}`,
+    caminho_prefixo: endereco.caminho_prefixo,
+    incluir_subdominios: endereco.incluir_subdominios,
+  }));
+}
 export default function VeiculoDetalhes() {
   const router = useRouter();
   const retornar = useRetornoSeguro("/veiculos");
@@ -100,6 +94,9 @@ export default function VeiculoDetalhes() {
     id: idParam,
     origemRelatorioId,
     origemClippingId,
+    origemMailingId,
+    origemMailingVeiculoId,
+    origemMailingInicio,
     origemTipo,
     origemId,
     retornoVinculado,
@@ -107,16 +104,18 @@ export default function VeiculoDetalhes() {
     id: string;
     origemRelatorioId?: string;
     origemClippingId?: string;
+    origemMailingId?: string;
+    origemMailingVeiculoId?: string;
+    origemMailingInicio?: string;
     origemTipo?: string;
     origemId?: string;
     retornoVinculado?: "origem" | "lista";
   }>();
   const id = Number(idParam);
   const clippingId = Number(origemClippingId);
-  const veioDoClipping =
-    Number.isSafeInteger(clippingId) && clippingId > 0;
+  const veioDoClipping = Number.isSafeInteger(clippingId) && clippingId > 0;
 
-   const [erros, setErros] = useState<ErrosVeiculo>({});
+  const [erros, setErros] = useState<ErrosVeiculo>({});
   const [erroGeral, setErroGeral] = useState("");
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null);
   const [formulario, setFormulario] = useState<Formulario>({
@@ -138,14 +137,19 @@ export default function VeiculoDetalhes() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
-  const [abaVinculos, setAbaVinculos] =
-    useState<"contatos" | "clippings">("contatos");
+  const [abaVinculos, setAbaVinculos] = useState<"contatos" | "clippings">(
+    "contatos"
+  );
   const [excluindoVinculos, setExcluindoVinculos] = useState(false);
   const [novoLogo, setNovoLogo] = useState<ArquivoLogoVeiculo | null>(null);
 
   const [logoRemovido, setLogoRemovido] = useState(false);
-  const [enderecosOriginais, setEnderecosOriginais] = useState<NovoEnderecoVeiculo[]>([]);
-  const [enderecosRascunho, setEnderecosRascunho] = useState<NovoEnderecoVeiculo[]>([]);
+  const [enderecosOriginais, setEnderecosOriginais] = useState<
+    NovoEnderecoVeiculo[]
+  >([]);
+  const [enderecosRascunho, setEnderecosRascunho] = useState<
+    NovoEnderecoVeiculo[]
+  >([]);
   const [versaoEnderecos, setVersaoEnderecos] = useState<number | null>(null);
   const [erroEnderecos, setErroEnderecos] = useState("");
 
@@ -160,6 +164,28 @@ export default function VeiculoDetalhes() {
   }, [modoEdicao]);
 
   const voltarDoVeiculo = useCallback(() => {
+    const contatoId = Number(origemMailingId);
+
+    if (Number.isSafeInteger(contatoId) && contatoId > 0) {
+      const veiculoOrigemId = Number(origemMailingVeiculoId);
+      const origemVeiculoValida =
+        Number.isSafeInteger(veiculoOrigemId) && veiculoOrigemId > 0;
+
+      router.navigate({
+        pathname: "/mailing/[id]",
+        params: {
+          id: String(contatoId),
+          origem: origemVeiculoValida
+            ? "veiculo"
+            : origemMailingInicio === "1"
+              ? "dashboard"
+              : undefined,
+          veiculo_id: origemVeiculoValida ? String(veiculoOrigemId) : undefined,
+        },
+      });
+      return;
+    }
+
     if (veioDoClipping) {
       router.navigate({
         pathname: "/clipping/[id]",
@@ -187,6 +213,9 @@ export default function VeiculoDetalhes() {
   }, [
     clippingId,
     origemId,
+    origemMailingId,
+    origemMailingVeiculoId,
+    origemMailingInicio,
     origemRelatorioId,
     origemTipo,
     retornoVinculado,
@@ -207,61 +236,64 @@ export default function VeiculoDetalhes() {
         return;
       }
 
-      const inscricao = BackHandler.addEventListener("hardwareBackPress", () => {
-        voltarDoVeiculo();
-        return true;
-      });
+      const inscricao = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          voltarDoVeiculo();
+          return true;
+        }
+      );
 
       return () => inscricao.remove();
-    }, [excluindo, excluindoVinculos, modoEdicao, veioDoClipping, voltarDoVeiculo])
+    }, [
+      excluindo,
+      excluindoVinculos,
+      modoEdicao,
+      veioDoClipping,
+      voltarDoVeiculo,
+    ])
   );
-  
-  const carregarVeiculo = useCallback(
-    async () => {
-      if (!id || Number.isNaN(id)) {
-        Alert.alert("Erro", "Veículo inválido.");
-        voltarDoVeiculo();
-        return;
-      }
 
-      try {
-        setCarregando(true);
-        
-        const [dados, enderecos] = await Promise.all([
-          buscarVeiculo(id),
-          listarEnderecosVeiculo(id),
-        ]);
+  const carregarVeiculo = useCallback(async () => {
+    if (!id || Number.isNaN(id)) {
+      Alert.alert("Erro", "Veículo inválido.");
+      voltarDoVeiculo();
+      return;
+    }
 
-        const listaFormulario =
-          enderecosParaEdicao(enderecos);
+    try {
+      setCarregando(true);
 
-        const novoFormulario = dadosFormulario(dados);
+      const [dados, enderecos] = await Promise.all([
+        buscarVeiculo(id),
+        listarEnderecosVeiculo(id),
+      ]);
 
-        setVeiculo(dados);
-        setFormulario(novoFormulario);
-        setFormularioOriginal(novoFormulario);
-        setEnderecosOriginais(listaFormulario);
-        setEnderecosRascunho(
-          listaFormulario.map((item) => ({ ...item }))
-        );
-        setErroEnderecos("");
-      } catch (error) {
-        Alert.alert(
-          "Erro",
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar o veículo."
-        );
+      const listaFormulario = enderecosParaEdicao(enderecos);
 
-        voltarDoVeiculo();
-      } finally {
-        setCarregando(false);
-        setNovoLogo(null);
-        setLogoRemovido(false);
-      }
-    },
-    [id, voltarDoVeiculo]
-  );
+      const novoFormulario = dadosFormulario(dados);
+
+      setVeiculo(dados);
+      setFormulario(novoFormulario);
+      setFormularioOriginal(novoFormulario);
+      setEnderecosOriginais(listaFormulario);
+      setEnderecosRascunho(listaFormulario.map((item) => ({ ...item })));
+      setErroEnderecos("");
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar o veículo."
+      );
+
+      voltarDoVeiculo();
+    } finally {
+      setCarregando(false);
+      setNovoLogo(null);
+      setLogoRemovido(false);
+    }
+  }, [id, voltarDoVeiculo]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -292,10 +324,7 @@ export default function VeiculoDetalhes() {
 
   function campoAlterado(campo: keyof Formulario) {
     if (campo === "logo_path") {
-      return (
-        novoLogo !== null ||
-        logoRemovido
-      );
+      return novoLogo !== null || logoRemovido;
     }
 
     return formularioOriginal
@@ -307,28 +336,23 @@ export default function VeiculoDetalhes() {
     if (!veiculo) return;
 
     try {
-      const snapshot =
-        await carregarEnderecosVeiculoComVersao(
-          veiculo.id
-        );
+      const snapshot = await carregarEnderecosVeiculoComVersao(veiculo.id);
 
-      const lista =
-        enderecosParaEdicao(snapshot.enderecos);
+      const lista = enderecosParaEdicao(snapshot.enderecos);
 
       setVersaoEnderecos(snapshot.versao);
       setEnderecosOriginais(lista);
-      setEnderecosRascunho(
-        lista.map((item) => ({ ...item }))
-      );
+      setEnderecosRascunho(lista.map((item) => ({ ...item })));
       setErroEnderecos("");
       setModoEdicao(true);
     } catch (error) {
       setFeedbackEdicao({
         variant: "error",
         title: "Não foi possível abrir a edição",
-        message: error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os endereços.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar os endereços.",
       });
     }
   }
@@ -342,36 +366,24 @@ export default function VeiculoDetalhes() {
     setErroGeral("");
     setNovoLogo(null);
     setLogoRemovido(false);
-    setEnderecosRascunho(
-      enderecosOriginais.map((item) => ({ ...item }))
-    );
+    setEnderecosRascunho(enderecosOriginais.map((item) => ({ ...item })));
     setErroEnderecos("");
     setModoEdicao(false);
   }
 
-  function camposAlterados():
-    Array<keyof Formulario | "enderecos"> {
+  function camposAlterados(): Array<keyof Formulario | "enderecos"> {
     if (!formularioOriginal) return [];
 
-    const campos:
-      Array<keyof Formulario | "enderecos"> =
-      (Object.keys(formulario) as
-        (keyof Formulario)[]).filter(
-          (campo) =>
-            formulario[campo] !==
-            formularioOriginal[campo]
-        );
+    const campos: Array<keyof Formulario | "enderecos"> = (
+      Object.keys(formulario) as (keyof Formulario)[]
+    ).filter((campo) => formulario[campo] !== formularioOriginal[campo]);
 
-    if (
-      (novoLogo !== null || logoRemovido) &&
-      !campos.includes("logo_path")
-    ) {
+    if ((novoLogo !== null || logoRemovido) && !campos.includes("logo_path")) {
       campos.push("logo_path");
     }
 
     if (
-      JSON.stringify(enderecosRascunho) !==
-      JSON.stringify(enderecosOriginais)
+      JSON.stringify(enderecosRascunho) !== JSON.stringify(enderecosOriginais)
     ) {
       campos.push("enderecos");
     }
@@ -379,16 +391,22 @@ export default function VeiculoDetalhes() {
     return campos;
   }
 
-  const saida = useSaidaFormulario(camposAlterados().length > 0, salvando || excluindo || excluindoVinculos);
+  const saida = useSaidaFormulario(
+    camposAlterados().length > 0,
+    salvando || excluindo || excluindoVinculos
+  );
 
   function handleBack() {
     if (salvando || excluindo || excluindoVinculos) return;
     if (!modoEdicao) {
-      voltarDoVeiculo()
+      voltarDoVeiculo();
       return;
     }
-    
-    if (camposAlterados().length > 0) { saida.confirmarSaida(cancelarEdicao); return; }
+
+    if (camposAlterados().length > 0) {
+      saida.confirmarSaida(cancelarEdicao);
+      return;
+    }
     cancelarEdicao();
   }
 
@@ -443,9 +461,7 @@ export default function VeiculoDetalhes() {
       nome: formulario.nome,
       descricao: formulario.descricao,
       alcance: formulario.alcance,
-      logo_path: logoRemovido
-        ? ""
-        : formulario.logo_path,
+      logo_path: logoRemovido ? "" : formulario.logo_path,
     });
 
     setErros(errosValidacao);
@@ -456,24 +472,17 @@ export default function VeiculoDetalhes() {
     }
 
     const enderecosMudaram =
-      JSON.stringify(enderecosRascunho) !==
-      JSON.stringify(enderecosOriginais);
+      JSON.stringify(enderecosRascunho) !== JSON.stringify(enderecosOriginais);
 
-    let enderecosParaSalvar:
-      NovoEnderecoVeiculo[] | undefined;
+    let enderecosParaSalvar: NovoEnderecoVeiculo[] | undefined;
 
     try {
       if (enderecosMudaram) {
-        enderecosParaSalvar =
-          prepararEnderecosCadastro(
-            enderecosRascunho
-          );
+        enderecosParaSalvar = prepararEnderecosCadastro(enderecosRascunho);
       }
     } catch (error) {
       setErroEnderecos(
-        error instanceof Error
-          ? error.message
-          : "Verifique os endereços."
+        error instanceof Error ? error.message : "Verifique os endereços."
       );
       return;
     }
@@ -482,13 +491,9 @@ export default function VeiculoDetalhes() {
 
     const dadosAtualizacao: DadosVeiculo = {
       nome: formulario.nome.trim(),
-      descricao:
-        formulario.descricao.trim() || undefined,
-      logo_path: logoRemovido
-        ? null
-        : formulario.logo_path.trim() || undefined,
-      alcance:
-        formulario.alcance.trim() || undefined,
+      descricao: formulario.descricao.trim() || undefined,
+      logo_path: logoRemovido ? null : formulario.logo_path.trim() || undefined,
+      alcance: formulario.alcance.trim() || undefined,
       ativo: formulario.ativo,
       tier: formulario.tier,
     };
@@ -501,10 +506,8 @@ export default function VeiculoDetalhes() {
         return;
       }
 
-      dadosAtualizacao.enderecos =
-        enderecosParaSalvar;
-      dadosAtualizacao.enderecos_versao =
-        versaoEnderecos;
+      dadosAtualizacao.enderecos = enderecosParaSalvar;
+      dadosAtualizacao.enderecos_versao = versaoEnderecos;
     }
 
     try {
@@ -518,13 +521,9 @@ export default function VeiculoDetalhes() {
               novoLogo ?? undefined,
               logoRemovido
             )
-          : await atualizarVeiculo(
-              veiculo.id,
-              dadosAtualizacao
-            );
+          : await atualizarVeiculo(veiculo.id, dadosAtualizacao);
 
-      const novoFormulario =
-        dadosFormulario(atualizado);
+      const novoFormulario = dadosFormulario(atualizado);
 
       setVeiculo(atualizado);
       setNovoLogo(null);
@@ -566,7 +565,7 @@ export default function VeiculoDetalhes() {
       setSalvando(false);
     }
   }
-  
+
   function confirmarExclusao() {
     if (!veiculo) return;
 
@@ -597,7 +596,11 @@ export default function VeiculoDetalhes() {
       }
 
       Alert.alert("Sucesso", "Veículo excluído com sucesso.", [
-        { text: "OK", onPress: () => saida.concluirSaida(() => router.dismissTo("/veiculos")) },
+        {
+          text: "OK",
+          onPress: () =>
+            saida.concluirSaida(() => router.dismissTo("/veiculos")),
+        },
       ]);
     } catch (error) {
       const mensagem =
@@ -618,15 +621,11 @@ export default function VeiculoDetalhes() {
   if (carregando) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Header
-          title="Veículo"
-          showBackButton
-          onBackPress={voltarDoVeiculo}
-        />
+        <Header title="Veículo" showBackButton onBackPress={voltarDoVeiculo} />
         <View style={styles.loading}>
           <ActivityIndicator size="large" color={theme.primaria} />
         </View>
-      <FeedbackAlert {...saida.alertaProps} />
+        <FeedbackAlert {...saida.alertaProps} />
       </View>
     );
   }
@@ -640,9 +639,7 @@ export default function VeiculoDetalhes() {
       ? "contatos"
       : "clippings";
 
-  const logoPerfil = obterUrlLogoVeiculo(
-    veiculo.logo_path
-  );
+  const logoPerfil = obterUrlLogoVeiculo(veiculo.logo_path);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -658,83 +655,52 @@ export default function VeiculoDetalhes() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-      {!modoEdicao ? (
-       <AcoesDetalhes
-          onEditar={
-            temPermissao("VEICULOS", "EDITAR")
-              ? () => void iniciarEdicao() 
-              : undefined
-          }
-          onExcluir={
-            temPermissao("VEICULOS", "EXCLUIR")
-              ? confirmarExclusao
-              : undefined
-          }
-            editarDesabilitado={excluindoVinculos}
-            excluirDesabilitado={excluindoVinculos}
-            excluindo={excluindo}
-        />
-      ) : null }
-        <View style={[styles.profile, { 
-          borderColor: theme.borda,           
-          backgroundColor: theme.backgroundSecundario
-        }]}>
-          <View
-            style={[
-              styles.avatar,
-              { backgroundColor: theme.backgroundContainer },
-            ]}
-          >
-            {logoPerfil ? (
-              <Image
-                source={{ uri: logoPerfil }}
-                style={styles.logoProfileImage}
-                resizeMode="contain"
+        {!modoEdicao ? (
+          <View style={styles.acoesDetalhes}>
+            {temPermissao("VEICULOS", "EDITAR") ? (
+              <Button
+                title="EDITAR"
+                icon="create-outline"
+                variant="outline"
+                onPress={() => void iniciarEdicao()}
+                disabled={excluindo || excluindoVinculos}
+                style={styles.botaoDetalhes}
               />
-            ) : (
-              <Ionicons
-                name="newspaper-outline"
-                size={29}
-                color={theme.textoContainer}
+            ) : null}
+            {temPermissao("VEICULOS", "EXCLUIR") ? (
+              <Button
+                title="EXCLUIR"
+                variant="danger"
+                onPress={confirmarExclusao}
+                loading={excluindo}
+                disabled={excluindoVinculos}
+                style={styles.botaoDetalhes}
               />
-            )}
+            ) : null}
           </View>
-
-          <View style={styles.profileInfo}>
-            <Text weight="Bold" style={styles.profileName}>
-              {veiculo.nome}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[styles.profileSubtitle, { color: theme.textoSub }]}
-            >
-              {veiculo.alcance || "Alcance não informado"}
-            </Text>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    veiculo.ativo === 1
-                      ? theme.backgroundContainer
-                      : theme.surface,
-                },
-              ]}
-            >
-              <Text
-                weight="SemiBold"
-                style={{
-                  color:
-                    veiculo.ativo === 1
-                      ? theme.textoContainer
-                      : theme.textoSub,
-                  fontSize: 11,
-                }}
-              >
-                {veiculo.ativo === 1 ? "ATIVO" : "INATIVO"}
-              </Text>
-            </View>
-          </View>
+        ) : null}
+        <View style={styles.resumoCadastro}>
+          <ResumoCadastro
+            nome={veiculo.nome}
+            categoria="VEÍCULO DE COMUNICAÇÃO"
+            ativo={veiculo.ativo === 1}
+            avatar={
+              logoPerfil ? (
+                <Image
+                  source={{ uri: logoPerfil }}
+                  style={styles.logoProfileImage}
+                  resizeMode="contain"
+                  accessibilityLabel={"Logo de " + veiculo.nome}
+                />
+              ) : (
+                <Ionicons
+                  name="newspaper-outline"
+                  size={24}
+                  color={theme.textoContainer}
+                />
+              )
+            }
+          />
         </View>
 
         {modoEdicao ? (
@@ -796,11 +762,7 @@ export default function VeiculoDetalhes() {
             />
             <LogoPicker
               logoAtualUri={
-                logoRemovido
-                  ? null
-                  : obterUrlLogoVeiculo(
-                      formulario.logo_path
-                    )
+                logoRemovido ? null : obterUrlLogoVeiculo(formulario.logo_path)
               }
               logoSelecionado={novoLogo}
               onSelect={(arquivo) => {
@@ -810,9 +772,7 @@ export default function VeiculoDetalhes() {
               }}
               onRemove={() => {
                 setNovoLogo(null);
-                setLogoRemovido(
-                  Boolean(formulario.logo_path)
-                );
+                setLogoRemovido(Boolean(formulario.logo_path));
                 limparErro("logo_path");
               }}
               disabled={salvando}
@@ -828,18 +788,13 @@ export default function VeiculoDetalhes() {
               disabled={salvando}
               error={erroEnderecos}
             />
-            <View
-              style={[styles.statusRow, { borderColor: theme.borda }]}
-            >
+            <View style={[styles.statusRow, { borderColor: theme.borda }]}>
               <View style={styles.statusInfo}>
                 <Text weight="SemiBold" style={styles.statusTitle}>
                   STATUS
                 </Text>
                 <Text
-                  style={[
-                    styles.statusDescription,
-                    { color: theme.textoSub },
-                  ]}
+                  style={[styles.statusDescription, { color: theme.textoSub }]}
                 >
                   Veículo disponível para vinculação no mailing
                 </Text>
@@ -852,10 +807,7 @@ export default function VeiculoDetalhes() {
               />
             </View>
             {erroGeral ? (
-              <Text
-                weight="Medium"
-                style={styles.errorGeral}
-              >
+              <Text weight="Medium" style={styles.errorGeral}>
                 {erroGeral}
               </Text>
             ) : null}
@@ -884,43 +836,59 @@ export default function VeiculoDetalhes() {
           </>
         ) : (
           <>
-            <Text weight="Bold" style={styles.sectionTitle}>
-              INFORMAÇÕES
-            </Text>
-            <InfoRow
-              icon="document-text-outline"
-              label="DESCRIÇÃO"
-              value={veiculo.descricao || "Não informada"}
-            />
-            <InfoRow
-              icon="stats-chart-outline"
-              label="ALCANCE"
-              value={veiculo.alcance || "Não informado"}
-            />
-            <InfoRow
-              icon="ribbon-outline"
-              label="TIER"
-              value={veiculo.tier == null
-                ? "Não definido"
-                : `${rotuloTier(veiculo.tier)} · ${DESCRICOES_TIER[veiculo.tier]}`}
-            />
-            <InfoRow
-              icon="image-outline"
-              label="LOGO"
-              value={
-                veiculo.logo_path
-                  ? "Logo cadastrado"
-                  : "Não informado"
-              }
-            />
-            <EnderecosVeiculo
-              veiculoId={veiculo.id}
-              editavel={false}
-            />
+            <View style={styles.informacoesCadastro}>
+              <InformacoesCadastro
+                grupos={[
+                  {
+                    id: "cadastro",
+                    titulo: "Dados do veículo",
+                    campos: [
+                      {
+                        id: "descricao",
+                        icone: "document-text-outline",
+                        rotulo: "Descrição",
+                        valor: veiculo.descricao || "Não informada",
+                      },
+                      {
+                        id: "alcance",
+                        icone: "stats-chart-outline",
+                        rotulo: "Alcance",
+                        valor: veiculo.alcance || "Não informado",
+                      },
+                      {
+                        id: "tier",
+                        icone: "ribbon-outline",
+                        rotulo: "Tier",
+                        valor:
+                          veiculo.tier == null
+                            ? "Não definido"
+                            : rotuloTier(veiculo.tier) +
+                              " · " +
+                              DESCRICOES_TIER[veiculo.tier],
+                      },
+                      {
+                        id: "logo",
+                        icone: "image-outline",
+                        rotulo: "Logo",
+                        valor: veiculo.logo_path
+                          ? "Logo cadastrado"
+                          : "Não informado",
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+            <EnderecosVeiculo veiculoId={veiculo.id} editavel={false} />
             {podeVerContatos || podeVerClippings ? (
-              <View style={styles.vinculos}>
-                <Text weight="Bold" style={styles.sectionTitle}>
-                  VÍNCULOS DO VEÍCULO
+              <View
+                style={[
+                  styles.vinculos,
+                  { borderTopColor: theme.borda + "25" },
+                ]}
+              >
+                <Text weight="SemiBold" style={styles.tituloVinculos}>
+                  Vínculos do veículo
                 </Text>
 
                 {podeVerContatos && podeVerClippings ? (
@@ -928,7 +896,9 @@ export default function VeiculoDetalhes() {
                     <Button
                       title="CONTATOS"
                       size="small"
-                      variant={abaVinculosAtiva === "contatos" ? "primary" : "outline"}
+                      variant={
+                        abaVinculosAtiva === "contatos" ? "primary" : "outline"
+                      }
                       disabled={excluindoVinculos || excluindo}
                       onPress={() => setAbaVinculos("contatos")}
                       style={styles.actionButton}
@@ -936,7 +906,9 @@ export default function VeiculoDetalhes() {
                     <Button
                       title="CLIPPINGS"
                       size="small"
-                      variant={abaVinculosAtiva === "clippings" ? "primary" : "outline"}
+                      variant={
+                        abaVinculosAtiva === "clippings" ? "primary" : "outline"
+                      }
                       disabled={excluindoVinculos || excluindo}
                       onPress={() => setAbaVinculos("clippings")}
                       style={styles.actionButton}
@@ -966,7 +938,7 @@ export default function VeiculoDetalhes() {
           </>
         )}
       </ScrollView>
-    <FeedbackAlert {...saida.alertaProps} />
+      <FeedbackAlert {...saida.alertaProps} />
       <FeedbackAlert
         visible={feedbackEdicao !== null}
         variant={feedbackEdicao?.variant ?? "success"}
@@ -974,132 +946,38 @@ export default function VeiculoDetalhes() {
         message={feedbackEdicao?.message ?? ""}
         onClose={() => setFeedbackEdicao(null)}
       />
-      </View>
-  );
-}
-
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <View style={[styles.infoRow, { borderColor: theme.borda, backgroundColor: theme.backgroundSecundario
-}]}>
-      <View
-        style={[
-          styles.infoIcon,
-          { backgroundColor: theme.backgroundContainer },
-        ]}
-      >
-        <Ionicons name={icon} size={19} color={theme.textoContainer} />
-      </View>
-      <View style={styles.infoContent}>
-        <Text weight="SemiBold" style={[styles.infoLabel, {color: theme.textoTerciaria}]}>
-          {label}
-        </Text>
-        <Text style={[styles.infoValue, { color: theme.texto }]}>
-          {value}
-        </Text>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1 
-},
-  content: { 
-    padding: 20, 
-    paddingTop: 12,
-    paddingBottom: 40 
-},
-  loading: { 
-    flex: 1, 
-    alignItems: "center", 
-    justifyContent: "center" 
-},
-  profile: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  profileInfo: { 
-    flex: 1, 
-    marginLeft: 14 
-  },
-  profileName: { 
-    fontSize: 19 
-  },
-  profileSubtitle: {
-    fontSize: 12, 
-    marginTop: 3 
-},
-  logoProfileImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 32,
-  },
-  statusBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 7,
-    marginTop: 8,
-  },
-  sectionTitle: { 
-    fontSize: 13, 
-    marginBottom: 12, 
-  },
-  infoRow: {
-    minHeight: 68,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  resumoCadastro: { marginBottom: 12 },
+  informacoesCadastro: { marginBottom: 12 },
+  acoesDetalhes: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  botaoDetalhes: { flex: 1, width: "auto", minWidth: 0 },
 
-  infoContent: { 
-    flex: 1, 
-    marginLeft: 12 
-},
-  infoLabel: { 
-    fontSize: 10, 
-    marginBottom: 3 
-},
-  infoValue: { 
-    fontSize: 14
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  loading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoProfileImage: { width: "100%", height: "100%" },
+  sectionTitle: {
+    fontSize: 13,
+    marginBottom: 12,
   },
   textArea: {
     height: 100,
-    paddingTop: 14
- },
+    paddingTop: 14,
+  },
   statusRow: {
     minHeight: 68,
     borderWidth: 1.5,
@@ -1110,33 +988,40 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 14,
   },
-  statusInfo: { 
+  statusInfo: {
     flex: 1,
-    marginRight: 10 
+    marginRight: 10,
   },
-  statusTitle: { 
-    fontSize: 12
+  statusTitle: {
+    fontSize: 12,
   },
 
-  statusDescription: { 
-    fontSize: 11, 
-    marginTop: 3 
-},
-  actions: { 
-    flexDirection: "row",
-    gap: 10, 
-    marginTop: 0,
-},
-  vinculos: {
-    marginTop: 5,
+  statusDescription: {
+    fontSize: 11,
+    marginTop: 3,
   },
-  actionButton: { 
-    flex: 1 
-},
+  actions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 0,
+  },
+  vinculos: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  tituloVinculos: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  actionButton: {
+    flex: 1,
+  },
   errorGeral: {
-  color: "#EF4444",
-  fontSize: 13,
-  textAlign: "center",
-  marginBottom: 10,
-},
+    color: "#EF4444",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 10,
+  },
 });

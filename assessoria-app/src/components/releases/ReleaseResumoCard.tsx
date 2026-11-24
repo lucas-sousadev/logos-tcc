@@ -14,14 +14,11 @@ interface Props {
   status: StatusRelease;
 }
 
-export default function ReleaseResumoCard({
-  release,
-  status,
-}: Props) {
+export default function ReleaseResumoCard({ release, status }: Props) {
   const { theme } = useTheme();
 
   const corStatus =
-    status === "FALHOU"
+    status === "FALHOU" || status === "CANCELADO"
       ? theme.erro
       : status === "RASCUNHO" || status === "PARCIAL"
         ? theme.aviso
@@ -39,42 +36,20 @@ export default function ReleaseResumoCard({
     >
       <View style={styles.topo}>
         <View style={styles.cliente}>
-          <Ionicons
-            name="business-outline"
-            size={14}
-            color={theme.textoSub}
-          />
+          <Ionicons name="business-outline" size={14} color={theme.textoSub} />
 
-          <Text
-            style={[
-              styles.clienteNome,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.clienteNome, { color: theme.textoSub }]}>
             {release.cliente_nome || "Sem cliente vinculado"}
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.status,
-            { backgroundColor: corStatus + "12" },
-          ]}
-        >
-          <View
-            style={[
-              styles.ponto,
-              { backgroundColor: corStatus },
-            ]}
-          />
+        <View style={[styles.status, { backgroundColor: corStatus + "12" }]}>
+          <View style={[styles.ponto, { backgroundColor: corStatus }]} />
 
           <Text
             weight="SemiBold"
             accessibilityLiveRegion="polite"
-            style={[
-              styles.statusTexto,
-              { color: corStatus },
-            ]}
+            style={[styles.statusTexto, { color: corStatus }]}
           >
             {ROTULOS_STATUS[status]}
           </Text>
@@ -85,19 +60,9 @@ export default function ReleaseResumoCard({
         {release.titulo || "Release sem título"}
       </Text>
 
-      <View
-        style={[
-          styles.dados,
-          { borderTopColor: theme.borda + "25" },
-        ]}
-      >
+      <View style={[styles.dados, { borderTopColor: theme.borda + "25" }]}>
         <View style={styles.linha}>
-          <Text
-            style={[
-              styles.rotulo,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.rotulo, { color: theme.textoSub }]}>
             Assunto
           </Text>
 
@@ -107,12 +72,7 @@ export default function ReleaseResumoCard({
         </View>
 
         <View style={styles.linha}>
-          <Text
-            style={[
-              styles.rotulo,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.rotulo, { color: theme.textoSub }]}>
             Remetente
           </Text>
 
@@ -121,30 +81,19 @@ export default function ReleaseResumoCard({
               {release.nome_remetente || "LOGOS"}
             </Text>
 
-            <Text
-              style={[
-                styles.ajuda,
-                { color: theme.textoSub },
-              ]}
-            >
+            <Text style={[styles.ajuda, { color: theme.textoSub }]}>
               Endereço padrão do LOGOS
             </Text>
           </View>
         </View>
 
         <View style={styles.linha}>
-          <Text
-            style={[
-              styles.rotulo,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.rotulo, { color: theme.textoSub }]}>
             Responder a
           </Text>
 
           <Text selectable style={styles.valor}>
-            {release.responder_para ||
-              "Endereço padrão do LOGOS"}
+            {release.responder_para || "Endereço padrão do LOGOS"}
           </Text>
         </View>
       </View>

@@ -1,15 +1,13 @@
 import { useCallback, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  AppState,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter
-} from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
@@ -18,14 +16,23 @@ import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import ReleaseBlocosPrevia from "@/components/releases/ReleaseBlocosPrevia";
+import ReleaseAgendamentoModal from "@/components/releases/ReleaseAgendamentoModal";
+import {
+  formatarAgendamentoRelease,
+  type HorarioRelease,
+} from "@/utils/agendamentoRelease";
 import ReleaseResumoCard from "@/components/releases/ReleaseResumoCard";
+import ReleaseAberturasCard from "@/components/releases/ReleaseAberturasCard";
 
-import { pendenciasEnvioRelease,} from "@/utils/validarEnvioRelease";
+import { pendenciasEnvioRelease } from "@/utils/validarEnvioRelease";
 import { avisoDominiosRelease } from "@/utils/releaseDominios";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { encerrarCopiaRelease } from "@/services/rascunhoRelease";
-import { lerReleasePendente, removerReleasePendente } from "@/services/releasePendente";
+import {
+  lerReleasePendente,
+  removerReleasePendente,
+} from "@/services/releasePendente";
 import {
   buscarRelease,
   consultarEnvioRelease,
@@ -33,50 +40,54 @@ import {
   ErroApiRelease,
   excluirRelease,
   repetirFalhasRelease,
+  agendarRelease,
+  cancelarAgendamentoRelease,
+  cancelarEnvioRelease,
   type DetalheRelease,
   type SituacaoEnvioRelease,
   type StatusDestinatarioRelease,
 } from "@/services/api/release";
 
-const EM_ANDAMENTO = ["NA_FILA", "ENVIANDO"];
+const EM_ANDAMENTO = ["AGENDADO", "NA_FILA", "ENVIANDO"];
 
 const FILTROS = [
   { valor: "TODOS", nome: "Todos" },
   { valor: "ENVIADO", nome: "Aceitos" },
   { valor: "ERRO", nome: "Falhas" },
+  { valor: "CANCELADO", nome: "Cancelados" },
 ] as const;
 
-const ROTULOS_DESTINATARIO: Record<
-  StatusDestinatarioRelease,
-  string
-> = {
+const ROTULOS_DESTINATARIO: Record<StatusDestinatarioRelease, string> = {
   PENDENTE: "Na fila",
   ENVIANDO: "Processando",
   ENVIADO: "Aceito para encaminhamento",
   ERRO: "Falha no envio",
+  CANCELADO: "Envio cancelado",
 };
+
+function formatarAbertura(valor: string): string {
+  const data = new Date(valor);
+  if (!Number.isFinite(data.getTime())) return "Data indisponível";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(data);
+}
 
 export default function DetalhesRelease() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { usuario } = useAuth();
 
   const numero =
-    typeof id === "string" && /^[1-9]\d*$/.test(id)
-      ? Number(id)
-      : 0;
+    typeof id === "string" && /^[1-9]\d*$/.test(id) ? Number(id) : 0;
 
-  const valido =
-    Number.isSafeInteger(numero) && numero > 0;
+  const valido = Number.isSafeInteger(numero) && numero > 0;
 
   return (
     <ConteudoRelease
-      key={
-        (usuario
-          ? usuario.assessoria_id + "-" + usuario.id
-          : "") +
-        "-" +
-        id
-      }
+      key={(usuario ? usuario.assessoria_id + "-" + usuario.id : "") + "-" + id}
       id={valido ? numero : 0}
     />
   );
@@ -136,11 +147,17 @@ function ConteudoRelease({ id }: { id: number }) {
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
+  const [agendamentoAberto, setAgendamentoAberto] = useState(false);
+  const [alterandoProgramacao, setAlterandoProgramacao] = useState(false);
+  const [cancelamento, setCancelamento] = useState<
+    "agendamento" | "envio" | null
+  >(null);
+  const [feedbackProgramacao, setFeedbackProgramacao] = useState("");
   const saida = useSaidaFormulario(
     false,
-    enviando || excluindo || repetindo
+    enviando || excluindo || repetindo || alterandoProgramacao
   );
-    
+
   useFocusEffect(
     useCallback(() => {
       if (!podeVer || !id) {
@@ -156,35 +173,36 @@ function ConteudoRelease({ id }: { id: number }) {
       let ativa = true;
       let snapshotCarregado = false;
       let continuar = true;
+      let intervalo = 5000;
+      let consultando = false;
+      let retomarConsulta = false;
+      let consultaPausada = false;
+      let appAtivo =
+        AppState.currentState !== "background" &&
+        AppState.currentState !== "inactive";
       let timer: ReturnType<typeof setTimeout> | undefined;
       let controller: AbortController | undefined;
 
       async function atualizar() {
+        if (!ativa || !appAtivo || consultando) return;
+        consultando = true;
+        consultaPausada = false;
+        clearTimeout(timer);
         controller = new AbortController();
 
-        const prazo = setTimeout(
-          () => controller?.abort(),
-          30_000
-        );
+        const prazo = setTimeout(() => controller?.abort(), 30_000);
 
         try {
           const [situacao, snapshot] = await Promise.all([
-            consultarEnvioRelease(
-              id,
-              consulta,
-              controller.signal
-            ),
+            consultarEnvioRelease(id, consulta, controller.signal),
             snapshotCarregado
               ? Promise.resolve(null)
               : buscarRelease(id, controller.signal),
           ]);
 
-          if (!ativa) return;
+          if (!ativa || !appAtivo || consultaPausada) return;
 
-          const ultima = Math.max(
-            1,
-            Math.ceil(situacao.pagination.total / 30)
-          );
+          const ultima = Math.max(1, Math.ceil(situacao.pagination.total / 30));
 
           if (consulta.page > ultima) {
             setConsulta((atual) => ({
@@ -201,11 +219,19 @@ function ConteudoRelease({ id }: { id: number }) {
 
           setEnvio(situacao);
           setErro("");
-          continuar = EM_ANDAMENTO.includes(
-            situacao.release.status
-          );
+          continuar =
+            EM_ANDAMENTO.includes(situacao.release.status) ||
+            situacao.totais.processando > 0 ||
+            situacao.totais.incertos > 0 ||
+            (situacao.aberturas?.envios_rastreados ?? 0) > 0 ||
+            (situacao.aberturas?.aberturas_sem_confirmacao ?? 0) > 0;
+          intervalo =
+            EM_ANDAMENTO.includes(situacao.release.status) ||
+            situacao.totais.processando > 0
+              ? 5000
+              : 15000;
         } catch (falha) {
-          if (!ativa) return;
+          if (!ativa || !appAtivo || consultaPausada) return;
 
           setErro(
             falha instanceof Error
@@ -221,25 +247,39 @@ function ConteudoRelease({ id }: { id: number }) {
           }
         } finally {
           clearTimeout(prazo);
+          consultando = false;
 
           if (ativa) {
             setCarregando(false);
 
-            if (continuar) {
-              timer = setTimeout(
-                () => void atualizar(),
-                5000
-              );
+            if (appAtivo && retomarConsulta) {
+              retomarConsulta = false;
+              timer = setTimeout(() => void atualizar(), 0);
+            } else if (continuar && appAtivo) {
+              timer = setTimeout(() => void atualizar(), intervalo);
             }
           }
         }
       }
 
       setCarregando(true);
+      const app = AppState.addEventListener("change", (estado) => {
+        appAtivo = estado === "active";
+        clearTimeout(timer);
+        if (appAtivo) {
+          if (consultando) retomarConsulta = true;
+          else void atualizar();
+        } else {
+          retomarConsulta = false;
+          if (consultando) consultaPausada = true;
+          controller?.abort();
+        }
+      });
       void atualizar();
 
       return () => {
         ativa = false;
+        app.remove();
         clearTimeout(timer);
         controller?.abort();
       };
@@ -247,11 +287,7 @@ function ConteudoRelease({ id }: { id: number }) {
   );
 
   async function enviar() {
-    if (
-      trava.current ||
-      !podeEnviar ||
-      envio?.release.status !== "RASCUNHO"
-    ) {
+    if (trava.current || !podeEnviar || envio?.release.status !== "RASCUNHO") {
       return;
     }
 
@@ -296,7 +332,7 @@ function ConteudoRelease({ id }: { id: number }) {
       const atual = await buscarRelease(id, controller.signal);
 
       if (
-        !["RASCUNHO", "ENVIADO", "PARCIAL", "FALHOU"].includes(
+        !["RASCUNHO", "ENVIADO", "PARCIAL", "FALHOU", "CANCELADO"].includes(
           atual.status
         )
       ) {
@@ -347,13 +383,94 @@ function ConteudoRelease({ id }: { id: number }) {
   async function encerrarRascunhoLocal() {
     if (!usuario) return;
     const conta = usuario.assessoria_id + "-" + usuario.id;
-    const chavePropria = release?.criado_por === usuario.id ? release.chave_rascunho ?? undefined : undefined;
+    const chavePropria =
+      release?.criado_por === usuario.id
+        ? (release.chave_rascunho ?? undefined)
+        : undefined;
     await encerrarCopiaRelease(conta, "editar-" + id, id, chavePropria);
     await encerrarCopiaRelease(conta, "novo", id, chavePropria);
     const pendente = await lerReleasePendente(conta);
-    if (pendente && (pendente.release_id === id ||
-      pendente.dados.chave_rascunho === chavePropria)) {
+    if (
+      pendente &&
+      (pendente.release_id === id ||
+        pendente.dados.chave_rascunho === chavePropria)
+    ) {
       await removerReleasePendente(conta, pendente.dados.chave_rascunho);
+    }
+  }
+
+  async function programar(horario: HorarioRelease) {
+    if (trava.current || !podeEnviar || !release) return;
+    trava.current = true;
+    setAlterandoProgramacao(true);
+    setErroEnvio("");
+    try {
+      const atualizado = await agendarRelease(
+        id,
+        release.versao_edicao,
+        horario
+      );
+      setRelease(atualizado.release);
+      setEnvio(atualizado.envio);
+      setAgendamentoAberto(false);
+      try {
+        await encerrarRascunhoLocal();
+      } catch {
+        /* O agendamento já foi confirmado pelo servidor. */
+      }
+      setFeedbackProgramacao(
+        atualizado.release.agendado_para
+          ? "Agendamento registrado para " +
+              formatarAgendamentoRelease(atualizado.release.agendado_para) +
+              ", no horário de Brasília."
+          : "A solicitação foi processada. Confira o estado atual do release."
+      );
+    } catch (falha) {
+      setErroEnvio(
+        falha instanceof Error
+          ? falha.message
+          : "Não foi possível agendar o release."
+      );
+    } finally {
+      trava.current = false;
+      setAlterandoProgramacao(false);
+      setConsulta((atual) => ({ ...atual }));
+    }
+  }
+
+  async function cancelarProgramacao() {
+    if (trava.current || !podeEnviar || !cancelamento || !release) return;
+    trava.current = true;
+    setAlterandoProgramacao(true);
+    setErroEnvio("");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const atual =
+        cancelamento === "envio"
+          ? await buscarRelease(id, controller.signal)
+          : release;
+      const atualizado =
+        cancelamento === "agendamento"
+          ? await cancelarAgendamentoRelease(id, atual.versao_edicao)
+          : await cancelarEnvioRelease(id, atual.versao_edicao);
+      setRelease(atualizado.release);
+      setEnvio(atualizado.envio);
+      setCancelamento(null);
+      setFeedbackProgramacao(
+        cancelamento === "agendamento"
+          ? "O agendamento foi removido. O release voltou para rascunho e pode ser editado."
+          : "O cancelamento foi registrado. Os destinatários pendentes foram interrompidos. Uma transmissão já iniciada ainda poderá terminar."
+      );
+    } catch (falha) {
+      setErroEnvio(
+        falha instanceof Error ? falha.message : "Não foi possível cancelar."
+      );
+    } finally {
+      clearTimeout(timer);
+      trava.current = false;
+      setAlterandoProgramacao(false);
+      setConsulta((atual) => ({ ...atual }));
     }
   }
 
@@ -390,37 +507,22 @@ function ConteudoRelease({ id }: { id: number }) {
   }
 
   return (
-    <View
-      style={[
-        styles.tela,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header
-        title="Release"
-        showBackButton
-        backFallback="/releases"
-        />
+    <View style={[styles.tela, { backgroundColor: theme.background }]}>
+      <Header title="Release" showBackButton backFallback="/releases" />
 
       <ScrollView contentContainerStyle={styles.conteudo}>
         <View style={styles.corpo}>
-          {carregando ? (
-            <ActivityIndicator color={theme.primaria} />
-          ) : null}
+          {carregando ? <ActivityIndicator color={theme.primaria} /> : null}
 
           {erro ? (
             <View style={styles.grupo}>
-              <Text style={{ color: theme.erro }}>
-                {erro}
-              </Text>
+              <Text style={{ color: theme.erro }}>{erro}</Text>
 
               {podeVer && id > 0 ? (
                 <Button
                   title="ATUALIZAR"
                   variant="outline"
-                  onPress={() =>
-                    setConsulta((atual) => ({ ...atual }))
-                  }
+                  onPress={() => setConsulta((atual) => ({ ...atual }))}
                 />
               ) : null}
             </View>
@@ -428,14 +530,19 @@ function ConteudoRelease({ id }: { id: number }) {
 
           {release && envio && podeVer ? (
             <>
-            <View style={styles.linha}>
+              <View style={styles.linha}>
                 {podeEditar && envio.release.status === "RASCUNHO" ? (
                   <Button
                     title="EDITAR"
                     icon="create-outline"
                     variant="outline"
                     style={styles.botao}
-                    disabled={carregando || enviando || excluindo}
+                    disabled={
+                      carregando ||
+                      enviando ||
+                      excluindo ||
+                      alterandoProgramacao
+                    }
                     onPress={() =>
                       router.push({
                         pathname: "/releases/novo",
@@ -448,22 +555,21 @@ function ConteudoRelease({ id }: { id: number }) {
                 {podeExcluir &&
                 ["RASCUNHO", "ENVIADO", "PARCIAL", "FALHOU"].includes(
                   envio.release.status
-                ) ? (
+                ) &&
+                envio.totais.processando === 0 ? (
                   <Button
                     title="EXCLUIR"
                     variant="danger"
                     style={styles.botao}
                     loading={excluindo}
-                    disabled={carregando || enviando}
+                    disabled={carregando || enviando || alterandoProgramacao}
                     onPress={() => void pedirExclusao()}
                   />
                 ) : null}
               </View>
 
               {erroExclusao ? (
-                <Text style={{ color: theme.erro }}>
-                  {erroExclusao}
-                </Text>
+                <Text style={{ color: theme.erro }}>{erroExclusao}</Text>
               ) : null}
 
               <ReleaseResumoCard
@@ -471,11 +577,89 @@ function ConteudoRelease({ id }: { id: number }) {
                 status={envio.release.status}
               />
 
+              {envio.release.status === "AGENDADO" &&
+              envio.release.agendado_para ? (
+                <View
+                  style={[
+                    styles.programacao,
+                    {
+                      borderColor: theme.borda,
+                      backgroundColor: theme.textoTerciaria + "08",
+                    },
+                  ]}
+                >
+                  <Text weight="Bold">Envio agendado</Text>
+                  <Text>
+                    {formatarAgendamentoRelease(envio.release.agendado_para)}
+                  </Text>
+                  <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+                    Horário de Brasília. O processamento começa a partir deste
+                    horário, conforme a execução da fila no servidor.
+                  </Text>
+                  {podeEnviar ? (
+                    <View style={styles.linha}>
+                      <Button
+                        title="REAGENDAR"
+                        icon="calendar-outline"
+                        size="small"
+                        style={styles.botao}
+                        disabled={carregando || alterandoProgramacao}
+                        onPress={() => {
+                          setErroEnvio("");
+                          setAgendamentoAberto(true);
+                        }}
+                      />
+                      <Button
+                        title="CANCELAR"
+                        variant="outline"
+                        size="small"
+                        style={styles.botao}
+                        disabled={carregando || alterandoProgramacao}
+                        onPress={() => {
+                          setErroEnvio("");
+                          setCancelamento("agendamento");
+                        }}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {envio.release.status === "CANCELADO" ? (
+                <View
+                  style={[styles.programacao, { borderColor: theme.borda }]}
+                >
+                  <Text weight="Bold">Envio cancelado</Text>
+                  <Text style={{ color: theme.textoSub }}>
+                    {envio.totais.cancelados} destinatário(s) cancelado(s). Os
+                    e-mails já aceitos foram preservados.
+                    {envio.totais.processando > 0
+                      ? " Há uma transmissão em andamento que ainda poderá terminar."
+                      : ""}
+                  </Text>
+                </View>
+              ) : null}
+
+              {podeEnviar &&
+              ["NA_FILA", "ENVIANDO"].includes(envio.release.status) ? (
+                <Button
+                  title="CANCELAR ENVIO"
+                  icon="stop-circle-outline"
+                  variant="outline"
+                  disabled={
+                    carregando || enviando || repetindo || alterandoProgramacao
+                  }
+                  onPress={() => {
+                    setErroEnvio("");
+                    setCancelamento("envio");
+                  }}
+                />
+              ) : null}
+
               <View style={styles.linha}>
                 {[
                   [
-                    envio.totais.pendentes +
-                      envio.totais.processando,
+                    envio.totais.pendentes + envio.totais.processando,
                     "Em aberto",
                   ],
                   [envio.totais.aceitos, "Aceitos"],
@@ -487,15 +671,11 @@ function ConteudoRelease({ id }: { id: number }) {
                       styles.indicador,
                       {
                         borderColor: theme.borda + "40",
-                        backgroundColor:
-                          theme.backgroundSecundario,
+                        backgroundColor: theme.backgroundSecundario,
                       },
                     ]}
                   >
-                    <Text
-                      weight="Bold"
-                      style={{ fontSize: 22 }}
-                    >
+                    <Text weight="Bold" style={{ fontSize: 22 }}>
                       {numero}
                     </Text>
                     <Text
@@ -510,6 +690,10 @@ function ConteudoRelease({ id }: { id: number }) {
                 ))}
               </View>
 
+              {envio.aberturas ? (
+                <ReleaseAberturasCard metricas={envio.aberturas} />
+              ) : null}
+
               <Text
                 style={{
                   fontSize: 12,
@@ -517,8 +701,8 @@ function ConteudoRelease({ id }: { id: number }) {
                 }}
               >
                 Aceitos são os e-mails recebidos pelo servidor para
-                encaminhamento. A entrega ao destinatário ainda não
-                está confirmada.
+                encaminhamento. A entrega ao destinatário ainda não está
+                confirmada.
               </Text>
               {envio.totais.aguardando_retentativa > 0 ? (
                 <Text
@@ -539,8 +723,8 @@ function ConteudoRelease({ id }: { id: number }) {
                     color: theme.aviso,
                   }}
                 >
-                  Há envios sem confirmação. Confira esses casos antes
-                  de realizar outro envio para os mesmos destinatários.
+                  Há envios sem confirmação. Confira esses casos antes de
+                  realizar outro envio para os mesmos destinatários.
                 </Text>
               ) : null}
 
@@ -561,15 +745,12 @@ function ConteudoRelease({ id }: { id: number }) {
               ) : null}
 
               {erroEnvio ? (
-                <Text style={{ color: theme.erro }}>
-                  {erroEnvio}
-                </Text>
+                <Text style={{ color: theme.erro }}>{erroEnvio}</Text>
               ) : null}
-              {envio.release.status === "RASCUNHO" && pendenciasEnvio.length > 0 ? (
+              {envio.release.status === "RASCUNHO" &&
+              pendenciasEnvio.length > 0 ? (
                 <View style={{ gap: 4 }}>
-                  <Text weight="SemiBold">
-                    Para enviar, falta:
-                  </Text>
+                  <Text weight="SemiBold">Para enviar ou agendar, falta:</Text>
 
                   {pendenciasEnvio.map((item) => (
                     <Text
@@ -585,8 +766,26 @@ function ConteudoRelease({ id }: { id: number }) {
                 </View>
               ) : null}
 
-              {envio.release.status === "RASCUNHO" &&
-              podeEnviar ? (
+              {envio.release.status === "RASCUNHO" && podeEnviar ? (
+                <Button
+                  title="AGENDAR RELEASE"
+                  icon="calendar-outline"
+                  variant="outline"
+                  disabled={
+                    carregando ||
+                    enviando ||
+                    excluindo ||
+                    alterandoProgramacao ||
+                    pendenciasEnvio.length > 0
+                  }
+                  onPress={() => {
+                    setErroEnvio("");
+                    setAgendamentoAberto(true);
+                  }}
+                />
+              ) : null}
+
+              {envio.release.status === "RASCUNHO" && podeEnviar ? (
                 <Button
                   title="ENVIAR RELEASE"
                   icon="paper-plane-outline"
@@ -595,6 +794,7 @@ function ConteudoRelease({ id }: { id: number }) {
                     carregando ||
                     excluindo ||
                     repetindo ||
+                    alterandoProgramacao ||
                     envio.totais.total === 0 ||
                     pendenciasEnvio.length > 0
                   }
@@ -611,22 +811,18 @@ function ConteudoRelease({ id }: { id: number }) {
                 </Text>
               ) : null}
 
-              <Text weight="Bold">
-                Destinatários ({envio.totais.total})
-              </Text>
+              <Text weight="Bold">Destinatários ({envio.totais.total})</Text>
 
-              <View style={styles.linha}>
+              <View style={[styles.linha, { flexWrap: "wrap" }]}>
                 {FILTROS.map((filtro) => (
                   <Button
                     key={filtro.valor}
                     title={filtro.nome}
                     size="small"
                     variant={
-                      consulta.status === filtro.valor
-                        ? "primary"
-                        : "outline"
+                      consulta.status === filtro.valor ? "primary" : "outline"
                     }
-                    style={styles.botao}
+                    style={[styles.botao, { minWidth: 70 }]}
                     onPress={() =>
                       setConsulta({
                         page: 1,
@@ -645,29 +841,56 @@ function ConteudoRelease({ id }: { id: number }) {
                     { borderColor: theme.borda + "35" },
                   ]}
                 >
-                  {d.nome ? (
-                    <Text weight="SemiBold">{d.nome}</Text>
-                  ) : null}
+                  {d.nome ? <Text weight="SemiBold">{d.nome}</Text> : null}
 
                   <Text selectable>{d.email}</Text>
 
                   <Text
                     style={{
-                      color:
-                        d.status === "ERRO"
-                          ? theme.erro
-                          : theme.textoSub,
+                      color: d.status === "ERRO" ? theme.erro : theme.textoSub,
                       fontSize: 12,
                     }}
                   >
                     {d.status === "PENDENTE" && d.proxima_tentativa_em
                       ? "Aguardando nova tentativa"
                       : d.status === "ERRO" && d.erro_tipo === "INCERTA"
-                      ? "Envio sem confirmação"
-                      : d.status === "ERRO" && d.erro_tipo === "CONFIGURACAO"
-                      ? "Aguardando correção"
-                      : ROTULOS_DESTINATARIO[d.status]}
+                        ? "Envio sem confirmação"
+                        : d.status === "ERRO" && d.erro_tipo === "CONFIGURACAO"
+                          ? "Aguardando correção"
+                          : ROTULOS_DESTINATARIO[d.status]}
                   </Text>
+
+                  {d.rastreamento_abertura && d.aberto_em ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons
+                        name="mail-open-outline"
+                        size={14}
+                        color={theme.alteracao}
+                      />
+                      <Text
+                        style={{
+                          color: theme.alteracao,
+                          fontSize: 11,
+                          lineHeight: 16,
+                          flex: 1,
+                        }}
+                      >
+                        Abertura detectada · {formatarAbertura(d.aberto_em)}
+                      </Text>
+                    </View>
+                  ) : d.status === "ENVIADO" ? (
+                    <Text style={{ color: theme.textoSub, fontSize: 11 }}>
+                      {d.rastreamento_abertura
+                        ? "Sem abertura detectada até o momento"
+                        : "Enviado sem rastreamento de abertura"}
+                    </Text>
+                  ) : null}
 
                   {d.tentativas > 0 ? (
                     <Text
@@ -695,9 +918,7 @@ function ConteudoRelease({ id }: { id: number }) {
               ))}
 
               {!envio.destinatarios.length ? (
-                <Text>
-                  Nenhum destinatário neste filtro.
-                </Text>
+                <Text>Nenhum destinatário neste filtro.</Text>
               ) : null}
 
               <PaginacaoLista
@@ -713,29 +934,69 @@ function ConteudoRelease({ id }: { id: number }) {
                 }
               />
 
-              <Text weight="Bold">
-                Conteúdo do release
-              </Text>
+              <Text weight="Bold">Conteúdo do release</Text>
 
-              <ReleaseBlocosPrevia
-                blocos={release.blocos}
-              />
+              <ReleaseBlocosPrevia blocos={release.blocos} />
             </>
           ) : null}
         </View>
       </ScrollView>
-        
+
+      <ReleaseAgendamentoModal
+        visible={agendamentoAberto}
+        inicial={envio?.release.agendado_para}
+        loading={alterandoProgramacao}
+        erro={erroEnvio}
+        onClose={() => {
+          if (!trava.current) setAgendamentoAberto(false);
+        }}
+        onConfirm={(horario) => void programar(horario)}
+      />
+      <FeedbackAlert
+        visible={cancelamento !== null}
+        variant="warning"
+        title={
+          cancelamento === "agendamento"
+            ? "Cancelar agendamento?"
+            : "Cancelar envio?"
+        }
+        message={
+          (cancelamento === "agendamento"
+            ? "O release voltará para rascunho. Nenhum destinatário será enviado por este agendamento."
+            : "Os destinatários ainda pendentes serão cancelados. E-mails já aceitos e uma transmissão em andamento não podem ser desfeitos.") +
+          (erroEnvio ? "\n\n" + erroEnvio : "")
+        }
+        primaryLabel="CANCELAR"
+        secondaryLabel="VOLTAR"
+        primaryDanger
+        loading={alterandoProgramacao}
+        onPrimary={() => void cancelarProgramacao()}
+        onClose={() => {
+          if (!trava.current) setCancelamento(null);
+        }}
+        onSecondary={() => {
+          if (!trava.current) setCancelamento(null);
+        }}
+      />
+      <FeedbackAlert
+        visible={Boolean(feedbackProgramacao)}
+        variant="success"
+        title="Release atualizado"
+        message={feedbackProgramacao}
+        onClose={() => setFeedbackProgramacao("")}
+      />
+
       <FeedbackAlert
         visible={confirmar}
         variant="warning"
         title="Enviar este release?"
         message={
-            'O release "' +
-            (release?.titulo ?? "") +
-            '" será enviado individualmente para ' +
-            (envio?.totais.total ?? 0) +
-            " destinatários. Confirme os dados antes de continuar." +
-            (avisoDominios ? "\n\n" + avisoDominios : "")
+          'O release "' +
+          (release?.titulo ?? "") +
+          '" será enviado individualmente para ' +
+          (envio?.totais.total ?? 0) +
+          " destinatários. Confirme os dados antes de continuar." +
+          (avisoDominios ? "\n\n" + avisoDominios : "")
         }
         primaryLabel="ENVIAR"
         secondaryLabel="VOLTAR"
@@ -797,7 +1058,6 @@ function ConteudoRelease({ id }: { id: number }) {
           if (!trava.current) setConfirmarRepeticao(false);
         }}
       />
-
     </View>
   );
 }
@@ -815,6 +1075,12 @@ const styles = StyleSheet.create({
     maxWidth: 760,
     alignSelf: "center",
     gap: 12,
+  },
+  programacao: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    gap: 10,
   },
   grupo: {
     gap: 8,

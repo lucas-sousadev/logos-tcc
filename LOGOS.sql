@@ -349,10 +349,12 @@ CREATE TABLE releases (
         'ENVIANDO',
         'ENVIADO',
         'PARCIAL',
-        'FALHOU'
+        'FALHOU',
+        'CANCELADO'
     ) NOT NULL DEFAULT 'RASCUNHO',
 
     agendado_para DATETIME NULL,
+    versao_programacao BIGINT UNSIGNED NOT NULL DEFAULT 0,
     iniciado_em DATETIME NULL,
     enviado_em DATETIME NULL,
 
@@ -408,7 +410,8 @@ CREATE TABLE release_destinatarios (
         'PENDENTE',
         'ENVIANDO',
         'ENVIADO',
-        'ERRO'
+        'ERRO',
+        'CANCELADO'
     ) NOT NULL DEFAULT 'PENDENTE',
     tentativas INT UNSIGNED NOT NULL DEFAULT 0,
     ultima_tentativa_em DATETIME NULL,

@@ -52,7 +52,8 @@ final class ReleaseEmailService
         array $envio,
         array $blocos,
         string $email,
-        bool $teste = false
+        bool $teste = false,
+        ?string $tokenAbertura = null
     ): PHPMailer {
         $envio = ReleaseService::validarDadosEnvio($envio);
         $blocos = ReleaseBlocosService::validar($blocos);
@@ -73,6 +74,10 @@ final class ReleaseEmailService
             );
         }
 
+        if (!$teste) {
+            ReleaseAberturaService::validarConfiguracao();
+        }
+
         $mailer = self::criarMailer();
 
         $imagens = self::incorporarImagens(
@@ -86,6 +91,14 @@ final class ReleaseEmailService
             $envio['primeira_linha'],
             $imagens
         );
+
+        $urlAbertura = !$teste ? ReleaseAberturaService::urlPixel($tokenAbertura) : null;
+        if ($urlAbertura !== null) {
+            $src = self::escapar($urlAbertura);
+            $pixel = '<img src="' . $src . '" width="1" height="1" alt="" '
+                . 'style="display:block;width:1px;height:1px;border:0" aria-hidden="true">';
+            $html = str_replace('</body>', $pixel . '</body>', $html);
+        }
 
         $mailer->setFrom(
             trim($_ENV['RELEASE_SMTP_FROM']),

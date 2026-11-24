@@ -26,6 +26,7 @@ class ReleaseService
         'ENVIADO',
         'PARCIAL',
         'FALHOU',
+        'CANCELADO',
     ];
 
     private const DATA_LISTAGEM =
@@ -34,7 +35,7 @@ class ReleaseService
     private const CAMPOS = '
         r.id, r.cliente_id, r.template_id, r.template_codigo, r.criado_por,
         r.titulo, r.assunto, r.status, r.chave_rascunho,
-        r.agendado_para, r.iniciado_em, r.enviado_em,
+        r.agendado_para, r.versao_programacao, r.iniciado_em, r.enviado_em,
         r.created_at, r.updated_at,
         c.nome AS cliente_nome,
         u.nome AS criado_por_nome,
@@ -749,7 +750,7 @@ class ReleaseService
         $campos = [
             'id', 'cliente_id', 'template_id', 'template_codigo', 'titulo',
             'assunto', 'primeira_linha', 'nome_remetente', 'responder_para',
-            'blocos', 'status', 'updated_at',
+            'blocos', 'status', 'agendado_para', 'versao_programacao', 'updated_at',
         ];
 
         $dados = array_intersect_key($release, array_flip($campos));

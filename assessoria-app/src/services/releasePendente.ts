@@ -12,7 +12,7 @@ import type {
   TemplateRelease,
 } from "@/services/api/release";
 
-export type AcaoCadastroRelease = "RASCUNHO" | "ENVIAR";
+export type AcaoCadastroRelease = "RASCUNHO" | "ENVIAR" | "AGENDAR";
 
 export interface ReleasePendente {
   dados: DadosNovoRelease & { dados_envio: DadosEnvioRelease };
@@ -24,6 +24,7 @@ export interface ReleasePendente {
   acao?: AcaoCadastroRelease;
   release_id?: number;
   versao_envio?: string;
+  agendamento?: { data: string; hora: string };
 }
 
 function prefixo(conta: string) {
@@ -52,15 +53,20 @@ export async function guardarReleasePendente(
   await temporario.move(new File(Paths.document, nome));
 }
 
-export async function lerReleasePendente(conta: string): Promise<ReleasePendente | null> {
+export async function lerReleasePendente(
+  conta: string
+): Promise<ReleasePendente | null> {
   const web = Platform.OS === "web";
   const nomes = web
     ? await AsyncStorage.getAllKeys()
-    : Paths.document.list().filter((item) => item instanceof File).map((item) => item.name);
+    : Paths.document
+        .list()
+        .filter((item) => item instanceof File)
+        .map((item) => item.name);
 
-  for (const nome of nomes.filter(
-    (item) => item.startsWith(prefixo(conta)) && item.endsWith(".json")
-  ).sort()) {
+  for (const nome of nomes
+    .filter((item) => item.startsWith(prefixo(conta)) && item.endsWith(".json"))
+    .sort()) {
     const conteudo = web
       ? await AsyncStorage.getItem(nome)
       : await new File(Paths.document, nome).text();
@@ -74,32 +80,30 @@ export async function lerReleasePendente(conta: string): Promise<ReleasePendente
 
     if (api !== API_URL) continue;
     const chave = tentativa?.dados?.chave_rascunho;
-    if (typeof chave === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(chave)
-      && await descarteRegistrado(conta, chave)) continue;
+    if (
+      typeof chave === "string" &&
+      /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(chave) &&
+      (await descarteRegistrado(conta, chave))
+    )
+      continue;
 
     if (
-      nome !== nomeTentativa(
-        conta,
-        tentativa?.dados?.chave_rascunho
-      ) ||
+      nome !== nomeTentativa(conta, tentativa?.dados?.chave_rascunho) ||
       !Array.isArray(tentativa.selecionados) ||
       !tentativa.dados.dados_envio ||
-      (tentativa.versao_envio !== undefined && !/^[a-f0-9]{64}$/.test(tentativa.versao_envio)) ||
-      (
-        tentativa.acao !== undefined &&
-        !["RASCUNHO", "ENVIAR"].includes(tentativa.acao)
-      ) ||
-      (
-        tentativa.release_id !== undefined &&
-        (
-          !Number.isSafeInteger(tentativa.release_id) ||
-          tentativa.release_id < 1
-        )
-      )
+      (tentativa.acao === "AGENDAR" &&
+        (!tentativa.agendamento ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(tentativa.agendamento.data) ||
+          !/^\d{2}:\d{2}$/.test(tentativa.agendamento.hora))) ||
+      (tentativa.versao_envio !== undefined &&
+        !/^[a-f0-9]{64}$/.test(tentativa.versao_envio)) ||
+      (tentativa.acao !== undefined &&
+        !["RASCUNHO", "ENVIAR", "AGENDAR"].includes(tentativa.acao)) ||
+      (tentativa.release_id !== undefined &&
+        (!Number.isSafeInteger(tentativa.release_id) ||
+          tentativa.release_id < 1))
     ) {
-      throw new Error(
-        "O rascunho salvo neste dispositivo está incompleto."
-      );
+      throw new Error("O rascunho salvo neste dispositivo está incompleto.");
     }
 
     return tentativa;

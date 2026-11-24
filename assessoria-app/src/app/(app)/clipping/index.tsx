@@ -140,27 +140,19 @@ export default function Clipping() {
               ) : null}
 
               {podeImportar ? (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  activeOpacity={0.8}
+                <Button
+                  title="IMPORTAR CSV"
+                  icon="download-outline"
+                  variant="outline"
+                  size="small"
                   onPress={importarCsv}
-                  style={[
-                    styles.botaoAcao,
-                    { backgroundColor: theme.primaria },
-                  ]}
-                >
-                  <Ionicons
-                    name="download-outline"
-                    size={15}
-                    color={theme.branco}
-                  />
-                  <Text
-                    weight="SemiBold"
-                    style={[styles.textoBotaoAcao, { color: theme.branco }]}
-                  >
-                    IMPORTAR CSV
-                  </Text>
-                </TouchableOpacity>
+                  style={{
+                    flex: 1,
+                    width: "auto",
+                    minWidth: 0,
+                    minHeight: 42,
+                  }}
+                />
               ) : null}
             </View>
           ) : null}

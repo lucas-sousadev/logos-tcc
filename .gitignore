@@ -9,6 +9,8 @@ tests/
 !/logos-api/tests/resolver_dominio.php
 !/logos-api/tests/releases.php
 !/logos-api/tests/releases_rascunho.php
+!/logos-api/tests/releases_agendamento.php
+!/logos-api/tests/releases_aberturas.php
 !/assessoria-app/tests/
 /assessoria-app/tests/*
 !/assessoria-app/tests/navegacao.test.cjs
