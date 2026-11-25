@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -13,7 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
@@ -53,16 +48,14 @@ export default function Templates() {
 
   return (
     <CatalogoTemplates
-      key={
-        usuario
-          ? usuario.assessoria_id + "-" + usuario.id
-          : "sem-conta"
-      }
+      key={usuario ? usuario.assessoria_id + "-" + usuario.id : "sem-conta"}
     />
   );
 }
 
 function CatalogoTemplates() {
+  const params = useLocalSearchParams<{ criar?: string }>();
+  const router = useRouter();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
   const { width } = useWindowDimensions();
@@ -78,7 +71,9 @@ function CatalogoTemplates() {
   const [formulario, setFormulario] = useState<{
     modelo: TemplateRelease | null;
     editar: boolean;
-  } | null>(null);
+  } | null>(() =>
+    params.criar === "1" && podeCriar ? { modelo: null, editar: false } : null
+  );
 
   const [digitado, setDigitado] = useState("");
   const [consulta, setConsulta] = useState<{
@@ -98,6 +93,11 @@ function CatalogoTemplates() {
   const [removendo, setRemovendo] = useState(false);
   const [erroRemocao, setErroRemocao] = useState("");
   const [sucesso, setSucesso] = useState("");
+
+  useEffect(() => {
+    if (params.criar !== "1") return;
+    router.setParams({ criar: undefined });
+  }, [params.criar, router]);
 
   useEffect(() => {
     const texto = digitado.trim();
@@ -186,11 +186,7 @@ function CatalogoTemplates() {
   }
 
   function pedirRemocao(modelo: TemplateRelease) {
-    if (
-      !podeExcluir ||
-      modelo.origem !== "ASSESSORIA" ||
-      trava.current
-    ) {
+    if (!podeExcluir || modelo.origem !== "ASSESSORIA" || trava.current) {
       return;
     }
 
@@ -205,10 +201,7 @@ function CatalogoTemplates() {
     setErroRemocao("");
   }
 
-  function abrir(
-    modelo: TemplateRelease | null = null,
-    editar = false
-  ) {
+  function abrir(modelo: TemplateRelease | null = null, editar = false) {
     setPrevia(null);
     setErro("");
     setFormulario({ modelo, editar });
@@ -233,9 +226,7 @@ function CatalogoTemplates() {
       );
     } catch (falha) {
       setErroRemocao(
-        falha instanceof Error
-          ? falha.message
-          : "Não foi possível remover."
+        falha instanceof Error ? falha.message : "Não foi possível remover."
       );
     } finally {
       trava.current = false;
@@ -252,21 +243,14 @@ function CatalogoTemplates() {
         onSaved={() => {
           setFormulario(null);
           recarregar();
-          setSucesso(
-            "Template salvo e disponível na criação de releases."
-          );
+          setSucesso("Template salvo e disponível na criação de releases.");
         }}
       />
     );
   }
 
   return (
-    <View
-      style={[
-        styles.tela,
-        { backgroundColor: theme.background },
-      ]}
-    >
+    <View style={[styles.tela, { backgroundColor: theme.background }]}>
       <Header title="Templates" showBackButton />
 
       <ScrollView
@@ -295,10 +279,7 @@ function CatalogoTemplates() {
               </Text>
 
               <Text
-                style={[
-                  styles.bibliotecaLegenda,
-                  { color: theme.textoSub },
-                ]}
+                style={[styles.bibliotecaLegenda, { color: theme.textoSub }]}
               >
                 Modelos de release
               </Text>
@@ -397,9 +378,7 @@ function CatalogoTemplates() {
                 <ActivityIndicator color={theme.primaria} />
               ) : erro ? (
                 <View style={styles.grupo}>
-                  <Text style={{ color: theme.erro }}>
-                    {erro}
-                  </Text>
+                  <Text style={{ color: theme.erro }}>{erro}</Text>
 
                   <Button
                     title="TENTAR NOVAMENTE"
@@ -431,9 +410,7 @@ function CatalogoTemplates() {
                           styles.card,
                           {
                             borderColor: theme.borda,
-                            width: width >= 620
-                              ? "48.5%"
-                              : "100%",
+                            width: width >= 620 ? "48.5%" : "100%",
                           },
                         ]}
                       >
@@ -441,9 +418,7 @@ function CatalogoTemplates() {
                           activeOpacity={0.8}
                           disabled={!modelo.disponivel}
                           accessibilityRole="button"
-                          accessibilityLabel={
-                            "Ver prévia de " + modelo.nome
-                          }
+                          accessibilityLabel={"Ver prévia de " + modelo.nome}
                           onPress={() => setPrevia(modelo)}
                           style={[
                             styles.miniatura,
@@ -456,10 +431,7 @@ function CatalogoTemplates() {
                         </TouchableOpacity>
 
                         <View style={styles.grupo}>
-                          <Text
-                            weight="Bold"
-                            numberOfLines={2}
-                          >
+                          <Text weight="Bold" numberOfLines={2}>
                             {modelo.nome}
                           </Text>
 
@@ -508,9 +480,7 @@ function CatalogoTemplates() {
                                   icon="create-outline"
                                   size="small"
                                   style={styles.flex}
-                                  onPress={() =>
-                                    abrir(modelo, true)
-                                  }
+                                  onPress={() => abrir(modelo, true)}
                                 />
                               ) : null}
 
@@ -520,9 +490,7 @@ function CatalogoTemplates() {
                                   variant="danger"
                                   size="small"
                                   style={styles.flex}
-                                  onPress={() =>
-                                    pedirRemocao(modelo)
-                                  }
+                                  onPress={() => pedirRemocao(modelo)}
                                 />
                               ) : null}
                             </View>
@@ -551,12 +519,7 @@ function CatalogoTemplates() {
         animationType="slide"
         onRequestClose={() => setPrevia(null)}
       >
-        <View
-          style={[
-            styles.tela,
-            { backgroundColor: theme.background },
-          ]}
-        >
+        <View style={[styles.tela, { backgroundColor: theme.background }]}>
           <Header
             title="Prévia do template"
             showBackButton
@@ -564,17 +527,11 @@ function CatalogoTemplates() {
             onBackPress={() => setPrevia(null)}
           />
 
-          <ScrollView
-            contentContainerStyle={styles.conteudo}
-          >
+          <ScrollView contentContainerStyle={styles.conteudo}>
             <View style={styles.previa}>
               <Text weight="Bold">{previa?.nome}</Text>
 
-              {previa ? (
-                <ReleaseBlocosPrevia
-                  blocos={previa.blocos}
-                />
-              ) : null}
+              {previa ? <ReleaseBlocosPrevia blocos={previa.blocos} /> : null}
             </View>
           </ScrollView>
 
@@ -601,14 +558,12 @@ function CatalogoTemplates() {
       <FeedbackAlert
         visible={remover !== null}
         variant={erroRemocao ? "error" : "warning"}
-        title={
-          erroRemocao ? "Não foi possível remover" : "Remover template?"
-        }
+        title={erroRemocao ? "Não foi possível remover" : "Remover template?"}
         message={
           erroRemocao ||
-          ('O modelo "' +
+          'O modelo "' +
             (remover?.nome ?? "") +
-            '" sairá do catálogo. Os releases já criados serão preservados.')
+            '" sairá do catálogo. Os releases já criados serão preservados.'
         }
         primaryLabel={erroRemocao ? "TENTAR NOVAMENTE" : "REMOVER"}
         secondaryLabel="CANCELAR"

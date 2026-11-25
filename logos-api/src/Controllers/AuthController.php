@@ -104,7 +104,10 @@ class AuthController
                 'assessoria_id' => $usuario['assessoria_id'],
                 'nome' => $usuario['nome'],
                 'email' => $usuario['email'],
+                'telefone' => $usuario['telefone'],
+                'foto_path' => $usuario['foto_path'],
                 'perfil' => $usuario['perfil'],
+                'email_verificado' => (bool) $usuario['email_verificado'],
             ],
         ]);
     }
@@ -189,6 +192,7 @@ class AuthController
                 'nome' => $usuario['nome'],
                 'email' => $usuario['email'],
                 'telefone' => $usuario['telefone'],
+                'foto_path' => $usuario['foto_path'],
                 'perfil' => $usuario['perfil'],
                 'email_verificado' => (bool) $usuario['email_verificado']
             ]

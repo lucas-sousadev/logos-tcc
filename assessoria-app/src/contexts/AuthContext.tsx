@@ -7,10 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  AppState,
-  AppStateStatus,
-} from "react-native";
+import { useSincronizacaoPermissoes } from "@/hooks/useSincronizacaoPermissoes";
 import {
   clearSession,
   getToken,
@@ -46,57 +43,44 @@ interface AuthContextData {
   carregando: boolean;
   autenticado: boolean;
   login: (
-  email: string,
-  senha: string,
-  perfilEsperado?: Usuario["perfil"]
-) => Promise<void>;
+    email: string,
+    senha: string,
+    perfilEsperado?: Usuario["perfil"]
+  ) => Promise<void>;
   //cadastro assessoria e logout
-  registerAssessoria: (
-    dados: RegisterAssessoriaData
-  ) => Promise<LoginResponse>;
+  registerAssessoria: (dados: RegisterAssessoriaData) => Promise<LoginResponse>;
 
   logout: () => Promise<void>;
 
-  //sistema convites 
-  validarConvite: (
-    codigo: string
-  ) => Promise<void>;
-  
-  criarConvite: (
-  emailDestino?: string
-) => Promise<CriarConviteResponse>;
+  //sistema convites
+  validarConvite: (codigo: string) => Promise<void>;
+
+  criarConvite: (emailDestino?: string) => Promise<CriarConviteResponse>;
 
   listarConvites: (
-  page?: number,
-  limit?: number
-) => Promise<ListarConvitesResponse>;
+    page?: number,
+    limit?: number
+  ) => Promise<ListarConvitesResponse>;
 
   // funcionarios e permissoes
   registerFuncionario: (
     dados: RegisterFuncionarioData
   ) => Promise<LoginResponse>;
-  
-  buscarFuncionario: (
-  usuarioId: number
-) => Promise<Funcionario>;
+
+  buscarFuncionario: (usuarioId: number) => Promise<Funcionario>;
   listarFuncionarios: (
     params?: ListarFuncionariosParams
   ) => Promise<ListarFuncionariosResponse>;
   listarTodasPermissoes: () => Promise<Permissao[]>;
 
-  listarPermissoesFuncionario: (
-    usuarioId: number
-  ) => Promise<Permissao[]>;
+  listarPermissoesFuncionario: (usuarioId: number) => Promise<Permissao[]>;
 
   atualizarPermissoesFuncionario: (
     usuarioId: number,
     permissoes: number[]
   ) => Promise<void>;
 
-  temPermissao: (
-    modulo: string,
-    acao: string
-  ) => boolean;
+  temPermissao: (modulo: string, acao: string) => boolean;
   recarregarPermissoes: () => Promise<void>;
 }
 
@@ -109,12 +93,28 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [permissoesUsuario, setPermissoesUsuario] =
-  useState<Permissao[]>([]);
+  const [permissoesUsuario, setPermissoesUsuario] = useState<Permissao[]>([]);
+  const consultaPermissoes = useRef<{
+    conta: string;
+    controller: AbortController;
+    promessa: Promise<void>;
+  } | null>(null);
 
-  const estadoAtualDoApp = useRef<AppStateStatus>(
-    AppState.currentState
+  const cancelarConsultaPermissoes = useCallback(() => {
+    consultaPermissoes.current?.controller.abort();
+    consultaPermissoes.current = null;
+  }, []);
+
+  useEffect(
+    () => cancelarConsultaPermissoes,
+    [
+      usuario?.id,
+      usuario?.assessoria_id,
+      usuario?.perfil,
+      cancelarConsultaPermissoes,
+    ]
   );
+
   useEffect(() => {
     async function carregarSessao() {
       try {
@@ -127,8 +127,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const usuarioAtual = await me();
 
         if (usuarioAtual.perfil === "FUNCIONARIO") {
-          const permissoes =
-            await authListarMinhasPermissoes();
+          const permissoes = await authListarMinhasPermissoes();
 
           setPermissoesUsuario(permissoes);
         } else {
@@ -150,83 +149,77 @@ export function AuthProvider({ children }: AuthProviderProps) {
     carregarSessao();
   }, []);
 
-  const recarregarPermissoes = useCallback(
-    async (): Promise<void> => {
-      if (
-        !usuario ||
-        usuario.perfil !== "FUNCIONARIO"
-      ) {
-        return;
-      }
+  const recarregarPermissoes = useCallback(async (): Promise<void> => {
+    if (!usuario || usuario.perfil !== "FUNCIONARIO") {
+      return;
+    }
 
-      const permissoes =
-        await authListarMinhasPermissoes();
+    const conta = usuario.assessoria_id + ":" + usuario.id;
+    const pendente = consultaPermissoes.current;
+    if (pendente?.conta === conta) return pendente.promessa;
 
-      setPermissoesUsuario(permissoes);
-    },
-    [usuario]
-  );
-
-  useEffect(() => {
-    const inscricao = AppState.addEventListener(
-      "change",
-      (proximoEstado) => {
-        const voltouAoApp =
-          estadoAtualDoApp.current !== "active" &&
-          proximoEstado === "active";
-
-        estadoAtualDoApp.current = proximoEstado;
-
-        if (voltouAoApp) {
-          recarregarPermissoes().catch((error) => {
-            console.error(
-              "Erro ao recarregar permissões:",
-              error
-            );
-          });
-        }
-      }
-    );
-
-    return () => {
-      inscricao.remove();
+    cancelarConsultaPermissoes();
+    const pedido = {
+      conta,
+      controller: new AbortController(),
+      promessa: Promise.resolve(),
     };
-  }, [recarregarPermissoes]);
+    consultaPermissoes.current = pedido;
+    const prazo = setTimeout(() => pedido.controller.abort(), 10_000);
+
+    pedido.promessa = (async () => {
+      try {
+        const permissoes = await authListarMinhasPermissoes(
+          pedido.controller.signal
+        );
+        if (
+          pedido.controller.signal.aborted ||
+          consultaPermissoes.current !== pedido
+        )
+          return;
+        setPermissoesUsuario((atuais) =>
+          JSON.stringify(atuais) === JSON.stringify(permissoes)
+            ? atuais
+            : permissoes
+        );
+      } catch (erro) {
+        if (!pedido.controller.signal.aborted) throw erro;
+      } finally {
+        clearTimeout(prazo);
+        if (consultaPermissoes.current === pedido)
+          consultaPermissoes.current = null;
+      }
+    })();
+
+    return pedido.promessa;
+  }, [usuario, cancelarConsultaPermissoes]);
+
+  useSincronizacaoPermissoes(
+    usuario?.perfil === "FUNCIONARIO",
+    recarregarPermissoes
+  );
 
   async function login(
     email: string,
     senha: string,
     perfilEsperado?: Usuario["perfil"]
   ): Promise<void> {
-    const resposta = await authLogin(
-      email,
-      senha
-    );
+    cancelarConsultaPermissoes();
+    const resposta = await authLogin(email, senha);
 
     if (!resposta.usuario) {
-      throw new Error(
-        "A API não retornou o usuário."
-      );
+      throw new Error("A API não retornou o usuário.");
     }
 
-    if (
-      perfilEsperado &&
-      resposta.usuario.perfil !== perfilEsperado
-    ) {
+    if (perfilEsperado && resposta.usuario.perfil !== perfilEsperado) {
       await authLogout();
 
-      throw new Error(
-        "Esta conta não pertence a este tipo de acesso."
-      );
+      throw new Error("Esta conta não pertence a este tipo de acesso.");
     }
 
     try {
-      if (
-        resposta.usuario.perfil ===
-        "FUNCIONARIO"
-      ) {
-        const permissoes =
-          await authListarMinhasPermissoes();
+      if (resposta.usuario.perfil === "FUNCIONARIO") {
+        const permissoes = await authListarMinhasPermissoes();
 
         setPermissoesUsuario(permissoes);
       } else {
@@ -247,6 +240,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function registerAssessoria(
     dados: RegisterAssessoriaData
   ): Promise<LoginResponse> {
+    cancelarConsultaPermissoes();
     const resposta = await authRegisterAssessoria(dados);
 
     if (!resposta.usuario) {
@@ -259,15 +253,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   async function logout(): Promise<void> {
+    cancelarConsultaPermissoes();
     await authLogout();
 
     setUsuario(null);
     setPermissoesUsuario([]);
   }
 
-  async function validarConvite(
-    codigo: string
-  ): Promise<void> {
+  async function validarConvite(codigo: string): Promise<void> {
     await authValidarConvite(codigo);
   }
 
@@ -275,9 +268,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     emailDestino?: string
   ): Promise<CriarConviteResponse> {
     if (!temPermissao("CONVITES", "CRIAR")) {
-      throw new Error(
-        "Você não possui permissão para criar convites."
-      );
+      throw new Error("Você não possui permissão para criar convites.");
     }
 
     return authCriarConvite(emailDestino);
@@ -288,9 +279,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     limit = 20
   ): Promise<ListarConvitesResponse> {
     if (!temPermissao("CONVITES", "VISUALIZAR")) {
-      throw new Error(
-        "Você não possui permissão para visualizar convites."
-      );
+      throw new Error("Você não possui permissão para visualizar convites.");
     }
 
     return authListarConvites(page, limit);
@@ -299,22 +288,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function registerFuncionario(
     dados: RegisterFuncionarioData
   ): Promise<LoginResponse> {
-    const resposta =
-      await authRegisterFuncionario(dados);
+    cancelarConsultaPermissoes();
+    const resposta = await authRegisterFuncionario(dados);
 
     if (!resposta.usuario) {
-      throw new Error(
-        "A API não retornou o usuário."
-      );
+      throw new Error("A API não retornou o usuário.");
     }
 
     try {
-      if (
-        resposta.usuario.perfil ===
-        "FUNCIONARIO"
-      ) {
-        const permissoes =
-          await authListarMinhasPermissoes();
+      if (resposta.usuario.perfil === "FUNCIONARIO") {
+        const permissoes = await authListarMinhasPermissoes();
 
         setPermissoesUsuario(permissoes);
       } else {
@@ -346,9 +329,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return authListarFuncionarios(params);
   }
 
-  async function buscarFuncionario(
-    usuarioId: number
-  ): Promise<Funcionario> {
+  async function buscarFuncionario(usuarioId: number): Promise<Funcionario> {
     if (!temPermissao("USUARIOS", "VISUALIZAR")) {
       throw new Error(
         "Você não possui permissão para visualizar funcionários."
@@ -359,15 +340,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   async function listarTodasPermissoes(): Promise<Permissao[]> {
-    if (
-      !temPermissao(
-        "USUARIOS",
-        "GERENCIAR_PERMISSOES"
-      )
-    ) {
-      throw new Error(
-        "Você não possui permissão para gerenciar permissões."
-      );
+    if (!temPermissao("USUARIOS", "GERENCIAR_PERMISSOES")) {
+      throw new Error("Você não possui permissão para gerenciar permissões.");
     }
 
     return authListarTodasPermissoes();
@@ -376,15 +350,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function listarPermissoesFuncionario(
     usuarioId: number
   ): Promise<Permissao[]> {
-    if (
-      !temPermissao(
-        "USUARIOS",
-        "GERENCIAR_PERMISSOES"
-      )
-    ) {
-      throw new Error(
-        "Você não possui permissão para gerenciar permissões."
-      );
+    if (!temPermissao("USUARIOS", "GERENCIAR_PERMISSOES")) {
+      throw new Error("Você não possui permissão para gerenciar permissões.");
     }
 
     return authListarPermissoesFuncionario(usuarioId);
@@ -394,27 +361,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     usuarioId: number,
     permissoes: number[]
   ): Promise<void> {
-    if (
-      !temPermissao(
-        "USUARIOS",
-        "GERENCIAR_PERMISSOES"
-      )
-    ) {
-      throw new Error(
-        "Você não possui permissão para gerenciar permissões."
-      );
+    if (!temPermissao("USUARIOS", "GERENCIAR_PERMISSOES")) {
+      throw new Error("Você não possui permissão para gerenciar permissões.");
     }
 
-    await authAtualizarPermissoesFuncionario(
-      usuarioId,
-      permissoes
-    );
+    await authAtualizarPermissoesFuncionario(usuarioId, permissoes);
   }
 
-  function temPermissao(
-    modulo: string,
-    acao: string
-  ): boolean {
+  function temPermissao(modulo: string, acao: string): boolean {
     if (!usuario) {
       return false;
     }
@@ -424,9 +378,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     return permissoesUsuario.some(
-      (permissao) =>
-        permissao.modulo === modulo &&
-        permissao.acao === acao
+      (permissao) => permissao.modulo === modulo && permissao.acao === acao
     );
   }
 
@@ -467,9 +419,7 @@ export function useAuth(): AuthContextData {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error(
-      "useAuth deve ser usado dentro de um AuthProvider."
-    );
+    throw new Error("useAuth deve ser usado dentro de um AuthProvider.");
   }
 
   return context;

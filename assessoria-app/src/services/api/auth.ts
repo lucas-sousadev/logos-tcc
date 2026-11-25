@@ -15,6 +15,7 @@ export interface Usuario {
   nome: string;
   email: string;
   telefone: string | null;
+  foto_path: string | null;
   perfil: "ASSESSOR" | "FUNCIONARIO";
   email_verificado: boolean;
 }
@@ -911,11 +912,15 @@ export async function atualizarPermissoesFuncionario(
   }
 }
 
-export async function listarMinhasPermissoes(): Promise<Permissao[]> {
+export async function listarMinhasPermissoes(
+  signal?: AbortSignal
+): Promise<Permissao[]> {
   const response = await authenticatedFetch(
     `${API_URL}/api/auth/permissoes`,
     {
       method: "GET",
+      cache: "no-store",
+      signal,
     }
   );
 

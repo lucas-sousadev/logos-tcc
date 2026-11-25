@@ -113,16 +113,19 @@ async function lerResposta<T>(response: Response): Promise<T> {
 export async function listarReleases(
   params: {
     page?: number;
+    limit?: number;
+    ordem?: "recentes" | "antigos" | "titulo" | "criados_recentes";
     busca?: string;
     status?: StatusRelease | "";
-  } = {}
+  } = {},
+  signal?: AbortSignal
 ): Promise<{
   releases: ResumoRelease[];
   pagination: Paginacao;
 }> {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
-    limit: "20",
+    limit: String(params.limit ?? 20),
   });
 
   if (params.busca?.trim()) {
@@ -133,8 +136,13 @@ export async function listarReleases(
     query.set("status", params.status);
   }
 
+  if (params.ordem) {
+    query.set("ordem", params.ordem);
+  }
+
   const response = await authenticatedFetch(
-    API_URL + "/api/releases?" + query.toString()
+    API_URL + "/api/releases?" + query.toString(),
+    { signal }
   );
 
   return lerResposta(response);

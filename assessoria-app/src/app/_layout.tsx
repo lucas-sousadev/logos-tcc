@@ -9,16 +9,17 @@ import {
 } from "@expo-google-fonts/montserrat";
 import { useFonts } from "expo-font";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { NavegacaoProvider } from "@/contexts/NavegacaoContext";
 
 function RootNavigator() {
   const { autenticado, carregando } = useAuth();
   const [fontsLoaded] = useFonts({
-      Montserrat_400Regular,
-      Montserrat_500Medium,
-      Montserrat_600SemiBold,
-      Montserrat_700Bold,
-      Montserrat_800ExtraBold,
-    });
+    Montserrat_400Regular,
+    Montserrat_500Medium,
+    Montserrat_600SemiBold,
+    Montserrat_700Bold,
+    Montserrat_800ExtraBold,
+  });
 
   if (!fontsLoaded) {
     return null;
@@ -29,20 +30,24 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{
+    <Stack
+      screenOptions={{
         headerShown: false,
-      }}>
+      }}
+    >
       <Stack.Protected guard={autenticado}>
         <Stack.Screen name="(app)" />
         <Stack.Screen name="configuracoes" />
+        <Stack.Screen name="perfil" />
+        <Stack.Screen name="personalizar-barra" />
       </Stack.Protected>
 
       <Stack.Protected guard={!autenticado}>
-        <Stack.Screen name="entrar"/>
-        <Stack.Screen name="login-assessor"/>
-        <Stack.Screen name="login-funcionario"/>
+        <Stack.Screen name="entrar" />
+        <Stack.Screen name="login-assessor" />
+        <Stack.Screen name="login-funcionario" />
         <Stack.Screen name="cadastro" />
-        <Stack.Screen name="cadastro-funcionario"/>
+        <Stack.Screen name="cadastro-funcionario" />
       </Stack.Protected>
     </Stack>
   );
@@ -52,7 +57,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootNavigator/>
+        <NavegacaoProvider>
+          <RootNavigator />
+        </NavegacaoProvider>
       </AuthProvider>
     </ThemeProvider>
   );

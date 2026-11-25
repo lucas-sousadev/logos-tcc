@@ -200,6 +200,7 @@ class ReleaseService
         $ordem = $dados['ordem'] ?? 'recentes';
         $ordenacoes = [
             'recentes' => self::DATA_LISTAGEM . ' DESC, r.id DESC',
+            'criados_recentes' => 'r.created_at DESC, r.id DESC',
             'antigos' => self::DATA_LISTAGEM . ' ASC, r.id ASC',
             'titulo' => 'r.titulo ASC, r.id ASC',
         ];

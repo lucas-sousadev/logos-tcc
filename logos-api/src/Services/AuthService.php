@@ -172,6 +172,7 @@ class AuthService
                 'nome' => $dados['assessor_nome'],
                 'email' => $dados['assessor_email'],
                 'telefone' => $assessorTelefone !== '' ? $assessorTelefone : null,
+                'foto_path' => null,
                 'perfil' => 'ASSESSOR',
                 'email_verificado' => false
             ];
@@ -385,6 +386,7 @@ class AuthService
                 'nome' => $nome,
                 'email' => $email,
                 'telefone' => $telefone !== '' ? $telefone : null,
+                'foto_path' => null,
                 'perfil' => 'FUNCIONARIO',
                 'email_verificado' => false
             ];

@@ -8,8 +8,17 @@ import {
 } from "expo-router/react-navigation";
 
 export const MODULOS_APP = [
-  "index", "clipping", "mailing", "releases", "mais", "clientes",
-  "relatorios", "veiculos", "convites", "funcionarios", "templates",
+  "index",
+  "clipping",
+  "mailing",
+  "releases",
+  "mais",
+  "clientes",
+  "relatorios",
+  "veiculos",
+  "convites",
+  "funcionarios",
+  "templates",
 ] as const;
 
 export type ModuloApp = (typeof MODULOS_APP)[number];
@@ -59,22 +68,29 @@ export function criarEntradaModulo(
       ...rota,
       key: `${rota.name}-entrada-${Date.now()}-${++sequencia}`,
       params,
-      state: temPilha ? {
-        stale: true as const,
-        index: 0,
-        routes: [{ name: entrando ? tela : "index", params }],
-      } : undefined,
+      state: temPilha
+        ? {
+            stale: true as const,
+            index: 0,
+            routes: [{ name: entrando ? tela : "index", params }],
+          }
+        : undefined,
     };
   });
 
   const inicio = routes.find((rota) => rota.name === "index");
   const atual = routes[destino];
-  const origemExplicita = origem === "mais" && modulo !== "mais" && modulo !== "index"
-    ? routes.find((rota) => rota.name === "mais")
-    : undefined;
-  const chaves = [...new Set([inicio?.key, origemExplicita?.key, atual.key].filter(
-    (chave): chave is string => chave !== undefined
-  ))];
+  const origemExplicita =
+    origem === "mais" && modulo !== "mais" && modulo !== "index"
+      ? routes.find((rota) => rota.name === "mais")
+      : undefined;
+  const chaves = [
+    ...new Set(
+      [inicio?.key, origemExplicita?.key, atual.key].filter(
+        (chave): chave is string => chave !== undefined
+      )
+    ),
+  ];
   const history = chaves.map((key) => ({ type: "route" as const, key }));
 
   return { ...estado, index: destino, routes, history };
@@ -91,12 +107,20 @@ export function abrirModuloNaNavegacao(
   let atual: NavegacaoModulo | undefined = navigation;
   while (atual) {
     const estado = atual.getState();
-    if (estado?.type === "tab") {
+    if (
+      estado?.type === "tab" &&
+      estado.routes.some((rota) => rota.name === modulo)
+    ) {
       const proximo = criarEntradaModulo(
-        estado as TabNavigationState<ParamListBase>, modulo, origem, tela, parametros
+        estado as TabNavigationState<ParamListBase>,
+        modulo,
+        origem,
+        tela,
+        parametros
       );
       const acao: AcaoModulo = {
-        ...CommonActions.reset(proximo), target: estado.key,
+        ...CommonActions.reset(proximo),
+        target: estado.key,
         ...(pelaBarra ? { origemBarra: true } : {}),
       };
       atual.dispatch(acao);
@@ -107,6 +131,16 @@ export function abrirModuloNaNavegacao(
   return false;
 }
 
-export function abrirModuloPelaBarra(navigation: NavegacaoModulo, modulo: ModuloApp) {
-  return abrirModuloNaNavegacao(navigation, modulo, "inicio", "index", {}, true);
+export function abrirModuloPelaBarra(
+  navigation: NavegacaoModulo,
+  modulo: ModuloApp
+) {
+  return abrirModuloNaNavegacao(
+    navigation,
+    modulo,
+    "inicio",
+    "index",
+    {},
+    true
+  );
 }

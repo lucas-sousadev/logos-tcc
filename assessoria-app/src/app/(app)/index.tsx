@@ -6,20 +6,30 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 
 import Header from "@/components/layout/Header";
-import { useAbrirModulo, useAbrirTelaInicial } from "@/hooks/useNavegacaoModulos";
+import {
+  useAbrirModulo,
+  useAbrirTelaInicial,
+} from "@/hooks/useNavegacaoModulos";
 import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import ReleaseDashboardCard from "@/components/releases/ReleaseDashboardCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { listarClientes } from "@/services/api/cliente";
 import { listarClippings } from "@/services/api/clipping";
 import { listarJornalistas } from "@/services/api/jornalista";
-import { listarRelatorios, type ResumoRelatorio } from "@/services/api/relatorio";
+import {
+  listarRelatorios,
+  type ResumoRelatorio,
+} from "@/services/api/relatorio";
 import { listarVeiculos } from "@/services/api/veiculo";
+import { listarTemplates } from "@/services/api/template";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 type ChaveTotal =
@@ -28,7 +38,8 @@ type ChaveTotal =
   | "veiculos"
   | "clientes"
   | "contatos"
-  | "funcionarios";
+  | "funcionarios"
+  | "templates";
 type Totais = Record<ChaveTotal, number | null>;
 
 const TOTAIS_VAZIOS: Totais = {
@@ -38,6 +49,7 @@ const TOTAIS_VAZIOS: Totais = {
   clientes: null,
   contatos: null,
   funcionarios: null,
+  templates: null,
 };
 
 interface Modulo {
@@ -52,7 +64,8 @@ export default function Dashboard() {
   const abrirModulo = useAbrirModulo();
   const abrirTela = useAbrirTelaInicial();
   const { theme } = useTheme();
-  const { listarFuncionarios, temPermissao } = useAuth();
+  const { width, fontScale } = useWindowDimensions();
+  const { listarFuncionarios, temPermissao, usuario } = useAuth();
 
   const podeVerRelatorios = temPermissao("RELATORIOS", "VISUALIZAR");
   const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
@@ -61,6 +74,10 @@ export default function Dashboard() {
   const podeVerContatos = temPermissao("MAILING", "VISUALIZAR");
   const podeVerFuncionarios = temPermissao("USUARIOS", "VISUALIZAR");
   const podeVerConvites = temPermissao("CONVITES", "VISUALIZAR");
+  const podeVerReleases = temPermissao("RELEASES", "VISUALIZAR");
+  const podeVerTemplates = temPermissao("TEMPLATES", "VISUALIZAR");
+  const podeCriarTemplate = temPermissao("TEMPLATES", "CRIAR");
+  const podeCriarRelease = temPermissao("RELEASES", "CRIAR");
   const podeCriarRelatorio = temPermissao("RELATORIOS", "CRIAR");
   const podeCriarClipping = temPermissao("CLIPPING", "CRIAR");
   const podeCriarContato = temPermissao("MAILING", "CRIAR");
@@ -82,10 +99,10 @@ export default function Dashboard() {
       async function carregar() {
         setCarregando(true);
 
-        const consultas: Array<{
+        const consultas: {
           chave: ChaveTotal;
           buscar: () => Promise<number>;
-        }> = [];
+        }[] = [];
 
         if (podeVerRelatorios) {
           consultas.push({
@@ -112,8 +129,8 @@ export default function Dashboard() {
           consultas.push({
             chave: "clientes",
             buscar: async () =>
-              (await listarClientes({ page: 1, limit: 1, ativo: 1 }))
-                .pagination.total,
+              (await listarClientes({ page: 1, limit: 1, ativo: 1 })).pagination
+                .total,
           });
         }
         if (podeVerContatos) {
@@ -130,6 +147,15 @@ export default function Dashboard() {
             buscar: async () =>
               (await listarFuncionarios({ page: 1, limit: 1 })).pagination
                 .total,
+          });
+        }
+
+        if (podeVerTemplates) {
+          consultas.push({
+            chave: "templates",
+            buscar: async () =>
+              (await listarTemplates({ page: 1, busca: "", origem: "TODOS" }))
+                .pagination.total,
           });
         }
 
@@ -182,6 +208,7 @@ export default function Dashboard() {
       podeVerClientes,
       podeVerContatos,
       podeVerFuncionarios,
+      podeVerTemplates,
       recarga,
     ])
   );
@@ -242,12 +269,85 @@ export default function Dashboard() {
     });
   }
 
-  const temAtalhos =
-    podeCriarRelatorio ||
-    podeCriarClipping ||
-    podeCriarContato ||
-    podeImportarClipping ||
-    podeVerConvites;
+  if (podeVerTemplates || podeCriarTemplate) {
+    modulos.push({
+      chave: "templates",
+      titulo: "Templates",
+      detalhe: "modelos de conteúdo",
+      icone: "albums-outline",
+      abrir: () => abrirModulo("templates"),
+    });
+  }
+
+  const atalhos: AtalhoDashboard[] = [];
+  if (podeCriarRelease) {
+    atalhos.push({
+      chave: "novo-release",
+      titulo: "Novo release",
+      descricao: "Prepare o conteúdo e os destinatários",
+      icone: "add-outline",
+      abrir: () => abrirTela("/releases/novo"),
+    });
+  }
+  if (podeCriarRelatorio) {
+    atalhos.push({
+      chave: "novo-relatorio",
+      titulo: "Novo relatório",
+      descricao: "Escolha o cliente e o período",
+      icone: "bar-chart-outline",
+      abrir: () => abrirTela("/relatorios/novo"),
+    });
+  }
+  if (podeCriarClipping) {
+    atalhos.push({
+      chave: "novo-clipping",
+      titulo: "Novo clipping",
+      descricao: "Cadastre uma matéria",
+      icone: "newspaper-outline",
+      abrir: () =>
+        abrirTela({
+          pathname: "/clipping/novo",
+          params: { ano: String(new Date().getFullYear()) },
+        }),
+    });
+  }
+  if (podeCriarContato) {
+    atalhos.push({
+      chave: "novo-contato",
+      titulo: "Novo contato",
+      descricao: "Adicione um jornalista ao mailing",
+      icone: "person-add-outline",
+      abrir: () => abrirTela("/mailing/novo"),
+    });
+  }
+  if (podeImportarClipping) {
+    atalhos.push({
+      chave: "importar-clippings",
+      titulo: "Importar clippings",
+      descricao: "Adicione matérias em lote",
+      icone: "download-outline",
+      abrir: () =>
+        abrirTela({
+          pathname: "/clipping/importar",
+          params: { ano: String(new Date().getFullYear()) },
+        }),
+    });
+  }
+  if (podeVerConvites) {
+    atalhos.push({
+      chave: "convites",
+      titulo: "Convites",
+      descricao: "Gerencie os acessos da equipe",
+      icone: "mail-outline",
+      abrir: () => abrirModulo("convites"),
+    });
+  }
+
+  const colunas = fontScale > 1.3 || width < 320 ? 1 : width >= 1000 ? 3 : 2;
+  const linhas = Array.from(
+    { length: Math.ceil(modulos.length / colunas) },
+    (_, indice) => modulos.slice(indice * colunas, (indice + 1) * colunas)
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -258,480 +358,588 @@ export default function Dashboard() {
         refreshControl={
           <RefreshControl
             refreshing={carregando && recarga > 0}
-            onRefresh={() => setRecarga((atual) => atual + 1)}
+            onRefresh={() => {
+              if (!carregando) setRecarga((atual) => atual + 1);
+            }}
             tintColor={theme.textoTerciaria}
+            colors={[theme.textoTerciaria]}
           />
         }
       >
-        {modulos.length > 0 ? (
-          <View style={styles.secao}>
-            <Text weight="Bold" style={styles.tituloSecao}>
-              Visão geral
-            </Text>
-            <View style={styles.grade}>
-              {modulos.map((modulo) => (
-                <TouchableOpacity
-                  key={modulo.chave}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    modulo.titulo +
-                    ": " +
-                    (totais[modulo.chave] ?? "contagem indisponível") +
-                    ". Abrir módulo"
-                  }
-                  onPress={modulo.abrir}
-                  activeOpacity={0.75}
-                  style={[
-                    styles.cartao,
-                    {
-                      backgroundColor: theme.backgroundSecundario,
-                      borderColor: theme.borda + "90",
-                    },
-                  ]}
-                >
-                  <View style={styles.cartaoTopo}>
-                    <Ionicons
-                      name={modulo.icone}
-                      size={19}
-                      color={theme.textoTerciaria}
-                    />
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color={theme.textoSub}
-                    />
-                  </View>
-                  <Text
-                    weight="Bold"
-                    style={[
-                      styles.cartaoNumero,
-                      { color: theme.textoTerciaria },
-                    ]}
-                  >
-                    {totais[modulo.chave] ?? (carregando ? "…" : "—")}
-                  </Text>
-                  <Text weight="SemiBold" style={styles.cartaoTitulo}>
-                    {modulo.titulo}
-                  </Text>
-                  <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
-                    {modulo.detalhe}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : null}
+        <View style={styles.corpo}>
+          {podeVerReleases ? (
+            <ReleaseDashboardCard
+              key={
+                usuario ? usuario.assessoria_id + "-" + usuario.id : "sem-conta"
+              }
+              recarga={recarga}
+              onVerTodos={() => abrirModulo("releases")}
+              onAbrirRelease={(id) =>
+                abrirTela({
+                  pathname: "/releases/[id]",
+                  params: { id: String(id), origem: "dashboard" },
+                })
+              }
+              onCriar={
+                podeCriarRelease ? () => abrirTela("/releases/novo") : undefined
+              }
+            />
+          ) : null}
 
-        {podeVerRelatorios ? (
-          <View style={styles.secao}>
-            <View style={styles.secaoTopo}>
-              <Text weight="Bold" style={styles.tituloSecao}>
+          {modulos.length > 0 ? (
+            <View style={styles.secao}>
+              <View style={styles.secaoTopo}>
+                <Text weight="SemiBold" style={styles.tituloSecao}>
+                  Visão geral
+                </Text>
+                {carregando ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.textoTerciaria}
+                    accessibilityLabel="Atualizando o painel"
+                  />
+                ) : null}
+              </View>
+              <View style={styles.grade}>
+                {linhas.map((linha) => (
+                  <View key={linha[0].chave} style={styles.linhaGrade}>
+                    {linha.map((modulo) => (
+                      <TouchableOpacity
+                        key={modulo.chave}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          modulo.titulo +
+                          ": " +
+                          (totais[modulo.chave] ??
+                            (carregando
+                              ? "carregando"
+                              : "contagem indisponível")) +
+                          ". Abrir módulo"
+                        }
+                        onPress={modulo.abrir}
+                        activeOpacity={0.75}
+                        style={[
+                          styles.cartao,
+                          {
+                            backgroundColor: theme.backgroundSecundario,
+                            borderColor: theme.borda + "40",
+                          },
+                        ]}
+                      >
+                        <View style={styles.cartaoTopo}>
+                          <View
+                            style={[
+                              styles.cartaoIcone,
+                              { backgroundColor: theme.primaria + "0E" },
+                            ]}
+                          >
+                            <Ionicons
+                              name={modulo.icone}
+                              size={18}
+                              color={theme.textoTerciaria}
+                            />
+                          </View>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={15}
+                            color={theme.textoSub}
+                          />
+                        </View>
+                        <Text
+                          weight="Bold"
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.75}
+                          style={styles.cartaoNumero}
+                        >
+                          {totais[modulo.chave]?.toLocaleString("pt-BR") ??
+                            (carregando ? "…" : "—")}
+                        </Text>
+                        <Text weight="SemiBold" style={styles.cartaoTitulo}>
+                          {modulo.titulo}
+                        </Text>
+                        <Text
+                          style={[styles.textoMenor, { color: theme.textoSub }]}
+                        >
+                          {modulo.detalhe}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {Array.from(
+                      { length: colunas - linha.length },
+                      (_, indice) => (
+                        <View
+                          key={"espaco-" + indice}
+                          style={styles.espacoGrade}
+                        />
+                      )
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {podeVerRelatorios ? (
+            <View style={styles.secao}>
+              <Text weight="SemiBold" style={styles.tituloSecao}>
                 Para revisar
               </Text>
-              {carregando && revisoes ? (
-                <ActivityIndicator size="small" color={theme.textoSub} />
-              ) : null}
-            </View>
-            <View
-              style={[
-                styles.revisoesCard,
-                {
-                  backgroundColor: theme.backgroundSecundario,
-                  borderColor:
-                    revisoes && revisoes.total > 0 ? theme.aviso : theme.borda,
-                },
-              ]}
-            >
-              {carregando && !revisoes ? (
-                <ActivityIndicator color={theme.textoTerciaria} />
-              ) : revisoes === null ? (
-                <Text style={{ color: theme.textoSub }}>
-                  Não foi possível carregar as revisões.
-                </Text>
-              ) : revisoes.total === 0 ? (
-                <View style={styles.revisoesVazio}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={24}
-                    color={theme.alteracao}
+              <View
+                style={[
+                  styles.revisoesCard,
+                  {
+                    backgroundColor: theme.backgroundSecundario,
+                    borderColor:
+                      revisoes && revisoes.total > 0
+                        ? theme.aviso + "50"
+                        : theme.borda + "40",
+                  },
+                ]}
+              >
+                {carregando && !revisoes ? (
+                  <ActivityIndicator
+                    color={theme.textoTerciaria}
+                    style={styles.carregamento}
+                    accessibilityLabel="Carregando revisões"
                   />
-                  <View style={styles.revisoesVazioTexto}>
-                    <Text weight="SemiBold">
-                      {totais.relatorios === 0
-                        ? "Nenhum relatório cadastrado"
-                        : "Nenhuma revisão pendente"}
-                    </Text>
-                    <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
-                      {totais.relatorios === 0
-                        ? "Crie um relatório para acompanhar as matérias."
-                        : "Os relatórios estão em dia."}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <>
+                ) : revisoes === null ? (
+                  <Text style={[styles.descricao, { color: theme.textoSub }]}>
+                    Não foi possível carregar as revisões. Tente atualizar o
+                    painel.
+                  </Text>
+                ) : revisoes.total === 0 ? (
                   <View style={styles.resumoRevisoes}>
                     <View
                       style={[
-                        styles.iconeAlerta,
-                        { backgroundColor: theme.aviso + "18" },
+                        styles.iconeRevisoes,
+                        { backgroundColor: theme.alteracao + "12" },
                       ]}
                     >
                       <Ionicons
-                        name="alert-circle-outline"
+                        name="checkmark-circle-outline"
                         size={22}
-                        color={theme.aviso}
+                        color={theme.alteracao}
                       />
                     </View>
-                    <View style={styles.resumoRevisoesTexto}>
-                      <Text weight="Bold" style={styles.numeroRevisoes}>
-                        {revisoes.total}
+                    <View style={styles.textos}>
+                      <Text weight="SemiBold" style={styles.nomeAtalho}>
+                        {totais.relatorios === 0
+                          ? "Nenhum relatório cadastrado"
+                          : "Nenhuma revisão pendente"}
                       </Text>
-                      <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
-                        {revisoes.total === 1
-                          ? "relatório com slides para revisar"
-                          : "relatórios com slides para revisar"}
+                      <Text
+                        style={[styles.textoMenor, { color: theme.textoSub }]}
+                      >
+                        {totais.relatorios === 0
+                          ? "Crie um relatório para acompanhar as matérias."
+                          : "Os relatórios estão em dia."}
                       </Text>
                     </View>
                   </View>
-                  {revisoes.relatorios.map((relatorio) => (
-                    <TouchableOpacity
-                      key={relatorio.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        "Abrir " +
-                        relatorio.titulo +
-                        ", " +
-                        relatorio.total_pendentes +
-                        " slides para revisar"
-                      }
-                      activeOpacity={0.75}
-                      onPress={() =>
-                        abrirTela({
-                          pathname: "/relatorios/[id]",
-                          params: {
-                            id: String(relatorio.id),
-                            origem: "dashboard",
-                          },
-                        })
-                      }
-                      style={[
-                        styles.relatorioPendente,
-                        { borderTopColor: theme.borda + "55" },
-                      ]}
-                    >
-                      <View style={styles.relatorioPendenteTexto}>
-                        <Text weight="SemiBold" numberOfLines={1}>
-                          {relatorio.titulo}
+                ) : (
+                  <>
+                    <View style={styles.resumoRevisoes}>
+                      <View
+                        style={[
+                          styles.iconeRevisoes,
+                          { backgroundColor: theme.aviso + "12" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="alert-circle-outline"
+                          size={22}
+                          color={theme.aviso}
+                        />
+                      </View>
+                      <View style={styles.textos}>
+                        <Text weight="Bold" style={styles.nomeAtalho}>
+                          {revisoes.total}{" "}
+                          {revisoes.total === 1
+                            ? "relatório para revisar"
+                            : "relatórios para revisar"}
                         </Text>
                         <Text
-                          numberOfLines={1}
                           style={[styles.textoMenor, { color: theme.textoSub }]}
                         >
-                          {relatorio.cliente_nome} · {relatorio.total_pendentes}{" "}
-                          {relatorio.total_pendentes === 1 ? "slide" : "slides"}
+                          Confira os slides com pendências.
                         </Text>
                       </View>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color={theme.textoTerciaria}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
-              {revisoes !== null ? (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  activeOpacity={0.75}
-                  onPress={() =>
-                    abrirTela({
-                      pathname: "/relatorios",
-                      params: revisoes.total > 0 ? { pendencias: "com" } : {},
-                    })
-                  }
-                  style={[
-                    styles.verRelatorios,
-                    { borderTopColor: theme.borda + "55" },
-                  ]}
-                >
-                  <Text weight="Bold" style={{ color: theme.textoTerciaria }}>
-                    {revisoes.total > 0
-                      ? "VER RELATÓRIOS A REVISAR"
-                      : "VER RELATÓRIOS"}
-                  </Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={16}
-                    color={theme.textoTerciaria}
-                  />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
+                    </View>
+                    {revisoes.relatorios.map((relatorio) => (
+                      <TouchableOpacity
+                        key={relatorio.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          "Abrir " +
+                          relatorio.titulo +
+                          ", " +
+                          relatorio.total_pendentes +
+                          " slides para revisar"
+                        }
+                        activeOpacity={0.75}
+                        onPress={() =>
+                          abrirTela({
+                            pathname: "/relatorios/[id]",
+                            params: {
+                              id: String(relatorio.id),
+                              origem: "dashboard",
+                            },
+                          })
+                        }
+                        style={[
+                          styles.relatorioPendente,
+                          { borderTopColor: theme.borda + "25" },
+                        ]}
+                      >
+                        <View style={styles.textos}>
+                          <Text
+                            weight="SemiBold"
+                            numberOfLines={2}
+                            style={styles.nomeAtalho}
+                          >
+                            {relatorio.titulo}
+                          </Text>
+                          <Text
+                            numberOfLines={2}
+                            style={[
+                              styles.textoMenor,
+                              { color: theme.textoSub },
+                            ]}
+                          >
+                            {relatorio.cliente_nome} ·{" "}
+                            {relatorio.total_pendentes}{" "}
+                            {relatorio.total_pendentes === 1
+                              ? "slide"
+                              : "slides"}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={17}
+                          color={theme.textoTerciaria}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
 
-        {temAtalhos ? (
-          <View style={styles.secao}>
-            <Text weight="Bold" style={styles.tituloSecao}>
-              Acesso rápido
-            </Text>
+                {revisoes !== null ? (
+                  <View
+                    style={[
+                      styles.rodapeRevisoes,
+                      { borderTopColor: theme.borda + "25" },
+                    ]}
+                  >
+                    <Button
+                      title={
+                        revisoes.total > 0
+                          ? "VER RELATÓRIOS A REVISAR"
+                          : "VER RELATÓRIOS"
+                      }
+                      variant="outline"
+                      size="small"
+                      icon="arrow-forward-outline"
+                      onPress={() =>
+                        abrirTela({
+                          pathname: "/relatorios",
+                          params:
+                            revisoes.total > 0 ? { pendencias: "com" } : {},
+                        })
+                      }
+                    />
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {atalhos.length > 0 ? (
+            <View style={styles.secao}>
+              <Text weight="SemiBold" style={styles.tituloSecao}>
+                Acesso rápido
+              </Text>
+              <View
+                style={[
+                  styles.superficie,
+                  {
+                    backgroundColor: theme.backgroundSecundario,
+                    borderColor: theme.borda + "40",
+                  },
+                ]}
+              >
+                {atalhos.map((item, indice) => (
+                  <Atalho
+                    key={item.chave}
+                    item={item}
+                    primeiro={indice === 0}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {modulos.length === 0 && !podeVerReleases && atalhos.length === 0 ? (
             <View
               style={[
-                styles.atalhos,
+                styles.vazio,
                 {
                   backgroundColor: theme.backgroundSecundario,
-                  borderColor: theme.borda + "90",
+                  borderColor: theme.borda + "40",
                 },
               ]}
             >
-              {podeCriarRelatorio ? (
-                <Atalho
-                  titulo="Novo relatório"
-                  descricao="Escolha o cliente e o período"
-                  icone="add-circle-outline"
-                  onPress={() => abrirTela("/relatorios/novo")}
-                />
-              ) : null}
-              {podeCriarClipping ? (
-                <Atalho
-                  titulo="Novo clipping"
-                  descricao="Cadastre uma matéria"
-                  icone="newspaper-outline"
-                  onPress={() =>
-                    abrirTela({
-                      pathname: "/clipping/novo",
-                      params: { ano: String(new Date().getFullYear()) },
-                    })
-                  }
-                />
-              ) : null}
-              {podeCriarContato ? (
-                <Atalho
-                  titulo="Novo contato"
-                  descricao="Cadastre um jornalista no mailing"
-                  icone="person-add-outline"
-                  onPress={() => abrirTela("/mailing/novo")}
-                />
-              ) : null}
-              {podeImportarClipping ? (
-                <Atalho
-                  titulo="Importar clippings"
-                  descricao="Adicione matérias em lote"
-                  icone="download-outline"
-                  onPress={() =>
-                    abrirTela({
-                      pathname: "/clipping/importar",
-                      params: { ano: String(new Date().getFullYear()) },
-                    })
-                  }
-                />
-              ) : null}
-              {podeVerConvites ? (
-                <Atalho
-                  titulo="Convites"
-                  descricao="Gerenciar e convidar colaboradores"
-                  icone="mail-outline"
-                  onPress={() => abrirModulo("convites")}
-                />
-              ) : null}
+              <Ionicons
+                name="lock-closed-outline"
+                size={26}
+                color={theme.textoSub}
+              />
+              <Text weight="SemiBold" style={styles.nomeAtalho}>
+                Nenhum acesso disponível
+              </Text>
+              <Text style={[styles.descricao, { color: theme.textoSub }]}>
+                Consulte o responsável pela assessoria para liberar seus
+                acessos.
+              </Text>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        {falha && !carregando ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            onPress={() => setRecarga((atual) => atual + 1)}
-            style={styles.avisoErro}
-          >
-            <Ionicons name="refresh-outline" size={17} color={theme.aviso} />
-            <Text style={[styles.textoMenor, { color: theme.aviso }]}>
-              Alguns dados não carregaram. Toque para tentar novamente.
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+          {falha && !carregando ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Atualizar os dados do painel"
+              activeOpacity={0.75}
+              onPress={() => setRecarga((atual) => atual + 1)}
+              style={[
+                styles.avisoErro,
+                {
+                  backgroundColor: theme.aviso + "08",
+                  borderColor: theme.aviso + "35",
+                },
+              ]}
+            >
+              <Ionicons name="refresh-outline" size={20} color={theme.aviso} />
+              <View style={styles.textos}>
+                <Text
+                  weight="SemiBold"
+                  style={[styles.nomeAtalho, { color: theme.aviso }]}
+                >
+                  Alguns dados não carregaram
+                </Text>
+                <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
+                  Toque para tentar novamente.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function Atalho({
-  titulo,
-  descricao,
-  icone,
-  onPress,
-}: {
+interface AtalhoDashboard {
+  chave: string;
   titulo: string;
   descricao: string;
   icone: IconName;
-  onPress: () => void;
+  abrir: () => void;
+}
+
+function Atalho({
+  item,
+  primeiro,
+}: {
+  item: AtalhoDashboard;
+  primeiro: boolean;
 }) {
   const { theme } = useTheme();
+
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={titulo}
+      accessibilityLabel={item.titulo + ". " + item.descricao}
       activeOpacity={0.75}
-      onPress={onPress}
-      style={[styles.atalho, { borderBottomColor: theme.borda + "45" }]}
+      onPress={item.abrir}
+      style={[
+        styles.atalho,
+        {
+          borderTopWidth: primeiro ? 0 : 1,
+          borderTopColor: theme.borda + "25",
+        },
+      ]}
     >
-      <View style={[styles.atalhoIcone, { backgroundColor: theme.borda + "20" }]}>
-        <Ionicons name={icone} size={21} color={theme.textoTerciaria} />
+      <View
+        style={[styles.atalhoIcone, { backgroundColor: theme.primaria + "0E" }]}
+      >
+        <Ionicons name={item.icone} size={20} color={theme.textoTerciaria} />
       </View>
-      <View style={styles.atalhoTexto}>
-        <Text weight="SemiBold">{titulo}</Text>
+      <View style={styles.textos}>
+        <Text weight="SemiBold" style={styles.nomeAtalho}>
+          {item.titulo}
+        </Text>
         <Text style={[styles.textoMenor, { color: theme.textoSub }]}>
-          {descricao}
+          {item.descricao}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.textoSub} />
+      <Ionicons name="chevron-forward" size={17} color={theme.textoSub} />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1 
+  container: {
+    flex: 1,
   },
   conteudo: {
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 30,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  corpo: {
+    width: "100%",
+    maxWidth: 1040,
+    alignSelf: "center",
     gap: 20,
   },
-  tituloPagina: { 
-    fontSize: 20, 
-    lineHeight: 26 
-  },
-  subtitulo: { 
-    fontSize: 12, 
-    lineHeight: 18 
-  },
-  secao: { 
-    gap: 8 
+  secao: {
+    gap: 10,
   },
   secaoTopo: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
-  tituloSecao: { 
-    fontSize: 16, 
-    lineHeight: 22 
+  tituloSecao: {
+    fontSize: 14,
+    lineHeight: 20,
   },
-  textoMenor: { 
-    fontSize: 11, 
-    lineHeight: 16 
+  textoMenor: {
+    fontSize: 11,
+    lineHeight: 16,
   },
-  revisoesCard: {
-    borderWidth: 1.5,
+  descricao: {
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  superficie: {
+    borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 14,
-    paddingTop: 14,
-    minHeight: 90,
+    overflow: "hidden",
   },
-  revisoesVazio: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingBottom: 14,
-  },
-  revisoesVazioTexto: {
-    flex: 1, gap: 2 },
-  resumoRevisoes: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    paddingBottom: 13,
-  },
-  iconeAlerta: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  resumoRevisoesTexto: {
-    flex: 1 
-  },
-  numeroRevisoes: { 
-    fontSize: 25, 
-    lineHeight: 29 
-  },
-  relatorioPendente: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: 1,
-    gap: 8,
-  },
-  relatorioPendenteTexto: { 
-    flex: 1, 
-    gap: 3 
-  },
-  verRelatorios: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
+  espacoGrade: {
+    flex: 1,
   },
   grade: {
+    gap: 10,
+  },
+  linhaGrade: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    alignItems: "stretch",
+    gap: 10,
   },
   cartao: {
-    width: "48%",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    gap: 2,
   },
   cartaoTopo: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 7,
   },
-  cartaoNumero: { 
-    fontSize: 26, 
-    lineHeight: 30, 
-    marginTop: 3 
-  },
-  cartaoTitulo: { 
-    fontSize: 13, 
-    lineHeight: 17 
-  },
-  atalhos: {
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingHorizontal: 13,
-    overflow: "hidden",
-  },
-  atalho: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 64,
-    gap: 11,
-    borderBottomWidth: 1,
-  },
-  atalhoIcone: {
-    width: 38,
-    height: 38,
+  cartaoIcone: {
+    width: 32,
+    height: 32,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  atalhoTexto: { 
-    flex: 1, 
-    gap: 2 
+  cartaoNumero: {
+    fontSize: 26,
+    lineHeight: 32,
+  },
+  cartaoTitulo: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  revisoesCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+  },
+  carregamento: {
+    paddingVertical: 12,
+  },
+  resumoRevisoes: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 12,
+  },
+  iconeRevisoes: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textos: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  nomeAtalho: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  relatorioPendente: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderTopWidth: 1,
+    paddingVertical: 12,
+  },
+  rodapeRevisoes: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+  },
+  atalho: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 66,
+    gap: 10,
+    paddingVertical: 12,
+  },
+  atalhoIcone: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avisoErro: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
+  vazio: {
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 20,
+    gap: 10,
   },
 });

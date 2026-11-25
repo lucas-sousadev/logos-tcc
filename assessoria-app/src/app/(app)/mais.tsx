@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,7 @@ import Header from "@/components/layout/Header";
 import { useAbrirModulo } from "@/hooks/useNavegacaoModulos";
 import type { ModuloApp } from "@/utils/navegacaoModulos";
 import Text from "@/components/ui/Text";
-import { useAuth } from "@/contexts/AuthContext";
+import { useNavegacao } from "@/contexts/NavegacaoContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface ItemMenu {
@@ -20,7 +21,6 @@ interface ItemMenu {
   descricao: string;
   icone: ComponentProps<typeof Ionicons>["name"];
   rota: ModuloApp;
-  visivel: boolean;
 }
 
 interface GrupoMenu {
@@ -31,85 +31,32 @@ interface GrupoMenu {
 export default function Mais() {
   const abrirModulo = useAbrirModulo();
   const { theme } = useTheme();
-  const { temPermissao } = useAuth();
+  const { atalhos, disponiveis, pronto } = useNavegacao();
   const { width } = useWindowDimensions();
 
   const grupos: GrupoMenu[] = [
-    {
-      titulo: "Templates e relatórios",
-      itens: [
-        {
-          titulo: "Templates",
-          descricao: "Modelos para seus releases",
-          icone: "albums-outline",
-          rota: "templates",
-          visivel:
-            temPermissao("TEMPLATES", "VISUALIZAR") ||
-            temPermissao("TEMPLATES", "CRIAR"),
-        },
-        {
-          titulo: "Relatórios",
-          descricao: "Slides e acompanhamento",
-          icone: "bar-chart-outline",
-          rota: "relatorios",
-          visivel: temPermissao("RELATORIOS", "VISUALIZAR"),
-        },
-      ],
-    },
-    {
-      titulo: "Cadastros",
-      itens: [
-        {
-          titulo: "Clientes",
-          descricao: "Clientes da assessoria",
-          icone: "business-outline",
-          rota: "clientes",
-          visivel: temPermissao("CLIENTES", "VISUALIZAR"),
-        },
-        {
-          titulo: "Veículos",
-          descricao: "Veículos de comunicação",
-          icone: "radio-outline",
-          rota: "veiculos",
-          visivel: temPermissao("VEICULOS", "VISUALIZAR"),
-        },
-      ],
-    },
-    {
-      titulo: "Equipe",
-      itens: [
-        {
-          titulo: "Funcionários",
-          descricao: "Pessoas e permissões",
-          icone: "people-outline",
-          rota: "funcionarios",
-          visivel: temPermissao("USUARIOS", "VISUALIZAR"),
-        },
-        {
-          titulo: "Convites",
-          descricao: "Acessos para novos funcionários",
-          icone: "mail-outline",
-          rota: "convites",
-          visivel: temPermissao("CONVITES", "VISUALIZAR"),
-        },
-      ],
-    },
-  ];
-
-  const gruposVisiveis = grupos
-    .map((grupo) => ({
-      ...grupo,
-      itens: grupo.itens.filter((item) => item.visivel),
-    }))
-    .filter((grupo) => grupo.itens.length > 0);
+    "Conteúdo e comunicação",
+    "Cadastros",
+    "Equipe",
+  ].map((titulo) => ({
+    titulo,
+    itens: disponiveis
+      .filter(
+        (modulo) => modulo.grupo === titulo && !atalhos.includes(modulo.id)
+      )
+      .map((modulo) => ({
+        titulo: modulo.titulo,
+        descricao: modulo.descricao,
+        icone: modulo.icone,
+        rota: modulo.id,
+      })),
+  }));
+  const gruposVisiveis = pronto
+    ? grupos.filter((grupo) => grupo.itens.length > 0)
+    : [];
 
   return (
-    <View
-      style={[
-        styles.tela,
-        { backgroundColor: theme.background },
-      ]}
-    >
+    <View style={[styles.tela, { backgroundColor: theme.background }]}>
       <Header title="Mais" showBackButton />
 
       <ScrollView
@@ -120,10 +67,7 @@ export default function Mais() {
           <View style={styles.introducao}>
             <Text
               weight="SemiBold"
-              style={[
-                styles.sobretitulo,
-                { color: theme.textoTerciaria },
-              ]}
+              style={[styles.sobretitulo, { color: theme.textoTerciaria }]}
             >
               ESPAÇO DE TRABALHO
             </Text>
@@ -132,16 +76,17 @@ export default function Mais() {
               Gestão da assessoria
             </Text>
 
-            <Text
-              style={[
-                styles.descricao,
-                { color: theme.textoSub },
-              ]}
-            >
-              Acesse seus templates, relatórios, equipe e outros dados da assessoria.
+            <Text style={[styles.descricao, { color: theme.textoSub }]}>
+              Os módulos que não estão nos seus atalhos ficam aqui.
             </Text>
           </View>
 
+          {!pronto ? (
+            <ActivityIndicator
+              color={theme.primaria}
+              accessibilityLabel="Carregando módulos"
+            />
+          ) : null}
           <View style={styles.grade}>
             {gruposVisiveis.map((grupo) => (
               <View
@@ -153,10 +98,7 @@ export default function Mais() {
                   },
                 ]}
               >
-                <Text
-                  weight="SemiBold"
-                  style={styles.tituloGrupo}
-                >
+                <Text weight="SemiBold" style={styles.tituloGrupo}>
                   {grupo.titulo}
                 </Text>
 
@@ -164,8 +106,7 @@ export default function Mais() {
                   style={[
                     styles.superficie,
                     {
-                      backgroundColor:
-                        theme.backgroundSecundario,
+                      backgroundColor: theme.backgroundSecundario,
                       borderColor: theme.borda + "40",
                     },
                   ]}
@@ -174,9 +115,7 @@ export default function Mais() {
                     <Pressable
                       key={item.titulo}
                       accessibilityRole="button"
-                      accessibilityLabel={
-                        item.titulo + ". " + item.descricao
-                      }
+                      accessibilityLabel={item.titulo + ". " + item.descricao}
                       onPress={() => abrirModulo(item.rota, "mais")}
                       style={({ pressed }) => [
                         styles.item,
@@ -193,8 +132,7 @@ export default function Mais() {
                         style={[
                           styles.icone,
                           {
-                            backgroundColor:
-                              theme.primaria + "12",
+                            backgroundColor: theme.primaria + "12",
                           },
                         ]}
                       >
@@ -206,18 +144,12 @@ export default function Mais() {
                       </View>
 
                       <View style={styles.textos}>
-                        <Text
-                          weight="SemiBold"
-                          style={styles.nomeItem}
-                        >
+                        <Text weight="SemiBold" style={styles.nomeItem}>
                           {item.titulo}
                         </Text>
 
                         <Text
-                          style={[
-                            styles.detalhe,
-                            { color: theme.textoSub },
-                          ]}
+                          style={[styles.detalhe, { color: theme.textoSub }]}
                         >
                           {item.descricao}
                         </Text>
@@ -235,7 +167,7 @@ export default function Mais() {
             ))}
           </View>
 
-          {gruposVisiveis.length === 0 ? (
+          {pronto && gruposVisiveis.length === 0 ? (
             <View
               style={[
                 styles.vazio,
@@ -251,9 +183,7 @@ export default function Mais() {
                 color={theme.textoSub}
               />
 
-              <Text weight="SemiBold">
-                Nenhum módulo disponível
-              </Text>
+              <Text weight="SemiBold">Nenhum outro módulo disponível</Text>
 
               <Text
                 style={[
@@ -264,8 +194,7 @@ export default function Mais() {
                   },
                 ]}
               >
-                Os acessos aparecem conforme as permissões
-                da sua conta.
+                Os acessos aparecem conforme as permissões da sua conta.
               </Text>
             </View>
           ) : null}

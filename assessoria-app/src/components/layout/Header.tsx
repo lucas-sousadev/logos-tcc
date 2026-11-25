@@ -1,22 +1,21 @@
+import { useCallback } from "react";
 import {
+  BackHandler,
+  Platform,
+  StatusBar,
   StyleSheet,
   TouchableOpacity,
   View,
-  StatusBar,
-  BackHandler,
-  Platform,
 } from "react-native";
-
-import { useRouter, type Href } from "expo-router";
-import { useCallback } from "react";
-import { useFocusEffect } from "expo-router";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import { useFocusEffect, usePathname, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import Text from "@/components/ui/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import Text from "@/components/ui/Text";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import { useAbrirTelaConta } from "@/hooks/useNavegacaoConta";
 
 interface HeaderProps {
   title?: string;
@@ -33,22 +32,21 @@ export default function Header({
   onBackPress,
   backFallback,
 }: HeaderProps) {
-  const router = useRouter();
+  const abrirTelaConta = useAbrirTelaConta();
+  const pathname = usePathname();
   const retornar = useRetornoSeguro(backFallback);
   const insets = useSafeAreaInsets();
-  
   const { usuario } = useAuth();
   const { theme, mode } = useTheme();
 
-  const nome = usuario?.nome || "Usuário";
-
-  const iniciais = nome
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((parte) => parte[0])
+  const nome = usuario?.nome?.trim() || "Usuário";
+  const partes = nome.split(/\s+/);
+  const iniciais = partes
+    .filter((_, indice) => indice === 0 || indice === partes.length - 1)
+    .map((parte) => Array.from(parte)[0])
     .join("")
-    .toUpperCase();
+    .toLocaleUpperCase("pt-BR");
+  const noPerfil = pathname === "/perfil";
 
   const handleBack = useCallback(() => {
     if (onBackPress) {
@@ -59,194 +57,177 @@ export default function Header({
     retornar();
   }, [onBackPress, retornar]);
 
-  useFocusEffect(useCallback(() => {
-    if (!showBackButton || Platform.OS !== "android") return;
-    const evento = BackHandler.addEventListener("hardwareBackPress", () => {
-      handleBack();
-      return true;
-    });
-    return () => evento.remove();
-  }, [showBackButton, handleBack]));
+  useFocusEffect(
+    useCallback(() => {
+      if (!showBackButton || Platform.OS !== "android") return;
 
-  function handleSettings() {
-    router.push("/configuracoes");
-  }
+      const evento = BackHandler.addEventListener("hardwareBackPress", () => {
+        handleBack();
+        return true;
+      });
+
+      return () => evento.remove();
+    }, [showBackButton, handleBack])
+  );
 
   return (
     <>
-    <StatusBar
-      barStyle={
-        mode === "dark"
-          ? "light-content"
-          : "dark-content"
-      }
-      backgroundColor={theme.background}
-    />
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-          borderBottomColor: theme.borda,
-          paddingTop: insets.top + 8,
-        },
-      ]}
-    >
-      <View style={styles.leftSection}>
-        {showBackButton && (
+      <StatusBar
+        barStyle={mode === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={theme.background}
+      />
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+            borderBottomColor: theme.borda + "35",
+            // Mantém o conteúdo abaixo da barra de status e do recorte.
+            paddingTop: insets.top + 12,
+            paddingLeft: Math.max(insets.left, 16),
+            paddingRight: Math.max(insets.right, 16),
+          },
+        ]}
+      >
+        <View style={styles.leftSection}>
+          {showBackButton && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Voltar"
+              activeOpacity={0.7}
+              onPress={handleBack}
+              style={[
+                styles.iconButton,
+                { backgroundColor: theme.primaria + "0A" },
+              ]}
+            >
+              <Ionicons name="chevron-back" size={23} color={theme.texto} />
+            </TouchableOpacity>
+          )}
+          <View style={styles.titleContainer}>
+            <Text
+              weight="SemiBold"
+              style={[styles.logo, { color: theme.textoSub }]}
+            >
+              LOGOS
+            </Text>
+            <Text
+              weight="Bold"
+              numberOfLines={2}
+              style={[styles.title, { color: theme.textoTerciaria }]}
+            >
+              {title === "LOGOS" ? `Olá, ${partes[0]}` : title}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.actions}>
+          {showSettings && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Configurações"
+              activeOpacity={0.7}
+              onPress={() => abrirTelaConta("configuracoes")}
+              style={[
+                styles.iconButton,
+                {
+                  backgroundColor: theme.primaria + "0A",
+                  borderColor: theme.borda + "25",
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={22}
+                color={theme.textoTerciaria}
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Meu perfil, ${nome}`}
+            accessibilityState={{ disabled: noPerfil }}
+            disabled={noPerfil}
+            activeOpacity={0.75}
+            onPress={() => abrirTelaConta("perfil")}
+            style={[
+              styles.avatar,
+              {
+                backgroundColor: theme.backgroundContainer,
+                borderColor: theme.primaria + "35",
+              },
+            ]}
           >
-            <Ionicons
-              name="chevron-back"
-              size={28}
-              color={theme.texto}
-            />
+            <Text
+              weight="Bold"
+              maxFontSizeMultiplier={1.5}
+              style={[styles.avatarText, { color: theme.textoContainer }]}
+            >
+              {iniciais}
+            </Text>
           </TouchableOpacity>
-        )}
-
-        <View style={styles.titleContainer}>
-          <Text
-            weight="Regular"
-            style={[
-              styles.logo,
-              {
-                color: theme.texto,
-              },
-            ]}
-          >
-            LOGOS
-          </Text>
-
-          <Text
-            weight="Bold"
-            style={[
-              styles.greeting,
-              {
-                color: theme.textoTerciaria,
-              },
-            ]}
-          >
-            {title === "LOGOS"
-              ? `Olá, ${nome}`
-              : title}
-          </Text>
         </View>
       </View>
-
-      <View style={styles.actions}>
-        {showSettings && (
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={handleSettings}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={25}
-              color={theme.texto}
-            />
-          </TouchableOpacity>
-        )}
-
-        <View
-          style={[
-            styles.avatar,
-            {
-              backgroundColor:
-                theme.backgroundContainer,
-            },
-          ]}
-        >
-          <Text
-            weight="Bold"
-            style={[
-              styles.avatarText,
-              {
-                color: theme.textoContainer,
-              },
-            ]}
-          >
-            {iniciais}
-          </Text>
-        </View>
-      </View>
-    </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-  minHeight: 90,
-
-  paddingHorizontal: 20,
-  paddingTop: 12,
-  paddingBottom: 15,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-
-  borderBottomWidth: 2,
-},
-
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
   leftSection: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
-
-  backButton: {
-    width: 40,
-    height: 40,
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    marginRight: 10,
-    marginLeft: -8,
-  },
-
   titleContainer: {
     flex: 1,
+    minWidth: 0,
+    gap: 3,
   },
-
   logo: {
-    fontSize: 14,
-    letterSpacing: 1,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 2,
   },
-
-  greeting: {
-    fontSize: 22,
-    marginTop: 3,
+  title: {
+    fontSize: 20,
+    lineHeight: 26,
   },
-
   actions: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 15,
+    gap: 8,
   },
-
   iconButton: {
-    width: 40,
-    height: 40,
-
-    justifyContent: "center",
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
-
   avatar: {
     width: 44,
     height: 44,
+    flexShrink: 0,
+    borderWidth: 2,
     borderRadius: 22,
-
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-
   avatarText: {
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 21,
   },
 });

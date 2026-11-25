@@ -127,6 +127,30 @@ try {
     $pagina2 = ReleaseService::listar(1, ['limit' => 1, 'page' => 2]);
     conferirRelease($pagina1['pagination']['has_next'] && $pagina1['releases'][0]['id'] !== $pagina2['releases'][0]['id'], 'Pagina com ordenação estável.');
 
+    $antigoDashboard = ReleaseService::criar(1, 1, ['titulo' => 'Dashboard ordenacao antigo']);
+    $novoDashboard = ReleaseService::criar(1, 1, ['titulo' => 'Dashboard ordenacao novo']);
+    $db->exec("UPDATE releases SET created_at = '2026-01-01 00:00:00', updated_at = '2099-01-01 00:00:00' WHERE id = " . $antigoDashboard['id']);
+    $db->exec("UPDATE releases SET created_at = '2026-02-01 00:00:00', updated_at = '2026-02-01 00:00:00' WHERE id = " . $novoDashboard['id']);
+    $ultimoDashboard = ReleaseService::listar(1, [
+        'busca' => 'Dashboard ordenacao',
+        'limit' => 1,
+        'ordem' => 'criados_recentes',
+    ]);
+    conferirRelease(
+        $ultimoDashboard['releases'][0]['id'] === $novoDashboard['id'],
+        'O dashboard deve usar a criação, mesmo quando um release antigo foi atualizado depois.'
+    );
+    conferirRelease(
+        ReleaseService::listar(1, ['busca' => 'Dashboard ordenacao', 'limit' => 1])['releases'][0]['id'] === $antigoDashboard['id'],
+        'A ordenação padrão por atividade deve permanecer inalterada.'
+    );
+    $db->exec("UPDATE releases SET created_at = '2026-02-01 00:00:00' WHERE id = " . $antigoDashboard['id']);
+    conferirRelease(
+        ReleaseService::listar(1, ['busca' => 'Dashboard ordenacao', 'limit' => 1, 'ordem' => 'criados_recentes'])['releases'][0]['id'] === $novoDashboard['id'],
+        'Criações no mesmo instante devem ter desempate estável pelo identificador.'
+    );
+    $db->exec('DELETE FROM releases WHERE id IN (' . $antigoDashboard['id'] . ', ' . $novoDashboard['id'] . ')');
+
     rejeitarRelease(fn() => ReleaseService::buscar(1, $outro['id']), OutOfBoundsException::class);
     rejeitarRelease(fn() => ReleaseService::criar(1, 1, ['cliente_id' => 2]), OutOfBoundsException::class);
     rejeitarRelease(fn() => ReleaseService::criar(1, 1, ['jornalistas_ids' => [2]]), InvalidArgumentException::class);

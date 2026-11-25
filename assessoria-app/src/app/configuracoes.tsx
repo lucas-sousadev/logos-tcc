@@ -6,6 +6,8 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Header from "@/components/layout/Header";
 import Text from "@/components/ui/Text";
@@ -13,6 +15,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Configuracoes() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { theme, mode, toggleTheme } = useTheme();
   const { usuario, logout } = useAuth();
 
@@ -27,15 +31,14 @@ export default function Configuracoes() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Header
-        title="Configurações"
-        showBackButton
-        showSettings={false}
-      />
+      <Header title="Configurações" showBackButton showSettings={false} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.conteudo}
+        contentContainerStyle={[
+          styles.conteudo,
+          { paddingBottom: Math.max(insets.bottom, 16) + 16 },
+        ]}
       >
         <View style={styles.introducao}>
           <Text weight="Bold" style={styles.tituloPagina}>
@@ -82,6 +85,47 @@ export default function Configuracoes() {
               {usuario?.perfil === "FUNCIONARIO" ? "Funcionário" : "Assessor"}
             </Text>
           </View>
+        </View>
+
+        <View style={styles.secao}>
+          <Text weight="Bold" style={styles.tituloSecao}>
+            Navegação
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Personalizar barra de navegação"
+            activeOpacity={0.75}
+            onPress={() => router.navigate("/personalizar-barra")}
+            style={[
+              styles.opcaoCard,
+              {
+                backgroundColor: theme.backgroundSecundario,
+                borderColor: theme.borda + "40",
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.iconeOpcao,
+                { backgroundColor: theme.primaria + "12" },
+              ]}
+            >
+              <Ionicons
+                name="options-outline"
+                size={22}
+                color={theme.textoTerciaria}
+              />
+            </View>
+            <View style={styles.opcaoTexto}>
+              <Text weight="SemiBold" style={styles.nomeOpcao}>
+                Barra de navegação
+              </Text>
+              <Text style={[styles.descricaoOpcao, { color: theme.textoSub }]}>
+                Personalize seus atalhos
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textoSub} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.secao}>
@@ -159,11 +203,7 @@ export default function Configuracoes() {
                 { backgroundColor: theme.erro + "15" },
               ]}
             >
-              <Ionicons
-                name="log-out-outline"
-                size={22}
-                color={theme.erro}
-              />
+              <Ionicons name="log-out-outline" size={22} color={theme.erro} />
             </View>
             <View style={styles.opcaoTexto}>
               <Text
@@ -176,11 +216,7 @@ export default function Configuracoes() {
                 Encerrar sessão neste dispositivo
               </Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={theme.erro}
-            />
+            <Ionicons name="chevron-forward" size={18} color={theme.erro} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -190,7 +226,7 @@ export default function Configuracoes() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1 
+    flex: 1,
   },
   conteudo: {
     paddingHorizontal: 16,
@@ -198,16 +234,16 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     gap: 22,
   },
-  introducao: { 
-    gap: 4 
+  introducao: {
+    gap: 4,
   },
-  tituloPagina: { 
-    fontSize: 20, 
-    lineHeight: 26 
+  tituloPagina: {
+    fontSize: 20,
+    lineHeight: 26,
   },
-  descricaoPagina: { 
-    fontSize: 12, 
-    lineHeight: 18 
+  descricaoPagina: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   contaCard: {
     flexDirection: "row",
@@ -224,28 +260,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  contaTexto: { 
-    flex: 1, 
-    gap: 2 
+  contaTexto: {
+    flex: 1,
+    gap: 2,
   },
-  nome: { 
-    fontSize: 15, 
-    lineHeight: 20 
+  nome: {
+    fontSize: 15,
+    lineHeight: 20,
   },
-  email: { 
-    fontSize: 12, 
-    lineHeight: 17 
+  email: {
+    fontSize: 12,
+    lineHeight: 17,
   },
-  perfil: { 
-    fontSize: 11, 
-    lineHeight: 16 
+  perfil: {
+    fontSize: 11,
+    lineHeight: 16,
   },
-  secao: { 
-    gap: 9 
+  secao: {
+    gap: 9,
   },
-  tituloSecao: { 
-    fontSize: 16, 
-    lineHeight: 22 
+  tituloSecao: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   opcaoCard: {
     flexDirection: "row",
@@ -265,19 +301,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   opcaoTexto: {
-    flex: 1, 
-    gap: 2 
+    flex: 1,
+    gap: 2,
   },
-  nomeOpcao: { 
-    fontSize: 13, 
-    lineHeight: 18 
+  nomeOpcao: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  descricaoOpcao: { 
-    fontSize: 11, 
-    lineHeight: 16 
+  descricaoOpcao: {
+    fontSize: 11,
+    lineHeight: 16,
   },
-  ajuda: { 
-    fontSize: 11, 
-    lineHeight: 16 
+  ajuda: {
+    fontSize: 11,
+    lineHeight: 16,
   },
 });
