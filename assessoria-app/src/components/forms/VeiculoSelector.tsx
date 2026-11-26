@@ -1,3 +1,4 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,10 +16,7 @@ import { rotuloTier, type Tier } from "@/constants/tier";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { validarNomeVeiculo } from "@/utils/validarVeiculo";
-import {
-  listarVeiculos,
-  type Veiculo,
-} from "@/services/api/veiculo";
+import { listarVeiculos, type Veiculo } from "@/services/api/veiculo";
 
 export interface SelecaoVeiculo {
   id: number | null;
@@ -62,11 +60,12 @@ export default function VeiculoSelector({
   onCadastrar,
   modoFiltro = false,
 }: VeiculoSelectorProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const [resultado, setResultado] =
-    useState<ResultadoBusca | null>(null);
+  const [resultado, setResultado] = useState<ResultadoBusca | null>(null);
 
   const [tentativa, setTentativa] = useState(0);
 
@@ -80,23 +79,17 @@ export default function VeiculoSelector({
   const temTermo = termo.length > 0;
 
   const deveBuscar =
-    semSelecao &&
-    temTermo &&
-    !erroNome &&
-    podeConsultar &&
-    !disabled;
+    semSelecao && temTermo && !erroNome && podeConsultar && !disabled;
 
   const chave = JSON.stringify([termo, tentativa]);
 
-  const resultadoAtual =
-    resultado?.chave === chave ? resultado : null;
+  const resultadoAtual = resultado?.chave === chave ? resultado : null;
 
   const carregando = deveBuscar && resultadoAtual === null;
 
   const correspondenciaExata =
     resultadoAtual?.veiculos.some(
-      (item) =>
-        item.nome.trim().toLowerCase() === termo.toLowerCase()
+      (item) => item.nome.trim().toLowerCase() === termo.toLowerCase()
     ) ?? false;
 
   const podeOferecerCadastro =
@@ -109,14 +102,10 @@ export default function VeiculoSelector({
     !modoFiltro &&
     !modoImportacao &&
     Boolean(onCadastrar) &&
-    (
-      !podeConsultar ||
-      (
-        resultadoAtual !== null &&
+    (!podeConsultar ||
+      (resultadoAtual !== null &&
         !resultadoAtual.erro &&
-        !correspondenciaExata
-      )
-    );
+        !correspondenciaExata));
 
   useEffect(() => {
     if (!deveBuscar) return;
@@ -166,13 +155,9 @@ export default function VeiculoSelector({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
       <Input
-        label={
-          modoImportacao
-            ? "ASSOCIAR A UM VEÍCULO"
-            : "VEÍCULO"
-        }
+        label={modoImportacao ? "ASSOCIAR A UM VEÍCULO" : "VEÍCULO"}
         value={value.nome}
         onChangeText={(nome) => {
           if (disabled) return;
@@ -195,18 +180,9 @@ export default function VeiculoSelector({
 
       {!semSelecao ? (
         mostrarResumo ? (
-          <VeiculoResumo
-            key={value.id}
-            veiculo={value}
-            disabled={disabled}
-          />
+          <VeiculoResumo key={value.id} veiculo={value} disabled={disabled} />
         ) : (
-          <View
-            style={[
-              styles.caixa,
-              { borderColor: theme.borda },
-            ]}
-          >
+          <View style={[styles.caixa, { borderColor: theme.borda }]}>
             <View style={styles.linha}>
               <Ionicons
                 name="checkmark-circle-outline"
@@ -231,32 +207,21 @@ export default function VeiculoSelector({
       ) : null}
 
       {deveBuscar ? (
-        <View
-          style={[
-            styles.resultados,
-            { borderColor: theme.borda },
-          ]}
-        >
+        <View style={[styles.resultados, { borderColor: theme.borda }]}>
           {carregando ? (
             <View style={styles.carregamento}>
               <ActivityIndicator color={theme.primaria} />
-              <Text
-                style={[styles.ajuda, { color: theme.textoSub }]}
-              >
+              <Text style={[styles.ajuda, { color: theme.textoSub }]}>
                 Buscando veículos...
               </Text>
             </View>
           ) : resultadoAtual?.erro ? (
             <View style={styles.caixaErro}>
-              <Text style={styles.erro}>
-                {resultadoAtual.erro}
-              </Text>
+              <Text style={styles.erro}>{resultadoAtual.erro}</Text>
 
               <TouchableOpacity
                 accessibilityRole="button"
-                onPress={() =>
-                  setTentativa((atual) => atual + 1)
-                }
+                onPress={() => setTentativa((atual) => atual + 1)}
                 style={styles.atalho}
               >
                 <Text
@@ -289,19 +254,13 @@ export default function VeiculoSelector({
                   />
 
                   <View style={styles.informacoes}>
-                    <Text
-                      weight="SemiBold"
-                      style={styles.nome}
-                    >
+                    <Text weight="SemiBold" style={styles.nome}>
                       {item.nome}
                     </Text>
 
                     <Text
                       numberOfLines={1}
-                      style={[
-                        styles.ajuda,
-                        { color: theme.textoSub },
-                      ]}
+                      style={[styles.ajuda, { color: theme.textoSub }]}
                     >
                       {rotuloTier(item.tier)}
                       {item.ativo === 0 ? " • Inativo" : ""}
@@ -312,23 +271,13 @@ export default function VeiculoSelector({
               ))}
 
               {resultadoAtual?.veiculos.length === 0 ? (
-                <Text
-                  style={[
-                    styles.vazio,
-                    { color: theme.textoSub },
-                  ]}
-                >
+                <Text style={[styles.vazio, { color: theme.textoSub }]}>
                   Nenhum veículo encontrado.
                 </Text>
               ) : null}
 
               {resultadoAtual?.temMais ? (
-                <Text
-                  style={[
-                    styles.vazio,
-                    { color: theme.textoSub },
-                  ]}
-                >
+                <Text style={[styles.vazio, { color: theme.textoSub }]}>
                   Há mais resultados. Digite um nome mais específico.
                 </Text>
               ) : null}
@@ -342,10 +291,7 @@ export default function VeiculoSelector({
           accessibilityRole="button"
           activeOpacity={0.8}
           onPress={() => onCadastrar?.(termo)}
-          style={[
-            styles.cadastrar,
-            { borderColor: theme.borda },
-          ]}
+          style={[styles.cadastrar, { borderColor: theme.borda }]}
         >
           <Ionicons
             name="add-circle-outline"
@@ -355,10 +301,7 @@ export default function VeiculoSelector({
 
           <Text
             weight="SemiBold"
-            style={[
-              styles.nome,
-              { color: theme.textoTerciaria, flex: 1 },
-            ]}
+            style={[styles.nome, { color: theme.textoTerciaria, flex: 1 }]}
           >
             Cadastrar “{termo}”
           </Text>
@@ -368,14 +311,14 @@ export default function VeiculoSelector({
       {semSelecao && temTermo && !erroNome ? (
         <Text style={[styles.ajuda, { color: theme.textoSub }]}>
           {modoImportacao
-          ? "Escolha um resultado da lista. Apenas digitar o nome não cria associação."
-          : modoFiltro
-            ? "Selecione um veículo específico ou mantenha o texto para pesquisar parte do nome."
-            : criacaoAoSalvar
-              ? "O nome digitado será usado ao salvar."
-              : podeCriar
-                ? "Selecione um resultado ou cadastre o veículo antes de salvar o clipping."
-                : "Selecione um resultado. Para deixar o veículo pendente, limpe este campo."}
+            ? "Escolha um resultado da lista. Apenas digitar o nome não cria associação."
+            : modoFiltro
+              ? "Selecione um veículo específico ou mantenha o texto para pesquisar parte do nome."
+              : criacaoAoSalvar
+                ? "O nome digitado será usado ao salvar."
+                : podeCriar
+                  ? "Selecione um resultado ou cadastre o veículo antes de salvar o clipping."
+                  : "Selecione um resultado. Para deixar o veículo pendente, limpe este campo."}
         </Text>
       ) : null}
     </View>

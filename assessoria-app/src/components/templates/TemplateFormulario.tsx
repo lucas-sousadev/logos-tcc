@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
   Keyboard,
   Platform,
   ScrollView,
@@ -7,6 +8,10 @@ import {
   View,
   type TextInput,
 } from "react-native";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import { useEffect, useRef, useState } from "react";
+
 import { useNavigation } from "expo-router";
 import {
   usePreventRemove,
@@ -22,10 +27,7 @@ import ReleaseConteudoEditor from "@/components/releases/ReleaseConteudoEditor";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ErroApiRelease,
-  type TemplateRelease,
-} from "@/services/api/release";
+import { ErroApiRelease, type TemplateRelease } from "@/services/api/release";
 import { salvarTemplate } from "@/services/api/template";
 
 interface Props {
@@ -62,7 +64,7 @@ export default function TemplateFormulario({
     () => modelo?.blocos.map((b) => ({ ...b })) ?? []
   );
 
-  const inicial = useRef(JSON.stringify({ nome, blocos }));
+  const [inicial] = useState(() => JSON.stringify({ nome, blocos }));
 
   const [salvando, setSalvando] = useState(false);
   const [imagemOcupada, setImagemOcupada] = useState(false);
@@ -70,39 +72,26 @@ export default function TemplateFormulario({
   const [erro, setErro] = useState("");
   const [desatualizado, setDesatualizado] = useState(false);
 
-  const permitido = temPermissao(
-    "TEMPLATES",
-    editar ? "EDITAR" : "CRIAR"
-  );
+  const permitido = temPermissao("TEMPLATES", editar ? "EDITAR" : "CRIAR");
 
   const bloqueado = salvando || imagemOcupada || !permitido;
 
   const sujo =
-    JSON.stringify({ nome, blocos }) !== inicial.current ||
+    JSON.stringify({ nome, blocos }) !== inicial ||
     (!editar && modelo !== null);
 
-  usePreventRemove(
-    sujo || salvando || imagemOcupada,
-    ({ data }) => {
-      if (
-        trava.current ||
-        imagemOcupada ||
-        acaoSaida.current
-      ) {
-        return;
-      }
-
-      acaoSaida.current = data.action;
-      Keyboard.dismiss();
-      setAvisoSaida(true);
+  usePreventRemove(sujo || salvando || imagemOcupada, ({ data }) => {
+    if (trava.current || imagemOcupada || acaoSaida.current) {
+      return;
     }
-  );
+
+    acaoSaida.current = data.action;
+    Keyboard.dismiss();
+    setAvisoSaida(true);
+  });
 
   useEffect(() => {
-    if (
-      Platform.OS !== "web" ||
-      (!sujo && !salvando && !imagemOcupada)
-    ) {
+    if (Platform.OS !== "web" || (!sujo && !salvando && !imagemOcupada)) {
       return;
     }
 
@@ -162,11 +151,7 @@ export default function TemplateFormulario({
   }
 
   async function salvar() {
-    if (
-      bloqueado ||
-      trava.current ||
-      desatualizado
-    ) {
+    if (bloqueado || trava.current || desatualizado) {
       return;
     }
 
@@ -194,9 +179,7 @@ export default function TemplateFormulario({
       onSaved();
     } catch (falha) {
       setErro(
-        falha instanceof Error
-          ? falha.message
-          : "Não foi possível salvar."
+        falha instanceof Error ? falha.message : "Não foi possível salvar."
       );
 
       if (
@@ -212,120 +195,132 @@ export default function TemplateFormulario({
   }
 
   return (
-    <View
-      style={[
-        styles.tela,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header
-        title={editar ? "Editar template" : "Novo template"}
-        showBackButton
-        onBackPress={sair}
-      />
-
-      <ScrollView
-        ref={scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.conteudo}
+    <EdicaoCompacta ativa={editar}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.tela, { backgroundColor: theme.background }]}
       >
-        <View
-          ref={conteudo}
-          collapsable={false}
-          style={styles.campos}
+        <Header
+          title={editar ? "Editar template" : "Novo template"}
+          showBackButton
+          onBackPress={sair}
+        />
+
+        <ScrollView
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+          ref={scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.conteudo}
         >
-          <Input
-            label="NOME DO TEMPLATE"
-            placeholder="Ex.: Release institucional"
-            value={nome}
-            onChangeText={setNome}
-            maxLength={150}
-            editable={!bloqueado}
-            containerStyle={{ marginBottom: 0 }}
-          />
+          <View ref={conteudo} collapsable={false} style={styles.campos}>
+            <SecaoEdicao titulo="Identificação do template" ativa={editar}>
+              <Input
+                label="Nome do template"
+                placeholder="Ex.: Release institucional"
+                value={nome}
+                onChangeText={setNome}
+                maxLength={150}
+                editable={!bloqueado}
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </SecaoEdicao>
 
-          <Text
-            style={{
-              color: theme.textoSub,
-              fontSize: 12,
-            }}
-          >
-            Este modelo ficará disponível para os próximos
-            releases da assessoria.
-          </Text>
-
-          <ReleaseConteudoEditor
-            blocos={blocos}
-            nomeTemplate={nome || "Novo template"}
-            contextoImagem="TEMPLATES"
-            disabled={bloqueado}
-            imagemOcupada={imagemOcupada}
-            onImagemOcupadaChange={setImagemOcupada}
-            onMostrarCampo={mostrarCampo}
-            onChange={(alterar) => {
-              if (!trava.current && permitido) {
-                setBlocos(alterar);
-              }
-            }}
-          />
-
-          {erro ? (
             <Text
-              accessibilityLiveRegion="polite"
-              style={{ color: theme.erro }}
+              style={{
+                color: theme.textoSub,
+                fontSize: 12,
+              }}
             >
-              {erro}
+              Este modelo ficará disponível para os próximos releases da
+              assessoria.
             </Text>
-          ) : null}
 
-          {desatualizado ? (
-            <Text style={{ color: theme.textoSub }}>
-              Volte à lista e reabra o template para carregar
-              a versão atual.
-            </Text>
-          ) : null}
-
-          {!permitido ? (
-            <Text style={{ color: theme.erro }}>
-              Você não possui permissão para salvar.
-            </Text>
-          ) : null}
-
-          <View style={styles.acoes}>
-            <Button
-              title="VOLTAR"
-              variant="outline"
-              disabled={salvando || imagemOcupada}
-              onPress={sair}
-              style={styles.botao}
+            <ReleaseConteudoEditor
+              blocos={blocos}
+              nomeTemplate={nome || "Novo template"}
+              contextoImagem="TEMPLATES"
+              disabled={bloqueado}
+              imagemOcupada={imagemOcupada}
+              onImagemOcupadaChange={setImagemOcupada}
+              onMostrarCampo={mostrarCampo}
+              onChange={(alterar) => {
+                if (!trava.current && permitido) {
+                  setBlocos(alterar);
+                }
+              }}
             />
 
-            <Button
-              title="SALVAR"
-              icon="checkmark-outline"
-              loading={salvando}
-              disabled={bloqueado || desatualizado}
-              onPress={() => void salvar()}
-              style={styles.botao}
-            />
+            {erro ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{ color: theme.erro }}
+              >
+                {erro}
+              </Text>
+            ) : null}
+
+            {desatualizado ? (
+              <Text style={{ color: theme.textoSub }}>
+                Volte à lista e reabra o template para carregar a versão atual.
+              </Text>
+            ) : null}
+
+            {!permitido ? (
+              <Text style={{ color: theme.erro }}>
+                Você não possui permissão para salvar.
+              </Text>
+            ) : null}
+
+            {!editar ? (
+              <View style={styles.acoes}>
+                <Button
+                  title="VOLTAR"
+                  variant="outline"
+                  disabled={salvando || imagemOcupada}
+                  onPress={sair}
+                  style={styles.botao}
+                />
+
+                <Button
+                  title="SALVAR"
+                  icon="checkmark-outline"
+                  loading={salvando}
+                  disabled={bloqueado || desatualizado}
+                  onPress={() => void salvar()}
+                  style={styles.botao}
+                />
+              </View>
+            ) : null}
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+        {editar ? (
+          <SalvarAlteracoes
+            changed={sujo}
+            saving={salvando}
+            busy={imagemOcupada}
+            disabled={bloqueado || desatualizado}
+            error={erro}
+            onSave={() => void salvar()}
+            onDiscard={sair}
+          />
+        ) : null}
 
-      <FeedbackAlert
-        visible={avisoSaida}
-        variant="warning"
-        title="Sair sem salvar?"
-        message="Se sair agora, você perderá as alterações deste template."
-        primaryLabel="SAIR"
-        secondaryLabel="CONTINUAR"
-        primaryDanger
-        onClose={continuar}
-        onSecondary={continuar}
-        onPrimary={confirmarSaida}
-      />
-    </View>
+        <FeedbackAlert
+          visible={avisoSaida}
+          variant="warning"
+          title="Sair sem salvar?"
+          message="Se sair agora, você perderá as alterações deste template."
+          primaryLabel="SAIR"
+          secondaryLabel="CONTINUAR"
+          primaryDanger
+          onClose={continuar}
+          onSecondary={continuar}
+          onPrimary={confirmarSaida}
+        />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 

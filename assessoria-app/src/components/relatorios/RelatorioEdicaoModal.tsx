@@ -1,14 +1,21 @@
-import { useState } from "react";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Modal,
   ScrollView,
   StyleSheet,
   Switch,
   View,
 } from "react-native";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import { useRef, useState } from "react";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -33,13 +40,24 @@ export default function RelatorioEdicaoModal({
   const insets = useSafeAreaInsets();
 
   const [titulo, setTitulo] = useState(relatorio.titulo);
-  const [inclusaoAutomatica, setInclusaoAutomatica] =
-    useState(relatorio.inclusao_automatica);
+  const [inclusaoAutomatica, setInclusaoAutomatica] = useState(
+    relatorio.inclusao_automatica
+  );
   const [erroTitulo, setErroTitulo] = useState("");
   const [erroSalvar, setErroSalvar] = useState("");
   const [salvando, setSalvando] = useState(false);
 
+  const quantidadeAlteracoes =
+    Number(titulo !== relatorio.titulo) +
+    Number(inclusaoAutomatica !== relatorio.inclusao_automatica);
+  const saida = useSaidaFormulario(quantidadeAlteracoes > 0, salvando);
+  function fecharEdicao() {
+    saida.confirmarSaida(onClose);
+  }
+  const salvamentoEmCurso = useRef(false);
+
   async function salvar() {
+    if (salvamentoEmCurso.current) return;
     const tituloLimpo = titulo.trim();
 
     if (!tituloLimpo || tituloLimpo.length > 200) {
@@ -49,25 +67,22 @@ export default function RelatorioEdicaoModal({
 
     setErroTitulo("");
     setErroSalvar("");
+    salvamentoEmCurso.current = true;
     setSalvando(true);
 
     try {
-      const resposta = await atualizarRelatorio(
-        relatorio.id,
-        {
-          titulo: tituloLimpo,
-          inclusao_automatica: inclusaoAutomatica,
-        }
-      );
+      const resposta = await atualizarRelatorio(relatorio.id, {
+        titulo: tituloLimpo,
+        inclusao_automatica: inclusaoAutomatica,
+      });
 
       onSaved(resposta.relatorio);
     } catch (e) {
       setErroSalvar(
-        e instanceof Error
-          ? e.message
-          : "Não foi possível salvar o relatório."
+        e instanceof Error ? e.message : "Não foi possível salvar o relatório."
       );
     } finally {
+      salvamentoEmCurso.current = false;
       setSalvando(false);
     }
   }
@@ -78,120 +93,97 @@ export default function RelatorioEdicaoModal({
       transparent
       animationType="slide"
       onRequestClose={() => {
-        if (!salvando) onClose();
+        if (saida.alertaProps.visible) saida.alertaProps.onClose();
+        else if (!salvando) fecharEdicao();
       }}
     >
-      <View style={styles.overlay}>
-        <View
-          style={[
-            styles.container,
-            {
-              backgroundColor: theme.background,
-              borderColor: theme.borda,
-              paddingBottom: Math.max(insets.bottom, 12),
-            },
-          ]}
+      <EdicaoCompacta ativa={true}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.overlay}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.conteudo}
+          <View
+            style={[
+              styles.container,
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.borda + "40",
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
           >
-            <Text weight="Bold" style={styles.tituloModal}>
-              Editar relatório
-            </Text>
-
-            <Input
-              label="TÍTULO"
-              value={titulo}
-              onChangeText={(valor) => {
-                setTitulo(valor);
-                setErroTitulo("");
-              }}
-              maxLength={200}
-              error={erroTitulo}
-              containerStyle={styles.input}
-            />
-
-            <View
-              style={[
-                styles.periodo,
-                { borderColor: theme.borda },
-              ]}
+            <ScrollView
+              style={{ flexShrink: 1, minHeight: 0 }}
+              automaticallyAdjustKeyboardInsets={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.conteudo}
             >
-              <Text weight="SemiBold">PERÍODO</Text>
-              <Text>
-                {dataISOParaBR(relatorio.periodo_inicio)} a{" "}
-                {dataISOParaBR(relatorio.periodo_fim)}
+              <Text weight="Bold" style={styles.tituloModal}>
+                Editar relatório
               </Text>
-              <Text
-                style={[
-                  styles.ajuda,
-                  { color: theme.textoSub },
-                ]}
-              >
-                Para mudar as datas e escolher novas matérias, use
-                “Alterar período e matérias” nos detalhes do relatório.
-              </Text>
-            </View>
 
-            <View
-              style={[
-                styles.automatico,
-                { borderColor: theme.borda },
-              ]}
-            >
-              <View style={styles.automaticoTexto}>
-                <Text weight="SemiBold">
-                  Incluir novas matérias
+              <SecaoEdicao titulo="Dados do relatório">
+                <Input
+                  label="Título"
+                  value={titulo}
+                  onChangeText={(valor) => {
+                    setTitulo(valor);
+                    setErroTitulo("");
+                  }}
+                  maxLength={200}
+                  error={erroTitulo}
+                  containerStyle={styles.input}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+
+              <View style={[styles.periodo, { borderColor: theme.borda }]}>
+                <Text weight="SemiBold">PERÍODO</Text>
+                <Text>
+                  {dataISOParaBR(relatorio.periodo_inicio)} a{" "}
+                  {dataISOParaBR(relatorio.periodo_fim)}
                 </Text>
-                <Text
-                  style={[
-                    styles.ajuda,
-                    { color: theme.textoSub },
-                  ]}
-                >
-                  Novos clippings deste cliente no período entram
-                  no relatório para revisão.
+                <Text style={[styles.ajuda, { color: theme.textoSub }]}>
+                  Para mudar as datas e escolher novas matérias, use “Alterar
+                  período e matérias” nos detalhes do relatório.
                 </Text>
               </View>
 
-              <Switch
-                value={inclusaoAutomatica}
-                onValueChange={setInclusaoAutomatica}
-                trackColor={{
-                  false: `${theme.borda}55`,
-                  true: `${theme.textoTerciaria}88`,
-                }}
-                thumbColor={theme.backgroundContainer}
-              />
-            </View>
+              <View style={[styles.automatico, { borderColor: theme.borda }]}>
+                <View style={styles.automaticoTexto}>
+                  <Text weight="SemiBold">Incluir novas matérias</Text>
+                  <Text style={[styles.ajuda, { color: theme.textoSub }]}>
+                    Novos clippings deste cliente no período entram no relatório
+                    para revisão.
+                  </Text>
+                </View>
 
-            {erroSalvar ? (
-              <Text style={{ color: theme.erro }}>
-                {erroSalvar}
-              </Text>
-            ) : null}
+                <Switch
+                  value={inclusaoAutomatica}
+                  onValueChange={setInclusaoAutomatica}
+                  trackColor={{
+                    false: `${theme.borda}55`,
+                    true: `${theme.textoTerciaria}88`,
+                  }}
+                  thumbColor={theme.backgroundContainer}
+                />
+              </View>
 
-            <View style={styles.acoes}>
-              <Button
-                title="CANCELAR"
-                variant="outline"
-                size="small"
-                disabled={salvando}
-                onPress={onClose}
-                style={styles.botao}
-              />
-              <Button
-                title="SALVAR"
-                size="small"
-                loading={salvando}
-                onPress={() => void salvar()}
-                style={styles.botao}
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </View>
+              {erroSalvar ? (
+                <Text style={{ color: theme.erro }}>{erroSalvar}</Text>
+              ) : null}
+            </ScrollView>
+            <SalvarAlteracoes
+              alterations={quantidadeAlteracoes}
+              saving={salvando}
+              error={erroSalvar || erroTitulo}
+              onSave={() => void salvar()}
+              onDiscard={fecharEdicao}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </EdicaoCompacta>
+      <FeedbackAlert {...saida.alertaProps} inline />
     </Modal>
   );
 }
@@ -204,7 +196,10 @@ const styles = StyleSheet.create({
   },
   container: {
     maxHeight: "90%",
-    borderWidth: 1.5,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    borderWidth: 1,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     overflow: "hidden",
@@ -240,15 +235,5 @@ const styles = StyleSheet.create({
   automaticoTexto: {
     flex: 1,
     gap: 5,
-  },
-  acoes: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 5,
-  },
-  botao: {
-    flex: 1,
-    width: "auto",
-    paddingHorizontal: 8,
   },
 });

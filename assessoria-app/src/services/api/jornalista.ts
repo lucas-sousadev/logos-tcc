@@ -1,454 +1,352 @@
-  import {
-    authenticatedFetch,
-  } from "@/services/api/auth";
-  import { API_URL } from "@/constants/api";
+import { authenticatedFetch } from "@/services/api/auth";
+import { API_URL } from "@/constants/api";
 
-  export interface Jornalista {
-    id: number;
-    assessoria_id: number;
+export interface Jornalista {
+  id: number;
+  assessoria_id: number;
 
-    nome: string;
-    email: string | null;
-    telefone: string | null;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
 
-    cargo: string | null;
-    estado: string | null;
-    cidade: string | null;
+  cargo: string | null;
+  estado: string | null;
+  cidade: string | null;
 
-    veiculo_id: number | null;
-    veiculo_nome: string | null;
+  veiculo_id: number | null;
+  veiculo_nome: string | null;
 
-    observacoes: string | null;
+  observacoes: string | null;
 
-    ativo: number;
+  ativo: number;
 
-    created_at: string;
-    updated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListarJornalistasParams {
+  page?: number;
+  limit?: number;
+
+  busca?: string;
+  estado?: string;
+  cidade?: string;
+  cargo?: string;
+  veiculo_id?: number;
+  ativo?: number;
+
+  ordem?: string;
+  direcao?: "ASC" | "DESC";
+}
+
+export interface ListarJornalistasResponse {
+  success: boolean;
+  jornalistas: Jornalista[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    has_next: boolean;
+  };
+  message?: string;
+}
+
+export interface CriarJornalistaData {
+  nome: string;
+  email?: string;
+  telefone?: string;
+  cargo?: string;
+  estado?: string;
+  cidade?: string;
+  veiculo_id?: number;
+  veiculo_nome?: string;
+  observacoes?: string;
+}
+
+export interface CriarJornalistaResponse {
+  success: boolean;
+  message: string;
+  jornalista_id?: number;
+}
+
+export interface AtualizarJornalistaData {
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  cargo: string | null;
+  estado: string | null;
+  cidade: string | null;
+  observacoes: string | null;
+  ativo: number;
+  veiculo_id: number | null;
+  veiculo_nome: string | null;
+}
+
+export interface AtualizarJornalistaResponse {
+  success: boolean;
+  message: string;
+  jornalista: Jornalista;
+}
+
+export interface ExcluirJornalistaResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function listarJornalistas(
+  params: ListarJornalistasParams = {}
+): Promise<ListarJornalistasResponse> {
+  const query = new URLSearchParams();
+
+  query.set("page", String(params.page ?? 1));
+
+  query.set("limit", String(params.limit ?? 50));
+
+  if (params.busca?.trim()) {
+    query.set("busca", params.busca.trim());
   }
 
-  export interface ListarJornalistasParams {
-    page?: number;
-    limit?: number;
-
-    busca?: string;
-    estado?: string;
-    cidade?: string;
-    cargo?: string;
-    veiculo_id?: number;
-    ativo?: number;
-
-    ordem?: string;
-    direcao?: "ASC" | "DESC";
+  if (params.estado?.trim()) {
+    query.set("estado", params.estado.trim());
   }
 
-  export interface ListarJornalistasResponse {
+  if (params.cidade?.trim()) {
+    query.set("cidade", params.cidade.trim());
+  }
+
+  if (params.cargo?.trim()) {
+    query.set("cargo", params.cargo.trim());
+  }
+
+  if (params.veiculo_id !== undefined) {
+    query.set("veiculo_id", String(params.veiculo_id));
+  }
+
+  if (params.ativo !== undefined) {
+    query.set("ativo", String(params.ativo));
+  }
+
+  if (params.ordem) {
+    query.set("ordem", params.ordem);
+  }
+
+  if (params.direcao) {
+    query.set("direcao", params.direcao);
+  }
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas?${query.toString()}`,
+    {
+      method: "GET",
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: ListarJornalistasResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error("A API retornou uma resposta inválida.");
+  }
+
+  if (!response.ok || !data.success || !data.jornalistas || !data.pagination) {
+    throw new Error(data.message || "Não foi possível carregar o mailing.");
+  }
+
+  return data;
+}
+
+export async function buscarJornalista(
+  id: number,
+  signal?: AbortSignal
+): Promise<Jornalista> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/${id}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      signal,
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: {
     success: boolean;
-    jornalistas: Jornalista[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      has_next: boolean;
-    };
+    jornalista?: Jornalista;
     message?: string;
+  };
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  export interface CriarJornalistaData {
-    nome: string;
-    email?: string;
-    telefone?: string;
-    cargo?: string;
-    estado?: string;
-    cidade?: string;
-    veiculo_id?: number;
-    veiculo_nome?: string;
-    observacoes?: string;
+  if (!response.ok || !data.success || !data.jornalista) {
+    throw new Error(data.message || "Não foi possível carregar o contato.");
   }
 
-  export interface CriarJornalistaResponse {
-    success: boolean;
-    message: string;
-    jornalista_id?: number;
+  return data.jornalista;
+}
+
+export async function criarJornalista(
+  dados: CriarJornalistaData
+): Promise<CriarJornalistaResponse> {
+  const response = await authenticatedFetch(`${API_URL}/api/jornalistas`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
+
+  const responseText = await response.text();
+
+  let data: CriarJornalistaResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  export interface AtualizarJornalistaData {
-    nome: string;
-    email: string | null;
-    telefone: string | null;
-    cargo: string | null;
-    estado: string | null;
-    cidade: string | null;
-    observacoes: string | null;
-    ativo: number;
-    veiculo_id: number | null;
-    veiculo_nome: string | null;
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || "Não foi possível cadastrar o contato.");
   }
 
-  export interface AtualizarJornalistaResponse {
-    success: boolean;
-    message: string;
-    jornalista: Jornalista;
+  return data;
+}
+
+export async function atualizarJornalista(
+  id: number,
+  dados: AtualizarJornalistaData
+): Promise<AtualizarJornalistaResponse> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/${id}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(dados),
+    }
+  );
+
+  const responseText = await response.text();
+
+  let data: AtualizarJornalistaResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  export interface ExcluirJornalistaResponse {
-    success: boolean;
-    message: string;
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || "Não foi possível atualizar o contato.");
   }
 
-  export async function listarJornalistas(
-    params: ListarJornalistasParams = {}
-  ): Promise<ListarJornalistasResponse> {
-    const query = new URLSearchParams();
-
-    query.set(
-      "page",
-      String(params.page ?? 1)
-    );
-
-    query.set(
-      "limit",
-      String(params.limit ?? 50)
-    );
-
-    if (params.busca?.trim()) {
-      query.set(
-        "busca",
-        params.busca.trim()
-      );
-    }
-
-    if (params.estado?.trim()) {
-      query.set(
-        "estado",
-        params.estado.trim()
-      );
-    }
-
-    if (params.cidade?.trim()) {
-      query.set(
-        "cidade",
-        params.cidade.trim()
-      );
-    }
-
-    if (params.cargo?.trim()) {
-      query.set(
-        "cargo",
-        params.cargo.trim()
-      );
-    }
-
-    if (
-      params.veiculo_id !== undefined
-    ) {
-      query.set(
-        "veiculo_id",
-        String(params.veiculo_id)
-      );
-    }
-
-    if (
-      params.ativo !== undefined
-    ) {
-      query.set(
-        "ativo",
-        String(params.ativo)
-      );
-    }
-
-    if (params.ordem) {
-      query.set(
-        "ordem",
-        params.ordem
-      );
-    }
-
-    if (params.direcao) {
-      query.set(
-        "direcao",
-        params.direcao
-      );
-    }
-
-    const response =
-      await authenticatedFetch(
-          `${API_URL}/api/jornalistas?${query.toString()}`,
-          {
-          method: "GET",
-          }
-      );
-
-    const responseText =
-      await response.text();
-
-    let data: ListarJornalistasResponse;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error(
-        "A API retornou uma resposta inválida."
-      );
-    }
-
-    if (
-      !response.ok ||
-      !data.success ||
-      !data.jornalistas ||
-      !data.pagination
-    ) {
-      throw new Error(
-        data.message ||
-          "Não foi possível carregar o mailing."
-      );
-    }
-
-    return data;
+  if (!data.jornalista) {
+    throw new Error("O servidor não retornou os dados atualizados do contato.");
   }
 
-  export async function buscarJornalista(
-    id: number
-  ): Promise<Jornalista> {
-    const response =
-      await authenticatedFetch(
-          `${API_URL}/api/jornalistas/${id}`,
-          {
-          method: "GET",
-          }
-      );
+  return data;
+}
 
-    const responseText =
-      await response.text();
-
-    let data: {
-      success: boolean;
-      jornalista?: Jornalista;
-      message?: string;
-    };
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error(
-        "A API retornou uma resposta inválida."
-      );
+export async function excluirJornalista(
+  id: number
+): Promise<ExcluirJornalistaResponse> {
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/${id}`,
+    {
+      method: "DELETE",
     }
+  );
 
-    if (
-      !response.ok ||
-      !data.success ||
-      !data.jornalista
-    ) {
-      throw new Error(
-        data.message ||
-          "Não foi possível carregar o contato."
-      );
-    }
+  const responseText = await response.text();
 
-    return data.jornalista;
+  let data: ExcluirJornalistaResponse;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  export async function criarJornalista(
-    dados: CriarJornalistaData
-  ): Promise<CriarJornalistaResponse> {
-    const response =
-      await authenticatedFetch(
-          `${API_URL}/api/jornalistas`,
-          {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json",
-          },
-          body: JSON.stringify(dados),
-          }
-      );
-
-    const responseText =
-      await response.text();
-
-    let data: CriarJornalistaResponse;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error(
-        "A API retornou uma resposta inválida."
-      );
-    }
-
-    if (
-      !response.ok ||
-      !data.success
-    ) {
-      throw new Error(
-        data.message ||
-          "Não foi possível cadastrar o contato."
-      );
-    }
-
-    return data;
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || "Não foi possível excluir o contato.");
   }
 
-  export async function atualizarJornalista(
-    id: number,
-    dados: AtualizarJornalistaData
-  ): Promise<AtualizarJornalistaResponse> {
-    const response =
-      await authenticatedFetch(
-          `${API_URL}/api/jornalistas/${id}`,
-          {
-          method: "PUT",
-          headers: {
-              "Content-Type": "application/json",
-          },
-          body: JSON.stringify(dados),
-          }
-      );
+  return data;
+}
 
-    const responseText =
-      await response.text();
+export async function exportarJornalistas(
+  params: Omit<ListarJornalistasParams, "page" | "limit"> = {}
+): Promise<Response> {
+  const query = new URLSearchParams();
 
-    let data: AtualizarJornalistaResponse;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error(
-        "A API retornou uma resposta inválida."
-      );
-    }
-
-    if (
-      !response.ok ||
-      !data.success
-    ) {
-      throw new Error(
-        data.message ||
-          "Não foi possível atualizar o contato."
-      );
-    }
-
-    if (!data.jornalista) {
-      throw new Error(
-        "O servidor não retornou os dados atualizados do contato."
-      );
-    }
-
-    return data;
+  if (params.busca?.trim()) {
+    query.set("busca", params.busca.trim());
   }
 
-  export async function excluirJornalista(
-    id: number
-  ): Promise<ExcluirJornalistaResponse> {
-    const response =
-      await authenticatedFetch(
-          `${API_URL}/api/jornalistas/${id}`,
-          {
-          method: "DELETE",
-          }
-      );
-
-    const responseText =
-      await response.text();
-
-    let data: ExcluirJornalistaResponse;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error(
-        "A API retornou uma resposta inválida."
-      );
-    }
-
-    if (
-      !response.ok ||
-      !data.success
-    ) {
-      throw new Error(
-        data.message ||
-          "Não foi possível excluir o contato."
-      );
-    }
-
-    return data;
+  if (params.estado?.trim()) {
+    query.set("estado", params.estado.trim());
   }
 
-    export async function exportarJornalistas(
-    params: Omit<
-      ListarJornalistasParams,
-      "page" | "limit"
-    > = {}
-  ): Promise<Response> {
-    const query = new URLSearchParams();
-
-    if (params.busca?.trim()) {
-      query.set("busca", params.busca.trim());
-    }
-
-    if (params.estado?.trim()) {
-      query.set("estado", params.estado.trim());
-    }
-
-    if (params.cidade?.trim()) {
-      query.set("cidade", params.cidade.trim());
-    }
-
-    if (params.cargo?.trim()) {
-      query.set("cargo", params.cargo.trim());
-    }
-
-    if (params.veiculo_id !== undefined) {
-      query.set(
-        "veiculo_id",
-        String(params.veiculo_id)
-      );
-    }
-
-    if (params.ativo !== undefined) {
-      query.set("ativo", String(params.ativo));
-    }
-
-    if (params.ordem) {
-      query.set("ordem", params.ordem);
-    }
-
-    if (params.direcao) {
-      query.set("direcao", params.direcao);
-    }
-
-    const sufixo = query.toString();
-
-    const response = await authenticatedFetch(
-      `${API_URL}/api/jornalistas/exportar${
-        sufixo ? `?${sufixo}` : ""
-      }`,
-      {
-        method: "GET",
-      }
-    );
-
-    if (response.ok) {
-      return response;
-    }
-
-    const textoResposta = await response.text();
-
-    let mensagem =
-      "Não foi possível exportar os contatos.";
-
-    try {
-      const dados = JSON.parse(textoResposta);
-
-      mensagem = dados.message || mensagem;
-    } catch {
-
-    }
-
-    throw new Error(mensagem);
+  if (params.cidade?.trim()) {
+    query.set("cidade", params.cidade.trim());
   }
 
-  export interface ResumoImportacaoJornalistas {
+  if (params.cargo?.trim()) {
+    query.set("cargo", params.cargo.trim());
+  }
+
+  if (params.veiculo_id !== undefined) {
+    query.set("veiculo_id", String(params.veiculo_id));
+  }
+
+  if (params.ativo !== undefined) {
+    query.set("ativo", String(params.ativo));
+  }
+
+  if (params.ordem) {
+    query.set("ordem", params.ordem);
+  }
+
+  if (params.direcao) {
+    query.set("direcao", params.direcao);
+  }
+
+  const sufixo = query.toString();
+
+  const response = await authenticatedFetch(
+    `${API_URL}/api/jornalistas/exportar${sufixo ? `?${sufixo}` : ""}`,
+    {
+      method: "GET",
+    }
+  );
+
+  if (response.ok) {
+    return response;
+  }
+
+  const textoResposta = await response.text();
+
+  let mensagem = "Não foi possível exportar os contatos.";
+
+  try {
+    const dados = JSON.parse(textoResposta);
+
+    mensagem = dados.message || mensagem;
+  } catch {}
+
+  throw new Error(mensagem);
+}
+
+export interface ResumoImportacaoJornalistas {
   lidos: number;
   importados: number;
   ignorados: number;
@@ -481,11 +379,7 @@ export async function importarJornalistas(
 ): Promise<ImportarJornalistasResponse> {
   const formData = new FormData();
 
-  formData.append(
-    "arquivo",
-    arquivo,
-    nomeArquivo
-  );
+  formData.append("arquivo", arquivo, nomeArquivo);
 
   const response = await authenticatedFetch(
     `${API_URL}/api/jornalistas/importar`,
@@ -502,15 +396,11 @@ export async function importarJornalistas(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!dados.message) {
-    throw new Error(
-      "Não foi possível importar os contatos."
-    );
+    throw new Error("Não foi possível importar os contatos.");
   }
 
   return dados;
@@ -543,16 +433,11 @@ export async function excluirJornalistasEmLote(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível excluir os contatos."
-    );
+    throw new Error(dados.message || "Não foi possível excluir os contatos.");
   }
 
   return dados;

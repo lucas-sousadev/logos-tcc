@@ -34,6 +34,9 @@ CREATE TABLE usuarios (
     email VARCHAR(150) NOT NULL,
     telefone VARCHAR(30) NULL,
     foto_path VARCHAR(500) NULL,
+    cargo VARCHAR(100) NULL,
+    cidade VARCHAR(100) NULL,
+    uf CHAR(2) NULL,
     senha_hash VARCHAR(255) NOT NULL,
 
     perfil ENUM('ASSESSOR', 'FUNCIONARIO')

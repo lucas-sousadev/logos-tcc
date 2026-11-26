@@ -1,9 +1,5 @@
-import {
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
+import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 import { useState } from "react";
 import * as DocumentPicker from "@/services/seletorArquivos";
@@ -21,10 +17,8 @@ export interface ArquivoLogo {
 
 interface LogoPickerProps {
   logoAtualUri?: string | null;
-  logoSelecionado?: ArquivoLogo | null;  
-  onSelect: (
-    arquivo: ArquivoLogo
-  ) => void;
+  logoSelecionado?: ArquivoLogo | null;
+  onSelect: (arquivo: ArquivoLogo) => void;
   onRemove: () => void;
   disabled?: boolean;
   error?: string;
@@ -37,35 +31,22 @@ function resolverMimeType(
   mimeType: string | undefined,
   nome: string
 ): string | null {
-  const tiposPermitidos = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-  ];
+  const tiposPermitidos = ["image/jpeg", "image/png", "image/webp"];
 
-  if (
-    mimeType &&
-    tiposPermitidos.includes(mimeType)
-  ) {
+  if (mimeType && tiposPermitidos.includes(mimeType)) {
     return mimeType;
   }
 
-  const extensao =
-    nome.split(".").pop()?.toLocaleLowerCase();
+  const extensao = nome.split(".").pop()?.toLocaleLowerCase();
 
-  const tiposPorExtensao: Record<
-    string,
-    string
-  > = {
+  const tiposPorExtensao: Record<string, string> = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
     png: "image/png",
     webp: "image/webp",
   };
 
-  return extensao
-    ? tiposPorExtensao[extensao] ?? null
-    : null;
+  return extensao ? (tiposPorExtensao[extensao] ?? null) : null;
 }
 
 export default function LogoPicker({
@@ -77,24 +58,20 @@ export default function LogoPicker({
   error,
   showChanged = false,
 }: LogoPickerProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
   const [erroLocal, setErroLocal] = useState("");
 
-  const uriLogo =
-    logoSelecionado?.uri ?? logoAtualUri;
+  const uriLogo = logoSelecionado?.uri ?? logoAtualUri;
 
   async function selecionarLogo() {
     try {
-      const resultado =
-        await DocumentPicker.getDocumentAsync({
-          type: [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-          ],
-          copyToCacheDirectory: true,
-          multiple: false,
-        });
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: ["image/jpeg", "image/png", "image/webp"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
 
       if (resultado.canceled) {
         return;
@@ -102,26 +79,16 @@ export default function LogoPicker({
 
       const arquivo = resultado.assets[0];
 
-      const mimeType = resolverMimeType(
-        arquivo.mimeType,
-        arquivo.name
-      );
+      const mimeType = resolverMimeType(arquivo.mimeType, arquivo.name);
 
       if (!mimeType) {
-        setErroLocal(
-          "Selecione uma imagem JPG, PNG ou WEBP."
-        );
+        setErroLocal("Selecione uma imagem JPG, PNG ou WEBP.");
 
         return;
       }
 
-      if (
-        arquivo.size !== undefined &&
-        arquivo.size > TAMANHO_MAXIMO
-      ) {
-        setErroLocal(
-          "O logo deve possuir no máximo 2 MB."
-        );
+      if (arquivo.size !== undefined && arquivo.size > TAMANHO_MAXIMO) {
+        setErroLocal("O logo deve possuir no máximo 2 MB.");
 
         return;
       }
@@ -135,20 +102,15 @@ export default function LogoPicker({
         file: arquivo.file,
       });
     } catch {
-      setErroLocal(
-        "Não foi possível selecionar a imagem."
-      );
+      setErroLocal("Não foi possível selecionar a imagem.");
     }
   }
 
   const mensagemErro = error || erroLocal;
 
   return (
-    <View style={styles.container}>
-      <Text
-        weight="SemiBold"
-        style={styles.label}
-      >
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
+      <Text weight="SemiBold" style={styles.label}>
         LOGO
       </Text>
 
@@ -158,8 +120,7 @@ export default function LogoPicker({
             styles.previewContainer,
             {
               borderColor: theme.borda,
-              backgroundColor:
-                theme.background,
+              backgroundColor: theme.background,
             },
           ]}
         >
@@ -167,8 +128,7 @@ export default function LogoPicker({
             style={[
               styles.preview,
               {
-                backgroundColor:
-                  theme.backgroundContainer,
+                backgroundColor: theme.backgroundContainer,
               },
             ]}
           >
@@ -180,21 +140,11 @@ export default function LogoPicker({
           </View>
 
           <View style={styles.previewInfo}>
-            <Text
-              weight="SemiBold"
-              style={styles.previewTitle}
-            >
-              {logoSelecionado
-                ? "Novo logo selecionado"
-                : "Logo atual"}
+            <Text weight="SemiBold" style={styles.previewTitle}>
+              {logoSelecionado ? "Novo logo selecionado" : "Logo atual"}
             </Text>
 
-            <Text
-              style={[
-                styles.previewText,
-                { color: theme.textoSub },
-              ]}
-            >
+            <Text style={[styles.previewText, { color: theme.textoSub }]}>
               JPG, PNG ou WEBP · até 2 MB
             </Text>
 
@@ -206,8 +156,7 @@ export default function LogoPicker({
                 style={[
                   styles.changeButton,
                   {
-                    backgroundColor:
-                      theme.backgroundContainer,
+                    backgroundColor: theme.backgroundContainer,
                     opacity: disabled ? 0.5 : 1,
                   },
                 ]}
@@ -242,10 +191,7 @@ export default function LogoPicker({
               >
                 <Text
                   weight="SemiBold"
-                  style={[
-                    styles.actionText,
-                    { color: "#EF4444" },
-                  ]}
+                  style={[styles.actionText, { color: "#EF4444" }]}
                 >
                   REMOVER
                 </Text>
@@ -267,26 +213,14 @@ export default function LogoPicker({
             },
           ]}
         >
-          <Ionicons
-            name="image-outline"
-            size={22}
-            color={theme.texto}
-          />
+          <Ionicons name="image-outline" size={22} color={theme.texto} />
 
           <View style={styles.emptyInfo}>
-            <Text
-              weight="SemiBold"
-              style={styles.emptyTitle}
-            >
+            <Text weight="SemiBold" style={styles.emptyTitle}>
               SELECIONAR LOGO
             </Text>
 
-            <Text
-              style={[
-                styles.emptyText,
-                { color: theme.textoSub },
-              ]}
-            >
+            <Text style={[styles.emptyText, { color: theme.textoSub }]}>
               JPG, PNG ou WEBP · até 2 MB
             </Text>
           </View>
@@ -296,20 +230,14 @@ export default function LogoPicker({
       {showChanged ? (
         <Text
           weight="Medium"
-          style={[
-            styles.changed,
-            { color: theme.primaria },
-          ]}
+          style={[styles.changed, { color: theme.primaria }]}
         >
           Alteração pendente
         </Text>
       ) : null}
 
       {mensagemErro ? (
-        <Text
-          weight="Medium"
-          style={styles.error}
-        >
+        <Text weight="Medium" style={styles.error}>
           {mensagemErro}
         </Text>
       ) : null}

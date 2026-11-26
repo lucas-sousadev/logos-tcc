@@ -1,3 +1,4 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { useState } from "react";
 import {
   Keyboard,
@@ -24,17 +25,40 @@ import {
 
 LocaleConfig.locales["pt-br"] = {
   monthNames: [
-    "Janeiro", "Fevereiro", "Março", "Abril",
-    "Maio", "Junho", "Julho", "Agosto",
-    "Setembro", "Outubro", "Novembro", "Dezembro",
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
   ],
   monthNamesShort: [
-    "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-    "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
   ],
   dayNames: [
-    "Domingo", "Segunda-feira", "Terça-feira",
-    "Quarta-feira", "Quinta-feira", "Sexta-feira",
+    "Domingo",
+    "Segunda-feira",
+    "Terça-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
     "Sábado",
   ],
   dayNamesShort: ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
@@ -62,6 +86,8 @@ export default function ClippingDataInput({
   disabled = false,
   label = "DATA DE PUBLICAÇÃO",
 }: ClippingDataInputProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme, mode } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -117,13 +143,13 @@ export default function ClippingDataInput({
 
     selecionarData(
       `${hoje.getFullYear()}-` +
-      `${String(hoje.getMonth() + 1).padStart(2, "0")}-` +
-      String(hoje.getDate()).padStart(2, "0")
+        `${String(hoje.getMonth() + 1).padStart(2, "0")}-` +
+        String(hoje.getDate()).padStart(2, "0")
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
       <View
         style={{
           flexDirection: "row",
@@ -132,10 +158,7 @@ export default function ClippingDataInput({
           marginBottom: 8,
         }}
       >
-        <Text
-          weight="Medium"
-          style={[styles.label, { marginBottom: 0 }]}
-        >
+        <Text weight="Medium" style={[styles.label, { marginBottom: 0 }]}>
           {label}
         </Text>
 
@@ -242,11 +265,7 @@ export default function ClippingDataInput({
                     accessibilityLabel="Fechar calendário"
                     style={styles.fechar}
                   >
-                    <Ionicons
-                      name="close"
-                      size={24}
-                      color={theme.texto}
-                    />
+                    <Ionicons name="close" size={24} color={theme.texto} />
                   </TouchableOpacity>
                 </View>
 
@@ -263,9 +282,7 @@ export default function ClippingDataInput({
                   onMonthChange={(mes) =>
                     setMesVisivel(mes.dateString.slice(0, 7))
                   }
-                  onDayPress={(dia) =>
-                    selecionarData(dia.dateString)
-                  }
+                  onDayPress={(dia) => selecionarData(dia.dateString)}
                   markedDates={
                     dataSelecionada
                       ? {
@@ -283,8 +300,7 @@ export default function ClippingDataInput({
                     textDisabledColor: theme.textoSub,
                     todayTextColor: theme.textoTerciaria,
                     arrowColor: theme.textoTerciaria,
-                    selectedDayBackgroundColor:
-                      theme.backgroundContainer,
+                    selectedDayBackgroundColor: theme.backgroundContainer,
                     selectedDayTextColor: theme.textoContainer,
                     textDayFontFamily: Fonts.MontserratRegular,
                     textMonthFontFamily: Fonts.MontserratSemiBold,

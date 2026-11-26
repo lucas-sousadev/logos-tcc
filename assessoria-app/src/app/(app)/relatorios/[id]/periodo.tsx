@@ -1,13 +1,19 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
 import Header from "@/components/layout/Header";
@@ -27,10 +33,7 @@ import {
   type RelatorioDetalhado,
   type ResumoMateriasEdicao,
 } from "@/services/api/relatorio";
-import {
-  dataBRParaISO,
-  dataISOParaBR,
-} from "@/utils/clippingFormatacao";
+import { dataBRParaISO, dataISOParaBR } from "@/utils/clippingFormatacao";
 
 const LIMITE = 20;
 
@@ -40,17 +43,24 @@ type Periodo = {
 };
 
 export default function EditarPeriodoRelatorio() {
+  const { usuario } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <EditarPeriodoConta
+      key={[usuario?.assessoria_id, usuario?.id, id].join(":")}
+    />
+  );
+}
+
+function EditarPeriodoConta() {
   const { theme } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
 
-  const [relatorio, setRelatorio] =
-    useState<RelatorioDetalhado | null>(null);
-  const [carregandoRelatorio, setCarregandoRelatorio] =
-    useState(true);
+  const [relatorio, setRelatorio] = useState<RelatorioDetalhado | null>(null);
+  const [carregandoRelatorio, setCarregandoRelatorio] = useState(true);
   const [erroRelatorio, setErroRelatorio] = useState("");
-  const [tentativaRelatorio, setTentativaRelatorio] =
-    useState(0);
+  const [tentativaRelatorio, setTentativaRelatorio] = useState(0);
 
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
@@ -58,77 +68,78 @@ export default function EditarPeriodoRelatorio() {
   const [erroFim, setErroFim] = useState("");
   const [periodo, setPeriodo] = useState<Periodo | null>(null);
 
-  const [aba, setAba] = useState<"disponiveis" | "marcadas">(
-    "disponiveis"
-  );
+  const [aba, setAba] = useState<"disponiveis" | "marcadas">("disponiveis");
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [pagina, setPagina] = useState(1);
   const [materias, setMaterias] = useState<MateriaRelatorio[]>([]);
-  const [marcadas, setMarcadas] = useState(
-    new Map<number, MateriaRelatorio>()
-  ); 
-  const [resumo, setResumo] =useState<ResumoMateriasEdicao | null>(null);
-    
+  const [marcadas, setMarcadas] = useState(new Map<number, MateriaRelatorio>());
+  const [resumo, setResumo] = useState<ResumoMateriasEdicao | null>(null);
+
   const [todasMarcadas, setTodasMarcadas] = useState(false);
-  const [desmarcadas, setDesmarcadas] = useState<
-    Map<number, MateriaRelatorio>
-  >(() => new Map());
+  const [desmarcadas, setDesmarcadas] = useState<Map<number, MateriaRelatorio>>(
+    () => new Map()
+  );
   const totalMarcadas = todasMarcadas
     ? Math.max(0, (resumo?.novas ?? 0) - desmarcadas.size)
     : marcadas.size;
-  const [paginacao, setPaginacao] =
-    useState<PaginacaoRelatorio | null>(null);
+  const [paginacao, setPaginacao] = useState<PaginacaoRelatorio | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erroConsulta, setErroConsulta] = useState("");
   const [erroSalvar, setErroSalvar] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const salvamentoEmCurso = useRef(false);
   const [tentativaConsulta, setTentativaConsulta] = useState(0);
   const assinaturaRevisada = useRef<string | null>(null);
 
   const retornar = useRetornoSeguro({
-    pathname: "/relatorios/[id]", params: { id: String(id) },
+    pathname: "/relatorios/[id]",
+    params: { id: String(id) },
   });
-  const alterado = Boolean(relatorio && (
-    dataInicio !== dataISOParaBR(relatorio.periodo_inicio) ||
-    dataFim !== dataISOParaBR(relatorio.periodo_fim) ||
-    marcadas.size || desmarcadas.size || todasMarcadas
-  ));
+  const alterado = Boolean(
+    relatorio &&
+    (dataInicio !== dataISOParaBR(relatorio.periodo_inicio) ||
+      dataFim !== dataISOParaBR(relatorio.periodo_fim) ||
+      marcadas.size ||
+      desmarcadas.size ||
+      todasMarcadas)
+  );
   const saida = useSaidaFormulario(alterado, salvando);
 
   useEffect(() => {
-    if (!Number.isSafeInteger(id) || id < 1) {
-      setErroRelatorio("Relatório inválido.");
-      setCarregandoRelatorio(false);
-      return;
-    }
-
     let ativo = true;
-    setCarregandoRelatorio(true);
-    setErroRelatorio("");
+    const timer = setTimeout(() => {
+      if (!ativo) return;
+      if (!Number.isSafeInteger(id) || id < 1) {
+        setErroRelatorio("Relatório inválido.");
+        setCarregandoRelatorio(false);
+        return;
+      }
+      setCarregandoRelatorio(true);
+      setErroRelatorio("");
+      buscarRelatorio(id, 1)
+        .then(({ relatorio: atual }) => {
+          if (!ativo) return;
 
-    buscarRelatorio(id, 1)
-      .then(({ relatorio: atual }) => {
-        if (!ativo) return;
-
-        setRelatorio(atual);
-        setDataInicio(dataISOParaBR(atual.periodo_inicio));
-        setDataFim(dataISOParaBR(atual.periodo_fim));
-      })
-      .catch((e) => {
-        if (!ativo) return;
-        setErroRelatorio(
-          e instanceof Error
-            ? e.message
-            : "Não foi possível abrir o relatório."
-        );
-      })
-      .finally(() => {
-        if (ativo) setCarregandoRelatorio(false);
-      });
-
+          setRelatorio(atual);
+          setDataInicio(dataISOParaBR(atual.periodo_inicio));
+          setDataFim(dataISOParaBR(atual.periodo_fim));
+        })
+        .catch((e) => {
+          if (!ativo) return;
+          setErroRelatorio(
+            e instanceof Error
+              ? e.message
+              : "Não foi possível abrir o relatório."
+          );
+        })
+        .finally(() => {
+          if (ativo) setCarregandoRelatorio(false);
+        });
+    }, 0);
     return () => {
       ativo = false;
+      clearTimeout(timer);
     };
   }, [id, tentativaRelatorio]);
 
@@ -142,33 +153,32 @@ export default function EditarPeriodoRelatorio() {
   }, [busca]);
 
   useEffect(() => {
-    if (!periodo) return;
-
-    if (aba === "marcadas") {
-      setCarregando(false);
-      return;
-    }
-
     let ativo = true;
-    setCarregando(true);
-    setErroConsulta("");
+    const timer = setTimeout(() => {
+      if (!ativo) return;
+      if (!periodo) return;
+      if (aba === "marcadas") {
+        setCarregando(false);
+        return;
+      }
+      setCarregando(true);
+      setErroConsulta("");
+      listarMateriasCandidatasRelatorio(id, {
+        periodo_inicio: periodo.inicio,
+        periodo_fim: periodo.fim,
+        page: pagina,
+        limit: LIMITE,
+        busca: buscaAplicada,
+      })
+        .then((resposta) => {
+          if (!ativo) return;
 
-    listarMateriasCandidatasRelatorio(id, {
-      periodo_inicio: periodo.inicio,
-      periodo_fim: periodo.fim,
-      page: pagina,
-      limit: LIMITE,
-      busca: buscaAplicada,
-    })
-      .then((resposta) => {
-        if (!ativo) return;
+          const novaAssinatura = resposta.resumo.assinatura;
 
-        const novaAssinatura = resposta.resumo.assinatura;
-
-        if (
+          if (
             assinaturaRevisada.current !== null &&
             assinaturaRevisada.current !== novaAssinatura
-        ) {
+          ) {
             assinaturaRevisada.current = novaAssinatura;
             setMarcadas(new Map());
             setDesmarcadas(new Map());
@@ -177,74 +187,57 @@ export default function EditarPeriodoRelatorio() {
             setMaterias([]);
             setPaginacao(null);
             setErroConsulta(
-            "A lista de matérias mudou. Confira as disponíveis e toque em TENTAR NOVAMENTE."
+              "A lista de matérias mudou. Confira as disponíveis e toque em TENTAR NOVAMENTE."
             );
             return;
-        }
+          }
 
-        assinaturaRevisada.current = novaAssinatura;
-        setMaterias(resposta.materias);
-        setResumo(resposta.resumo);
-        setPaginacao(resposta.pagination);
-      })
-      .catch((e) => {
-        if (!ativo) return;
+          assinaturaRevisada.current = novaAssinatura;
+          setMaterias(resposta.materias);
+          setResumo(resposta.resumo);
+          setPaginacao(resposta.pagination);
+        })
+        .catch((e) => {
+          if (!ativo) return;
 
-        setErroConsulta(
-          e instanceof Error
-            ? e.message
-            : "Não foi possível consultar as matérias."
-        );
-      })
-      .finally(() => {
-        if (ativo) setCarregando(false);
-      });
-
+          setErroConsulta(
+            e instanceof Error
+              ? e.message
+              : "Não foi possível consultar as matérias."
+          );
+        })
+        .finally(() => {
+          if (ativo) setCarregando(false);
+        });
+    }, 0);
     return () => {
       ativo = false;
+      clearTimeout(timer);
     };
-  }, [
-    id,
-    periodo,
-    aba,
-    pagina,
-    buscaAplicada,
-    tentativaConsulta,
-  ]);
+  }, [id, periodo, aba, pagina, buscaAplicada, tentativaConsulta]);
 
   const materiasMarcadas = useMemo(() => {
     const termo = buscaAplicada.toLocaleLowerCase("pt-BR");
     const fonte = todasMarcadas ? desmarcadas : marcadas;
 
     return [...fonte.values()]
-        .filter(
+      .filter(
         (materia) =>
-            !termo ||
-            [materia.pauta, materia.veiculo_nome].some((valor) =>
-            (valor ?? "")
-                .toLocaleLowerCase("pt-BR")
-                .includes(termo)
-            )
-        )
-        .sort(
+          !termo ||
+          [materia.pauta, materia.veiculo_nome].some((valor) =>
+            (valor ?? "").toLocaleLowerCase("pt-BR").includes(termo)
+          )
+      )
+      .sort(
         (a, b) =>
-            (a.data_publicacao ?? "").localeCompare(
-            b.data_publicacao ?? ""
-            ) || a.id - b.id
-        );
-    }, [
-    todasMarcadas,
-    desmarcadas,
-    marcadas,
-    buscaAplicada,
-    ]);
+          (a.data_publicacao ?? "").localeCompare(b.data_publicacao ?? "") ||
+          a.id - b.id
+      );
+  }, [todasMarcadas, desmarcadas, marcadas, buscaAplicada]);
 
   const materiasVisiveis =
     aba === "marcadas"
-      ? materiasMarcadas.slice(
-          (pagina - 1) * LIMITE,
-          pagina * LIMITE
-        )
+      ? materiasMarcadas.slice((pagina - 1) * LIMITE, pagina * LIMITE)
       : materias;
 
   const paginacaoVisivel =
@@ -260,12 +253,11 @@ export default function EditarPeriodoRelatorio() {
   useEffect(() => {
     if (aba !== "marcadas") return;
 
-    const ultima = Math.max(
-      1,
-      Math.ceil(materiasMarcadas.length / LIMITE)
-    );
+    const ultima = Math.max(1, Math.ceil(materiasMarcadas.length / LIMITE));
 
-    if (pagina > ultima) setPagina(ultima);
+    if (pagina <= ultima) return;
+    const timer = setTimeout(() => setPagina(ultima), 0);
+    return () => clearTimeout(timer);
   }, [aba, pagina, materiasMarcadas.length]);
 
   function revisar() {
@@ -274,19 +266,13 @@ export default function EditarPeriodoRelatorio() {
 
     assinaturaRevisada.current = null;
 
-    setErroInicio(
-      inicio ? "" : "Informe uma data inicial válida."
-    );
-    setErroFim(
-      fim ? "" : "Informe uma data final válida."
-    );
+    setErroInicio(inicio ? "" : "Informe uma data inicial válida.");
+    setErroFim(fim ? "" : "Informe uma data final válida.");
 
     if (!inicio || !fim) return;
 
     if (inicio > fim) {
-      setErroFim(
-        "O fim não pode ser anterior ao início."
-      );
+      setErroFim("O fim não pode ser anterior ao início.");
       return;
     }
 
@@ -316,37 +302,38 @@ export default function EditarPeriodoRelatorio() {
 
   function alternar(materia: MateriaRelatorio) {
     if (todasMarcadas) {
-        setDesmarcadas((atuais) => {
+      setDesmarcadas((atuais) => {
         const proximo = new Map(atuais);
 
         if (proximo.has(materia.id)) {
-            proximo.delete(materia.id);
+          proximo.delete(materia.id);
         } else {
-            proximo.set(materia.id, materia);
+          proximo.set(materia.id, materia);
         }
 
         return proximo;
-        });
+      });
 
-        return;
+      return;
     }
 
     setMarcadas((atuais) => {
-        const proximo = new Map(atuais);
+      const proximo = new Map(atuais);
 
-        if (proximo.has(materia.id)) {
+      if (proximo.has(materia.id)) {
         proximo.delete(materia.id);
-        } else {
+      } else {
         proximo.set(materia.id, materia);
-        }
+      }
 
-        return proximo;
+      return proximo;
     });
-    }
+  }
 
   async function salvar() {
-    if (!periodo || !resumo || salvando) return;
+    if (!periodo || !resumo || salvamentoEmCurso.current) return;
 
+    salvamentoEmCurso.current = true;
     setSalvando(true);
     setErroSalvar("");
 
@@ -355,19 +342,15 @@ export default function EditarPeriodoRelatorio() {
         periodo_inicio: periodo.inicio,
         periodo_fim: periodo.fim,
         ids_incluir: todasMarcadas ? [] : [...marcadas.keys()],
-        ids_excluir: todasMarcadas
-        ? [...desmarcadas.keys()]
-        : [],
+        ids_excluir: todasMarcadas ? [...desmarcadas.keys()] : [],
         incluir_todas: todasMarcadas,
-        assinatura: resumo.assinatura, 
+        assinatura: resumo.assinatura,
       });
 
       saida.concluirSaida(retornar);
     } catch (e) {
       const mensagem =
-        e instanceof Error
-          ? e.message
-          : "Não foi possível salvar o período.";
+        e instanceof Error ? e.message : "Não foi possível salvar o período.";
 
       setErroSalvar(mensagem);
 
@@ -384,526 +367,464 @@ export default function EditarPeriodoRelatorio() {
         setTentativaConsulta((atual) => atual + 1);
       }
     } finally {
+      salvamentoEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header title="Editar período" showBackButton />
-
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.conteudo}
+    <EdicaoCompacta ativa={true}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
-        {carregandoRelatorio ? (
-          <ActivityIndicator color={theme.textoTerciaria} />
-        ) : null}
+        <Header title="Editar período" showBackButton />
 
-        {erroRelatorio ? (
-          <View style={styles.bloco}>
-            <Text style={{ color: theme.erro }}>
-              {erroRelatorio}
-            </Text>
-            <Button
-              title="TENTAR NOVAMENTE"
-              variant="outline"
-              size="small"
-              onPress={() =>
-                setTentativaRelatorio((atual) => atual + 1)
-              }
-            />
-          </View>
-        ) : null}
+        <ScrollView
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.conteudo}
+        >
+          {carregandoRelatorio ? (
+            <ActivityIndicator color={theme.textoTerciaria} />
+          ) : null}
 
-        {relatorio ? (
-          <>
-            {!periodo ? (
-            <View
-                style={[
-                styles.cartao,
-                {
-                    borderColor: theme.borda,
-                    backgroundColor: theme.backgroundSecundario,
-                },
-                ]}
-            >
-                <Text weight="Bold">{relatorio.titulo}</Text>
-                <Text style={{ color: theme.textoSub }}>
-                {relatorio.cliente_nome}
-                </Text>
-                <Text style={{ color: theme.textoSub }}>
-                Período atual: {dataISOParaBR(relatorio.periodo_inicio)} a{" "}
-                {dataISOParaBR(relatorio.periodo_fim)}
-                </Text>
+          {erroRelatorio ? (
+            <View style={styles.bloco}>
+              <Text style={{ color: theme.erro }}>{erroRelatorio}</Text>
+              <Button
+                title="TENTAR NOVAMENTE"
+                variant="outline"
+                size="small"
+                onPress={() => setTentativaRelatorio((atual) => atual + 1)}
+              />
             </View>
-            ) : null}
+          ) : null}
 
-            {!periodo ? (
-              <View style={styles.bloco}>
-                <Text weight="Bold" style={styles.titulo}>
-                  Novo período
-                </Text>
-
-                <ClippingDataInput
-                  label="INÍCIO DO PERÍODO"
-                  value={dataInicio}
-                  anoReferencia={new Date().getFullYear()}
-                  error={erroInicio}
-                  onChangeText={(valor) => {
-                    setDataInicio(valor);
-                    setErroInicio("");
-                  }}
-                />
-
-                <ClippingDataInput
-                  label="FIM DO PERÍODO"
-                  value={dataFim}
-                  anoReferencia={new Date().getFullYear()}
-                  error={erroFim}
-                  onChangeText={(valor) => {
-                    setDataFim(valor);
-                    setErroFim("");
-                  }}
-                />
-
-                <Text style={{ color: theme.textoSub }}>
-                  Os slides atuais permanecem, mesmo se estiverem
-                  fora das novas datas. Você escolherá quais outras
-                  matérias deseja incluir.
-                </Text>
-
-                <Button
-                  title="REVISAR MATÉRIAS"
-                  onPress={revisar}
-                />
-              </View>
-            ) : (
-              <>
+          {relatorio ? (
+            <>
+              {!periodo ? (
                 <View
+                  style={[
+                    styles.cartao,
+                    {
+                      borderColor: theme.borda + "40",
+                      backgroundColor: theme.backgroundSecundario,
+                    },
+                  ]}
+                >
+                  <Text weight="Bold">{relatorio.titulo}</Text>
+                  <Text style={{ color: theme.textoSub }}>
+                    {relatorio.cliente_nome}
+                  </Text>
+                  <Text style={{ color: theme.textoSub }}>
+                    Período atual: {dataISOParaBR(relatorio.periodo_inicio)} a{" "}
+                    {dataISOParaBR(relatorio.periodo_fim)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {!periodo ? (
+                <SecaoEdicao titulo="Novo período">
+                  <ClippingDataInput
+                    label="INÍCIO DO PERÍODO"
+                    value={dataInicio}
+                    anoReferencia={new Date().getFullYear()}
+                    error={erroInicio}
+                    onChangeText={(valor) => {
+                      setDataInicio(valor);
+                      setErroInicio("");
+                    }}
+                  />
+                  <ClippingDataInput
+                    label="FIM DO PERÍODO"
+                    value={dataFim}
+                    anoReferencia={new Date().getFullYear()}
+                    error={erroFim}
+                    onChangeText={(valor) => {
+                      setDataFim(valor);
+                      setErroFim("");
+                    }}
+                  />
+                  <Text style={{ color: theme.textoSub }}>
+                    Os slides atuais permanecem, mesmo se estiverem fora das
+                    novas datas. Você escolherá quais outras matérias deseja
+                    incluir.
+                  </Text>
+                  <Button title="REVISAR MATÉRIAS" onPress={revisar} />
+                </SecaoEdicao>
+              ) : (
+                <>
+                  <View
                     style={[
-                        styles.cartao,
-                        {
-                        borderColor: theme.borda,
+                      styles.cartao,
+                      {
+                        borderColor: theme.borda + "40",
                         backgroundColor: theme.backgroundSecundario,
-                        },
+                      },
                     ]}
-                    >
+                  >
                     <View style={styles.topoResumo}>
-                        <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1 }}>
                         <Text weight="Bold" numberOfLines={1}>
-                            {relatorio.titulo}
+                          {relatorio.titulo}
                         </Text>
                         <Text
-                            numberOfLines={1}
-                            style={{ color: theme.textoSub, fontSize: 12 }}
+                          numberOfLines={1}
+                          style={{ color: theme.textoSub, fontSize: 12 }}
                         >
-                            {relatorio.cliente_nome}
+                          {relatorio.cliente_nome}
                         </Text>
-                        </View>
+                      </View>
 
-                        <Pressable
+                      <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Alterar datas do período"
                         onPress={alterarDatas}
-                        style={[styles.atalhoDatas, { borderColor: theme.borda }]}
-                        >
+                        style={[
+                          styles.atalhoDatas,
+                          { borderColor: theme.borda },
+                        ]}
+                      >
                         <Ionicons
-                            name="calendar-outline"
-                            size={16}
-                            color={theme.textoTerciaria}
+                          name="calendar-outline"
+                          size={16}
+                          color={theme.textoTerciaria}
                         />
                         <Text
-                            weight="SemiBold"
-                            style={{ color: theme.textoTerciaria, fontSize: 12 }}
+                          weight="SemiBold"
+                          style={{ color: theme.textoTerciaria, fontSize: 12 }}
                         >
-                            ALTERAR
+                          ALTERAR
                         </Text>
-                        </Pressable>
+                      </Pressable>
                     </View>
 
                     <View style={styles.linhaData}>
-                        <Text style={[styles.rotuloData, { color: theme.textoSub }]}>
+                      <Text
+                        style={[styles.rotuloData, { color: theme.textoSub }]}
+                      >
                         ATUAL
-                        </Text>
-                        <Text style={styles.valorData}>
+                      </Text>
+                      <Text style={styles.valorData}>
                         {dataISOParaBR(relatorio.periodo_inicio)} a{" "}
                         {dataISOParaBR(relatorio.periodo_fim)}
-                        </Text>
+                      </Text>
                     </View>
 
                     <View style={styles.linhaData}>
-                        <Text
+                      <Text
                         weight="SemiBold"
                         style={[
-                            styles.rotuloData,
-                            { color: theme.textoTerciaria },
+                          styles.rotuloData,
+                          { color: theme.textoTerciaria },
                         ]}
-                        >
+                      >
                         NOVO
-                        </Text>
-                        <Text weight="SemiBold" style={styles.valorData}>
+                      </Text>
+                      <Text weight="SemiBold" style={styles.valorData}>
                         {dataISOParaBR(periodo.inicio)} a{" "}
                         {dataISOParaBR(periodo.fim)}
-                        </Text>
+                      </Text>
                     </View>
 
                     {resumo ? (
-                        <Text style={{ color: theme.textoSub, fontSize: 12 }}>
-                        {resumo.ja_incluidas} já no relatório · {resumo.novas} para
-                        escolher · {resumo.fora_do_periodo} fora das novas datas
-                        </Text>
+                      <Text style={{ color: theme.textoSub, fontSize: 12 }}>
+                        {resumo.ja_incluidas} já no relatório · {resumo.novas}{" "}
+                        para escolher · {resumo.fora_do_periodo} fora das novas
+                        datas
+                      </Text>
                     ) : null}
-                    </View>
-            
-                <Input
-                  label="BUSCAR MATÉRIAS"
-                  placeholder="Pauta ou veículo"
-                  value={busca}
-                  onChangeText={setBusca}
-                  clearable
-                  containerStyle={styles.busca}
-                />
-                <View style={styles.abas}>
-                  {(
-                    [
-                      ["disponiveis", "DISPONÍVEIS", resumo?.novas ?? 0],
-                      [
-                        "marcadas",
-                        todasMarcadas ? "DESMARCADAS" : "MARCADAS",
-                        todasMarcadas ? desmarcadas.size : marcadas.size,
-                      ],
-                    ] as const
-                  ).map(([chave, titulo, quantidade]) => {
-                    const ativa = aba === chave;
+                  </View>
 
-                    return (
-                      <Pressable
-                        key={chave}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: ativa }}
-                        onPress={() => {
-                          setAba(chave);
-                          setPagina(1);
-                        }}
-                        style={[
-                          styles.aba,
-                          {
-                            borderColor: ativa
-                            ? theme.backgroundContainer
-                            : theme.borda,
-                            backgroundColor: ativa
-                              ? theme.backgroundContainer
-                              : theme.background,
-                          },
-                        ]}
-                      >
-                        <Text
-                          weight="Bold"
-                          style={{
-                            color: ativa
-                              ? theme.textoContainer
-                              : theme.texto,
+                  <Input
+                    label="BUSCAR MATÉRIAS"
+                    placeholder="Pauta ou veículo"
+                    value={busca}
+                    onChangeText={setBusca}
+                    clearable
+                    containerStyle={styles.busca}
+                  />
+                  <View style={styles.abas}>
+                    {(
+                      [
+                        ["disponiveis", "DISPONÍVEIS", resumo?.novas ?? 0],
+                        [
+                          "marcadas",
+                          todasMarcadas ? "DESMARCADAS" : "MARCADAS",
+                          todasMarcadas ? desmarcadas.size : marcadas.size,
+                        ],
+                      ] as const
+                    ).map(([chave, titulo, quantidade]) => {
+                      const ativa = aba === chave;
+
+                      return (
+                        <Pressable
+                          key={chave}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected: ativa }}
+                          onPress={() => {
+                            setAba(chave);
+                            setPagina(1);
                           }}
+                          style={[
+                            styles.aba,
+                            {
+                              borderColor: ativa
+                                ? theme.backgroundContainer
+                                : theme.borda,
+                              backgroundColor: ativa
+                                ? theme.backgroundContainer
+                                : theme.background,
+                            },
+                          ]}
                         >
-                          {titulo} · {quantidade}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Pressable
+                          <Text
+                            weight="Bold"
+                            style={{
+                              color: ativa ? theme.textoContainer : theme.texto,
+                            }}
+                          >
+                            {titulo} · {quantidade}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={
-                        todasMarcadas
+                      todasMarcadas
                         ? "Desmarcar todas as matérias do período"
                         : "Selecionar todas as matérias do período"
                     }
                     accessibilityState={{
-                        disabled:
+                      disabled:
                         !resumo ||
                         resumo.novas === 0 ||
                         carregando ||
                         Boolean(erroConsulta),
-                        selected: todasMarcadas,
+                      selected: todasMarcadas,
                     }}
                     disabled={
-                        !resumo ||
-                        resumo.novas === 0 ||
-                        carregando ||
-                        Boolean(erroConsulta)
+                      !resumo ||
+                      resumo.novas === 0 ||
+                      carregando ||
+                      Boolean(erroConsulta)
                     }
                     onPress={() => {
-                        const selecionar = !todasMarcadas;
+                      const selecionar = !todasMarcadas;
 
-                        setMarcadas(new Map());
-                        setDesmarcadas(new Map());
-                        setTodasMarcadas(selecionar);
-                        setAba("disponiveis");
-                        setPagina(1);
-                        setErroSalvar("");
+                      setMarcadas(new Map());
+                      setDesmarcadas(new Map());
+                      setTodasMarcadas(selecionar);
+                      setAba("disponiveis");
+                      setPagina(1);
+                      setErroSalvar("");
                     }}
                     style={[
-                        styles.selecionarTodas,
-                        {
+                      styles.selecionarTodas,
+                      {
                         borderColor: todasMarcadas
-                            ? theme.backgroundContainer
-                            : theme.borda,
+                          ? theme.backgroundContainer
+                          : theme.borda,
                         backgroundColor: todasMarcadas
-                            ? theme.backgroundContainer
-                            : theme.background,
+                          ? theme.backgroundContainer
+                          : theme.background,
                         opacity:
-                            !resumo ||
-                            resumo.novas === 0 ||
-                            carregando ||
-                            Boolean(erroConsulta)
+                          !resumo ||
+                          resumo.novas === 0 ||
+                          carregando ||
+                          Boolean(erroConsulta)
                             ? 0.5
                             : 1,
-                        },
-                    ]}
-                    >
-                    <Ionicons
-                        name={
-                        todasMarcadas
-                            ? "checkmark-circle"
-                            : "checkmark-circle-outline"
-                        }
-                        size={19}
-                        color={todasMarcadas
-                            ? theme.textoContainer
-                            : theme.texto}
-                    />
-
-                    <Text
-                        weight="SemiBold"
-                        style={{
-                        color: todasMarcadas
-                            ? theme.textoContainer
-                            : theme.texto,
-                        fontSize: 12,
-                        }}
-                    >
-                        {todasMarcadas
-                        ? "DESMARCAR TODAS"
-                        : "SELECIONAR TODAS"}
-                    </Text>
-                    </Pressable>
-
-                {carregando && aba === "disponiveis" ? (
-                  <ActivityIndicator
-                    color={theme.textoTerciaria}
-                  />
-                ) : null}
-
-                {erroConsulta && aba === "disponiveis" ? (
-                  <View style={styles.bloco}>
-                    <Text style={{ color: theme.erro }}>
-                      {erroConsulta}
-                    </Text>
-                    <Button
-                      title="TENTAR NOVAMENTE"
-                      variant="outline"
-                      size="small"
-                      onPress={() =>
-                        setTentativaConsulta(
-                          (atual) => atual + 1
-                        )
-                      }
-                    />
-                  </View>
-                ) : null}
-
-                {(!carregando || aba === "marcadas") &&
-                (!erroConsulta || aba === "marcadas") &&
-                materiasVisiveis.length === 0 ? (
-                  <Text
-                    style={[
-                      styles.vazio,
-                      { color: theme.textoSub },
+                      },
                     ]}
                   >
-                    {aba === "marcadas"
-                        ? todasMarcadas
-                            ? "Nenhuma matéria desmarcada."
-                            : "Nenhuma matéria marcada."
-                        : "Nenhuma matéria disponível nesta consulta."}
-                  </Text>
-                ) : null}
+                    <Ionicons
+                      name={
+                        todasMarcadas
+                          ? "checkmark-circle"
+                          : "checkmark-circle-outline"
+                      }
+                      size={19}
+                      color={todasMarcadas ? theme.textoContainer : theme.texto}
+                    />
 
-                {(!carregando || aba === "marcadas") &&
-                (!erroConsulta || aba === "marcadas")
-                  ? materiasVisiveis.map((materia) => {
-                     const marcada = todasMarcadas
-                        ? !desmarcadas.has(materia.id)
-                        : marcadas.has(materia.id);
-
-                      return (
-                        <Pressable
-                          key={materia.id}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{
-                            checked: marcada,
-                          }}
-                          onPress={() => alternar(materia)}
-                          style={[
-                            styles.materia,
-                            {
-                                borderWidth: marcada ? 2.5 : 1,
-                                borderColor: marcada
-                                ? theme.textoTerciaria
-                                : theme.textoSub,
-                                backgroundColor: marcada
-                                ? theme.backgroundSecundario
-                                : theme.background,
-                            },
-                            ]}
-                        >
-                          <View style={styles.linha}>
-                            <Text weight="SemiBold">
-                              {dataISOParaBR(
-                                materia.data_publicacao
-                              )}
-                            </Text>
-                            <Text
-                              weight="SemiBold"
-                              numberOfLines={1}
-                              style={[
-                                styles.veiculo,
-                                {
-                                  color:
-                                    theme.textoTerciaria,
-                                },
-                              ]}
-                            >
-                              {materia.veiculo_nome ||
-                                "Sem veículo"}
-                            </Text>
-                            <Ionicons
-                              name={
-                                marcada
-                                  ? "checkmark-circle"
-                                  : "ellipse-outline"
-                              }
-                              size={23}
-                              color={theme.textoTerciaria}
-                            />
-                          </View>
-
-                          <Text weight="Bold">
-                            {materia.pauta || "Sem pauta"}
-                          </Text>
-
-                          {materia.imagem_anexo_id === null ? (
-                            <Text
-                              style={{
-                                color: theme.aviso,
-                                fontSize: 12,
-                              }}
-                            >
-                              Sem imagem para o slide
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                      );
-                    })
-                  : null}
-
-                {paginacaoVisivel &&
-                paginacaoVisivel.total > 0 &&
-                (aba === "marcadas" || (!carregando && !erroConsulta)) ? (
-                  <View style={styles.paginacao}>
                     <Text
+                      weight="SemiBold"
                       style={{
-                        color: theme.textoSub,
-                        textAlign: "center",
+                        color: todasMarcadas
+                          ? theme.textoContainer
+                          : theme.texto,
+                        fontSize: 12,
                       }}
                     >
-                      Página {pagina} de{" "}
-                      {Math.ceil(
-                        paginacaoVisivel.total / LIMITE
-                      )}
+                      {todasMarcadas ? "DESMARCAR TODAS" : "SELECIONAR TODAS"}
                     </Text>
+                  </Pressable>
 
-                    <View style={styles.linha}>
+                  {carregando && aba === "disponiveis" ? (
+                    <ActivityIndicator color={theme.textoTerciaria} />
+                  ) : null}
+
+                  {erroConsulta && aba === "disponiveis" ? (
+                    <View style={styles.bloco}>
+                      <Text style={{ color: theme.erro }}>{erroConsulta}</Text>
                       <Button
-                        title="ANTERIOR"
+                        title="TENTAR NOVAMENTE"
                         variant="outline"
                         size="small"
-                        disabled={pagina === 1 || carregando}
                         onPress={() =>
-                          setPagina((atual) => atual - 1)
+                          setTentativaConsulta((atual) => atual + 1)
                         }
-                        style={styles.botaoPagina}
-                      />
-                      <Button
-                        title="PRÓXIMA"
-                        variant="outline"
-                        size="small"
-                        disabled={
-                          !paginacaoVisivel.has_next ||
-                          carregando
-                        }
-                        onPress={() =>
-                          setPagina((atual) => atual + 1)
-                        }
-                        style={styles.botaoPagina}
                       />
                     </View>
-                  </View>
-                ) : null}
-              </>
-            )}
-          </>
-        ) : null} 
-      </ScrollView>
+                  ) : null}
 
-      {periodo ? (
-        <View
-          style={[
-            styles.rodape,
-            {
-              borderTopColor: theme.borda,
-              backgroundColor: theme.background,
-            },
-          ]}
-        >
-          <Text
-            weight="SemiBold"
-            style={{ textAlign: "center" }}
-          >
-            {totalMarcadas} nova(s) matéria(s) marcada(s)
-          </Text>
+                  {(!carregando || aba === "marcadas") &&
+                  (!erroConsulta || aba === "marcadas") &&
+                  materiasVisiveis.length === 0 ? (
+                    <Text style={[styles.vazio, { color: theme.textoSub }]}>
+                      {aba === "marcadas"
+                        ? todasMarcadas
+                          ? "Nenhuma matéria desmarcada."
+                          : "Nenhuma matéria marcada."
+                        : "Nenhuma matéria disponível nesta consulta."}
+                    </Text>
+                  ) : null}
 
-          {erroSalvar ? (
-            <Text
-              style={{
-                color: theme.erro,
-                textAlign: "center",
-              }}
-            >
-              {erroSalvar}
-            </Text>
+                  {(!carregando || aba === "marcadas") &&
+                  (!erroConsulta || aba === "marcadas")
+                    ? materiasVisiveis.map((materia) => {
+                        const marcada = todasMarcadas
+                          ? !desmarcadas.has(materia.id)
+                          : marcadas.has(materia.id);
+
+                        return (
+                          <Pressable
+                            key={materia.id}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{
+                              checked: marcada,
+                            }}
+                            onPress={() => alternar(materia)}
+                            style={[
+                              styles.materia,
+                              {
+                                borderWidth: marcada ? 2.5 : 1,
+                                borderColor: marcada
+                                  ? theme.textoTerciaria
+                                  : theme.textoSub,
+                                backgroundColor: marcada
+                                  ? theme.backgroundSecundario
+                                  : theme.background,
+                              },
+                            ]}
+                          >
+                            <View style={styles.linha}>
+                              <Text weight="SemiBold">
+                                {dataISOParaBR(materia.data_publicacao)}
+                              </Text>
+                              <Text
+                                weight="SemiBold"
+                                numberOfLines={1}
+                                style={[
+                                  styles.veiculo,
+                                  {
+                                    color: theme.textoTerciaria,
+                                  },
+                                ]}
+                              >
+                                {materia.veiculo_nome || "Sem veículo"}
+                              </Text>
+                              <Ionicons
+                                name={
+                                  marcada
+                                    ? "checkmark-circle"
+                                    : "ellipse-outline"
+                                }
+                                size={23}
+                                color={theme.textoTerciaria}
+                              />
+                            </View>
+
+                            <Text weight="Bold">
+                              {materia.pauta || "Sem pauta"}
+                            </Text>
+
+                            {materia.imagem_anexo_id === null ? (
+                              <Text
+                                style={{
+                                  color: theme.aviso,
+                                  fontSize: 12,
+                                }}
+                              >
+                                Sem imagem para o slide
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                        );
+                      })
+                    : null}
+
+                  {paginacaoVisivel &&
+                  paginacaoVisivel.total > 0 &&
+                  (aba === "marcadas" || (!carregando && !erroConsulta)) ? (
+                    <View style={styles.paginacao}>
+                      <Text
+                        style={{
+                          color: theme.textoSub,
+                          textAlign: "center",
+                        }}
+                      >
+                        Página {pagina} de{" "}
+                        {Math.ceil(paginacaoVisivel.total / LIMITE)}
+                      </Text>
+
+                      <View style={styles.linha}>
+                        <Button
+                          title="ANTERIOR"
+                          variant="outline"
+                          size="small"
+                          disabled={pagina === 1 || carregando}
+                          onPress={() => setPagina((atual) => atual - 1)}
+                          style={styles.botaoPagina}
+                        />
+                        <Button
+                          title="PRÓXIMA"
+                          variant="outline"
+                          size="small"
+                          disabled={!paginacaoVisivel.has_next || carregando}
+                          onPress={() => setPagina((atual) => atual + 1)}
+                          style={styles.botaoPagina}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                </>
+              )}
+            </>
           ) : null}
+        </ScrollView>
 
-          <Button
-            title="SALVAR PERÍODO"
-            loading={salvando}
-            disabled={
-              !resumo ||
-              carregando ||
-              Boolean(erroConsulta)
-            }
-            onPress={() => void salvar()}
-          />
-        </View>
-      ) : null}
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+        <SalvarAlteracoes
+          changed={alterado}
+          saving={salvando}
+          disabled={!periodo || !resumo || carregando || Boolean(erroConsulta)}
+          message={
+            periodo
+              ? totalMarcadas + " nova(s) matéria(s) marcada(s)."
+              : "Revise o período para continuar."
+          }
+          error={erroSalvar}
+          onSave={() => void salvar()}
+          onDiscard={retornar}
+        />
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -912,14 +833,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   conteudo: {
-    padding: 15,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 16,
     paddingBottom: 28,
-    gap: 12,
+    gap: 14,
   },
   cartao: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 13,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
     gap: 8,
   },
   bloco: {
@@ -933,8 +857,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginBottom: 3,
-    },
-    atalhoDatas: {
+  },
+  atalhoDatas: {
     minHeight: 36,
     borderWidth: 1,
     borderRadius: 10,
@@ -943,20 +867,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    },
-    linhaData: {
+  },
+  linhaData: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    },
-    rotuloData: {
+  },
+  rotuloData: {
     width: 43,
     fontSize: 11,
-    },
-    valorData: {
+  },
+  valorData: {
     flex: 1,
     fontSize: 12,
-    },
+  },
   abas: {
     flexDirection: "row",
     gap: 8,
@@ -979,7 +903,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    },
+  },
   busca: {
     marginBottom: 0,
   },
@@ -1008,10 +932,4 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "auto",
   },
-  rodape: {
-    borderTopWidth: 1,
-    padding: 13,
-    gap: 8,
-  },
-
 });

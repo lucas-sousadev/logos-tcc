@@ -1,3 +1,4 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -39,10 +40,7 @@ import {
   type ErrosCliente,
 } from "@/utils/validarCliente";
 
-type ClienteDoSeletor = Pick<
-  ClienteClippingAno,
-  "id" | "nome" | "ativo"
->;
+type ClienteDoSeletor = Pick<ClienteClippingAno, "id" | "nome" | "ativo">;
 
 const CLIENTES_POR_PAGINA = 50;
 
@@ -88,14 +86,13 @@ export default function ClippingContexto({
   apenasCliente = false,
   style,
 }: ClippingContextoProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
 
-  const [painel, setPainel] = useState<"cliente" | "ano" | null>(
-    null
-  );
+  const [painel, setPainel] = useState<"cliente" | "ano" | null>(null);
 
-  const anoValido =
-    Number.isInteger(ano) && ano >= 1000 && ano <= 9999;
+  const anoValido = Number.isInteger(ano) && ano >= 1000 && ano <= 9999;
 
   function abrir(tipo: "cliente" | "ano") {
     Keyboard.dismiss();
@@ -108,7 +105,7 @@ export default function ClippingContexto({
   }
 
   return (
-    <View style={[styles.contexto, style]}>
+    <View style={[styles.contexto, compacto && { marginBottom: 0 }, style]}>
       <CampoContexto
         label="CLIENTE"
         value={
@@ -117,11 +114,10 @@ export default function ClippingContexto({
             : "Selecione o cliente"
         }
         action={clienteId !== null ? "Alterar" : "Selecionar"}
-        disabled={disabled || (!apenasCliente && !anoValido)}        
+        disabled={disabled || (!apenasCliente && !anoValido)}
         error={erroCliente}
         onPress={() => abrir("cliente")}
         showChanged={clienteAlterado}
-        
       />
 
       {!apenasCliente ? (
@@ -181,7 +177,7 @@ function CampoContexto({
   disabled,
   error,
   onPress,
-  
+
   showChanged = false,
 }: {
   label: string;
@@ -251,9 +247,7 @@ function CampoContexto({
           style={[
             styles.acaoCampo,
             {
-              color: disabled
-                ? theme.textoSub
-                : theme.textoTerciaria,
+              color: disabled ? theme.textoSub : theme.textoTerciaria,
             },
           ]}
         >
@@ -281,12 +275,7 @@ function Painel({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={[styles.overlay, { paddingTop: insets.top }]}
@@ -324,11 +313,7 @@ function Painel({
                 { backgroundColor: theme.backgroundContainer },
               ]}
             >
-              <Ionicons
-                name="close"
-                size={22}
-                color={theme.textoContainer}
-              />
+              <Ionicons name="close" size={22} color={theme.textoContainer} />
             </TouchableOpacity>
           </View>
 
@@ -348,20 +333,14 @@ function PainelAno({
   onClose: () => void;
   onAplicar: (ano: number) => void;
 }) {
-  const [valor, setValor] = useState(
-    Number.isInteger(ano) ? String(ano) : ""
-  );
+  const [valor, setValor] = useState(Number.isInteger(ano) ? String(ano) : "");
   const [erro, setErro] = useState("");
 
   function aplicar() {
     const texto = valor.trim();
     const numero = Number(texto);
 
-    if (
-      !/^\d{4}$/.test(texto) ||
-      numero < 1000 ||
-      numero > 9999
-    ) {
+    if (!/^\d{4}$/.test(texto) || numero < 1000 || numero > 9999) {
       setErro("Informe um ano entre 1000 e 9999.");
       return;
     }
@@ -452,7 +431,10 @@ function PainelClientes({
 
         setTotal(resposta.pagination.total);
         setErro("");
-        const ultima = Math.max(1, Math.ceil(resposta.pagination.total / CLIENTES_POR_PAGINA));
+        const ultima = Math.max(
+          1,
+          Math.ceil(resposta.pagination.total / CLIENTES_POR_PAGINA)
+        );
         if (pagina > ultima) {
           redirecionando = true;
           setCarregando(true);
@@ -514,7 +496,7 @@ function PainelClientes({
   }
 
   function alterarCadastro(campo: keyof DadosCadastroRapido, valor: string) {
-    setCadastro((atual) => atual ? { ...atual, [campo]: valor } : atual);
+    setCadastro((atual) => (atual ? { ...atual, [campo]: valor } : atual));
     setErrosCadastro((atual) => ({ ...atual, [campo]: undefined }));
     setErroCadastro("");
   }
@@ -652,7 +634,11 @@ function PainelClientes({
               },
             ]}
           >
-            <Ionicons name="arrow-back-outline" size={15} color={theme.branco} />
+            <Ionicons
+              name="arrow-back-outline"
+              size={15}
+              color={theme.branco}
+            />
             <Text
               weight="SemiBold"
               style={[styles.textoBotaoCadastro, { color: theme.branco }]}
@@ -668,13 +654,20 @@ function PainelClientes({
             onPress={() => void cadastrarCliente()}
             style={[
               styles.botaoCadastro,
-              { backgroundColor: theme.primaria, opacity: !podeCriar ? 0.5 : 1 },
+              {
+                backgroundColor: theme.primaria,
+                opacity: !podeCriar ? 0.5 : 1,
+              },
             ]}
           >
             {salvandoCadastro ? (
               <ActivityIndicator size="small" color={theme.branco} />
             ) : (
-              <Ionicons name="checkmark-outline" size={15} color={theme.branco} />
+              <Ionicons
+                name="checkmark-outline"
+                size={15}
+                color={theme.branco}
+              />
             )}
             <Text
               weight="SemiBold"
@@ -711,8 +704,15 @@ function PainelClientes({
           }}
           style={styles.atalhoCadastro}
         >
-          <Ionicons name="person-add-outline" size={16} color={theme.textoTerciaria} />
-          <Text weight="SemiBold" style={{ color: theme.textoTerciaria, fontSize: 13 }}>
+          <Ionicons
+            name="person-add-outline"
+            size={16}
+            color={theme.textoTerciaria}
+          />
+          <Text
+            weight="SemiBold"
+            style={{ color: theme.textoTerciaria, fontSize: 13 }}
+          >
             Cadastro rápido de cliente
           </Text>
         </TouchableOpacity>
@@ -728,9 +728,7 @@ function PainelClientes({
         renderItem={({ item }) => {
           const escolhido = item.id === selecionado;
 
-          const corTexto = escolhido
-            ? theme.textoContainer
-            : theme.texto;
+          const corTexto = escolhido ? theme.textoContainer : theme.texto;
 
           return (
             <TouchableOpacity
@@ -757,20 +755,14 @@ function PainelClientes({
                 </Text>
 
                 {item.ativo !== 1 ? (
-                  <Text
-                    style={[styles.label, { color: corTexto }]}
-                  >
+                  <Text style={[styles.label, { color: corTexto }]}>
                     Inativo
                   </Text>
                 ) : null}
               </View>
 
               <Ionicons
-                name={
-                  escolhido
-                    ? "checkmark-circle"
-                    : "ellipse-outline"
-                }
+                name={escolhido ? "checkmark-circle" : "ellipse-outline"}
                 size={22}
                 color={corTexto}
               />
@@ -784,9 +776,7 @@ function PainelClientes({
               style={styles.carregamento}
             />
           ) : !erro ? (
-            <Text
-              style={[styles.vazio, { color: theme.textoSub }]}
-            >
+            <Text style={[styles.vazio, { color: theme.textoSub }]}>
               {consulta
                 ? "Nenhum cliente encontrado para essa busca."
                 : buscarClientes

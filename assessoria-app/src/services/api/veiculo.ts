@@ -1,10 +1,5 @@
-import {
-  authenticatedFetch,
-} from "@/services/api/auth";
-import {
-  anexarArquivo,
-  fetchUpload,
-} from "@/services/arquivoUpload";
+import { authenticatedFetch } from "@/services/api/auth";
+import { anexarArquivo, fetchUpload } from "@/services/arquivoUpload";
 
 import { API_URL } from "@/constants/api";
 import type { Tier } from "@/constants/tier";
@@ -70,24 +65,14 @@ export interface ListarVeiculosResponse {
 export async function listarVeiculos(
   params: ListarVeiculosParams = {}
 ): Promise<ListarVeiculosResponse> {
-  const query =
-    new URLSearchParams();
+  const query = new URLSearchParams();
 
-  query.set(
-    "page",
-    String(params.page ?? 1)
-  );
+  query.set("page", String(params.page ?? 1));
 
-  query.set(
-    "limit",
-    String(params.limit ?? 50)
-  );
+  query.set("limit", String(params.limit ?? 50));
 
   if (params.busca?.trim()) {
-    query.set(
-      "busca",
-      params.busca.trim()
-    );
+    query.set("busca", params.busca.trim());
   }
 
   if (params.ativo !== undefined) {
@@ -95,25 +80,19 @@ export async function listarVeiculos(
   }
 
   if (params.ordem) {
-  query.set("ordem", params.ordem);
-}
+    query.set("ordem", params.ordem);
+  }
 
   if (params.direcao) {
     query.set("direcao", params.direcao);
   }
 
   if (params.min_contatos !== undefined) {
-    query.set(
-      "min_contatos",
-      String(params.min_contatos)
-    );
+    query.set("min_contatos", String(params.min_contatos));
   }
 
   if (params.max_contatos !== undefined) {
-    query.set(
-      "max_contatos",
-      String(params.max_contatos)
-    );
+    query.set("max_contatos", String(params.max_contatos));
   }
 
   if (params.min_clippings !== undefined) {
@@ -124,55 +103,41 @@ export async function listarVeiculos(
     query.set("max_clippings", String(params.max_clippings));
   }
 
-  const response =
-    await authenticatedFetch(
-      `${API_URL}/api/veiculos?${query.toString()}`,
-      {
-        method: "GET",
-      }
-    );
+  const response = await authenticatedFetch(
+    `${API_URL}/api/veiculos?${query.toString()}`,
+    {
+      method: "GET",
+    }
+  );
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: ListarVeiculosResponse;
 
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.veiculos ||
-    !data.pagination
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível carregar os veículos."
-    );
+  if (!response.ok || !data.success || !data.veiculos || !data.pagination) {
+    throw new Error(data.message || "Não foi possível carregar os veículos.");
   }
 
   return data;
 }
 
 export async function buscarVeiculo(
-  id: number
+  id: number,
+  signal?: AbortSignal
 ): Promise<Veiculo> {
-  const response =
-    await authenticatedFetch(
-      `${API_URL}/api/veiculos/${id}`,
-      {
-        method: "GET",
-      }
-    );
+  const response = await authenticatedFetch(`${API_URL}/api/veiculos/${id}`, {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  });
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: {
     success: boolean;
@@ -183,20 +148,11 @@ export async function buscarVeiculo(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.veiculo
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível carregar o veículo."
-    );
+  if (!response.ok || !data.success || !data.veiculo) {
+    throw new Error(data.message || "Não foi possível carregar o veículo.");
   }
 
   return data.veiculo;
@@ -223,30 +179,22 @@ export async function criarVeiculo(
     fetchUpload
   );
 
-  return lerRespostaVeiculo(
-    response,
-    "Não foi possível criar o veículo."
-  );
+  return lerRespostaVeiculo(response, "Não foi possível criar o veículo.");
 }
 
 export async function atualizarVeiculo(
   id: number,
   dados: DadosVeiculo
 ): Promise<Veiculo> {
-  const response =
-    await authenticatedFetch(
-      `${API_URL}/api/veiculos/${id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(dados),
-      }
-    );
+  const response = await authenticatedFetch(`${API_URL}/api/veiculos/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: {
     success: boolean;
@@ -257,20 +205,11 @@ export async function atualizarVeiculo(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.veiculo
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível atualizar o veículo."
-    );
+  if (!response.ok || !data.success || !data.veiculo) {
+    throw new Error(data.message || "Não foi possível atualizar o veículo.");
   }
 
   return data.veiculo;
@@ -286,34 +225,20 @@ export async function atualizarVeiculoComLogo(
     `${API_URL}/api/veiculos/${id}/atualizar-com-logo`,
     {
       method: "POST",
-      body: criarFormDataVeiculo(
-        dados,
-        logo,
-        removerLogo
-      ),
+      body: criarFormDataVeiculo(dados, logo, removerLogo),
     },
     fetchUpload
   );
 
-  return lerRespostaVeiculo(
-    response,
-    "Não foi possível atualizar o veículo."
-  );
+  return lerRespostaVeiculo(response, "Não foi possível atualizar o veículo.");
 }
 
-export async function excluirVeiculo(
-  id: number
-): Promise<void> {
-  const response =
-    await authenticatedFetch(
-      `${API_URL}/api/veiculos/${id}`,
-      {
-        method: "DELETE",
-      }
-    );
+export async function excluirVeiculo(id: number): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/api/veiculos/${id}`, {
+    method: "DELETE",
+  });
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: {
     success: boolean;
@@ -323,16 +248,11 @@ export async function excluirVeiculo(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.message ||
-        "Não foi possível excluir o veículo."
-    );
+    throw new Error(data.message || "Não foi possível excluir o veículo.");
   }
 }
 
@@ -363,25 +283,17 @@ export async function excluirVeiculosEmLote(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível excluir os veículos."
-    );
+    throw new Error(dados.message || "Não foi possível excluir os veículos.");
   }
 
   return dados;
 }
 
-
-export function obterUrlLogoVeiculo(
-  logoPath?: string | null
-): string | null {
+export function obterUrlLogoVeiculo(logoPath?: string | null): string | null {
   const caminho = logoPath?.trim();
 
   if (!caminho) {
@@ -392,10 +304,7 @@ export function obterUrlLogoVeiculo(
     return caminho;
   }
 
-  return (
-    `${API_URL}/` +
-    caminho.replace(/^\/+/, "")
-  );
+  return `${API_URL}/` + caminho.replace(/^\/+/, "");
 }
 
 function criarFormDataVeiculo(
@@ -406,18 +315,9 @@ function criarFormDataVeiculo(
   const formData = new FormData();
 
   formData.append("nome", dados.nome);
-  formData.append(
-    "descricao",
-    dados.descricao ?? ""
-  );
-  formData.append(
-    "alcance",
-    dados.alcance ?? ""
-  );
-  formData.append(
-    "ativo",
-    String(dados.ativo ?? true)
-  );
+  formData.append("descricao", dados.descricao ?? "");
+  formData.append("alcance", dados.alcance ?? "");
+  formData.append("ativo", String(dados.ativo ?? true));
 
   if (removerLogo) {
     formData.append("remover_logo", "true");
@@ -428,16 +328,10 @@ function criarFormDataVeiculo(
   }
 
   if (dados.enderecos !== undefined) {
-    formData.append(
-      "enderecos",
-      JSON.stringify(dados.enderecos)
-    );
+    formData.append("enderecos", JSON.stringify(dados.enderecos));
   }
   if (dados.enderecos_versao !== undefined) {
-    formData.append(
-      "enderecos_versao",
-      String(dados.enderecos_versao)
-    );
+    formData.append("enderecos_versao", String(dados.enderecos_versao));
   }
 
   if (logo) {
@@ -462,19 +356,11 @@ async function lerRespostaVeiculo(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.veiculo
-  ) {
-    throw new Error(
-      data.message || mensagemPadrao
-    );
+  if (!response.ok || !data.success || !data.veiculo) {
+    throw new Error(data.message || mensagemPadrao);
   }
 
   return data.veiculo;
@@ -515,30 +401,26 @@ async function lerRespostaEnderecoVeiculo(
   try {
     dados = JSON.parse(texto);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível processar o endereço."
-    );
+    throw new Error(dados.message || "Não foi possível processar o endereço.");
   }
 
   return dados;
 }
 
 export async function carregarEnderecosVeiculoComVersao(
-  veiculoId: number
+  veiculoId: number,
+  signal?: AbortSignal
 ): Promise<{
   enderecos: EnderecoVeiculo[];
   versao: number;
 }> {
   const response = await authenticatedFetch(
     `${API_URL}/api/veiculos/${veiculoId}/enderecos`,
-    { method: "GET" }
+    { method: "GET", cache: "no-store", signal }
   );
 
   const dados = await lerRespostaEnderecoVeiculo(response);
@@ -548,9 +430,7 @@ export async function carregarEnderecosVeiculoComVersao(
     !Number.isSafeInteger(dados.versao) ||
     dados.versao! < 0
   ) {
-    throw new Error(
-      "A API não retornou os endereços e sua versão."
-    );
+    throw new Error("A API não retornou os endereços e sua versão.");
   }
 
   return {
@@ -560,10 +440,10 @@ export async function carregarEnderecosVeiculoComVersao(
 }
 
 export async function listarEnderecosVeiculo(
-  veiculoId: number
+  veiculoId: number,
+  signal?: AbortSignal
 ): Promise<EnderecoVeiculo[]> {
-  const snapshot =
-    await carregarEnderecosVeiculoComVersao(veiculoId);
+  const snapshot = await carregarEnderecosVeiculoComVersao(veiculoId, signal);
 
   return snapshot.enderecos;
 }
@@ -586,9 +466,7 @@ export async function adicionarEnderecoVeiculo(
   const dados = await lerRespostaEnderecoVeiculo(response);
 
   if (!dados.endereco) {
-    throw new Error(
-      "A API não retornou o endereço cadastrado."
-    );
+    throw new Error("A API não retornou o endereço cadastrado.");
   }
 
   return dados.endereco;
@@ -613,9 +491,7 @@ export async function atualizarEnderecoVeiculo(
   const dados = await lerRespostaEnderecoVeiculo(response);
 
   if (!dados.endereco) {
-    throw new Error(
-      "A API não retornou o endereço atualizado."
-    );
+    throw new Error("A API não retornou o endereço atualizado.");
   }
 
   return dados.endereco;

@@ -6,12 +6,11 @@ import {
   View,
 } from "react-native";
 
-import { useCallback, useState, useRef} from "react";
-import {
-  useRouter,
-} from "expo-router";
+import { useCallback, useState, useRef } from "react";
+import { useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import AvatarUsuario from "@/components/perfil/AvatarUsuario";
 import BackButton from "@/components/ui/BackButton";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -29,41 +28,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Funcionario } from "@/services/api/auth";
 import { Ionicons } from "@expo/vector-icons";
 
-function obterIniciais(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  const primeira = partes[0]?.charAt(0) ?? "";
-
-  const ultima =
-    partes.length > 1
-      ? partes[partes.length - 1].charAt(0)
-      : "";
-
-  return (
-    (primeira + ultima).toLocaleUpperCase("pt-BR") || "?"
-  );
-}
-
 export default function Funcionarios() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
 
-  const {
-    listarFuncionarios,
-    temPermissao
-  } = useAuth();
+  const { listarFuncionarios, temPermissao } = useAuth();
 
   const [busca, setBusca] = useState("");
-  const [buscaAplicada, setBuscaAplicada] =
-    useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
 
-  const [filtrosAberto, setFiltrosAberto] =
-    useState(false);
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
 
-  const [filtros, setFiltros] =
-    useState<FiltrosFuncionarios>({
-      ativo: undefined,
-    });
+  const [filtros, setFiltros] = useState<FiltrosFuncionarios>({
+    ativo: undefined,
+  });
 
   const consultarPagina = useCallback(
     async (page: number, limit: number) => {
@@ -79,11 +58,7 @@ export default function Funcionarios() {
         total: resposta.pagination.total,
       };
     },
-    [
-      buscaAplicada,
-      filtros.ativo,
-      listarFuncionarios,
-    ]
+    [buscaAplicada, filtros.ativo, listarFuncionarios]
   );
 
   const {
@@ -97,10 +72,7 @@ export default function Funcionarios() {
   } = useListaPaginada<Funcionario>({
     chave: JSON.stringify([buscaAplicada, filtros]),
     consultar: consultarPagina,
-    habilitado: temPermissao(
-      "USUARIOS",
-      "VISUALIZAR"
-    ),
+    habilitado: temPermissao("USUARIOS", "VISUALIZAR"),
   });
 
   function carregarPrimeiraPagina() {
@@ -127,14 +99,12 @@ export default function Funcionarios() {
     }
   }
 
-  function aplicarFiltros(
-    novosFiltros: FiltrosFuncionarios
-  ) {
+  function aplicarFiltros(novosFiltros: FiltrosFuncionarios) {
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
   }
 
-  if (!temPermissao("USUARIOS", "VISUALIZAR"))  {
+  if (!temPermissao("USUARIOS", "VISUALIZAR")) {
     return (
       <View
         style={[
@@ -147,10 +117,7 @@ export default function Funcionarios() {
         <BackButton />
 
         <View style={styles.restricted}>
-          <Text
-            weight="Bold"
-            style={styles.restrictedTitle}
-          >
+          <Text weight="Bold" style={styles.restrictedTitle}>
             Acesso restrito
           </Text>
 
@@ -171,10 +138,7 @@ export default function Funcionarios() {
         },
       ]}
     >
-      <Header
-        title="Funcionários"
-        showBackButton
-      />
+      <Header title="Funcionários" showBackButton />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -187,12 +151,8 @@ export default function Funcionarios() {
           onChangeText={setBusca}
           placeholder="Buscar funcionários..."
           onSearch={realizarBusca}
-          onFilterPress={() =>
-            setFiltrosAberto(true)
-          }
-          filterActive={
-            filtros.ativo !== undefined
-          }
+          onFilterPress={() => setFiltrosAberto(true)}
+          filterActive={filtros.ativo !== undefined}
           onClear={limparBusca}
         />
 
@@ -230,10 +190,7 @@ export default function Funcionarios() {
         />
         {carregando ? (
           <View style={styles.loading}>
-            <ActivityIndicator
-              size="large"
-              color={theme.primaria}
-            />
+            <ActivityIndicator size="large" color={theme.primaria} />
           </View>
         ) : erro ? (
           <View
@@ -241,18 +198,11 @@ export default function Funcionarios() {
               styles.errorBox,
               {
                 borderColor: theme.borda,
-                backgroundColor:
-                  theme.backgroundContainer,
+                backgroundColor: theme.backgroundContainer,
               },
             ]}
           >
-            <Text
-              weight="Medium"
-              style={[
-                styles.error,
-                { color: "#EF4444" },
-              ]}
-            >
+            <Text weight="Medium" style={[styles.error, { color: "#EF4444" }]}>
               {erro}
             </Text>
 
@@ -272,10 +222,7 @@ export default function Funcionarios() {
               },
             ]}
           >
-            <Text
-              weight="Bold"
-              style={styles.emptyTitle}
-            >
+            <Text weight="Bold" style={styles.emptyTitle}>
               Nenhum funcionário encontrado
             </Text>
 
@@ -288,9 +235,7 @@ export default function Funcionarios() {
             {funcionarios.map((funcionario) => {
               const ativo = funcionario.ativo === 1;
 
-              const corStatus = ativo
-                ? theme.alteracao
-                : theme.textoSub;
+              const corStatus = ativo ? theme.alteracao : theme.textoSub;
 
               return (
                 <TouchableOpacity
@@ -321,24 +266,7 @@ export default function Funcionarios() {
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.avatar,
-                      {
-                        backgroundColor: theme.primaria + "12",
-                      },
-                    ]}
-                  >
-                    <Text
-                      weight="Bold"
-                      style={[
-                        styles.avatarTexto,
-                        { color: theme.textoTerciaria },
-                      ]}
-                    >
-                      {obterIniciais(funcionario.nome)}
-                    </Text>
-                  </View>
+                  <AvatarUsuario usuario={funcionario} tamanho={44} />
 
                   <View style={styles.cardContent}>
                     <Text
@@ -351,10 +279,7 @@ export default function Funcionarios() {
 
                     <Text
                       numberOfLines={1}
-                      style={[
-                        styles.email,
-                        { color: theme.textoSub },
-                      ]}
+                      style={[styles.email, { color: theme.textoSub }]}
                     >
                       {funcionario.email}
                     </Text>
@@ -376,10 +301,7 @@ export default function Funcionarios() {
 
                       <Text
                         weight="SemiBold"
-                        style={[
-                          styles.statusTexto,
-                          { color: corStatus },
-                        ]}
+                        style={[styles.statusTexto, { color: corStatus }]}
                       >
                         {ativo ? "Ativo" : "Inativo"}
                       </Text>
@@ -438,7 +360,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  
+
   content: {
     padding: 20,
     paddingBottom: 30,
@@ -479,19 +401,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 10,
-  },
-
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  avatarTexto: {
-    fontSize: 15,
-    lineHeight: 20,
   },
 
   cardContent: {

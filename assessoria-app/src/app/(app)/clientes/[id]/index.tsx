@@ -1,8 +1,7 @@
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
-  ResumoCadastro,
-  InformacoesCadastro,
-} from "@/components/ui/DetalhesCadastro";
-import {
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Image,
   Linking,
@@ -11,8 +10,12 @@ import {
   Switch,
   View,
 } from "react-native";
+import {
+  ResumoCadastro,
+  InformacoesCadastro,
+} from "@/components/ui/DetalhesCadastro";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -24,7 +27,8 @@ import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
@@ -72,7 +76,34 @@ interface FeedbackState {
   onClose?: () => void;
 }
 
+function dadosFormulario(dados: Cliente): FormularioCliente {
+  return {
+    nome: dados.nome ?? "",
+    email: dados.email ?? "",
+    telefone: dados.telefone ?? "",
+    cnpj: dados.cnpj ?? "",
+    site: dados.site ?? "",
+    cidade: dados.cidade ?? "",
+    estado: dados.estado ?? "",
+    descricao: dados.descricao ?? "",
+    segmento: dados.segmento ?? "",
+    responsavel: dados.responsavel ?? "",
+    logo_path: dados.logo_path ?? "",
+    ativo: dados.ativo === 1,
+  };
+}
+
 export default function ClienteDetalhes() {
+  const { usuario } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <ClienteDetalhesConta
+      key={[usuario?.assessoria_id, usuario?.id, id].join(":")}
+    />
+  );
+}
+
+function ClienteDetalhesConta() {
   const router = useRouter();
   const retornar = useRetornoSeguro("/clientes");
   const { theme } = useTheme();
@@ -138,6 +169,9 @@ export default function ClienteDetalhes() {
 
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
+  const salvamentoEmCurso = useRef(false);
+  const exclusaoEmCurso = useRef(false);
+  const consultaEmCurso = useRef<AbortController | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -149,32 +183,22 @@ export default function ClienteDetalhes() {
   }, [modoEdicao]);
 
   useEffect(() => {
-    void carregarCliente();
-  }, [id]);
-
-  useEffect(() => {
-    setAbaVinculos(vinculo === "relatorios" ? "relatorios" : "clippings");
+    const timer = setTimeout(
+      () =>
+        setAbaVinculos(vinculo === "relatorios" ? "relatorios" : "clippings"),
+      0
+    );
+    return () => clearTimeout(timer);
   }, [id, vinculo]);
 
-  function dadosFormulario(dados: Cliente): FormularioCliente {
-    return {
-      nome: dados.nome ?? "",
-      email: dados.email ?? "",
-      telefone: dados.telefone ?? "",
-      cnpj: dados.cnpj ?? "",
-      site: dados.site ?? "",
-      cidade: dados.cidade ?? "",
-      estado: dados.estado ?? "",
-      descricao: dados.descricao ?? "",
-      segmento: dados.segmento ?? "",
-      responsavel: dados.responsavel ?? "",
-      logo_path: dados.logo_path ?? "",
-      ativo: dados.ativo === 1,
-    };
-  }
-
-  async function carregarCliente() {
-    if (!id || Number.isNaN(id)) {
+  const carregarCliente = useCallback(async () => {
+    consultaEmCurso.current?.abort();
+    const controller = new AbortController();
+    consultaEmCurso.current = controller;
+    const prazo = setTimeout(() => controller.abort(), 15000);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      clearTimeout(prazo);
+      consultaEmCurso.current = null;
       setErroCarregamento("Cliente inválido.");
       setCarregando(false);
 
@@ -185,7 +209,8 @@ export default function ClienteDetalhes() {
       setCarregando(true);
       setErroCarregamento("");
 
-      const dados = await buscarCliente(id);
+      const dados = await buscarCliente(id, controller.signal);
+      if (consultaEmCurso.current !== controller) return;
       const novoFormulario = dadosFormulario(dados);
 
       setCliente(dados);
@@ -195,21 +220,35 @@ export default function ClienteDetalhes() {
       setNovoLogo(null);
       setLogoRemovido(false);
     } catch (error) {
+      if (consultaEmCurso.current !== controller) return;
       setErroCarregamento(
         error instanceof Error
           ? error.message
           : "Não foi possível carregar o cliente."
       );
     } finally {
-      setCarregando(false);
+      clearTimeout(prazo);
+      if (consultaEmCurso.current === controller) {
+        consultaEmCurso.current = null;
+        setCarregando(false);
+      }
     }
-  }
+  }, [id]);
+  useEffect(() => {
+    const timer = setTimeout(() => void carregarCliente(), 0);
+    return () => {
+      clearTimeout(timer);
+      consultaEmCurso.current?.abort();
+      consultaEmCurso.current = null;
+    };
+  }, [carregarCliente]);
 
   function mostrarFeedback(dados: FeedbackState) {
     setFeedback(dados);
   }
 
   function fecharFeedback() {
+    if (salvando || excluindo) return;
     const aoFechar = feedback?.onClose;
 
     setFeedback(null);
@@ -357,7 +396,12 @@ export default function ClienteDetalhes() {
   }
 
   async function salvarAlteracoes() {
-    if (!cliente) {
+    if (
+      !cliente ||
+      salvamentoEmCurso.current ||
+      excluindo ||
+      !temPermissao("CLIENTES", "EDITAR")
+    ) {
       return;
     }
 
@@ -383,6 +427,7 @@ export default function ClienteDetalhes() {
     }
 
     try {
+      salvamentoEmCurso.current = true;
       setSalvando(true);
 
       const atualizado = await atualizarClienteComLogo(
@@ -427,12 +472,18 @@ export default function ClienteDetalhes() {
           : "Não foi possível atualizar o cliente."
       );
     } finally {
+      salvamentoEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   function confirmarExclusao() {
-    if (!cliente) {
+    if (
+      !cliente ||
+      salvando ||
+      exclusaoEmCurso.current ||
+      !temPermissao("CLIENTES", "EXCLUIR")
+    ) {
       return;
     }
 
@@ -452,10 +503,16 @@ export default function ClienteDetalhes() {
   }
 
   async function excluirClienteAtual() {
-    if (!cliente) {
+    if (
+      !cliente ||
+      salvando ||
+      exclusaoEmCurso.current ||
+      !temPermissao("CLIENTES", "EXCLUIR")
+    ) {
       return;
     }
 
+    exclusaoEmCurso.current = true;
     fecharFeedback();
     setExcluindo(true);
 
@@ -480,6 +537,7 @@ export default function ClienteDetalhes() {
             : "Não foi possível excluir o cliente.",
       });
     } finally {
+      exclusaoEmCurso.current = false;
       setExcluindo(false);
     }
   }
@@ -628,532 +686,517 @@ export default function ClienteDetalhes() {
     .join(" - ");
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
-    >
-      <Header
-        title={modoEdicao ? "Editar cliente" : "Cliente"}
-        showBackButton
-        onBackPress={handleBack}
-      />
-
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+    <EdicaoCompacta ativa={modoEdicao}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
       >
-        {!modoEdicao ? (
-          <View style={styles.acoesDetalhes}>
-            {temPermissao("CLIENTES", "EDITAR") ? (
-              <Button
-                title="EDITAR"
-                icon="create-outline"
-                variant="outline"
-                onPress={() => setModoEdicao(true)}
-                disabled={excluindo || excluindoVinculos}
-                style={styles.botaoDetalhes}
-              />
-            ) : null}
-            {temPermissao("CLIENTES", "EXCLUIR") ? (
-              <Button
-                title="EXCLUIR"
-                variant="danger"
-                onPress={confirmarExclusao}
-                loading={excluindo}
-                disabled={excluindoVinculos}
-                style={styles.botaoDetalhes}
-              />
-            ) : null}
-          </View>
-        ) : null}
-        <View style={styles.resumoCadastro}>
-          <ResumoCadastro
-            nome={cliente.nome}
-            categoria="CLIENTE"
-            ativo={cliente.ativo === 1}
-            avatar={
-              logoPerfil ? (
-                <Image
-                  source={{ uri: logoPerfil }}
-                  style={styles.logoProfileImage}
-                  resizeMode="contain"
-                  accessibilityLabel={"Logo de " + cliente.nome}
+        <Header
+          title={modoEdicao ? "Editar cliente" : "Cliente"}
+          showBackButton
+          onBackPress={handleBack}
+        />
+
+        <ScrollView
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          {!modoEdicao ? (
+            <View style={styles.acoesDetalhes}>
+              {temPermissao("CLIENTES", "EDITAR") ? (
+                <Button
+                  title="EDITAR"
+                  icon="create-outline"
+                  variant="outline"
+                  onPress={() => setModoEdicao(true)}
+                  disabled={excluindo || excluindoVinculos}
+                  style={styles.botaoDetalhes}
                 />
-              ) : (
-                <Ionicons
-                  name="briefcase-outline"
-                  size={24}
-                  color={theme.textoContainer}
+              ) : null}
+              {temPermissao("CLIENTES", "EXCLUIR") ? (
+                <Button
+                  title="EXCLUIR"
+                  variant="danger"
+                  onPress={confirmarExclusao}
+                  loading={excluindo}
+                  disabled={excluindoVinculos}
+                  style={styles.botaoDetalhes}
                 />
-              )
-            }
-          />
-        </View>
-
-        {modoEdicao ? (
-          <>
-            <Text
-              weight="Bold"
-              style={[
-                styles.sectionTitle,
-                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
-              ]}
-            >
-              DADOS PRINCIPAIS
-            </Text>
-
-            <Input
-              label="NOME"
-              value={formulario.nome}
-              onChangeText={(texto) => atualizarCampo("nome", texto)}
-              placeholder="Nome do cliente"
-              autoCapitalize="words"
-              error={erros.nome}
-              showChanged={campoAlterado("nome")}
-              clearable
-            />
-
-            <Input
-              label="SEGMENTO"
-              value={formulario.segmento}
-              onChangeText={(texto) => atualizarCampo("segmento", texto)}
-              placeholder="Ex.: Tecnologia, Saúde, Varejo"
-              autoCapitalize="words"
-              error={erros.segmento}
-              showChanged={campoAlterado("segmento")}
-              clearable
-            />
-
-            <Input
-              label="RESPONSÁVEL"
-              value={formulario.responsavel}
-              onChangeText={(texto) => atualizarCampo("responsavel", texto)}
-              placeholder="Nome do responsável"
-              autoCapitalize="words"
-              error={erros.responsavel}
-              showChanged={campoAlterado("responsavel")}
-              clearable
-            />
-
-            <Input
-              label="CNPJ"
-              value={formulario.cnpj}
-              onChangeText={(texto) => atualizarCampo("cnpj", texto)}
-              placeholder="Ex.: 12.345.678/0001-95"
-              autoCapitalize="characters"
-              autoCorrect={false}
-              error={erros.cnpj}
-              showChanged={campoAlterado("cnpj")}
-              clearable
-            />
-
-            <Input
-              label="DESCRIÇÃO"
-              value={formulario.descricao}
-              onChangeText={(texto) => atualizarCampo("descricao", texto)}
-              placeholder="Informações sobre o cliente"
-              multiline
-              textAlignVertical="top"
-              style={styles.textArea}
-              error={erros.descricao}
-              showChanged={campoAlterado("descricao")}
-              clearable
-            />
-
-            <Text
-              weight="Bold"
-              style={[
-                styles.sectionTitle,
-                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
-              ]}
-            >
-              CONTATO
-            </Text>
-
-            <Input
-              label="E-MAIL"
-              value={formulario.email}
-              onChangeText={(texto) => atualizarCampo("email", texto)}
-              placeholder="contato@cliente.com.br"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={erros.email}
-              showChanged={campoAlterado("email")}
-              clearable
-            />
-
-            <Input
-              label="TELEFONE"
-              value={formulario.telefone}
-              onChangeText={(texto) => atualizarCampo("telefone", texto)}
-              placeholder="Ex.: (11) 99999-9999"
-              keyboardType="phone-pad"
-              error={erros.telefone}
-              showChanged={campoAlterado("telefone")}
-              clearable
-            />
-
-            <Input
-              label="SITE"
-              value={formulario.site}
-              onChangeText={(texto) => atualizarCampo("site", texto)}
-              placeholder="https://www.exemplo.com.br"
-              keyboardType="url"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={erros.site}
-              showChanged={campoAlterado("site")}
-              clearable
-            />
-
-            <Text
-              weight="Bold"
-              style={[
-                styles.sectionTitle,
-                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
-              ]}
-            >
-              LOCALIZAÇÃO
-            </Text>
-
-            <Input
-              label="CIDADE"
-              value={formulario.cidade}
-              onChangeText={(texto) => atualizarCampo("cidade", texto)}
-              placeholder="Ex.: São Paulo"
-              autoCapitalize="words"
-              error={erros.cidade}
-              showChanged={campoAlterado("cidade")}
-              clearable
-            />
-
-            <Input
-              label="ESTADO"
-              value={formulario.estado}
-              onChangeText={(texto) => atualizarCampo("estado", texto)}
-              placeholder="Ex.: São Paulo"
-              autoCapitalize="words"
-              error={erros.estado}
-              showChanged={campoAlterado("estado")}
-              clearable
-            />
-
-            <Text
-              weight="Bold"
-              style={[
-                styles.sectionTitle,
-                { color: theme.textoTerciaria, borderBottomColor: theme.borda },
-              ]}
-            >
-              IDENTIDADE VISUAL
-            </Text>
-
-            <LogoPicker
-              logoAtualUri={
-                logoRemovido ? null : obterUrlLogoCliente(formulario.logo_path)
+              ) : null}
+            </View>
+          ) : null}
+          <View style={styles.resumoCadastro}>
+            <ResumoCadastro
+              nome={cliente.nome}
+              categoria="CLIENTE"
+              ativo={cliente.ativo === 1}
+              avatar={
+                logoPerfil ? (
+                  <Image
+                    source={{ uri: logoPerfil }}
+                    style={styles.logoProfileImage}
+                    resizeMode="contain"
+                    accessibilityLabel={"Logo de " + cliente.nome}
+                  />
+                ) : (
+                  <Ionicons
+                    name="briefcase-outline"
+                    size={24}
+                    color={theme.textoContainer}
+                  />
+                )
               }
-              logoSelecionado={novoLogo}
-              onSelect={(arquivo) => {
-                setNovoLogo(arquivo);
-                setLogoRemovido(false);
-                setErroLogo("");
-              }}
-              onRemove={() => {
-                setNovoLogo(null);
-
-                setLogoRemovido(Boolean(formulario.logo_path));
-
-                setErroLogo("");
-              }}
-              disabled={salvando}
-              error={erroLogo}
-              showChanged={campoAlterado("logo_path")}
             />
+          </View>
 
-            <View
-              style={[
-                styles.statusRow,
-                {
-                  borderColor: theme.borda,
-                },
-              ]}
-            >
-              <View style={styles.statusInfo}>
-                <View style={styles.statusTitleRow}>
-                  <Text weight="SemiBold" style={styles.statusTitle}>
-                    STATUS
-                  </Text>
+          {modoEdicao ? (
+            <View style={styles.formularioEdicao}>
+              <SecaoEdicao titulo="Dados principais">
+                <Input
+                  label="Nome"
+                  value={formulario.nome}
+                  onChangeText={(texto) => atualizarCampo("nome", texto)}
+                  placeholder="Nome do cliente"
+                  autoCapitalize="words"
+                  error={erros.nome}
+                  showChanged={campoAlterado("nome")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Segmento"
+                  value={formulario.segmento}
+                  onChangeText={(texto) => atualizarCampo("segmento", texto)}
+                  placeholder="Ex.: Tecnologia, Saúde, Varejo"
+                  autoCapitalize="words"
+                  error={erros.segmento}
+                  showChanged={campoAlterado("segmento")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Responsável"
+                  value={formulario.responsavel}
+                  onChangeText={(texto) => atualizarCampo("responsavel", texto)}
+                  placeholder="Nome do responsável"
+                  autoCapitalize="words"
+                  error={erros.responsavel}
+                  showChanged={campoAlterado("responsavel")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="CNPJ"
+                  value={formulario.cnpj}
+                  onChangeText={(texto) => atualizarCampo("cnpj", texto)}
+                  placeholder="Ex.: 12.345.678/0001-95"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  error={erros.cnpj}
+                  showChanged={campoAlterado("cnpj")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Descrição"
+                  value={formulario.descricao}
+                  onChangeText={(texto) => atualizarCampo("descricao", texto)}
+                  placeholder="Informações sobre o cliente"
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.textArea}
+                  error={erros.descricao}
+                  showChanged={campoAlterado("descricao")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Contato">
+                <Input
+                  label="E-mail"
+                  value={formulario.email}
+                  onChangeText={(texto) => atualizarCampo("email", texto)}
+                  placeholder="contato@cliente.com.br"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  error={erros.email}
+                  showChanged={campoAlterado("email")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Telefone"
+                  value={formulario.telefone}
+                  onChangeText={(texto) => atualizarCampo("telefone", texto)}
+                  placeholder="Ex.: (11) 99999-9999"
+                  keyboardType="phone-pad"
+                  error={erros.telefone}
+                  showChanged={campoAlterado("telefone")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Site"
+                  value={formulario.site}
+                  onChangeText={(texto) => atualizarCampo("site", texto)}
+                  placeholder="https://www.exemplo.com.br"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  error={erros.site}
+                  showChanged={campoAlterado("site")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Localização">
+                <Input
+                  label="Cidade"
+                  value={formulario.cidade}
+                  onChangeText={(texto) => atualizarCampo("cidade", texto)}
+                  placeholder="Ex.: São Paulo"
+                  autoCapitalize="words"
+                  error={erros.cidade}
+                  showChanged={campoAlterado("cidade")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Estado"
+                  value={formulario.estado}
+                  onChangeText={(texto) => atualizarCampo("estado", texto)}
+                  placeholder="Ex.: São Paulo"
+                  autoCapitalize="words"
+                  error={erros.estado}
+                  showChanged={campoAlterado("estado")}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Identidade visual">
+                <LogoPicker
+                  logoAtualUri={
+                    logoRemovido
+                      ? null
+                      : obterUrlLogoCliente(formulario.logo_path)
+                  }
+                  logoSelecionado={novoLogo}
+                  onSelect={(arquivo) => {
+                    setNovoLogo(arquivo);
+                    setLogoRemovido(false);
+                    setErroLogo("");
+                  }}
+                  onRemove={() => {
+                    setNovoLogo(null);
 
-                  {campoAlterado("ativo") ? (
-                    <Ionicons
-                      name="create-outline"
-                      size={15}
-                      color={theme.primaria}
-                    />
-                  ) : null}
-                </View>
+                    setLogoRemovido(Boolean(formulario.logo_path));
 
-                <Text
+                    setErroLogo("");
+                  }}
+                  disabled={salvando}
+                  error={erroLogo}
+                  showChanged={campoAlterado("logo_path")}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Disponibilidade">
+                <View
                   style={[
-                    styles.statusDescription,
+                    styles.statusRow,
                     {
-                      color: theme.textoSub,
+                      borderColor: theme.borda,
                     },
                   ]}
                 >
-                  Cliente ativo e disponível no sistema.
-                </Text>
-              </View>
+                  <View style={styles.statusInfo}>
+                    <View style={styles.statusTitleRow}>
+                      <Text weight="SemiBold" style={styles.statusTitle}>
+                        STATUS
+                      </Text>
 
-              <Switch
-                value={formulario.ativo}
-                onValueChange={(valor) => atualizarCampo("ativo", valor)}
-                trackColor={{
-                  false: theme.surface,
-                  true: theme.primaria,
-                }}
-                thumbColor={theme.branco}
-              />
-            </View>
+                      {campoAlterado("ativo") ? (
+                        <Ionicons
+                          name="create-outline"
+                          size={15}
+                          color={theme.primaria}
+                        />
+                      ) : null}
+                    </View>
 
-            {erroGeral ? (
-              <Text weight="Medium" style={styles.errorGeral}>
-                {erroGeral}
-              </Text>
-            ) : null}
-
-            <View style={styles.actions}>
-              <Button
-                title="CANCELAR"
-                variant="outline"
-                onPress={cancelarEdicao}
-                style={styles.actionButton}
-              />
-
-              <Button
-                title="SALVAR"
-                loading={salvando}
-                onPress={salvarAlteracoes}
-                style={styles.actionButton}
-              />
-            </View>
-
-            <UnsavedChanges
-              visible={camposAlterados().length > 0}
-              saving={salvando}
-              alterations={camposAlterados().length}
-              onSave={salvarAlteracoes}
-              onDiscard={cancelarEdicao}
-            />
-          </>
-        ) : (
-          <>
-            <InformacoesCadastro
-              grupos={[
-                {
-                  id: "contato",
-                  titulo: "Contato",
-                  campos: [
-                    {
-                      id: "responsavel",
-                      icone: "person-outline",
-                      rotulo: "Responsável",
-                      valor: cliente.responsavel || "Não informado",
-                    },
-                    {
-                      id: "email",
-                      icone: "mail-outline",
-                      rotulo: "E-mail",
-                      valor: cliente.email || "Não informado",
-                      acao: cliente.email
-                        ? {
-                            icone: "mail-outline",
-                            rotulo: "Enviar e-mail para o cliente",
-                            onPress: abrirEmail,
-                          }
-                        : undefined,
-                    },
-                    {
-                      id: "telefone",
-                      icone: "call-outline",
-                      rotulo: "Telefone",
-                      valor: cliente.telefone || "Não informado",
-                      acao: cliente.telefone
-                        ? {
-                            icone: "logo-whatsapp",
-                            rotulo: "Abrir conversa no WhatsApp",
-                            onPress: abrirWhatsApp,
-                          }
-                        : undefined,
-                    },
-                    {
-                      id: "site",
-                      icone: "globe-outline",
-                      rotulo: "Site",
-                      valor: cliente.site || "Não informado",
-                      acao: cliente.site
-                        ? {
-                            icone: "open-outline",
-                            rotulo: "Abrir site do cliente",
-                            onPress: abrirSite,
-                          }
-                        : undefined,
-                    },
-                  ],
-                },
-                {
-                  id: "cadastro",
-                  titulo: "Dados do cliente",
-                  campos: [
-                    {
-                      id: "segmento",
-                      icone: "briefcase-outline",
-                      rotulo: "Segmento",
-                      valor: cliente.segmento || "Não informado",
-                    },
-                    {
-                      id: "cnpj",
-                      icone: "card-outline",
-                      rotulo: "CNPJ",
-                      valor: cliente.cnpj || "Não informado",
-                    },
-                    {
-                      id: "localizacao",
-                      icone: "location-outline",
-                      rotulo: "Localização",
-                      valor: localizacao || "Não informada",
-                    },
-                    {
-                      id: "logo",
-                      icone: "image-outline",
-                      rotulo: "Logo",
-                      valor: cliente.logo_path
-                        ? "Logo cadastrado"
-                        : "Não informado",
-                    },
-                  ],
-                },
-                ...(cliente.descricao
-                  ? [
-                      {
-                        id: "descricao",
-                        titulo: "Sobre o cliente",
-                        campos: [
-                          {
-                            id: "descricao",
-                            icone: "document-text-outline" as const,
-                            rotulo: "Descrição",
-                            valor: cliente.descricao,
-                          },
-                        ],
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-            {podeVerClippings || podeVerRelatorios ? (
-              <View
-                style={[
-                  styles.vinculos,
-                  { borderTopColor: theme.borda + "25" },
-                ]}
-              >
-                <Text weight="SemiBold" style={styles.tituloVinculos}>
-                  Vínculos do cliente
-                </Text>
-
-                {podeVerClippings && podeVerRelatorios ? (
-                  <View style={styles.actions}>
-                    <Button
-                      title="CLIPPINGS"
-                      size="small"
-                      variant={
-                        abaVinculosAtiva === "clippings" ? "primary" : "outline"
-                      }
-                      disabled={excluindo || excluindoVinculos}
-                      onPress={() => setAbaVinculos("clippings")}
-                      style={styles.actionButton}
-                    />
-                    <Button
-                      title="RELATÓRIOS"
-                      size="small"
-                      variant={
-                        abaVinculosAtiva === "relatorios"
-                          ? "primary"
-                          : "outline"
-                      }
-                      disabled={excluindo || excluindoVinculos}
-                      onPress={() => setAbaVinculos("relatorios")}
-                      style={styles.actionButton}
-                    />
+                    <Text
+                      style={[
+                        styles.statusDescription,
+                        {
+                          color: theme.textoSub,
+                        },
+                      ]}
+                    >
+                      Cliente ativo e disponível no sistema.
+                    </Text>
                   </View>
-                ) : null}
 
-                {abaVinculosAtiva === "clippings" ? (
-                  <ClippingsVinculados
-                    key={`cliente-${cliente.id}`}
-                    tipo="cliente"
-                    id={cliente.id}
-                    nome={cliente.nome}
-                    onExcluindoChange={setExcluindoVinculos}
+                  <Switch
+                    value={formulario.ativo}
+                    onValueChange={(valor) => atualizarCampo("ativo", valor)}
+                    trackColor={{
+                      false: theme.surface,
+                      true: theme.primaria,
+                    }}
+                    thumbColor={theme.branco}
+                    disabled={salvando}
                   />
-                ) : (
-                  <RelatoriosVinculados
-                    key={cliente.id}
-                    clienteId={cliente.id}
-                  />
-                )}
-              </View>
-            ) : null}
-          </>
-        )}
-      </ScrollView>
+                </View>
+              </SecaoEdicao>
+              {erroGeral ? (
+                <Text weight="Medium" style={styles.errorGeral}>
+                  {erroGeral}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <>
+              <InformacoesCadastro
+                grupos={[
+                  {
+                    id: "contato",
+                    titulo: "Contato",
+                    campos: [
+                      {
+                        id: "responsavel",
+                        icone: "person-outline",
+                        rotulo: "Responsável",
+                        valor: cliente.responsavel || "Não informado",
+                      },
+                      {
+                        id: "email",
+                        icone: "mail-outline",
+                        rotulo: "E-mail",
+                        valor: cliente.email || "Não informado",
+                        acao: cliente.email
+                          ? {
+                              icone: "mail-outline",
+                              rotulo: "Enviar e-mail para o cliente",
+                              onPress: abrirEmail,
+                            }
+                          : undefined,
+                      },
+                      {
+                        id: "telefone",
+                        icone: "call-outline",
+                        rotulo: "Telefone",
+                        valor: cliente.telefone || "Não informado",
+                        acao: cliente.telefone
+                          ? {
+                              icone: "logo-whatsapp",
+                              rotulo: "Abrir conversa no WhatsApp",
+                              onPress: abrirWhatsApp,
+                            }
+                          : undefined,
+                      },
+                      {
+                        id: "site",
+                        icone: "globe-outline",
+                        rotulo: "Site",
+                        valor: cliente.site || "Não informado",
+                        acao: cliente.site
+                          ? {
+                              icone: "open-outline",
+                              rotulo: "Abrir site do cliente",
+                              onPress: abrirSite,
+                            }
+                          : undefined,
+                      },
+                    ],
+                  },
+                  {
+                    id: "cadastro",
+                    titulo: "Dados do cliente",
+                    campos: [
+                      {
+                        id: "segmento",
+                        icone: "briefcase-outline",
+                        rotulo: "Segmento",
+                        valor: cliente.segmento || "Não informado",
+                      },
+                      {
+                        id: "cnpj",
+                        icone: "card-outline",
+                        rotulo: "CNPJ",
+                        valor: cliente.cnpj || "Não informado",
+                      },
+                      {
+                        id: "localizacao",
+                        icone: "location-outline",
+                        rotulo: "Localização",
+                        valor: localizacao || "Não informada",
+                      },
+                      {
+                        id: "logo",
+                        icone: "image-outline",
+                        rotulo: "Logo",
+                        valor: cliente.logo_path
+                          ? "Logo cadastrado"
+                          : "Não informado",
+                      },
+                    ],
+                  },
+                  ...(cliente.descricao
+                    ? [
+                        {
+                          id: "descricao",
+                          titulo: "Sobre o cliente",
+                          campos: [
+                            {
+                              id: "descricao",
+                              icone: "document-text-outline" as const,
+                              rotulo: "Descrição",
+                              valor: cliente.descricao,
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+              {podeVerClippings || podeVerRelatorios ? (
+                <View
+                  style={[
+                    styles.vinculos,
+                    { borderTopColor: theme.borda + "25" },
+                  ]}
+                >
+                  <Text weight="SemiBold" style={styles.tituloVinculos}>
+                    Vínculos do cliente
+                  </Text>
 
-      <FeedbackAlert
-        visible={feedback !== null}
-        variant={feedback?.variant ?? "info"}
-        title={feedback?.title ?? ""}
-        message={feedback?.message ?? ""}
-        primaryLabel={feedback?.primaryLabel}
-        secondaryLabel={feedback?.secondaryLabel}
-        primaryDanger={feedback?.primaryDanger}
-        onClose={fecharFeedback}
-        onPrimary={() => {
-          if (feedback?.onPrimary) {
-            feedback.onPrimary();
-            return;
-          }
+                  {podeVerClippings && podeVerRelatorios ? (
+                    <View style={styles.actions}>
+                      <Button
+                        title="CLIPPINGS"
+                        size="small"
+                        variant={
+                          abaVinculosAtiva === "clippings"
+                            ? "primary"
+                            : "outline"
+                        }
+                        disabled={excluindo || excluindoVinculos}
+                        onPress={() => setAbaVinculos("clippings")}
+                        style={styles.actionButton}
+                      />
+                      <Button
+                        title="RELATÓRIOS"
+                        size="small"
+                        variant={
+                          abaVinculosAtiva === "relatorios"
+                            ? "primary"
+                            : "outline"
+                        }
+                        disabled={excluindo || excluindoVinculos}
+                        onPress={() => setAbaVinculos("relatorios")}
+                        style={styles.actionButton}
+                      />
+                    </View>
+                  ) : null}
 
-          fecharFeedback();
-        }}
-        onSecondary={fecharFeedback}
-      />
-      <FeedbackAlert {...saida.alertaProps} />
-    </View>
+                  {abaVinculosAtiva === "clippings" ? (
+                    <ClippingsVinculados
+                      key={`cliente-${cliente.id}`}
+                      tipo="cliente"
+                      id={cliente.id}
+                      nome={cliente.nome}
+                      onExcluindoChange={setExcluindoVinculos}
+                    />
+                  ) : (
+                    <RelatoriosVinculados
+                      key={cliente.id}
+                      clienteId={cliente.id}
+                    />
+                  )}
+                </View>
+              ) : null}
+            </>
+          )}
+        </ScrollView>
+        {modoEdicao ? (
+          <SalvarAlteracoes
+            error={erroGeral || Object.values(erros).find(Boolean)}
+            alterations={camposAlterados().length}
+            saving={salvando}
+            onSave={salvarAlteracoes}
+            onDiscard={handleBack}
+          />
+        ) : null}
+
+        <FeedbackAlert
+          visible={feedback !== null}
+          variant={feedback?.variant ?? "info"}
+          title={feedback?.title ?? ""}
+          message={feedback?.message ?? ""}
+          primaryLabel={feedback?.primaryLabel}
+          secondaryLabel={feedback?.secondaryLabel}
+          primaryDanger={feedback?.primaryDanger}
+          loading={salvando || excluindo}
+          onClose={fecharFeedback}
+          onPrimary={() => {
+            if (feedback?.onPrimary) {
+              feedback.onPrimary();
+              return;
+            }
+
+            fecharFeedback();
+          }}
+          onSecondary={fecharFeedback}
+        />
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
 const styles = StyleSheet.create({
-  resumoCadastro: { marginBottom: 12 },
-  informacoesCadastro: { marginBottom: 12 },
-  acoesDetalhes: { flexDirection: "row", gap: 8, marginBottom: 12 },
-  botaoDetalhes: { flex: 1, width: "auto", minWidth: 0 },
+  resumoCadastro: {
+    marginBottom: 12,
+  },
+  acoesDetalhes: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  botaoDetalhes: {
+    flex: 1,
+    width: "auto",
+    minWidth: 0,
+  },
 
   container: {
     flex: 1,
   },
 
   content: {
-    padding: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 16,
+    paddingBottom: 28,
   },
 
   loading: {
@@ -1187,13 +1230,9 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
 
-  logoProfileImage: { width: "100%", height: "100%" },
-
-  sectionTitle: {
-    fontSize: 13,
-    paddingBottom: 2,
-    marginTop: 4,
-    marginBottom: 10,
+  logoProfileImage: {
+    width: "100%",
+    height: "100%",
   },
 
   vinculos: {
@@ -1213,19 +1252,15 @@ const styles = StyleSheet.create({
   },
 
   statusRow: {
-    minHeight: 68,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
+    gap: 12,
+    minWidth: 0,
   },
 
   statusInfo: {
     flex: 1,
-    marginRight: 10,
+    minWidth: 0,
   },
 
   statusTitleRow: {
@@ -1257,5 +1292,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginBottom: 10,
+  },
+  formularioEdicao: {
+    gap: 14,
   },
 });

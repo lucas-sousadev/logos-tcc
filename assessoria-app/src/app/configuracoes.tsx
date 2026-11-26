@@ -10,24 +10,20 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Header from "@/components/layout/Header";
+import AvatarUsuario from "@/components/perfil/AvatarUsuario";
+import { useAbrirTelaConta } from "@/hooks/useNavegacaoConta";
 import Text from "@/components/ui/Text";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Configuracoes() {
   const router = useRouter();
+  const abrirTelaConta = useAbrirTelaConta();
   const insets = useSafeAreaInsets();
   const { theme, mode, toggleTheme } = useTheme();
   const { usuario, logout } = useAuth();
 
   const nome = usuario?.nome?.trim() || "Usuário";
-  const iniciais = nome
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((parte) => parte[0])
-    .join("")
-    .toUpperCase();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -49,7 +45,11 @@ export default function Configuracoes() {
           </Text>
         </View>
 
-        <View
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Abrir meu perfil"
+          activeOpacity={0.75}
+          onPress={() => abrirTelaConta("perfil")}
           style={[
             styles.contaCard,
             {
@@ -64,9 +64,7 @@ export default function Configuracoes() {
               { backgroundColor: theme.backgroundContainer },
             ]}
           >
-            <Text weight="Bold" style={{ color: theme.textoContainer }}>
-              {iniciais}
-            </Text>
+            <AvatarUsuario usuario={usuario} tamanho={46} />
           </View>
           <View style={styles.contaTexto}>
             <Text weight="Bold" numberOfLines={1} style={styles.nome}>
@@ -85,7 +83,12 @@ export default function Configuracoes() {
               {usuario?.perfil === "FUNCIONARIO" ? "Funcionário" : "Assessor"}
             </Text>
           </View>
-        </View>
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={theme.textoTerciaria}
+          />
+        </TouchableOpacity>
 
         <View style={styles.secao}>
           <Text weight="Bold" style={styles.tituloSecao}>
@@ -262,6 +265,7 @@ const styles = StyleSheet.create({
   },
   contaTexto: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   nome: {

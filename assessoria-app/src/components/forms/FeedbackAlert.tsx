@@ -12,11 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 
-export type FeedbackAlertVariant =
-  | "success"
-  | "error"
-  | "warning"
-  | "info";
+export type FeedbackAlertVariant = "success" | "error" | "warning" | "info";
 
 interface FeedbackAlertProps {
   visible: boolean;
@@ -79,131 +75,133 @@ export default function FeedbackAlert({
   }
 
   const conteudo = (
+    <View style={styles.overlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={fechar} />
 
-      <View style={styles.overlay}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={fechar}
-        />
-
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+            borderColor: theme.borda,
+          },
+        ]}
+      >
         <View
           style={[
-            styles.container,
+            styles.iconContainer,
             {
-              backgroundColor: theme.background,
-              borderColor: theme.borda,
+              backgroundColor: `${configuracao.color}1A`,
             },
           ]}
         >
-          <View
+          <Ionicons
+            name={configuracao.icon}
+            size={34}
+            color={configuracao.color}
+          />
+        </View>
+
+        <Text weight="Bold" style={styles.title}>
+          {title}
+        </Text>
+
+        <ScrollView
+          style={styles.messageScroll}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.message, { color: theme.textoSub }]}>
+            {message}
+          </Text>
+        </ScrollView>
+
+        {tertiaryLabel && onTertiary ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            activeOpacity={0.8}
+            disabled={loading}
+            onPress={onTertiary}
             style={[
-              styles.iconContainer,
-              {
-                backgroundColor: `${configuracao.color}1A`,
-              },
+              styles.button,
+              styles.tertiaryButton,
+              { backgroundColor: theme.primaria },
             ]}
           >
-            <Ionicons
-              name={configuracao.icon}
-              size={34}
-              color={configuracao.color}
-            />
-          </View>
-
-          <Text weight="Bold" style={styles.title}>
-            {title}
-          </Text>
-
-          <ScrollView
-            style={styles.messageScroll}
-            showsVerticalScrollIndicator={false}
-          >
             <Text
-              style={[
-                styles.message,
-                { color: theme.textoSub },
-              ]}
+              weight="SemiBold"
+              style={[styles.buttonText, { color: "#FFFFFF" }]}
             >
-              {message}
+              {tertiaryLabel}
             </Text>
-          </ScrollView>
+          </TouchableOpacity>
+        ) : null}
 
-          {tertiaryLabel && onTertiary ? (
+        <View
+          style={[
+            styles.actions,
+            tertiaryLabel && onTertiary
+              ? styles.actionsWithTertiary
+              : undefined,
+          ]}
+        >
+          {secondaryLabel && onSecondary ? (
             <TouchableOpacity
               accessibilityRole="button"
+              accessibilityLabel={secondaryLabel}
+              accessibilityState={{ disabled: loading }}
               activeOpacity={0.8}
+              onPress={onSecondary}
               disabled={loading}
-              onPress={onTertiary}
-              style={[styles.button, styles.tertiaryButton, { backgroundColor: theme.primaria }]}
-            >
-              <Text weight="SemiBold" style={[styles.buttonText, { color: "#FFFFFF" }]}>
-                {tertiaryLabel}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <View style={[styles.actions, tertiaryLabel && onTertiary ? styles.actionsWithTertiary : undefined]}>
-            {secondaryLabel && onSecondary ? (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={onSecondary}
-                disabled={loading}
-                style={[
-                  styles.button,
-                  styles.secondaryButton,
-                  { borderColor: theme.borda },
-                ]}
-              >
-                <Text
-                  weight="SemiBold"
-                  style={[
-                    styles.buttonText,
-                    { color: theme.texto },
-                  ]}
-                >
-                  {secondaryLabel}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              disabled={loading}
-              onPress={onPrimary ?? onClose}
               style={[
                 styles.button,
-                {
-                  backgroundColor: primaryDanger
-                    ? "#EF4444"
-                    : theme.backgroundContainer,
-                },
+                styles.secondaryButton,
+                { borderColor: theme.borda },
               ]}
             >
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.buttonText,
-                  {
-                    color: primaryDanger
-                      ? "#FFFFFF"
-                      : theme.textoContainer,
-                  },
-                ]}
+                style={[styles.buttonText, { color: theme.texto }]}
               >
-                {loading
-                  ? "PROCESSANDO..."
-                  : primaryLabel}
+                {secondaryLabel}
               </Text>
             </TouchableOpacity>
-          </View>
+          ) : null}
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={primaryLabel}
+            accessibilityState={{ disabled: loading, busy: loading }}
+            activeOpacity={0.8}
+            disabled={loading}
+            onPress={onPrimary ?? onClose}
+            style={[
+              styles.button,
+              {
+                backgroundColor: primaryDanger
+                  ? "#EF4444"
+                  : theme.backgroundContainer,
+              },
+            ]}
+          >
+            <Text
+              weight="SemiBold"
+              style={[
+                styles.buttonText,
+                {
+                  color: primaryDanger ? "#FFFFFF" : theme.textoContainer,
+                },
+              ]}
+            >
+              {loading ? "PROCESSANDO..." : primaryLabel}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+    </View>
   );
 
   if (inline) {
-    return visible ? (
-      <View style={styles.inlineRoot}>{conteudo}</View>
-    ) : null;
+    return visible ? <View style={styles.inlineRoot}>{conteudo}</View> : null;
   }
 
   return (

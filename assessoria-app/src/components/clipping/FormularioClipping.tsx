@@ -1,17 +1,24 @@
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
   Keyboard,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 
 import { useEffect, useRef, useState } from "react";
-import { useIsFocused, useNavigation,useRouter, useLocalSearchParams,} from "expo-router";
+import {
+  useIsFocused,
+  useNavigation,
+  useRouter,
+  useLocalSearchParams,
+} from "expo-router";
 
-import { CommonActions, usePreventRemove,} from "expo-router/react-navigation";
+import { CommonActions, usePreventRemove } from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
 import Header from "@/components/layout/Header";
 import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
@@ -21,8 +28,7 @@ import Text from "@/components/ui/Text";
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
-import PreviaDadosLink from
-  "@/components/clipping/PreviaDadosLink";
+import PreviaDadosLink from "@/components/clipping/PreviaDadosLink";
 import ClippingContexto from "@/components/clipping/ClippingContexto";
 import TierSelector from "@/components/forms/TierSelector";
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
@@ -33,15 +39,27 @@ import AvisoClippingSalvo from "@/components/clipping/avisoClippingSalvo";
 import ClippingArquivosInput, {
   type ArquivoRascunho,
 } from "@/components/clipping/ClippingArquivosInput";
-import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
 import {
   normalizarSecaoAssociacao,
   validarSecaoAssociacao,
 } from "@/utils/associacaoEnderecoLink";
 
-import { dataBRParaISO,tempoParaSegundos, dataISOParaBR, segundosParaTempo} from "@/utils/clippingFormatacao";
-import { type ErrosClipping, identificarCampoErroClipping, normalizarCategorias,obterAnoDaPublicacao, validarFormularioClipping,} from "@/utils/validarClipping";
+import {
+  dataBRParaISO,
+  tempoParaSegundos,
+  dataISOParaBR,
+  segundosParaTempo,
+} from "@/utils/clippingFormatacao";
+import {
+  type ErrosClipping,
+  identificarCampoErroClipping,
+  normalizarCategorias,
+  obterAnoDaPublicacao,
+  validarFormularioClipping,
+} from "@/utils/validarClipping";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
@@ -61,7 +79,7 @@ import {
   enviarAnexo,
   atualizarClipping,
   extrairDadosDoLink,
-} from "@/services/api/clipping"; 
+} from "@/services/api/clipping";
 
 const CATEGORIAS_SUGERIDAS = [
   "Site",
@@ -72,7 +90,7 @@ const CATEGORIAS_SUGERIDAS = [
   "Podcast",
   "Redes sociais",
 ];
-  
+
 function compararData(valor: string): string {
   const texto = valor.trim();
 
@@ -88,9 +106,7 @@ function compararTempo(valor: string): string {
 
   const segundos = tempoParaSegundos(texto);
 
-  return segundos === null
-    ? `invalido:${texto}`
-    : String(segundos);
+  return segundos === null ? `invalido:${texto}` : String(segundos);
 }
 
 export default function FormularioClipping({
@@ -124,72 +140,61 @@ export default function FormularioClipping({
 
   const editando = clippingInicial !== undefined;
 
-  const podeSalvar = temPermissao(
-    "CLIPPING",
-    editando ? "EDITAR" : "CRIAR"
-  );
+  const podeSalvar = temPermissao("CLIPPING", editando ? "EDITAR" : "CRIAR");
 
   const mensagemSemPermissao = editando
     ? "Você não possui permissão para editar clippings."
     : "Você não possui permissão para criar clippings.";
   const [anoReferencia, setAnoReferencia] = useState(anoInicial);
 
-  const [clienteId, setClienteId] = useState<number | null>(
-    clienteInicial
-  );
+  const [clienteId, setClienteId] = useState<number | null>(clienteInicial);
 
   const [clienteNome, setClienteNome] = useState(
     clienteInicial !== null ? nomeClienteInicial : ""
   );
 
   const [dataPublicacao, setDataPublicacao] = useState(
-  dataISOParaBR(clippingInicial?.data_publicacao ?? null)
-);
+    dataISOParaBR(clippingInicial?.data_publicacao ?? null)
+  );
 
   const anoDaData = obterAnoDaPublicacao(dataPublicacao);
   const ano = anoDaData ?? anoReferencia;
 
-const [pauta, setPauta] = useState(
-  clippingInicial?.pauta ?? ""
-);
+  const [pauta, setPauta] = useState(clippingInicial?.pauta ?? "");
 
-const [programaSecao, setProgramaSecao] = useState(
-  clippingInicial?.programa_secao ?? ""
-);
+  const [programaSecao, setProgramaSecao] = useState(
+    clippingInicial?.programa_secao ?? ""
+  );
 
-const [categoriasTexto, setCategoriasTexto] = useState(
-  clippingInicial?.categorias.join(", ") ?? ""
-);
+  const [categoriasTexto, setCategoriasTexto] = useState(
+    clippingInicial?.categorias.join(", ") ?? ""
+  );
 
-const [link, setLink] = useState(
-  clippingInicial?.link ?? ""
-);
+  const [link, setLink] = useState(clippingInicial?.link ?? "");
 
-const [observacoes, setObservacoes] = useState(
-  clippingInicial?.observacoes ?? ""
-);
+  const [observacoes, setObservacoes] = useState(
+    clippingInicial?.observacoes ?? ""
+  );
 
-const [inicioSegundos, setInicioSegundos] = useState(
-  segundosParaTempo(clippingInicial?.inicio_segundos ?? null)
-);
+  const [inicioSegundos, setInicioSegundos] = useState(
+    segundosParaTempo(clippingInicial?.inicio_segundos ?? null)
+  );
 
-const [fimSegundos, setFimSegundos] = useState(
-  segundosParaTempo(clippingInicial?.fim_segundos ?? null)
-);
+  const [fimSegundos, setFimSegundos] = useState(
+    segundosParaTempo(clippingInicial?.fim_segundos ?? null)
+  );
 
-const [veiculo, setVeiculo] = useState<SelecaoVeiculo>({
-  id: clippingInicial?.veiculo_id ?? null,
-  nome: clippingInicial?.veiculo_nome ?? "",
-  descricao: clippingInicial?.veiculo_descricao ?? null,
-  alcance: clippingInicial?.veiculo_alcance ?? null,
-  logo_path: clippingInicial?.veiculo_logo_path ?? null,
-});
+  const [veiculo, setVeiculo] = useState<SelecaoVeiculo>({
+    id: clippingInicial?.veiculo_id ?? null,
+    nome: clippingInicial?.veiculo_nome ?? "",
+    descricao: clippingInicial?.veiculo_descricao ?? null,
+    alcance: clippingInicial?.veiculo_alcance ?? null,
+    logo_path: clippingInicial?.veiculo_logo_path ?? null,
+  });
 
-const [tier, setTier] = useState<Tier | null>(
-  clippingInicial?.tier ?? null
-);
+  const [tier, setTier] = useState<Tier | null>(clippingInicial?.tier ?? null);
 
-    const [valoresOriginais] = useState(() => ({
+  const [valoresOriginais] = useState(() => ({
     clienteId,
     ano,
     dataPublicacao,
@@ -203,74 +208,64 @@ const [tier, setTier] = useState<Tier | null>(
     veiculoId: veiculo.id,
     veiculoNome: veiculo.nome,
     tier,
-    }));
+  }));
 
-    const alteracoes: Record<keyof ErrosClipping, boolean> = {
-    cliente:
-        clienteId !== valoresOriginais.clienteId,
+  const alteracoes: Record<keyof ErrosClipping, boolean> = {
+    cliente: clienteId !== valoresOriginais.clienteId,
 
-    anoReferencia:
-        ano !== valoresOriginais.ano,
+    anoReferencia: ano !== valoresOriginais.ano,
 
     dataPublicacao:
-        compararData(dataPublicacao) !==
-        compararData(valoresOriginais.dataPublicacao),
+      compararData(dataPublicacao) !==
+      compararData(valoresOriginais.dataPublicacao),
 
-    pauta:
-        pauta.trim() !== valoresOriginais.pauta.trim(),
+    pauta: pauta.trim() !== valoresOriginais.pauta.trim(),
 
     programaSecao:
-        programaSecao.trim() !==
-        valoresOriginais.programaSecao.trim(),
+      programaSecao.trim() !== valoresOriginais.programaSecao.trim(),
 
     categorias:
-        JSON.stringify(normalizarCategorias(categoriasTexto)) !==
-        JSON.stringify(
-        normalizarCategorias(valoresOriginais.categoriasTexto)
-        ),
+      JSON.stringify(normalizarCategorias(categoriasTexto)) !==
+      JSON.stringify(normalizarCategorias(valoresOriginais.categoriasTexto)),
 
     veiculo:
-        veiculo.id !== valoresOriginais.veiculoId ||
-        (
-        veiculo.id === null &&
-        veiculo.nome.trim() !== valoresOriginais.veiculoNome.trim()
-        ),
+      veiculo.id !== valoresOriginais.veiculoId ||
+      (veiculo.id === null &&
+        veiculo.nome.trim() !== valoresOriginais.veiculoNome.trim()),
 
-    tier:
-        tier !== valoresOriginais.tier,
+    tier: tier !== valoresOriginais.tier,
 
     inicioSegundos:
-        compararTempo(inicioSegundos) !==
-        compararTempo(valoresOriginais.inicioSegundos),
+      compararTempo(inicioSegundos) !==
+      compararTempo(valoresOriginais.inicioSegundos),
 
     fimSegundos:
-        compararTempo(fimSegundos) !==
-        compararTempo(valoresOriginais.fimSegundos),
+      compararTempo(fimSegundos) !==
+      compararTempo(valoresOriginais.fimSegundos),
 
-    link:
-        link.trim() !== valoresOriginais.link.trim(),
+    link: link.trim() !== valoresOriginais.link.trim(),
 
-    observacoes:
-        observacoes.trim() !== valoresOriginais.observacoes.trim(),
-    };
+    observacoes: observacoes.trim() !== valoresOriginais.observacoes.trim(),
+  };
 
-    function campoAlterado(campo: keyof ErrosClipping): boolean {
+  function campoAlterado(campo: keyof ErrosClipping): boolean {
     return editando && alteracoes[campo];
-    }
+  }
 
-    const quantidadeAlteracoes = editando
+  const quantidadeAlteracoes = editando
     ? Object.values(alteracoes).filter(Boolean).length
     : 0;
-    
-  const [pautasSugeridas, setPautasSugeridas] =
-    useState<string[]>([]);
+
+  const [pautasSugeridas, setPautasSugeridas] = useState<string[]>([]);
 
   const [salvando, setSalvando] = useState(false);
   const [erros, setErros] = useState<ErrosClipping>({});
   const [erroGeral, setErroGeral] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const travaSalvar = useRef(false);
-  const [nomeCadastroVeiculo, setNomeCadastroVeiculo] = useState<string | null>(null);
+  const [nomeCadastroVeiculo, setNomeCadastroVeiculo] = useState<string | null>(
+    null
+  );
   const [sucesso, setSucesso] = useState("");
   const [falha, setFalha] = useState<string | null>(null);
 
@@ -278,49 +273,49 @@ const [tier, setTier] = useState<Tier | null>(
   const [arquivos, setArquivos] = useState<ArquivoRascunho[]>([]);
   const [selecionandoArquivos, setSelecionandoArquivos] = useState(false);
   const [mensagemEnvio, setMensagemEnvio] = useState("");
-  const [conclusaoComFalhas, setConclusaoComFalhas] =
-    useState<{
-      clipping: Clipping;
-      adicionarOutro: boolean;
-      falhas: string[];
-    } | null>(null);
-  const [ultimaCapturaChave, setUltimaCapturaChave] = useState<string | null>(null);
+  const [conclusaoComFalhas, setConclusaoComFalhas] = useState<{
+    clipping: Clipping;
+    adicionarOutro: boolean;
+    falhas: string[];
+  } | null>(null);
+  const [ultimaCapturaChave, setUltimaCapturaChave] = useState<string | null>(
+    null
+  );
   const imagemCapturadaPendente =
     ultimaCapturaChave !== null &&
     arquivos.some((arquivo) => arquivo.chave === ultimaCapturaChave);
 
-  const [ultimoCriado, setUltimoCriado] =
-  useState<Clipping | null>(null);
-    
-  const [destinoAposSalvar, setDestinoAposSalvar] =
-    useState<Clipping | null>(null);
+  const [ultimoCriado, setUltimoCriado] = useState<Clipping | null>(null);
+
+  const [destinoAposSalvar, setDestinoAposSalvar] = useState<Clipping | null>(
+    null
+  );
   const [previaLink, setPreviaLink] = useState<ExtracaoLink | null>(null);
   const [buscandoLink, setBuscandoLink] = useState(false);
   const [erroBuscaLink, setErroBuscaLink] = useState("");
   const [previaAberta, setPreviaAberta] = useState(false);
-  const [
-    enderecoCadastroVeiculo,
-    setEnderecoCadastroVeiculo,
-  ] = useState<ExtracaoLink["endereco_sugerido"] | null>(null);
-  const [enderecoPendente, setEnderecoPendente] =
-    useState<{
-      veiculoId: number;
-      host: string;
-      caminho_prefixo: string;
-      incluir_subdominios: boolean;
-    } | null>(null);
+  const [enderecoCadastroVeiculo, setEnderecoCadastroVeiculo] = useState<
+    ExtracaoLink["endereco_sugerido"] | null
+  >(null);
+  const [enderecoPendente, setEnderecoPendente] = useState<{
+    veiculoId: number;
+    host: string;
+    caminho_prefixo: string;
+    incluir_subdominios: boolean;
+  } | null>(null);
   const [capturaAberta, setCapturaAberta] = useState(false);
-  const [transferenciaPendente, setTransferenciaPendente] =
-    useState<{
-      veiculoId: number;
-      veiculoNome: string;
-      link: string;
-      associacao: AssociacaoEnderecoExistente;
-      dados: TransferenciaEnderecoVeiculo;
-    } | null>(null);
+  const [transferenciaPendente, setTransferenciaPendente] = useState<{
+    veiculoId: number;
+    veiculoNome: string;
+    link: string;
+    associacao: AssociacaoEnderecoExistente;
+    dados: TransferenciaEnderecoVeiculo;
+  } | null>(null);
 
   const quantidadePendencias =
-    quantidadeAlteracoes + arquivos.length + Number(transferenciaPendente !== null);
+    quantidadeAlteracoes +
+    arquivos.length +
+    Number(transferenciaPendente !== null);
 
   const linkAtualRef = useRef(link);
   const navegacaoIniciada = useRef(false);
@@ -329,8 +324,7 @@ const [tier, setTier] = useState<Tier | null>(
   const [permitirSaida, setPermitirSaida] = useState(false);
   const saidaPendente = useRef<(() => void) | null>(null);
   const temAlteracoesPendentes =
-    quantidadePendencias > 0 &&
-    destinoAposSalvar === null;
+    quantidadePendencias > 0 && destinoAposSalvar === null;
 
   const bloqueado =
     buscandoLink ||
@@ -340,56 +334,53 @@ const [tier, setTier] = useState<Tier | null>(
     conclusaoComFalhas !== null ||
     permitirSaida;
 
-    useEffect(() => {
+  useEffect(() => {
     if (
-        Platform.OS !== "web" ||
-        typeof window === "undefined" ||
-        !temAlteracoesPendentes ||
-        permitirSaida
+      Platform.OS !== "web" ||
+      typeof window === "undefined" ||
+      !temAlteracoesPendentes ||
+      permitirSaida
     ) {
-        return;
+      return;
     }
 
     function avisarAntesDeSair(event: BeforeUnloadEvent) {
-        event.preventDefault();
-        event.returnValue = "";
+      event.preventDefault();
+      event.returnValue = "";
     }
 
     window.addEventListener("beforeunload", avisarAntesDeSair);
 
     return () => {
-        window.removeEventListener(
-        "beforeunload",
-        avisarAntesDeSair
-        );
+      window.removeEventListener("beforeunload", avisarAntesDeSair);
     };
-    }, [temAlteracoesPendentes, permitirSaida]);
+  }, [temAlteracoesPendentes, permitirSaida]);
 
   // evita remover o cadastro enquanto a API está salvando
   usePreventRemove(
     salvando ||
-        selecionandoArquivos ||
-        (temAlteracoesPendentes && !permitirSaida),
+      selecionandoArquivos ||
+      (temAlteracoesPendentes && !permitirSaida),
     ({ data }) => {
-        if (salvando || selecionandoArquivos) return;
+      if (salvando || selecionandoArquivos) return;
 
-        saidaPendente.current = () => {
+      saidaPendente.current = () => {
         navigation.dispatch(data.action);
-        };
+      };
 
-        Keyboard.dismiss();
-        setConfirmarDescarte(true);
+      Keyboard.dismiss();
+      setConfirmarDescarte(true);
     }
-    );
+  );
 
-    useEffect(() => {
+  useEffect(() => {
     if (!permitirSaida) return;
 
     const sair = saidaPendente.current;
     saidaPendente.current = null;
 
     sair?.();
-    }, [permitirSaida]);
+  }, [permitirSaida]);
 
   useEffect(() => {
     if (
@@ -404,16 +395,14 @@ const [tier, setTier] = useState<Tier | null>(
     navegacaoIniciada.current = true;
 
     if (editando && onSalvo) {
-        onSalvo(destinoAposSalvar);
-        return;
+      onSalvo(destinoAposSalvar);
+      return;
     }
 
     const clipping = destinoAposSalvar;
     const estado = navigation.getState();
 
-    const anterior = estado
-      ? estado.routes[estado.index - 1]
-      : undefined;
+    const anterior = estado ? estado.routes[estado.index - 1] : undefined;
 
     const parametrosAnteriores = anterior?.params as
       | {
@@ -450,17 +439,12 @@ const [tier, setTier] = useState<Tier | null>(
         id: String(clipping.cliente_id),
         ano: String(clipping.ano_referencia),
         clienteNome: clipping.cliente_nome,
-        ...(rotaOrigemClipping(
-          paramsRota.origemTipo,
-          paramsRota.origemId
-        )
+        ...(rotaOrigemClipping(paramsRota.origemTipo, paramsRota.origemId)
           ? {
               origemTipo: paramsRota.origemTipo,
               origemId: paramsRota.origemId,
               retornoVinculado:
-                paramsRota.retornoVinculado === "ano"
-                  ? "ano"
-                  : "origem",
+                paramsRota.retornoVinculado === "ano" ? "ano" : "origem",
             }
           : {}),
       },
@@ -482,84 +466,77 @@ const [tier, setTier] = useState<Tier | null>(
 
   useEffect(() => {
     if (!clienteId || pauta.trim().length < 2) {
-        return;
+      return;
     }
 
     let cancelado = false;
 
     const atraso = setTimeout(async () => {
-        try {
-        const resposta = await listarPautas(
-            clienteId,
-            pauta
-        );
+      try {
+        const resposta = await listarPautas(clienteId, pauta);
 
         if (!cancelado) {
-            setPautasSugeridas(resposta.pautas);
+          setPautasSugeridas(resposta.pautas);
         }
-        } catch {
+      } catch {
         if (!cancelado) {
-            setPautasSugeridas([]);
+          setPautasSugeridas([]);
         }
-        }
+      }
     }, 300);
 
     return () => {
-        cancelado = true;
-        clearTimeout(atraso);
+      cancelado = true;
+      clearTimeout(atraso);
     };
-    }, [clienteId, pauta]);
+  }, [clienteId, pauta]);
 
   function adicionarCategoria(categoria: string) {
     if (travaSalvar.current) return;
 
     setCategoriasTexto((atual) =>
-      normalizarCategorias(
-        atual ? `${atual}, ${categoria}` : categoria
-      ).join(", ")
+      normalizarCategorias(atual ? `${atual}, ${categoria}` : categoria).join(
+        ", "
+      )
     );
 
     limparErro("categorias");
   }
 
   async function buscarDadosDoLink() {
-  const url = link.trim();
+    const url = link.trim();
 
-  if (bloqueado || buscandoLink) return;
+    if (bloqueado || buscandoLink) return;
 
-  if (!/^https?:\/\/\S+$/i.test(url)) {
-    setErroBuscaLink(
-      "Informe um link completo com http:// ou https://."
-    );
-    return;
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      setErroBuscaLink("Informe um link completo com http:// ou https://.");
+      return;
+    }
+
+    setBuscandoLink(true);
+    setErroBuscaLink("");
+
+    try {
+      const dados = await extrairDadosDoLink(url);
+
+      if (linkAtualRef.current.trim() === url) {
+        setPreviaLink(dados);
+        setPreviaAberta(true);
+      }
+    } catch (erro) {
+      if (linkAtualRef.current.trim() === url) {
+        setErroBuscaLink(
+          erro instanceof Error
+            ? erro.message
+            : "Não foi possível consultar o link."
+        );
+      }
+    } finally {
+      setBuscandoLink(false);
+    }
   }
 
-  setBuscandoLink(true);
-  setErroBuscaLink("");
-
-  try {
-    const dados = await extrairDadosDoLink(url);
-
-    if (linkAtualRef.current.trim() === url) {
-      setPreviaLink(dados);
-      setPreviaAberta(true);
-    }
-  } catch (erro) {
-    if (linkAtualRef.current.trim() === url) {
-      setErroBuscaLink(
-        erro instanceof Error
-          ? erro.message
-          : "Não foi possível consultar o link."
-      );
-    }
-  } finally {
-    setBuscandoLink(false);
-  }
-}
-
-  function aplicarDadosDoLink(
-    modo: "tudo" | "vazios"
-  ) {
+  function aplicarDadosDoLink(modo: "tudo" | "vazios") {
     if (!previaLink) return;
 
     const tudo = modo === "tudo";
@@ -601,35 +578,15 @@ const [tier, setTier] = useState<Tier | null>(
       limparErro("pauta");
     }
 
-    if (
-      previaLink.data_publicacao &&
-      (tudo || !dataPublicacao.trim())
-    ) {
-      setDataPublicacao(
-        dataISOParaBR(
-          previaLink.data_publicacao
-        )
-      );
-      setAnoReferencia(
-        Number(
-          previaLink.data_publicacao.slice(0, 4)
-        )
-      );
-      limparErro(
-        "dataPublicacao",
-        "anoReferencia"
-      );
+    if (previaLink.data_publicacao && (tudo || !dataPublicacao.trim())) {
+      setDataPublicacao(dataISOParaBR(previaLink.data_publicacao));
+      setAnoReferencia(Number(previaLink.data_publicacao.slice(0, 4)));
+      limparErro("dataPublicacao", "anoReferencia");
     }
 
     if (
       previaLink.veiculo_sugerido &&
-      (
-        tudo ||
-        (
-          veiculo.id === null &&
-          !veiculo.nome.trim()
-        )
-      )
+      (tudo || (veiculo.id === null && !veiculo.nome.trim()))
     ) {
       const tierAnterior = tier;
 
@@ -659,8 +616,7 @@ const [tier, setTier] = useState<Tier | null>(
         previaLink.endereco_associavel
       ) {
         setEnderecoPendente({
-          veiculoId:
-            previaLink.veiculo_sugerido.id,
+          veiculoId: previaLink.veiculo_sugerido.id,
           ...previaLink.endereco_sugerido,
           caminho_prefixo: normalizarSecaoAssociacao(
             previaLink.endereco_sugerido.caminho_prefixo
@@ -675,33 +631,18 @@ const [tier, setTier] = useState<Tier | null>(
 
     if (
       previaLink.duracao_segundos !== null &&
-      (
-        tudo ||
-        (
-          !inicioSegundos.trim() &&
-          !fimSegundos.trim()
-        )
-      )
+      (tudo || (!inicioSegundos.trim() && !fimSegundos.trim()))
     ) {
       setInicioSegundos("00:00");
-      setFimSegundos(
-        segundosParaTempo(
-          previaLink.duracao_segundos
-        )
-      );
-      limparErro(
-        "inicioSegundos",
-        "fimSegundos"
-      );
+      setFimSegundos(segundosParaTempo(previaLink.duracao_segundos));
+      limparErro("inicioSegundos", "fimSegundos");
     }
 
     setPreviaAberta(false);
     setPreviaLink(null);
   }
 
-  function limparErro(
-    ...campos: (keyof ErrosClipping)[]
-  ) {
+  function limparErro(...campos: (keyof ErrosClipping)[]) {
     setErros((atual) => {
       const novos = { ...atual };
 
@@ -722,16 +663,11 @@ const [tier, setTier] = useState<Tier | null>(
 
     setEnderecoPendente(null);
 
-
     setTransferenciaPendente(null);
     setVeiculo(selecao);
 
     if (mudouVeiculo || limpouCampo) {
-      setTier(
-        selecao.id === null
-          ? null
-          : selecao.tier ?? null
-      );
+      setTier(selecao.id === null ? null : (selecao.tier ?? null));
     }
 
     limparErro("veiculo", "tier");
@@ -744,8 +680,7 @@ const [tier, setTier] = useState<Tier | null>(
         : "Não foi possível salvar o clipping.";
 
     const campo =
-      error instanceof ErroApiClipping &&
-      error.status === 422
+      error instanceof ErroApiClipping && error.status === 422
         ? identificarCampoErroClipping(mensagem)
         : null;
 
@@ -787,47 +722,43 @@ const [tier, setTier] = useState<Tier | null>(
   }
 
   function cancelarCadastro() {
-    if (
-        travaSalvar.current ||
-        bloqueado ||
-        nomeCadastroVeiculo !== null
-    ) {
-        return;
+    if (travaSalvar.current || bloqueado || nomeCadastroVeiculo !== null) {
+      return;
     }
 
     Keyboard.dismiss();
 
     const sair = () => {
-        if (onCancelar) {
+      if (onCancelar) {
         onCancelar();
         return;
-        }
+      }
 
-        retornar();
+      retornar();
     };
 
     if (temAlteracoesPendentes) {
-        saidaPendente.current = sair;
-        setConfirmarDescarte(true);
-        return;
+      saidaPendente.current = sair;
+      setConfirmarDescarte(true);
+      return;
     }
 
     sair();
-    }
+  }
 
-    function continuarEditando() {
+  function continuarEditando() {
     saidaPendente.current = null;
     setConfirmarDescarte(false);
-    }
+  }
 
-    function descartarESair() {
+  function descartarESair() {
     if (salvando || selecionandoArquivos) return;
 
     setConfirmarDescarte(false);
 
     // a saída acontece no efeito depois de desativar a proteção
     setPermitirSaida(true);
-    }
+  }
 
   function visualizarUltimoCriado() {
     if (!ultimoCriado || travaSalvar.current || bloqueado) {
@@ -844,16 +775,11 @@ const [tier, setTier] = useState<Tier | null>(
     });
   }
 
-  function finalizarCadastro(
-    clipping: Clipping,
-    adicionarOutro: boolean
-  ) {
+  function finalizarCadastro(clipping: Clipping, adicionarOutro: boolean) {
     setClienteId(clipping.cliente_id);
     setClienteNome(clipping.cliente_nome);
     setAnoReferencia(clipping.ano_referencia);
-    setDataPublicacao(
-      dataISOParaBR(clipping.data_publicacao)
-    );
+    setDataPublicacao(dataISOParaBR(clipping.data_publicacao));
 
     setArquivos([]);
     setConclusaoComFalhas(null);
@@ -883,11 +809,7 @@ const [tier, setTier] = useState<Tier | null>(
   }
 
   async function salvar(adicionarOutro: boolean) {
-    if (
-      travaSalvar.current ||
-      bloqueado ||
-      nomeCadastroVeiculo !== null
-    ) {
+    if (travaSalvar.current || bloqueado || nomeCadastroVeiculo !== null) {
       return;
     }
 
@@ -895,8 +817,8 @@ const [tier, setTier] = useState<Tier | null>(
     setErroGeral("");
 
     if (!podeSalvar) {
-        setFalha(mensagemSemPermissao);
-        return;
+      setFalha(mensagemSemPermissao);
+      return;
     }
 
     if (arquivos.length > 0 && !podeAnexar) {
@@ -920,15 +842,14 @@ const [tier, setTier] = useState<Tier | null>(
       fimSegundos,
       link,
       observacoes,
-      permitirNomeVeiculoPendente: clippingInicial?.veiculo_nome_informado != null,
+      permitirNomeVeiculoPendente:
+        clippingInicial?.veiculo_nome_informado != null,
     });
 
     setErros(errosValidacao);
 
     if (Object.keys(errosValidacao).length > 0) {
-      setErroGeral(
-        "Revise os campos destacados antes de salvar."
-      );
+      setErroGeral("Revise os campos destacados antes de salvar.");
       return;
     }
 
@@ -950,16 +871,11 @@ const [tier, setTier] = useState<Tier | null>(
       fim_segundos: tempoParaSegundos(fimSegundos),
     };
 
-    if (
-      enderecoPendente &&
-      enderecoPendente.veiculoId === veiculo.id
-    ) {
+    if (enderecoPendente && enderecoPendente.veiculoId === veiculo.id) {
       dados.associar_endereco_veiculo = {
         host: enderecoPendente.host,
-        caminho_prefixo:
-          enderecoPendente.caminho_prefixo,
-        incluir_subdominios:
-          enderecoPendente.incluir_subdominios,
+        caminho_prefixo: enderecoPendente.caminho_prefixo,
+        incluir_subdominios: enderecoPendente.incluir_subdominios,
       };
     }
 
@@ -970,13 +886,12 @@ const [tier, setTier] = useState<Tier | null>(
     ) {
       dados.transferir_endereco_veiculo = transferenciaPendente.dados;
     }
-    
+
     if (
       clippingInicial?.veiculo_nome_informado != null &&
       veiculo.id === null
     ) {
-      dados.veiculo_nome_informado =
-        veiculo.nome.trim() || null;
+      dados.veiculo_nome_informado = veiculo.nome.trim() || null;
     }
 
     travaSalvar.current = true;
@@ -1023,7 +938,7 @@ const [tier, setTier] = useState<Tier | null>(
           error instanceof Error
             ? error.message
             : "Não foi possível confirmar o envio.";
-        
+
         falhas.push(`${arquivo.nome}: ${motivo}`);
         pendentes.push(arquivo);
       }
@@ -1036,8 +951,8 @@ const [tier, setTier] = useState<Tier | null>(
         setArquivos(pendentes);
         setErroGeral(
           "Os dados do clipping foram salvos, mas alguns anexos " +
-          `não foram enviados: ${falhas.join("; ")}. ` +
-          "Salve novamente para tentar enviar apenas os pendentes."
+            `não foram enviados: ${falhas.join("; ")}. ` +
+            "Salve novamente para tentar enviar apenas os pendentes."
         );
         travaSalvar.current = false;
         setSalvando(false);
@@ -1069,12 +984,7 @@ const [tier, setTier] = useState<Tier | null>(
     const conclusao = conclusaoComFalhas;
 
     return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: theme.background },
-        ]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Header
           title="Clipping cadastrado"
           showBackButton
@@ -1087,10 +997,7 @@ const [tier, setTier] = useState<Tier | null>(
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <Text
-            weight="SemiBold"
-            style={{ fontSize: 16, marginBottom: 10 }}
-          >
+          <Text weight="SemiBold" style={{ fontSize: 16, marginBottom: 10 }}>
             O clipping foi salvo
           </Text>
 
@@ -1101,9 +1008,9 @@ const [tier, setTier] = useState<Tier | null>(
               marginBottom: 16,
             }}
           >
-            Ocorreram falhas no envio inicial de alguns arquivos e eles não foram enviados.
-            Confira nos detalhes quais anexos chegaram antes
-            de enviá-los novamente.
+            Ocorreram falhas no envio inicial de alguns arquivos e eles não
+            foram enviados. Confira nos detalhes quais anexos chegaram antes de
+            enviá-los novamente.
           </Text>
 
           {conclusao.falhas.map((falha, indice) => (
@@ -1147,16 +1054,11 @@ const [tier, setTier] = useState<Tier | null>(
 
           <Button
             title={
-              conclusao.adicionarOutro
-                ? "ADICIONAR OUTRO"
-                : "VOLTAR À LISTA"
+              conclusao.adicionarOutro ? "ADICIONAR OUTRO" : "VOLTAR À LISTA"
             }
             variant="outline"
             onPress={() => {
-              finalizarCadastro(
-                conclusao.clipping,
-                conclusao.adicionarOutro
-              );
+              finalizarCadastro(conclusao.clipping, conclusao.adicionarOutro);
             }}
           />
         </ScrollView>
@@ -1166,12 +1068,7 @@ const [tier, setTier] = useState<Tier | null>(
 
   if (!podeSalvar) {
     return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: theme.background },
-        ]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Header
           title={editando ? "Editar clipping" : "Novo clipping"}
           showBackButton
@@ -1185,19 +1082,11 @@ const [tier, setTier] = useState<Tier | null>(
             color={theme.primaria}
           />
 
-          <Text
-            weight="SemiBold"
-            style={styles.permissionTitle}
-          >
+          <Text weight="SemiBold" style={styles.permissionTitle}>
             {mensagemSemPermissao}
           </Text>
 
-          <Text
-            style={[
-              styles.permissionText,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.permissionText, { color: theme.textoSub }]}>
             Você não possui permissão para criar clippings.
           </Text>
         </View>
@@ -1206,764 +1095,746 @@ const [tier, setTier] = useState<Tier | null>(
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header
-        title={editando ? "Editar clipping" : "Novo clipping"}
-        showBackButton
-        onBackPress={cancelarCadastro}
-      />
-
-      <ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <EdicaoCompacta ativa={editando}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
-        {ultimoCriado && !bloqueado ? (
-          <AvisoClippingSalvo
-            mensagem="Clipping cadastrado. Cliente, ano e data mantidos para o próximo cadastro."
-            onVisualizar={visualizarUltimoCriado}
-            onFechar={() => setUltimoCriado(null)}
-          />
-        ) : null} 
-        {sucesso ? (
-          <View
-            accessibilityLiveRegion="polite"
-            style={[
-              styles.feedbackSucesso,
-              { borderColor: theme.borda },
-            ]}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={21}
-              color="#22C55E"
-            />
-
-            <Text
-              style={{
-                flex: 1,
-                fontSize: 12,
-                lineHeight: 18,
-              }}
-            >
-              {sucesso}
-            </Text>
-          </View>
-        ) : null}
-        <ClippingContexto
-          clienteId={clienteId}
-          clienteNome={clienteNome}
-          ano={ano}
-          anoPelaData={anoDaData !== null}
-          erroCliente={erros.cliente}
-          erroAno={erros.anoReferencia}
-          disabled={bloqueado}
-          onCliente={(cliente) => {
-            if (cliente.id !== clienteId) {
-              setPautasSugeridas([]);
-            }
-
-            setClienteId(cliente.id);
-            setClienteNome(cliente.nome);
-            limparErro("cliente");
-          }}
-          onAno={(novoAno) =>  {
-            setAnoReferencia(novoAno);
-            limparErro("anoReferencia");
-          }}
-          clienteAlterado={campoAlterado("cliente")}
-          anoAlterado={campoAlterado("anoReferencia")}
+        <Header
+          title={editando ? "Editar clipping" : "Novo clipping"}
+          showBackButton
+          onBackPress={cancelarCadastro}
         />
 
-        <Text weight="Bold" style={styles.sectionTitle}>
-          DADOS DA PUBLICAÇÃO
-        </Text>
-
-        <Input
-          label="LINK"
-          value={link}
-          onChangeText={(texto) => {
-            linkAtualRef.current = texto;
-            setLink(texto);
-            setPreviaLink(null);
-            setErroBuscaLink("");
-            limparErro("link");
-            setEnderecoPendente(null);
-
-            setTransferenciaPendente(null);
-          }}
-          placeholder="https://..."
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          error={erros.link}
-          editable={!bloqueado}
-          showChanged={campoAlterado("link")}
-          clearable
-        />
-        <View
-          style={[
-            styles.acoesLink,
-            { marginBottom: erroBuscaLink ? 8 : 18 },
-          ]}
+        <ScrollView
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Buscar dados do link"
-            disabled={bloqueado || !link.trim()}
-            onPress={() => void buscarDadosDoLink()}
-            style={[
-              styles.botaoAcaoLink,
-              {
-                backgroundColor: theme.primaria,
-                opacity:
-                  (!buscandoLink && bloqueado) || !link.trim() ? 0.5 : 1,
-              },
-            ]}
-          >
-            {buscandoLink ? (
-              <ActivityIndicator size="small" color={theme.textoInput} />
-            ) : (
-              <Ionicons
-                name="search-outline"
-                size={15}
-                color={theme.branco}
-              />
-            )}
-            <Text
-              weight="SemiBold"
-              numberOfLines={1}
-              style={[
-                styles.botaoAcaoLinkTexto,
-                { color: theme.branco },
-              ]}
+          {ultimoCriado && !bloqueado ? (
+            <AvisoClippingSalvo
+              mensagem="Clipping cadastrado. Cliente, ano e data mantidos para o próximo cadastro."
+              onVisualizar={visualizarUltimoCriado}
+              onFechar={() => setUltimoCriado(null)}
+            />
+          ) : null}
+          {sucesso ? (
+            <View
+              accessibilityLiveRegion="polite"
+              style={[styles.feedbackSucesso, { borderColor: theme.borda }]}
             >
-              {buscandoLink ? "BUSCANDO..." : "BUSCAR DADOS"}
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={21}
+                color="#22C55E"
+              />
 
-          {podeAnexar ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Capturar imagem do link"
-              disabled={bloqueado || !link.trim()}
-              onPress={() => setCapturaAberta(true)}
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  lineHeight: 18,
+                }}
+              >
+                {sucesso}
+              </Text>
+            </View>
+          ) : null}
+          <SecaoEdicao titulo="Cliente e referência" ativa={editando}>
+            <ClippingContexto
+              clienteId={clienteId}
+              clienteNome={clienteNome}
+              ano={ano}
+              anoPelaData={anoDaData !== null}
+              erroCliente={erros.cliente}
+              erroAno={erros.anoReferencia}
+              disabled={bloqueado}
+              onCliente={(cliente) => {
+                if (cliente.id !== clienteId) {
+                  setPautasSugeridas([]);
+                }
+
+                setClienteId(cliente.id);
+                setClienteNome(cliente.nome);
+                limparErro("cliente");
+              }}
+              onAno={(novoAno) => {
+                setAnoReferencia(novoAno);
+                limparErro("anoReferencia");
+              }}
+              clienteAlterado={campoAlterado("cliente")}
+              anoAlterado={campoAlterado("anoReferencia")}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Dados da publicação" ativa={editando}>
+            {!editando ? (
+              <Text weight="Bold" style={styles.sectionTitle}>
+                DADOS DA PUBLICAÇÃO
+              </Text>
+            ) : null}
+            <Input
+              label="LINK"
+              value={link}
+              onChangeText={(texto) => {
+                linkAtualRef.current = texto;
+                setLink(texto);
+                setPreviaLink(null);
+                setErroBuscaLink("");
+                limparErro("link");
+                setEnderecoPendente(null);
+
+                setTransferenciaPendente(null);
+              }}
+              placeholder="https://..."
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              error={erros.link}
+              editable={!bloqueado}
+              showChanged={campoAlterado("link")}
+              clearable
+              containerStyle={editando ? { marginBottom: 0 } : undefined}
+            />
+            <View
               style={[
-                styles.botaoAcaoLink,
-                {
-                  backgroundColor: theme.primaria,
-                  opacity: bloqueado || !link.trim() ? 0.5 : 1,
-                },
+                [
+                  styles.acoesLink,
+                  { marginBottom: editando ? 0 : erroBuscaLink ? 8 : 18 },
+                ],
+                editando && styles.auxiliarEdicao,
               ]}
             >
-              <Ionicons
-                name="image-outline"
-                size={15}
-                color={theme.branco}
-              />
-              <Text
-                weight="SemiBold"
-                numberOfLines={1}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Buscar dados do link"
+                disabled={bloqueado || !link.trim()}
+                onPress={() => void buscarDadosDoLink()}
                 style={[
-                  styles.botaoAcaoLinkTexto,
-                  { color: theme.branco },
+                  styles.botaoAcaoLink,
+                  {
+                    backgroundColor: theme.primaria,
+                    opacity:
+                      (!buscandoLink && bloqueado) || !link.trim() ? 0.5 : 1,
+                  },
                 ]}
               >
-                CAPTURAR IMAGEM
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+                {buscandoLink ? (
+                  <ActivityIndicator size="small" color={theme.textoInput} />
+                ) : (
+                  <Ionicons
+                    name="search-outline"
+                    size={15}
+                    color={theme.branco}
+                  />
+                )}
+                <Text
+                  weight="SemiBold"
+                  numberOfLines={1}
+                  style={[styles.botaoAcaoLinkTexto, { color: theme.branco }]}
+                >
+                  {buscandoLink ? "BUSCANDO..." : "BUSCAR DADOS"}
+                </Text>
+              </TouchableOpacity>
 
-        {erroBuscaLink ? (
-          <Text
-            style={{
-              color: theme.erro,
-              fontSize: 12,
-              marginBottom: 16,
-            }}
-          >
-            {erroBuscaLink}
-          </Text>
-        ) : null}
-        {imagemCapturadaPendente ? (
-        <View
-          accessibilityLiveRegion="polite"
-          style={[
-            styles.avisoCaptura,
-            { borderColor: theme.alteracao },
-          ]}
-        >
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={18}
-            color={theme.alteracao}
-          />
-          <Text
-            style={{
-              flex: 1,
-              color: theme.alteracao,
-              fontSize: 12,
-              lineHeight: 18,
-            }}
-          >
-            Captura adicionada aos anexos abaixo.
-          </Text>
-        </View>
-      ) : null}
-        <ClippingDataInput
-          value={dataPublicacao}
-          anoReferencia={ano}
-          onChangeText={(texto) => {
-            setDataPublicacao(texto);
-
-            const novoAno = obterAnoDaPublicacao(texto);
-
-            if (novoAno !== null) {
-              setAnoReferencia(novoAno);
-              limparErro("anoReferencia");
-            }
-
-            limparErro("dataPublicacao");
-          }}
-          error={erros.dataPublicacao}
-          disabled={bloqueado}
-          showChanged={campoAlterado("dataPublicacao")}
-        />
-        
-        <Input
-          label="PAUTA"
-          value={pauta}
-          onChangeText={(texto) => {
-            setPauta(texto);
-
-            if (texto.trim().length < 2) {
-              setPautasSugeridas([]);
-            }
-
-            limparErro("pauta");
-          }}
-          error={erros.pauta}
-          placeholder="Assunto ou título da matéria"
-          autoCapitalize="sentences"
-          editable={!bloqueado}
-          showChanged={campoAlterado("pauta")}
-          clearable
-        />
-
-        {pautasSugeridas.length > 0 ? (
-          <View
-            style={[
-              styles.suggestions,
-              { borderColor: theme.borda },
-            ]}
-          >
-            {pautasSugeridas.map((sugestao) => (
-              <TouchableOpacity
-                key={sugestao}
-                onPress={() => {
-                  setPauta(sugestao);
-                  setPautasSugeridas([]);
+              {podeAnexar ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Capturar imagem do link"
+                  disabled={bloqueado || !link.trim()}
+                  onPress={() => setCapturaAberta(true)}
+                  style={[
+                    styles.botaoAcaoLink,
+                    {
+                      backgroundColor: theme.primaria,
+                      opacity: bloqueado || !link.trim() ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="image-outline"
+                    size={15}
+                    color={theme.branco}
+                  />
+                  <Text
+                    weight="SemiBold"
+                    numberOfLines={1}
+                    style={[styles.botaoAcaoLinkTexto, { color: theme.branco }]}
+                  >
+                    CAPTURAR IMAGEM
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            {erroBuscaLink ? (
+              <Text
+                style={{
+                  color: theme.erro,
+                  fontSize: 12,
+                  marginBottom: 16,
                 }}
-                style={styles.suggestion}
-                disabled={bloqueado}
+              >
+                {erroBuscaLink}
+              </Text>
+            ) : null}
+            {imagemCapturadaPendente ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={[styles.avisoCaptura, { borderColor: theme.alteracao }]}
               >
                 <Ionicons
-                  name="return-down-forward-outline"
-                  size={16}
-                  color={theme.primaria}
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color={theme.alteracao}
                 />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: theme.alteracao,
+                    fontSize: 12,
+                    lineHeight: 18,
+                  }}
+                >
+                  Captura adicionada aos anexos abaixo.
+                </Text>
+              </View>
+            ) : null}
+            <ClippingDataInput
+              value={dataPublicacao}
+              anoReferencia={ano}
+              onChangeText={(texto) => {
+                setDataPublicacao(texto);
+
+                const novoAno = obterAnoDaPublicacao(texto);
+
+                if (novoAno !== null) {
+                  setAnoReferencia(novoAno);
+                  limparErro("anoReferencia");
+                }
+
+                limparErro("dataPublicacao");
+              }}
+              error={erros.dataPublicacao}
+              disabled={bloqueado}
+              showChanged={campoAlterado("dataPublicacao")}
+            />
+            <Input
+              label="PAUTA"
+              value={pauta}
+              onChangeText={(texto) => {
+                setPauta(texto);
+
+                if (texto.trim().length < 2) {
+                  setPautasSugeridas([]);
+                }
+
+                limparErro("pauta");
+              }}
+              error={erros.pauta}
+              placeholder="Assunto ou título da matéria"
+              autoCapitalize="sentences"
+              editable={!bloqueado}
+              showChanged={campoAlterado("pauta")}
+              clearable
+              containerStyle={editando ? { marginBottom: 0 } : undefined}
+            />
+            {pautasSugeridas.length > 0 ? (
+              <View
+                testID="clipping-pautas-sugeridas"
+                style={[
+                  [styles.suggestions, { borderColor: theme.borda }],
+                  editando && styles.auxiliarEdicao,
+                ]}
+              >
+                {pautasSugeridas.map((sugestao) => (
+                  <TouchableOpacity
+                    key={sugestao}
+                    onPress={() => {
+                      setPauta(sugestao);
+                      setPautasSugeridas([]);
+                    }}
+                    style={styles.suggestion}
+                    disabled={bloqueado}
+                  >
+                    <Ionicons
+                      name="return-down-forward-outline"
+                      size={16}
+                      color={theme.primaria}
+                    />
+
+                    <Text
+                      style={[styles.suggestionText, { color: theme.texto }]}
+                    >
+                      {sugestao}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Veículo e classificação" ativa={editando}>
+            <VeiculoSelector
+              value={veiculo}
+              onChange={alterarVeiculo}
+              error={erros.veiculo}
+              disabled={bloqueado}
+              mostrarResumo
+              criacaoAoSalvar={false}
+              onCadastrar={
+                podeCriarVeiculo
+                  ? (nome) => {
+                      Keyboard.dismiss();
+                      setNomeCadastroVeiculo(nome);
+                    }
+                  : undefined
+              }
+              showChanged={campoAlterado("veiculo")}
+            />
+            {transferenciaPendente ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={[
+                  [
+                    styles.avisoAssociacao,
+                    { backgroundColor: theme.textoTerciaria + "12" },
+                  ],
+                  editando && styles.auxiliarEdicao,
+                ]}
+              >
+                <View style={styles.cabecalhoAvisoAssociacao}>
+                  <Ionicons
+                    name="link-outline"
+                    size={17}
+                    color={theme.textoTerciaria}
+                  />
+
+                  <Text weight="SemiBold" style={styles.tituloAvisoAssociacao}>
+                    Associação pendente
+                  </Text>
+
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Desfazer correção da associação"
+                    disabled={bloqueado}
+                    onPress={() => setTransferenciaPendente(null)}
+                    style={styles.acaoAvisoAssociacao}
+                  >
+                    <Ionicons
+                      name="arrow-undo-outline"
+                      size={14}
+                      color={theme.textoTerciaria}
+                    />
+
+                    <Text
+                      weight="SemiBold"
+                      style={[
+                        styles.acaoAvisoAssociacaoTexto,
+                        { color: theme.textoTerciaria },
+                      ]}
+                    >
+                      DESFAZER
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text weight="SemiBold" style={styles.textoAvisoAssociacao}>
+                  {transferenciaPendente.associacao.host}
+                  {transferenciaPendente.associacao.caminho_prefixo}
+                </Text>
 
                 <Text
                   style={[
-                    styles.suggestionText,
-                    { color: theme.texto },
+                    styles.textoAvisoAssociacao,
+                    { color: theme.textoSub },
                   ]}
                 >
-                  {sugestao}
+                  {transferenciaPendente.associacao.veiculo_nome}
+                  {" → "}
+                  {transferenciaPendente.veiculoNome}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : null}
 
-        <VeiculoSelector
-          value={veiculo}
-          onChange={alterarVeiculo}
-          error={erros.veiculo}
-          disabled={bloqueado}
-          mostrarResumo
-          criacaoAoSalvar={false}
-          onCadastrar={
-            podeCriarVeiculo
-              ? (nome) => {
-                  Keyboard.dismiss();
-                  setNomeCadastroVeiculo(nome);
-                }
-              : undefined
-          }
-          showChanged={campoAlterado("veiculo")}
-        />
-
-        {transferenciaPendente ? (
-        <View
-          accessibilityLiveRegion="polite"
-          style={[
-            styles.avisoAssociacao,
-            { backgroundColor: theme.textoTerciaria + "12" },
-          ]}
-        >
-          <View style={styles.cabecalhoAvisoAssociacao}>
-            <Ionicons
-              name="link-outline"
-              size={17}
-              color={theme.textoTerciaria}
+                <Text
+                  style={[
+                    styles.notaAvisoAssociacao,
+                    { color: theme.textoSub },
+                  ]}
+                >
+                  Será alterada ao salvar o clipping.
+                </Text>
+              </View>
+            ) : null}
+            <Input
+              label="PROGRAMA / SEÇÃO"
+              value={programaSecao}
+              onChangeText={(texto) => {
+                setProgramaSecao(texto);
+                limparErro("programaSecao");
+              }}
+              placeholder="Ex.: Jornal da manhã"
+              error={erros.programaSecao}
+              editable={!bloqueado}
+              showChanged={campoAlterado("programaSecao")}
+              clearable
+              containerStyle={editando ? { marginBottom: 0 } : undefined}
             />
-
+            <Input
+              label="CATEGORIAS"
+              value={categoriasTexto}
+              onChangeText={(texto) => {
+                setCategoriasTexto(texto);
+                limparErro("categorias");
+              }}
+              placeholder="Separe as categorias por vírgula"
+              error={erros.categorias}
+              editable={!bloqueado}
+              showChanged={campoAlterado("categorias")}
+              clearable
+              containerStyle={editando ? { marginBottom: 0 } : undefined}
+            />
+            <View
+              testID="clipping-categorias-sugeridas"
+              style={[styles.chips, editando && styles.auxiliarEdicao]}
+            >
+              {CATEGORIAS_SUGERIDAS.map((categoria) => (
+                <TouchableOpacity
+                  key={categoria}
+                  onPress={() => adicionarCategoria(categoria)}
+                  style={[styles.chip, { borderColor: theme.borda }]}
+                  disabled={bloqueado}
+                >
+                  <Text style={[styles.chipText, { color: theme.texto }]}>
+                    + {categoria}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TierSelector
+              value={tier}
+              onChange={(valor) => {
+                setTier(valor);
+                limparErro("tier");
+              }}
+              disabled={bloqueado}
+              showChanged={campoAlterado("tier")}
+            />
+            {erros.tier ? (
+              <Text
+                style={[styles.fieldError, editando && styles.auxiliarEdicao]}
+              >
+                {erros.tier}
+              </Text>
+            ) : null}
+            {veiculo.id !== null ? (
+              <Text
+                style={[
+                  [styles.tierHint, { color: theme.textoSub }],
+                  editando && styles.auxiliarEdicao,
+                ]}
+              >
+                O Tier selecionado será registrado neste clipping. Você pode
+                ajustá-lo para esta publicação.
+              </Text>
+            ) : null}
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Trecho e anexos" ativa={editando}>
+            <ClippingTrechoInput
+              inicio={inicioSegundos}
+              fim={fimSegundos}
+              onInicioChange={(texto) => {
+                setInicioSegundos(texto);
+                limparErro("inicioSegundos");
+                limparErro("fimSegundos");
+              }}
+              onFimChange={(texto) => {
+                setFimSegundos(texto);
+                limparErro("inicioSegundos");
+                limparErro("fimSegundos");
+              }}
+              erroInicio={erros.inicioSegundos}
+              erroFim={erros.fimSegundos}
+              disabled={bloqueado}
+              showInicioChanged={campoAlterado("inicioSegundos")}
+              showFimChanged={campoAlterado("fimSegundos")}
+            />
+            <ClippingArquivosInput
+              arquivos={arquivos}
+              disabled={bloqueado}
+              podeSelecionar={podeAnexar}
+              onChange={setArquivos}
+              onOcupadoChange={setSelecionandoArquivos}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Informações adicionais" ativa={editando}>
+            <Input
+              label="OBSERVAÇÕES"
+              value={observacoes}
+              onChangeText={(texto) => {
+                setObservacoes(texto);
+                limparErro("observacoes");
+              }}
+              placeholder="Informações adicionais"
+              multiline
+              textAlignVertical="top"
+              style={styles.textArea}
+              error={erros.observacoes}
+              editable={!bloqueado}
+              showChanged={campoAlterado("observacoes")}
+              clearable
+              containerStyle={editando ? { marginBottom: 0 } : undefined}
+            />
+          </SecaoEdicao>
+          {erroGeral ? (
+            <Text style={styles.generalError}>{erroGeral}</Text>
+          ) : null}
+          {mensagemEnvio ? (
             <Text
-              weight="SemiBold"
-              style={styles.tituloAvisoAssociacao}
+              accessibilityLiveRegion="polite"
+              style={{
+                fontSize: 12,
+                color: theme.textoSub,
+                marginBottom: 12,
+              }}
             >
-              Associação pendente
+              {mensagemEnvio}
             </Text>
-
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Desfazer correção da associação"
-              disabled={bloqueado}
-              onPress={() => setTransferenciaPendente(null)}
-              style={styles.acaoAvisoAssociacao}
-            >
-              <Ionicons
-                name="arrow-undo-outline"
-                size={14}
-                color={theme.textoTerciaria}
-              />
-
-              <Text
-                weight="SemiBold"
-                style={[
-                  styles.acaoAvisoAssociacaoTexto,
-                  { color: theme.textoTerciaria },
-                ]}
-              >
-                DESFAZER
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text
-            weight="SemiBold"
-            style={styles.textoAvisoAssociacao}
-          >
-            {transferenciaPendente.associacao.host}
-            {transferenciaPendente.associacao.caminho_prefixo}
-          </Text>
-
-          <Text
-            style={[
-              styles.textoAvisoAssociacao,
-              { color: theme.textoSub },
-            ]}
-          >
-            {transferenciaPendente.associacao.veiculo_nome}
-            {" → "}
-            {transferenciaPendente.veiculoNome}
-          </Text>
-
-          <Text
-            style={[
-              styles.notaAvisoAssociacao,
-              { color: theme.textoSub },
-            ]}
-          >
-            Será alterada ao salvar o clipping.
-          </Text>
-        </View>
-      ) : null}
-        
-        <Input
-          label="PROGRAMA / SEÇÃO"
-          value={programaSecao}
-          onChangeText={(texto) => {
-            setProgramaSecao(texto);
-            limparErro("programaSecao");
-          }}
-          placeholder="Ex.: Jornal da manhã"
-          error={erros.programaSecao}
-          editable={!bloqueado}
-          showChanged={campoAlterado("programaSecao")}
-          clearable
-        />
-
-        <Input
-          label="CATEGORIAS"
-          value={categoriasTexto}
-          onChangeText={(texto) => {
-            setCategoriasTexto(texto);
-            limparErro("categorias");
-          }}
-          placeholder="Separe as categorias por vírgula"
-          error={erros.categorias}
-          editable={!bloqueado}
-          showChanged={campoAlterado("categorias")}
-          clearable
-        />
-
-        <View style={styles.chips}>
-          {CATEGORIAS_SUGERIDAS.map((categoria) => (
-            <TouchableOpacity
-              key={categoria}
-              onPress={() =>
-                adicionarCategoria(categoria)
-              }
-              style={[
-                styles.chip,
-                { borderColor: theme.borda },
-              ]}
-              disabled={bloqueado}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: theme.texto },
-                ]}
-              >
-                + {categoria}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TierSelector
-          value={tier}
-          onChange={(valor) => {
-            setTier(valor);
-            limparErro("tier");
-          }}
-          disabled={bloqueado}
-          showChanged={campoAlterado("tier")}
-        />
-        {erros.tier ? (
-          <Text style={styles.fieldError}>
-            {erros.tier}
-          </Text>
-        ) : null}
-        {veiculo.id !== null ? (
-          <Text
-            style={[
-              styles.tierHint,
-              { color: theme.textoSub },
-            ]}
-          >
-            O Tier selecionado será registrado neste clipping.
-            Você pode ajustá-lo para esta publicação.
-          </Text>
-        ) : null}
-
-        <ClippingTrechoInput
-          inicio={inicioSegundos}
-          fim={fimSegundos}
-          onInicioChange={(texto) => {
-            setInicioSegundos(texto);
-            limparErro("inicioSegundos");
-            limparErro("fimSegundos");
-          }}
-          onFimChange={(texto) => {
-            setFimSegundos(texto);
-            limparErro("inicioSegundos");
-            limparErro("fimSegundos");
-          }}
-          erroInicio={erros.inicioSegundos}
-          erroFim={erros.fimSegundos}
-          disabled={bloqueado}
-          showInicioChanged={campoAlterado("inicioSegundos")}
-          showFimChanged={campoAlterado("fimSegundos")}
-        />
-        <ClippingArquivosInput
-          arquivos={arquivos}
-          disabled={bloqueado}
-          podeSelecionar={podeAnexar}
-          onChange={setArquivos}
-          onOcupadoChange={setSelecionandoArquivos}
-        />
-        <Input
-          label="OBSERVAÇÕES"
-          value={observacoes}
-          onChangeText={(texto) => {
-            setObservacoes(texto);
-            limparErro("observacoes");
-          }}
-          placeholder="Informações adicionais"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-          error={erros.observacoes}
-          editable={!bloqueado}
-          showChanged={campoAlterado("observacoes")}
-          clearable
-        />  
-        {erroGeral ? (
-          <Text style={styles.generalError}>
-            {erroGeral}
-          </Text>
-        ) : null}
-
-        {mensagemEnvio ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{
-              fontSize: 12,
-              color: theme.textoSub,
-              marginBottom: 12,
-            }}
-          >
-            {mensagemEnvio}
-          </Text>
-        ) : null}
-
-        {editando &&
-        quantidadePendencias > 0 ? (
-            <UnsavedChanges
-              visible
-              saving={bloqueado}
-              alterations={quantidadePendencias}
-              onSave={() => void salvar(false)}
-              onDiscard={cancelarCadastro}
-            />
-            ) : (
+          ) : null}
+          {!editando ? (
             <View style={styles.actions}>
-                <Button
-                title={editando ? "VOLTAR AOS DETALHES" : "CANCELAR"}
+              <Button
+                title="CANCELAR"
                 variant="outline"
                 disabled={bloqueado}
                 onPress={cancelarCadastro}
                 style={styles.actionButton}
-                />
+              />
 
-                {!editando ? (
+              {!editando ? (
                 <Button
-                    title="SALVAR"
-                    loading={salvando}
-                    disabled={bloqueado}
-                    onPress={() => void salvar(false)}
-                    style={styles.actionButton}
+                  title="SALVAR"
+                  loading={salvando}
+                  disabled={bloqueado}
+                  onPress={() => void salvar(false)}
+                  style={styles.actionButton}
                 />
-                ) : null}
+              ) : null}
             </View>
-        )}
-
-        {!editando ? (
+          ) : null}
+          {!editando ? (
             <Button
-                title="SALVAR E ADICIONAR OUTRO"
-                variant="outline"
-                loading={salvando}
-                disabled={bloqueado}
-                onPress={() => void salvar(true)}
-                style={styles.addAnotherButton}
+              title="SALVAR E ADICIONAR OUTRO"
+              variant="outline"
+              loading={salvando}
+              disabled={bloqueado}
+              onPress={() => void salvar(true)}
+              style={styles.addAnotherButton}
             />
+          ) : null}
+        </ScrollView>
+        {editando ? (
+          <SalvarAlteracoes
+            alterations={quantidadePendencias}
+            saving={salvando}
+            busy={bloqueado && !salvando}
+            onSave={() => void salvar(false)}
+            onDiscard={cancelarCadastro}
+          />
         ) : null}
-      </ScrollView>
-      {nomeCadastroVeiculo !== null ? (
-        <ClippingVeiculoCadastro
-          nomeInicial={nomeCadastroVeiculo}
-          onClose={() => {
-            setNomeCadastroVeiculo(null);
-            setEnderecoCadastroVeiculo(null);
-            if (previaLink) setPreviaAberta(true);
-          }}
-          onCriado={(criado, enderecosSalvos) => {
-            if (previaLink) {
-              const sugerido = previaLink.endereco_sugerido;
-
-              const enderecoFoiSalvo =
-                Boolean(sugerido.host) &&
-                enderecosSalvos.some(
-                  (endereco) =>
-                    endereco.host.trim().toLowerCase() ===
-                      sugerido.host.trim().toLowerCase() &&
-                    endereco.caminho_prefixo.trim() ===
-                      sugerido.caminho_prefixo.trim() &&
-                    endereco.incluir_subdominios ===
-                      sugerido.incluir_subdominios
-                );
-
-              setPreviaLink({
-                ...previaLink,
-                veiculo_sugerido: criado,
-                associar_endereco_ao_salvar: false,
-                transferir_endereco_ao_salvar: false,
-                endereco_associado_veiculo_id: enderecoFoiSalvo
-                  ? criado.id
-                  : previaLink.endereco_associado_veiculo_id ?? null,
-                endereco_associado: enderecoFoiSalvo
-                  ? null
-                  : previaLink.endereco_associado,
-              });
-
+        {nomeCadastroVeiculo !== null ? (
+          <ClippingVeiculoCadastro
+            nomeInicial={nomeCadastroVeiculo}
+            onClose={() => {
               setNomeCadastroVeiculo(null);
               setEnderecoCadastroVeiculo(null);
-              setPreviaAberta(true);
-              return;
-            }
+              if (previaLink) setPreviaAberta(true);
+            }}
+            onCriado={(criado, enderecosSalvos) => {
+              if (previaLink) {
+                const sugerido = previaLink.endereco_sugerido;
 
-            alterarVeiculo(criado);
-            setNomeCadastroVeiculo(null);
-            setSucesso(
-              "Veículo cadastrado e selecionado. Salve o clipping para concluir."
-            );
-          }}
-          enderecoInicial={enderecoCadastroVeiculo}
-        />
-      ) : null}
-      <PreviaDadosLink
-        dados={previaLink}
-        onFechar={() => {
-          setPreviaAberta(false);
-          setPreviaLink(null);
-        }}
-        onAplicar={aplicarDadosDoLink}
-        visible={previaAberta}
-        podeCriarVeiculo={podeCriarVeiculo}
-        podeAssociarEndereco={temPermissao("VEICULOS", "EDITAR")}
-        veiculoAtualPreenchido={
-          veiculo.id !== null || Boolean(veiculo.nome.trim())
-        }
-        onConfigurarTransferencia={(confirmada) => {
-          setPreviaLink((atual) => {
-            if (
-              !atual ||
-              !temPermissao("VEICULOS", "EDITAR") ||
-              !atual.endereco_associavel ||
-              !atual.endereco_associado ||
-              !atual.veiculo_sugerido ||
-              atual.endereco_associado.veiculo_id === atual.veiculo_sugerido.id
-            ) {
-              return atual;
-            }
+                const enderecoFoiSalvo =
+                  Boolean(sugerido.host) &&
+                  enderecosSalvos.some(
+                    (endereco) =>
+                      endereco.host.trim().toLowerCase() ===
+                        sugerido.host.trim().toLowerCase() &&
+                      endereco.caminho_prefixo.trim() ===
+                        sugerido.caminho_prefixo.trim() &&
+                      endereco.incluir_subdominios ===
+                        sugerido.incluir_subdominios
+                  );
 
-            return {
-              ...atual,
-              associar_endereco_ao_salvar: false,
-              transferir_endereco_ao_salvar: confirmada,
-            };
-          });
-        }}
-        onConfigurarAssociacao={(escopo, caminho) => {
-          setPreviaLink((atual) => {
-            if (!atual || atual.endereco_associado_veiculo_id != null) {
-              return atual;
-            }
-
-            return {
-              ...atual,
-              escopo_associacao: escopo,
-              endereco_sugerido: {
-                ...atual.endereco_sugerido,
-                caminho_prefixo: escopo === "site" ? "" : caminho,
-              },
-              associar_endereco_ao_salvar:
-                escopo !== "nenhum" &&
-                atual.veiculo_sugerido !== null &&
-                atual.endereco_associavel &&
-                temPermissao("VEICULOS", "EDITAR"),
-            };
-          });
-        }}
-        onSelecionarVeiculo={(escolhido) => {
-          setPreviaLink((atual) =>
-            atual
-              ? {
-                  ...atual,
-                  veiculo_sugerido: escolhido,
-                  transferir_endereco_ao_salvar: false,
-                  associar_endereco_ao_salvar:
-                    atual.escopo_associacao !== "nenhum" &&
-                    atual.endereco_associado_veiculo_id == null &&
-                    atual.endereco_associavel &&
-                    temPermissao("VEICULOS", "EDITAR"),
-                }
-              : null
-          );
-        }}
-        onCadastroRapido={(nome, endereco) => {
-          if (endereco) {
-            setPreviaLink((atual) =>
-              atual
-                ? { ...atual, endereco_sugerido: endereco }
-                : atual
-            );
-          }
-
-          setPreviaAberta(false);
-          setEnderecoCadastroVeiculo(endereco);
-          setNomeCadastroVeiculo(nome);
-        }}
-        onDesfazerVeiculo={() => {
-          setPreviaLink((atual) =>
-            atual
-              ? {
-                  ...atual,
-                  veiculo_sugerido: null,
+                setPreviaLink({
+                  ...previaLink,
+                  veiculo_sugerido: criado,
                   associar_endereco_ao_salvar: false,
                   transferir_endereco_ao_salvar: false,
-                }
-              : null
-          );
-        }}
-      />
+                  endereco_associado_veiculo_id: enderecoFoiSalvo
+                    ? criado.id
+                    : (previaLink.endereco_associado_veiculo_id ?? null),
+                  endereco_associado: enderecoFoiSalvo
+                    ? null
+                    : previaLink.endereco_associado,
+                });
 
-      <CapturaPaginaModal
-        visivel={capturaAberta}
-        link={link.trim()}
-        origem="clipping"
-        onFechar={() => setCapturaAberta(false)}
-        onConfirmar={(imagem) => {
-          const chave = `captura-${Date.now()}-${Math.random()}`;
+                setNomeCadastroVeiculo(null);
+                setEnderecoCadastroVeiculo(null);
+                setPreviaAberta(true);
+                return;
+              }
 
-          setArquivos((atuais) => [
-            ...atuais,
-            {
-              chave,
-              uri: imagem.uri,
-              nome: imagem.nome,
-              mimeType: imagem.mimeType,
-              file: imagem.file,
-              tamanhoBytes: imagem.tamanhoBytes,
-            },
-          ]);
+              alterarVeiculo(criado);
+              setNomeCadastroVeiculo(null);
+              setSucesso(
+                "Veículo cadastrado e selecionado. Salve o clipping para concluir."
+              );
+            }}
+            enderecoInicial={enderecoCadastroVeiculo}
+          />
+        ) : null}
+        <PreviaDadosLink
+          dados={previaLink}
+          onFechar={() => {
+            setPreviaAberta(false);
+            setPreviaLink(null);
+          }}
+          onAplicar={aplicarDadosDoLink}
+          visible={previaAberta}
+          podeCriarVeiculo={podeCriarVeiculo}
+          podeAssociarEndereco={temPermissao("VEICULOS", "EDITAR")}
+          veiculoAtualPreenchido={
+            veiculo.id !== null || Boolean(veiculo.nome.trim())
+          }
+          onConfigurarTransferencia={(confirmada) => {
+            setPreviaLink((atual) => {
+              if (
+                !atual ||
+                !temPermissao("VEICULOS", "EDITAR") ||
+                !atual.endereco_associavel ||
+                !atual.endereco_associado ||
+                !atual.veiculo_sugerido ||
+                atual.endereco_associado.veiculo_id ===
+                  atual.veiculo_sugerido.id
+              ) {
+                return atual;
+              }
 
-          setUltimaCapturaChave(chave);
-          setCapturaAberta(false);
-        }}
-      />
+              return {
+                ...atual,
+                associar_endereco_ao_salvar: false,
+                transferir_endereco_ao_salvar: confirmada,
+              };
+            });
+          }}
+          onConfigurarAssociacao={(escopo, caminho) => {
+            setPreviaLink((atual) => {
+              if (!atual || atual.endereco_associado_veiculo_id != null) {
+                return atual;
+              }
 
-      <FeedbackAlert
-        visible={falha !== null}
-        variant="error"
-        title="Não foi possível salvar"
-        message={falha ?? ""}
-        onClose={() => setFalha(null)}
-      />
-      <FeedbackAlert
-        visible={confirmarDescarte}
-        variant="warning"
-        title="Descartar alterações?"
-        message="As alterações desta edição ainda não foram salvas."
-        primaryLabel="DESCARTAR"
-        secondaryLabel="CONTINUAR"
-        primaryDanger
-        onPrimary={descartarESair}
-        onSecondary={continuarEditando}
-        onClose={continuarEditando}
+              return {
+                ...atual,
+                escopo_associacao: escopo,
+                endereco_sugerido: {
+                  ...atual.endereco_sugerido,
+                  caminho_prefixo: escopo === "site" ? "" : caminho,
+                },
+                associar_endereco_ao_salvar:
+                  escopo !== "nenhum" &&
+                  atual.veiculo_sugerido !== null &&
+                  atual.endereco_associavel &&
+                  temPermissao("VEICULOS", "EDITAR"),
+              };
+            });
+          }}
+          onSelecionarVeiculo={(escolhido) => {
+            setPreviaLink((atual) =>
+              atual
+                ? {
+                    ...atual,
+                    veiculo_sugerido: escolhido,
+                    transferir_endereco_ao_salvar: false,
+                    associar_endereco_ao_salvar:
+                      atual.escopo_associacao !== "nenhum" &&
+                      atual.endereco_associado_veiculo_id == null &&
+                      atual.endereco_associavel &&
+                      temPermissao("VEICULOS", "EDITAR"),
+                  }
+                : null
+            );
+          }}
+          onCadastroRapido={(nome, endereco) => {
+            if (endereco) {
+              setPreviaLink((atual) =>
+                atual ? { ...atual, endereco_sugerido: endereco } : atual
+              );
+            }
+
+            setPreviaAberta(false);
+            setEnderecoCadastroVeiculo(endereco);
+            setNomeCadastroVeiculo(nome);
+          }}
+          onDesfazerVeiculo={() => {
+            setPreviaLink((atual) =>
+              atual
+                ? {
+                    ...atual,
+                    veiculo_sugerido: null,
+                    associar_endereco_ao_salvar: false,
+                    transferir_endereco_ao_salvar: false,
+                  }
+                : null
+            );
+          }}
         />
-    </View>
+
+        <CapturaPaginaModal
+          visivel={capturaAberta}
+          link={link.trim()}
+          origem="clipping"
+          onFechar={() => setCapturaAberta(false)}
+          onConfirmar={(imagem) => {
+            const chave = `captura-${Date.now()}-${Math.random()}`;
+
+            setArquivos((atuais) => [
+              ...atuais,
+              {
+                chave,
+                uri: imagem.uri,
+                nome: imagem.nome,
+                mimeType: imagem.mimeType,
+                file: imagem.file,
+                tamanhoBytes: imagem.tamanhoBytes,
+              },
+            ]);
+
+            setUltimaCapturaChave(chave);
+            setCapturaAberta(false);
+          }}
+        />
+
+        <FeedbackAlert
+          visible={falha !== null}
+          variant="error"
+          title="Não foi possível salvar"
+          message={falha ?? ""}
+          onClose={() => setFalha(null)}
+        />
+        <FeedbackAlert
+          visible={confirmarDescarte}
+          variant="warning"
+          title="Descartar alterações?"
+          message="As alterações desta edição ainda não foram salvas."
+          primaryLabel="DESCARTAR"
+          secondaryLabel="CONTINUAR"
+          primaryDanger
+          onPrimary={descartarESair}
+          onSecondary={continuarEditando}
+          onClose={continuarEditando}
+        />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -1973,19 +1844,18 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
-    paddingBottom: 45,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 16,
+    paddingBottom: 28,
+    gap: 14,
   },
 
   sectionTitle: {
     fontSize: 13,
     marginBottom: 13,
     marginTop: 4,
-  },
-
-  fieldLabel: {
-    fontSize: 12,
-    marginBottom: 8,
   },
 
   suggestions: {
@@ -1999,6 +1869,7 @@ const styles = StyleSheet.create({
   suggestion: {
     minHeight: 42,
     paddingHorizontal: 12,
+    paddingVertical: 9,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -2006,7 +1877,9 @@ const styles = StyleSheet.create({
 
   suggestionText: {
     flex: 1,
+    minWidth: 0,
     fontSize: 12,
+    lineHeight: 18,
   },
 
   chips: {
@@ -2026,15 +1899,6 @@ const styles = StyleSheet.create({
 
   chipText: {
     fontSize: 11,
-  },
-
-  row: {
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  half: {
-    flex: 1,
   },
 
   textArea: {
@@ -2168,5 +2032,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginBottom: 10,
+  },
+  auxiliarEdicao: {
+    marginTop: 0,
+    marginBottom: 0,
   },
 });

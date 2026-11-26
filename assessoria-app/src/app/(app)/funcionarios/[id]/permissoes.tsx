@@ -1,939 +1,665 @@
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 
-import { useEffect, useState, useCallback } from "react";
-import {
-  useLocalSearchParams,
-} from "expo-router";
-
+import { useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
-import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import AvatarUsuario from "@/components/perfil/AvatarUsuario";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import UnsavedChanges from "@/components/forms/UnsavedChanges";
-
+import { ResumoCadastro } from "@/components/ui/DetalhesCadastro";
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-
 import {
-  Funcionario,
-  Permissao,
+  buscarFuncionario,
+  listarTodasPermissoes,
+  listarPermissoesFuncionario,
+  atualizarPermissoesFuncionario,
+  type Funcionario,
+  type Permissao,
 } from "@/services/api/auth";
 
 export default function Permissoes() {
-   const { theme } = useTheme();
-   const { id } =
-    useLocalSearchParams<{
-      id: string;
-    }>();
-
-  const {
-    carregando: carregandoAuth,
-    buscarFuncionario,
-    listarTodasPermissoes,
-    listarPermissoesFuncionario,
-    atualizarPermissoesFuncionario,
-    temPermissao,
-  } = useAuth();
-
-  
-    const [funcionario, setFuncionario] =
-    useState<Funcionario | null>(null);
-
-    const [permissoes, setPermissoes] =
-    useState<Permissao[]>([]);
-
-    const [selecionadas, setSelecionadas] =
-    useState<number[]>([]);
-
-    const [permissoesOriginais, setPermissoesOriginais] =
-    useState<number[]>([]);
-
-    const adicionadas =
-    selecionadas.filter(
-        (id) =>
-        !permissoesOriginais.includes(id)
-    ).length;
-
-    const removidas =
-    permissoesOriginais.filter(
-        (id) =>
-        !selecionadas.includes(id)
-    ).length;
-
-    const quantidadeAlteracoes =
-    adicionadas + removidas;
-
-    const possuiAlteracoes =
-  !mesmasPermissoes(
-    permissoesOriginais,
-    selecionadas
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { usuario } = useAuth();
+  return (
+    <PermissoesFuncionario
+      key={[usuario?.assessoria_id, usuario?.id, id].join(":")}
+      id={Number(id)}
+    />
   );
-  const [carregando, setCarregando] =
-    useState(true);
+}
 
-  const [salvando, setSalvando] =
-    useState(false);
-
+function PermissoesFuncionario({ id }: { id: number }) {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { temPermissao, carregando: carregandoAuth } = useAuth();
+  const podeGerenciar = temPermissao("USUARIOS", "GERENCIAR_PERMISSOES");
+  const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
+  const [permissoes, setPermissoes] = useState<Permissao[]>([]);
+  const [selecionadas, setSelecionadas] = useState<number[]>([]);
+  const [originais, setOriginais] = useState<number[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [tentativa, setTentativa] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const montado = useRef(true);
+  const envio = useRef(false);
+  const alteracoes =
+    selecionadas.filter((item) => !originais.includes(item)).length +
+    originais.filter((item) => !selecionadas.includes(item)).length;
+  const saida = useSaidaFormulario(alteracoes > 0, salvando);
+  const retornar = useRetornoSeguro({
+    pathname: "/funcionarios/[id]",
+    params: { id: String(id) },
+  });
 
-  const carregarDados = useCallback(
-    async () => {
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (carregandoAuth || !podeGerenciar) return;
+    const controller = new AbortController();
+    let ativo = true;
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    async function carregar() {
+      setCarregando(true);
+      setErro("");
+      setFuncionario(null);
       try {
-        setCarregando(true);
-        setErro("");
-
-        const [
-          funcionarioEncontrado,
-          todasPermissoes,
-          permissoesAtuais,
-        ] = await Promise.all([
-          buscarFuncionario(Number(id)),
-          listarTodasPermissoes(),
-          listarPermissoesFuncionario(Number(id)),
+        if (!Number.isSafeInteger(id) || id <= 0)
+          throw new Error("Funcionário não encontrado.");
+        const [pessoa, todas, atuais] = await Promise.all([
+          buscarFuncionario(id, controller.signal),
+          listarTodasPermissoes(controller.signal),
+          listarPermissoesFuncionario(id, controller.signal),
         ]);
-
-        const idsAtuais =
-          permissoesAtuais.map(
-            (item) => item.id
-          );
-
-        setFuncionario(funcionarioEncontrado);
-        setPermissoes(todasPermissoes);
-        setSelecionadas(idsAtuais);
-        setPermissoesOriginais(idsAtuais);
+        if (!ativo) return;
+        setFuncionario(pessoa);
+        setPermissoes(todas);
+        setSelecionadas(atuais.map((item) => item.id));
+        setOriginais(atuais.map((item) => item.id));
       } catch (error) {
-        console.error(
-          "Erro ao carregar permissões:",
-          error
-        );
+        if (ativo)
+          setErro(
+            controller.signal.aborted
+              ? "A consulta demorou mais que o esperado. Tente novamente."
+              : error instanceof Error
+                ? error.message
+                : "Não foi possível carregar as permissões."
+          );
+      } finally {
+        clearTimeout(timer);
+        if (ativo) setCarregando(false);
+      }
+    }
 
+    void carregar();
+    return () => {
+      ativo = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [carregandoAuth, podeGerenciar, id, tentativa]);
+
+  function bloqueada(permissao: Permissao) {
+    return (
+      permissao.acao !== "VISUALIZAR" &&
+      !permissoes.some(
+        (item) =>
+          item.modulo === permissao.modulo &&
+          item.acao === "VISUALIZAR" &&
+          selecionadas.includes(item.id)
+      )
+    );
+  }
+
+  function alternar(permissao: Permissao) {
+    if (envio.current || !podeGerenciar || bloqueada(permissao)) return;
+    setSelecionadas((atuais) => {
+      if (!atuais.includes(permissao.id)) return [...atuais, permissao.id];
+      return atuais.filter(
+        (item) =>
+          item !== permissao.id &&
+          (permissao.acao !== "VISUALIZAR" ||
+            !permissoes.some(
+              (outra) => outra.id === item && outra.modulo === permissao.modulo
+            ))
+      );
+    });
+  }
+
+  async function salvar() {
+    if (envio.current || !podeGerenciar || !funcionario || !alteracoes) return;
+    envio.current = true;
+    setSalvando(true);
+    setErro("");
+    const ids = [...selecionadas];
+    try {
+      await atualizarPermissoesFuncionario(id, ids);
+      if (!montado.current) return;
+      setOriginais(ids);
+      setFeedback("As permissões do funcionário foram atualizadas.");
+    } catch (error) {
+      if (montado.current)
         setErro(
           error instanceof Error
             ? error.message
-            : "Não foi possível carregar as permissões."
+            : "Não foi possível salvar as permissões."
         );
-      } finally {
-        setCarregando(false);
-      }
-    },
-    [
-      id,
-      buscarFuncionario,
-      listarTodasPermissoes,
-      listarPermissoesFuncionario,
-      setErro
-    ]
+    } finally {
+      envio.current = false;
+      if (montado.current) setSalvando(false);
+    }
+  }
+
+  const grupos = Object.entries(
+    permissoes.reduce<Record<string, Permissao[]>>((todos, item) => {
+      (todos[item.modulo] ??= []).push(item);
+      return todos;
+    }, {})
   );
 
-  useEffect(() => {
-    if (
-      carregandoAuth ||
-      !temPermissao(
-        "USUARIOS",
-        "GERENCIAR_PERMISSOES"
-      )
-    ) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void carregarDados();
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [
-    carregandoAuth,
-    temPermissao,
-    carregarDados,
-  ]);
-
-  function mesmasPermissoes(
-  a: number[],
-  b: number[]
-): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  const primeira = [...a].sort(
-    (x, y) => x - y
-  );
-
-  const segunda = [...b].sort(
-    (x, y) => x - y
-  );
-
-  return primeira.every(
-    (valor, indice) =>
-      valor === segunda[indice]
-  );
-}
-
-  function alternarPermissao(
-    permissao: Permissao
-  ) {
-    if (
-      permissao.acao !== "VISUALIZAR" &&
-      permissaoBloqueada(permissao)
-    ) {
-      return;
-    }
-
-    setSelecionadas((atuais) => {
-      const selecionada =
-        atuais.includes(permissao.id);
-
-      if (selecionada) {
-        const novas =
-          atuais.filter(
-            (id) =>
-              id !== permissao.id
-          );
-          
-        if (
-          permissao.acao === "VISUALIZAR"
-        ) {
-          return novas.filter((id) => {
-            const outra = permissoes.find(
-              (p) => p.id === id
-            );
-
-            return (
-              !outra ||
-              outra.modulo !==
-                permissao.modulo
-            );
-          });
-        }
-
-        return novas;
-      }
-
-      return [
-        ...atuais,
-        permissao.id,
-      ];
-    });
-    
-  }
-
-  const retornar = useRetornoSeguro({
-    pathname: "/funcionarios/[id]", params: { id: String(id) },
-  });
-  const saida = useSaidaFormulario(possuiAlteracoes, salvando);
-
-  function handleBack() {
-  retornar();
-}
-
-  function possuiVisualizar(
-    modulo: string
-  ): boolean {
-    const permissaoVisualizar = permissoes.find(
-      (permissao) =>
-        permissao.modulo === modulo &&
-        permissao.acao === "VISUALIZAR"
-    );
-
-    if (!permissaoVisualizar) {
-      return false;
-    }
-
-    return selecionadas.includes(
-      permissaoVisualizar.id
-    );
-  }
-
-  function permissaoBloqueada(
-    permissao: Permissao
-  ): boolean {
-    if (permissao.acao === "VISUALIZAR") {
-      return false;
-    }
-
-    return !possuiVisualizar(
-      permissao.modulo
-    );
-  }
-  
-  function descartarAlteracoes() {
-    setSelecionadas(
-        [...permissoesOriginais]
-    );
-}
-
-  async function salvar() {
-  try {
-    setSalvando(true);
-    setErro("");
-
-    await atualizarPermissoesFuncionario(
-      Number(id),
-      selecionadas
-    );
-
-    setPermissoesOriginais(
-      [...selecionadas]
-    );
-
-  } catch (error) {
-    console.error(
-      "Erro ao salvar permissões:",
-      error
-    );
-
-    setErro(
-      error instanceof Error
-        ? error.message
-        : "Não foi possível salvar as permissões."
-    );
-  } finally {
-    setSalvando(false);
-  }
-}
-
-  if (!temPermissao("USUARIOS","GERENCIAR_PERMISSOES"))  {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor:
-              theme.background,
-          },
-        ]}
+  return (
+    <EdicaoCompacta ativa={true}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
         <Header
           title="Permissões"
           showBackButton
           showSettings={false}
-          onBackPress={handleBack}
+          onBackPress={retornar}
         />
-
-        <View style={styles.center}>
-          <Text weight="Bold">
-            Acesso restrito
-          </Text>
-
-          <Text
-            style={[
-              styles.centerText,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            Você não possui permissão para gerenciar permissões.
-          </Text>
-        </View>
-      <FeedbackAlert {...saida.alertaProps} />
-      </View>
-    );
-  }
-
-  return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor:
-            theme.background,
-        },
-      ]}
-    >
-      <Header
-        title="Permissões"
-        showBackButton
-        showSettings={false}
-        onBackPress={handleBack}
-      />
-
-      {carregando ? (
-        <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.primaria}
-          />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-        >
-          <View
-            style={[
-              styles.employeeCard,
-              {
-                backgroundColor:
-                  theme.background,
-                borderColor:
-                  theme.borda,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.avatar,
+        {carregandoAuth || (podeGerenciar && carregando) ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={theme.primaria} />
+          </View>
+        ) : !podeGerenciar ? (
+          <View style={styles.center}>
+            <Text weight="Bold">Acesso restrito</Text>
+            <Text style={[styles.mensagem, { color: theme.textoSub }]}>
+              Você não possui permissão para gerenciar permissões.
+            </Text>
+          </View>
+        ) : !funcionario ? (
+          <View style={styles.center}>
+            <Text style={[styles.mensagem, { color: theme.textoSub }]}>
+              {erro}
+            </Text>
+            <Button
+              title="TENTAR NOVAMENTE"
+              variant="outline"
+              onPress={() => setTentativa((atual) => atual + 1)}
+            />
+          </View>
+        ) : (
+          <>
+            <ScrollView
+              style={{ flex: 1 }}
+              automaticallyAdjustKeyboardInsets={false}
+              contentContainerStyle={[
+                styles.content,
                 {
-                  backgroundColor:
-                    theme.backgroundContainer,
+                  paddingBottom: 24 + insets.bottom,
+                  paddingLeft: 16 + insets.left,
+                  paddingRight: 16 + insets.right,
                 },
               ]}
             >
-              <Text
-                weight="Bold"
-                style={[
-                  styles.avatarText,
-                  {
-                    color:
-                      theme.textoContainer,
-                  },
-                ]}
-              >
-                {funcionario?.nome
-                  .charAt(0)
-                  .toUpperCase()}
-              </Text>
-            </View>
-
-            <View
-              style={styles.employeeInfo}
-            >
-              <Text
-                weight="Bold"
-                style={styles.employeeName}
-              >
-                {funcionario?.nome}
-              </Text>
-
-              <Text
-                style={[
-                  styles.employeeEmail,
-                  {
-                    color:
-                      theme.textoSub,
-                  },
-                ]}
-              >
-                {funcionario?.email}
-              </Text>
-            </View>
-          </View>
-
-          <Text
-            weight="SemiBold"
-            style={styles.sectionTitle}
-          >
-            Permissões de acesso
-          </Text>
-
-          <Text
-            style={[
-              styles.sectionDescription,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            Defina quais ações este funcionário poderá
-            realizar no sistema. 
-            Ativar &quot;visualizar&quot; permite que outras ações sejam ativadas.          
-          </Text>
-
-          {Object.entries(
-            permissoes.reduce<
-              Record<string, Permissao[]>
-            >((grupos, permissao) => {
-              if (!grupos[permissao.modulo]) {
-                grupos[permissao.modulo] = [];
-              }
-
-              grupos[
-                permissao.modulo
-              ].push(permissao);
-
-              return grupos;
-            }, {})
-          ).map(
-            ([modulo, lista]) => (
-              <View
-                key={modulo}
-                style={[
-                  styles.moduleCard,
-                  {
-                    backgroundColor:
-                      theme.background,
-                    borderColor:
-                      theme.borda,
-                  },
-                ]}
-              >
+              <ResumoCadastro
+                nome={funcionario.nome}
+                categoria="PERMISSÕES DO FUNCIONÁRIO"
+                ativo={Number(funcionario.ativo) === 1}
+                avatar={<AvatarUsuario usuario={funcionario} tamanho={48} />}
+              />
+              <View style={styles.introducao}>
+                <Text weight="Bold" style={styles.titulo}>
+                  Acessos por módulo
+                </Text>
+                <Text style={[styles.descricao, { color: theme.textoSub }]}>
+                  Escolha o que o funcionário pode fazer. Habilite Visualizar
+                  para liberar as demais ações de cada módulo.
+                </Text>
                 <View
-                  style={styles.moduleHeader}
+                  style={[
+                    styles.contagem,
+                    { backgroundColor: theme.primaria + "0D" },
+                  ]}
                 >
-                  <View
-                    style={[
-                      styles.moduleIcon,
-                      {
-                        backgroundColor:
-                          theme.backgroundContainer,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        obterIconeModulo(
-                          modulo
-                        ) as any
-                      }
-                      size={20}
-                      color={
-                        theme.textoContainer
-                      }
-                    />
-                  </View>
-
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={15}
+                    color={theme.textoTerciaria}
+                  />
                   <Text
-                    weight="Bold"
+                    weight="SemiBold"
                     style={[
-                      styles.moduleTitle,
-                      {
-                        color:
-                          theme.textoTerciaria,
-                      },
+                      styles.contagemTexto,
+                      { color: theme.textoTerciaria },
                     ]}
                   >
-                    {modulo}
+                    {selecionadas.length}{" "}
+                    {selecionadas.length === 1
+                      ? "permissão habilitada"
+                      : "permissões habilitadas"}
                   </Text>
                 </View>
-
-                {lista.map(
-                  (permissao) => {
-                    const eraSelecionada = permissoesOriginais.includes( permissao.id);
-                        const estaSelecionada = selecionadas.includes(permissao.id);
-                        const foiAdicionada = !eraSelecionada && estaSelecionada;
-                        const foiRemovida = eraSelecionada && !estaSelecionada;
-                    const marcada =
-                      selecionadas.includes(
-                        permissao.id
-                      );
-                        const bloqueada = permissaoBloqueada(permissao);
-
-
+              </View>
+              {grupos.map(([modulo, lista]) => (
+                <View
+                  key={modulo}
+                  style={[
+                    styles.modulo,
+                    {
+                      backgroundColor: theme.backgroundSecundario,
+                      borderColor: theme.borda + "40",
+                    },
+                  ]}
+                >
+                  <View style={styles.moduloHeader}>
+                    <View
+                      style={[
+                        styles.moduloIcone,
+                        { backgroundColor: theme.primaria + "0D" },
+                      ]}
+                    >
+                      <Ionicons
+                        name={obterIconeModulo(modulo)}
+                        size={20}
+                        color={theme.textoTerciaria}
+                      />
+                    </View>
+                    <Text weight="SemiBold" style={styles.moduloTitulo}>
+                      {NOMES_MODULOS[modulo] ?? formatarNome(modulo)}
+                    </Text>
+                    <Text
+                      weight="Medium"
+                      style={[styles.proporcao, { color: theme.textoSub }]}
+                    >
+                      {
+                        lista.filter((item) => selecionadas.includes(item.id))
+                          .length
+                      }
+                      /{lista.length}
+                    </Text>
+                  </View>
+                  {lista.map((permissao) => {
+                    const marcada = selecionadas.includes(permissao.id);
+                    const impedida = bloqueada(permissao);
+                    const mudou = marcada !== originais.includes(permissao.id);
+                    const cor = marcada ? theme.alteracao : "#EF4444";
                     return (
                       <TouchableOpacity
                         key={permissao.id}
-                        disabled={bloqueada}
-                        activeOpacity={bloqueada ? 1 : 0.8}
-                        onPress={() => {
-                          if (!bloqueada) {
-                            alternarPermissao(permissao);
-                          }
+                        accessibilityRole="checkbox"
+                        aria-checked={marcada}
+                        aria-disabled={impedida || salvando}
+                        accessibilityLabel={
+                          formatarNome(permissao.acao) +
+                          ": " +
+                          (NOMES_MODULOS[modulo] ?? modulo)
+                        }
+                        accessibilityState={{
+                          checked: marcada,
+                          disabled: impedida || salvando,
                         }}
+                        disabled={impedida || salvando}
+                        activeOpacity={0.7}
+                        onPress={() => alternar(permissao)}
                         style={[
-                          styles.permissionRow,
-                          {
-                            borderTopColor: theme.borda,
-                            opacity: bloqueada ? 0.55 : 1,
-                          },
+                          styles.permissao,
+                          { borderTopColor: theme.borda + "20" },
                         ]}
                       >
-                        <View
-                          style={
-                            styles.permissionInfo
-                          }
-                        >
-                          <View style={styles.actionRow}>
+                        <View style={styles.permissaoConteudo}>
+                          <View style={styles.acaoLinha}>
                             <Text
                               weight="SemiBold"
                               style={[
-                                styles.permissionAction,
+                                styles.acao,
                                 {
-                                  color: bloqueada
+                                  color: impedida
                                     ? theme.textoSub
                                     : theme.texto,
                                 },
                               ]}
                             >
-                              {formatarAcao(permissao.acao)}
+                              {formatarNome(permissao.acao)}
                             </Text>
-
-                            {bloqueada && (
+                            {impedida && (
                               <Ionicons
                                 name="lock-closed-outline"
-                                size={13}
+                                size={12}
                                 color={theme.textoSub}
                               />
                             )}
-
-                            {foiAdicionada && (
-                              <View
-                                style={[
-                                  styles.changeBadge,
-                                  {
-                                    backgroundColor:
-                                      theme.backgroundContainer,
-                                  },
-                                ]}
+                            {mudou && (
+                              <Text
+                                weight="Medium"
+                                style={[styles.alteracao, { color: cor }]}
                               >
-                                <Text
-                                  weight="SemiBold"
-                                  style={[
-                                    styles.changeBadgeText,
-                                    {
-                                      color:
-                                        theme.textoContainer,
-                                    },
-                                  ]}
-                                >
-                                  NOVA
-                                </Text>
-                              </View>
+                                {marcada ? "Adicionada" : "Removida"}
+                              </Text>
                             )}
-
-                            {foiRemovida && (
-                              <View
-                                style={[
-                                  styles.changeBadge,
-                                  styles.removedBadge,
-                                ]}
-                              >
-                                <Text
-                                  weight="SemiBold"
-                                  style={styles.removedBadgeText}
-                                >
-                                  REMOVIDA
-                                </Text>
-                              </View>
-                            )}
-                            </View>
-
+                          </View>
                           <Text
-                            style={[
-                              styles.permissionDescription,
-                              {
-                                color:
-                                  theme.textoSub,
-                              },
-                            ]}
+                            style={[styles.detalhe, { color: theme.textoSub }]}
                           >
-                            {
-                              permissao.descricao
-                            }
+                            {impedida
+                              ? "Habilite Visualizar neste módulo."
+                              : permissao.descricao ||
+                                "Permite esta ação no módulo."}
                           </Text>
                         </View>
-
                         <View
                           style={[
                             styles.checkbox,
                             {
-                              borderColor: bloqueada
-                                ? theme.textoSub
-                                : marcada
-                                  ? theme.primaria
-                                  : theme.borda,
-
-                              backgroundColor: bloqueada
-                                ? "transparent"
-                                : marcada
-                                  ? theme.backgroundContainer
-                                  : "transparent",
+                              borderColor: marcada
+                                ? theme.primaria
+                                : theme.borda + "80",
+                              backgroundColor: marcada
+                                ? theme.primaria
+                                : "transparent",
+                              opacity: impedida ? 0.5 : 1,
                             },
                           ]}
                         >
                           {marcada && (
                             <Ionicons
                               name="checkmark"
-                              size={17}
-                              color={
-                                theme.textoContainer
-                              }
+                              size={16}
+                              color={theme.branco}
                             />
                           )}
                         </View>
                       </TouchableOpacity>
                     );
-                  }
-                )}
-              </View>
-            )
-          )}
-
-          {erro ? (
-            <View
-              style={[
-                styles.errorContainer,
-                {
-                  borderColor:
-                    theme.borda,
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={20}
-                color="#EF4444"
-              />
-
-              <Text
-                weight="Medium"
-                style={styles.errorText}
-              >
-                {erro}
-              </Text>
-            </View>
-          ) : null}
-          <Button
-            title="SALVAR PERMISSÕES"
-            onPress={salvar}
-            loading={salvando}
-            style={styles.saveButton}
-          />
-          <UnsavedChanges
-            visible={possuiAlteracoes}
-            saving={salvando}
-            alterations={quantidadeAlteracoes}
-            onSave={salvar}
-            onDiscard={descartarAlteracoes}
-          />
-        </ScrollView>
-      )}
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+                  })}
+                </View>
+              ))}
+              {!grupos.length && (
+                <Text style={[styles.descricao, { color: theme.textoSub }]}>
+                  Não há permissões disponíveis para gerenciar.
+                </Text>
+              )}
+              {erro ? (
+                <Text
+                  accessibilityRole="alert"
+                  style={[styles.descricao, { color: "#EF4444" }]}
+                >
+                  {erro}
+                </Text>
+              ) : null}
+              {alteracoes > 0 && (
+                <View
+                  style={[
+                    styles.pendencias,
+                    { backgroundColor: theme.primaria + "0A" },
+                  ]}
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={17}
+                    color={theme.textoTerciaria}
+                  />
+                  <Text
+                    style={[
+                      styles.pendenciasTexto,
+                      { color: theme.textoTerciaria },
+                    ]}
+                  >
+                    {alteracoes}{" "}
+                    {alteracoes === 1
+                      ? "alteração pendente"
+                      : "alterações pendentes"}
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Descartar alterações"
+                    disabled={salvando}
+                    onPress={() => {
+                      setSelecionadas([...originais]);
+                      setErro("");
+                    }}
+                  >
+                    <Text
+                      weight="SemiBold"
+                      style={[
+                        styles.contagemTexto,
+                        { color: theme.textoTerciaria },
+                      ]}
+                    >
+                      Desfazer
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+            <SalvarAlteracoes
+              alterations={alteracoes}
+              saving={salvando}
+              error={erro}
+              onSave={() => void salvar()}
+              onDiscard={retornar}
+            />
+          </>
+        )}
+        <FeedbackAlert {...saida.alertaProps} />
+        <FeedbackAlert
+          visible={!!feedback}
+          variant="success"
+          title="Permissões salvas"
+          message={feedback ?? ""}
+          onClose={() => setFeedback(null)}
+        />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
-function formatarAcao(acao: string): string {
-  return acao
-    .toLowerCase()
-    .replace(/^./, (letra) =>
-      letra.toUpperCase()
-    );
+const NOMES_MODULOS: Record<string, string> = {
+  MAILING: "Mailing",
+  CLIENTES: "Clientes",
+  VEICULOS: "Veículos",
+  RELEASES: "Releases",
+  TEMPLATES: "Templates",
+  CLIPPING: "Clipping",
+  RELATORIOS: "Relatórios",
+  AUDITORIA: "Auditoria",
+  USUARIOS: "Funcionários",
+  CONVITES: "Convites",
+};
+
+function formatarNome(valor: string) {
+  const nomes: Record<string, string> = {
+    VISUALIZAR: "Visualizar",
+    CRIAR: "Criar",
+    EDITAR: "Editar",
+    EXCLUIR: "Excluir",
+    GERENCIAR_PERMISSOES: "Gerenciar permissões",
+    IMPORTAR: "Importar",
+    EXPORTAR: "Exportar",
+  };
+  return (
+    nomes[valor] ??
+    valor
+      .toLocaleLowerCase("pt-BR")
+      .replace(/_/g, " ")
+      .replace(/^./, (letra) => letra.toLocaleUpperCase("pt-BR"))
+  );
 }
 
-function obterIconeModulo(modulo: string) {
-  switch (modulo) {
-    case "MAILING":
-      return "people-outline";
-
-    case "CLIENTES":
-      return "business-outline";
-
-    case "VEICULOS":
-      return "radio-outline";
-
-    case "RELEASES":
-      return "newspaper-outline";
-
-    case "TEMPLATES":
-      return "layers-outline";
-
-    case "CLIPPING":
-      return "document-outline";
-
-    case "RELATORIOS":
-      return "bar-chart-outline";
-
-    case "AUDITORIA":
-      return "shield-checkmark-outline";
-
-    case "USUARIOS":
-      return "people-outline";
-
-    case "CONVITES":
-      return "mail-outline";
-
-    default:
-      return "apps-outline";
-  }
+function obterIconeModulo(
+  modulo: string
+): ComponentProps<typeof Ionicons>["name"] {
+  const icones: Record<string, ComponentProps<typeof Ionicons>["name"]> = {
+    MAILING: "people-outline",
+    CLIENTES: "business-outline",
+    VEICULOS: "radio-outline",
+    RELEASES: "paper-plane-outline",
+    TEMPLATES: "layers-outline",
+    CLIPPING: "document-text-outline",
+    RELATORIOS: "bar-chart-outline",
+    AUDITORIA: "shield-checkmark-outline",
+    USUARIOS: "people-outline",
+    CONVITES: "mail-outline",
+  };
+  return icones[modulo] ?? "apps-outline";
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
-  content: {
-    padding: 20,
-    paddingBottom: 35,
-  },
-
-  employeeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 25,
-  },
-
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  avatarText: {
-    fontSize: 19,
-  },
-
-  employeeInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  employeeName: {
-    fontSize: 18,
-  },
-
-  employeeEmail: {
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-  sectionTitle: {
-    fontSize: 21,
-  },
-
-  sectionDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 5,
-    marginBottom: 20,
-  },
-
-  moduleCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 15,
-    overflow: "hidden",
-  },
-
-  moduleHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-  },
-
-  moduleIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-
-  moduleTitle: {
-    fontSize: 17,
-  },
-
-  permissionRow: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-
-  permissionInfo: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingRight: 12,
-  },
-
-  permissionAction: {
-    fontSize: 14,
-  },
-  actionRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-},
-
-changeBadge: {
-  paddingHorizontal: 7,
-  paddingVertical: 3,
-  borderRadius: 8,
-},
-
-changeBadgeText: {
-  fontSize: 9,
-},
-
-removedBadge: {
-  backgroundColor: "#FDECEC",
-},
-
-removedBadgeText: {
-  color: "#EF4444",
-  fontSize: 9,
-},
-  permissionDescription: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-
-  checkbox: {
-    width: 25,
-    height: 25,
-    borderRadius: 7,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 15,
-  },
-
-  errorText: {
-    flex: 1,
-    color: "#EF4444",
-    fontSize: 13,
-    marginLeft: 8,
-  },
-
-  saveButton: {
-    marginTop: 5,
-  },
-
-  loading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 25,
+    padding: 24,
+    gap: 16,
   },
-
-  centerText: {
+  mensagem: {
+    fontSize: 13,
+    lineHeight: 20,
     textAlign: "center",
-    marginTop: 8,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    paddingTop: 16,
+    gap: 12,
+  },
+  introducao: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  titulo: {
+    fontSize: 17,
+    lineHeight: 24,
+  },
+  descricao: {
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  contagem: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  contagemTexto: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  modulo: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  moduloHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+  },
+  moduloIcone: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  moduloTitulo: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  proporcao: {
+    fontSize: 11,
+  },
+  permissao: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    minHeight: 64,
+  },
+  permissaoConteudo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  acaoLinha: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  acao: {
+    fontSize: 12,
+    lineHeight: 18,
+    flexShrink: 1,
+  },
+  alteracao: {
+    fontSize: 10,
+    lineHeight: 16,
+  },
+  detalhe: {
+    fontSize: 11,
+    lineHeight: 17,
+  },
+  checkbox: {
+    width: 23,
+    height: 23,
+    borderWidth: 1,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  pendencias: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    padding: 12,
+  },
+  pendenciasTexto: {
+    flex: 1,
+    minWidth: 100,
+    fontSize: 11,
+    lineHeight: 17,
   },
 });

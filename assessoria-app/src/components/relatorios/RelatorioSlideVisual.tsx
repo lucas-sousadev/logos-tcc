@@ -16,22 +16,25 @@ interface Props {
 const LARGURA_SLIDE = 960;
 const ALTURA_SLIDE = 540;
 
-export default function RelatorioSlideVisual({ slide, imagemUri, logoUri }: Props) {
+export default function RelatorioSlideVisual({
+  slide,
+  imagemUri,
+  logoUri,
+}: Props) {
   const { width: larguraJanela } = useWindowDimensions();
-  const [alturaEsquerda, setAlturaEsquerda] = useState(0);
-  const [alturaDireita, setAlturaDireita] = useState(0);
+  const [larguraArea, setLarguraArea] = useState<number | null>(null);
   const [alturaDados, setAlturaDados] = useState(0);
   const [alturaLink, setAlturaLink] = useState(0);
 
   const larguraVisivel = Math.min(
     LARGURA_SLIDE,
-    Math.max(280, larguraJanela - 32)
+    Math.max(1, larguraArea ?? larguraJanela - 32)
   );
   const escala = larguraVisivel / LARGURA_SLIDE;
 
   const clipping = slide.dados_json?.clipping;
   const veiculo = slide.dados_json?.veiculo;
-  
+
   const endpointLogo = slide.logo_midia_id
     ? `/relatorios/${slide.relatorio_id}/midias/${slide.logo_midia_id}`
     : null;
@@ -81,12 +84,19 @@ export default function RelatorioSlideVisual({ slide, imagemUri, logoUri }: Prop
       : null;
 
   const limiteDados = data ? 310 : 355;
-  const excedeuSlide =
-    alturaDados > limiteDados + 2 ||
-    alturaLink > 60 + 2;
+  const excedeuSlide = alturaDados > limiteDados + 2 || alturaLink > 60 + 2;
 
   return (
-    <View style={{ alignItems: "center", gap: 7 }}>
+    <View
+      onLayout={({ nativeEvent }) => {
+        const largura = nativeEvent.layout.width;
+        if (largura <= 0) return;
+        setLarguraArea((atual) =>
+          atual !== null && Math.abs(atual - largura) < 1 ? atual : largura
+        );
+      }}
+      style={{ width: "100%", minWidth: 0, alignItems: "center", gap: 7 }}
+    >
       <View
         style={{
           width: larguraVisivel,
@@ -95,7 +105,7 @@ export default function RelatorioSlideVisual({ slide, imagemUri, logoUri }: Prop
           backgroundColor: "#FFFFFF",
           borderColor: "#D7DEEA",
           borderWidth: 1,
-          marginBottom: 3
+          marginBottom: 3,
         }}
       >
         <View
@@ -334,8 +344,8 @@ export default function RelatorioSlideVisual({ slide, imagemUri, logoUri }: Prop
             fontSize: 12,
           }}
         >
-          O conteúdo não cabe no slide 16:9. Revise os textos deste slide
-          antes de exportar.
+          O conteúdo não cabe no slide 16:9. Revise os textos deste slide antes
+          de exportar.
         </Text>
       ) : null}
     </View>

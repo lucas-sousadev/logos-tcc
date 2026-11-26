@@ -1,3 +1,4 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -86,6 +87,8 @@ export default function ClippingArquivosInput({
   onChange,
   onOcupadoChange,
 }: ClippingArquivosInputProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
   const tela = useWindowDimensions();
 
@@ -217,7 +220,7 @@ export default function ClippingArquivosInput({
   const alturaImagem = alturaBase * zoom;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
       <View style={styles.cabecalho}>
         <View style={styles.tituloGrupo}>
           <Text weight="Bold" style={styles.titulo}>
@@ -226,10 +229,7 @@ export default function ClippingArquivosInput({
 
           {arquivos.length > 0 ? (
             <View
-              style={[
-                styles.contador,
-                { backgroundColor: theme.primaria },
-              ]}
+              style={[styles.contador, { backgroundColor: theme.primaria }]}
             >
               <Text
                 weight="Bold"
@@ -289,11 +289,7 @@ export default function ClippingArquivosInput({
             },
           ]}
         >
-          <Ionicons
-            name="images-outline"
-            size={20}
-            color={theme.textoSub}
-          />
+          <Ionicons name="images-outline" size={20} color={theme.textoSub} />
           <Text style={[styles.vazioTexto, { color: theme.textoSub }]}>
             Nenhum anexo selecionado
           </Text>
@@ -337,10 +333,7 @@ export default function ClippingArquivosInput({
                   </Text>
 
                   <Text
-                    style={[
-                      styles.detalhesArquivo,
-                      { color: theme.textoSub },
-                    ]}
+                    style={[styles.detalhesArquivo, { color: theme.textoSub }]}
                   >
                     {tipoArquivo(arquivo)} ·{" "}
                     {tamanhoArquivo(arquivo.tamanhoBytes)}
@@ -398,10 +391,7 @@ export default function ClippingArquivosInput({
                   accessibilityLabel={`Remover ${arquivo.nome} da seleção`}
                   disabled={disabled}
                   onPress={() => remover(arquivo.chave)}
-                  style={[
-                    styles.botaoRemover,
-                    { opacity: disabled ? 0.5 : 1 },
-                  ]}
+                  style={[styles.botaoRemover, { opacity: disabled ? 0.5 : 1 }]}
                 >
                   <Ionicons
                     name="close-circle-outline"
@@ -432,11 +422,7 @@ export default function ClippingArquivosInput({
       >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalCabecalho}>
-            <Text
-              weight="SemiBold"
-              numberOfLines={1}
-              style={styles.modalNome}
-            >
+            <Text weight="SemiBold" numberOfLines={1} style={styles.modalNome}>
               {imagemAberta?.nome}
             </Text>
 
@@ -486,21 +472,13 @@ export default function ClippingArquivosInput({
               accessibilityRole="button"
               accessibilityLabel="Diminuir zoom"
               disabled={zoom <= 0.25}
-              onPress={() =>
-                setZoom((atual) => Math.max(0.25, atual - 0.25))
-              }
-              style={[
-                styles.botaoZoom,
-                { opacity: zoom <= 0.25 ? 0.4 : 1 },
-              ]}
+              onPress={() => setZoom((atual) => Math.max(0.25, atual - 0.25))}
+              style={[styles.botaoZoom, { opacity: zoom <= 0.25 ? 0.4 : 1 }]}
             >
               <Ionicons name="remove" size={22} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <Text
-              weight="SemiBold"
-              style={styles.valorZoom}
-            >
+            <Text weight="SemiBold" style={styles.valorZoom}>
               {Math.round(zoom * 100)}%
             </Text>
 
@@ -508,13 +486,8 @@ export default function ClippingArquivosInput({
               accessibilityRole="button"
               accessibilityLabel="Aumentar zoom"
               disabled={zoom >= 3}
-              onPress={() =>
-                setZoom((atual) => Math.min(3, atual + 0.25))
-              }
-              style={[
-                styles.botaoZoom,
-                { opacity: zoom >= 3 ? 0.4 : 1 },
-              ]}
+              onPress={() => setZoom((atual) => Math.min(3, atual + 0.25))}
+              style={[styles.botaoZoom, { opacity: zoom >= 3 ? 0.4 : 1 }]}
             >
               <Ionicons name="add" size={22} color="#FFFFFF" />
             </TouchableOpacity>
@@ -673,7 +646,7 @@ const styles = StyleSheet.create({
   rolagemHorizontal: {
     alignItems: "center",
     justifyContent: "center",
-    flexGrow: 1
+    flexGrow: 1,
   },
   rolagemVertical: {
     justifyContent: "center",

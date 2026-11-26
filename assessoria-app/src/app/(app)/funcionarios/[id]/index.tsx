@@ -1,557 +1,253 @@
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
-
-import { useCallback, useEffect, useState } from "react";
-import { useLocalSearchParams, useRouter,} from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Header from "@/components/layout/Header";
+import AvatarUsuario from "@/components/perfil/AvatarUsuario";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-
-import { useTheme } from "@/contexts/ThemeContext";
+import {
+  InformacoesCadastro,
+  ResumoCadastro,
+} from "@/components/ui/DetalhesCadastro";
 import { useAuth } from "@/contexts/AuthContext";
-import { Funcionario } from "@/services/api/auth";
+import { useTheme } from "@/contexts/ThemeContext";
+import { buscarFuncionario, type Funcionario } from "@/services/api/auth";
 
 export default function FuncionarioDetalhes() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { usuario } = useAuth();
+  return (
+    <Detalhes
+      key={[usuario?.assessoria_id, usuario?.id, id].join(":")}
+      id={Number(id)}
+    />
+  );
+}
+
+function Detalhes({ id }: { id: number }) {
   const router = useRouter();
   const { theme } = useTheme();
-
-  const { id } =
-    useLocalSearchParams<{
-      id: string;
-    }>();
-
-  const {
-    buscarFuncionario,
-    temPermissao
-  } = useAuth();
-  
-  const [funcionario, setFuncionario] =
-    useState<Funcionario | null>(null);
-
-  const [carregando, setCarregando] =
-    useState(true);
-
+  const insets = useSafeAreaInsets();
+  const { temPermissao, carregando: carregandoAuth } = useAuth();
+  const podeVisualizar = temPermissao("USUARIOS", "VISUALIZAR");
+  const podeGerenciar = temPermissao("USUARIOS", "GERENCIAR_PERMISSOES");
+  const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
+  const [consultando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [tentativa, setTentativa] = useState(0);
+  const [consultaConcluida, setConsultaConcluida] = useState(-1);
+  const carregando = consultando || consultaConcluida !== tentativa;
 
-  const carregarFuncionario = useCallback(
-    async () => {
-      if (
-        !temPermissao(
-          "USUARIOS",
-          "VISUALIZAR"
-        )
-      ) {
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      if (carregandoAuth || !podeVisualizar) return;
+      const controller = new AbortController();
+      let ativo = true;
+      const timer = setTimeout(() => controller.abort(), 15000);
 
-      try {
+      async function carregar() {
         setCarregando(true);
+        setFuncionario(null);
         setErro("");
-
-        const dados =
-          await buscarFuncionario(Number(id));
-
-        setFuncionario(dados);
-      } catch (error) {
-        console.error(
-          "Erro ao carregar funcionário:",
-          error
-        );
-
-        setErro(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar o funcionário."
-        );
-      } finally {
-        setCarregando(false);
+        try {
+          if (!Number.isSafeInteger(id) || id <= 0) {
+            throw new Error("Funcionário não encontrado.");
+          }
+          const dados = await buscarFuncionario(id, controller.signal);
+          if (ativo) setFuncionario(dados);
+        } catch (error) {
+          if (ativo) {
+            setErro(
+              controller.signal.aborted
+                ? "A consulta demorou mais que o esperado. Tente novamente."
+                : error instanceof Error
+                  ? error.message
+                  : "Não foi possível carregar o funcionário."
+            );
+          }
+        } finally {
+          clearTimeout(timer);
+          if (ativo) {
+            setCarregando(false);
+            setConsultaConcluida(tentativa);
+          }
+        }
       }
-    },
-    [id, buscarFuncionario, temPermissao]
+
+      void carregar();
+      return () => {
+        ativo = false;
+        clearTimeout(timer);
+        controller.abort();
+      };
+    }, [carregandoAuth, podeVisualizar, id, tentativa])
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void carregarFuncionario();
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [carregarFuncionario]);
-
-  if (!temPermissao("USUARIOS", "VISUALIZAR")) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor:
-              theme.background,
-          },
-        ]}
-      >
-        <Header
-          title="Funcionário"
-          showBackButton
-        />
-
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Header title="Funcionário" showBackButton />
+      {carregandoAuth || (podeVisualizar && carregando) ? (
         <View style={styles.center}>
-          <Text weight="Bold">
-            Acesso restrito
-          </Text>
-
-          <Text
-            style={[
-              styles.centerText,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
+          <ActivityIndicator size="large" color={theme.primaria} />
+        </View>
+      ) : !podeVisualizar ? (
+        <View style={styles.center}>
+          <Text weight="Bold">Acesso restrito</Text>
+          <Text style={[styles.mensagem, { color: theme.textoSub }]}>
             Você não tem permissão para visualizar funcionários.
           </Text>
         </View>
-      </View>
-    );
-  }
-
-  if (carregando) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor:
-              theme.background,
-          },
-        ]}
-      >
-        <Header
-          title="Funcionário"
-          showBackButton
-        />
-
-        <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.primaria}
-          />
-        </View>
-      </View>
-    );
-  }
-
-  if (!funcionario) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor:
-              theme.background,
-          },
-        ]}
-      >
-        <Header
-          title="Funcionário"
-          showBackButton
-        />
-
+      ) : !funcionario ? (
         <View style={styles.center}>
-          <Text
-            weight="Medium"
-            style={{
-              color: "#EF4444",
-            }}
-          >
-            {erro || "Funcionário não encontrado."}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor:
-            theme.background,
-        },
-      ]}
-    >
-      <Header
-        title="Funcionário"
-        showBackButton
-      />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-      >
-        {erro ? (
-          <Text
-            weight="Medium"
-            style={styles.error}
-          >
+          <Text style={[styles.mensagem, { color: theme.textoSub }]}>
             {erro}
           </Text>
-        ) : null}
-
-
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor:
-                theme.background,
-              borderColor:
-                theme.borda,
-            },
-          ]}
-        >
-          <Text
-            weight="Bold"
-            style={[
-              styles.sectionTitle,
-              {
-                color:
-                  theme.textoTerciaria,
-              },
-            ]}
-          >
-            Dados básicos
-          </Text>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconContainer}>
-              <Ionicons
-                name="person-outline"
-                size={21}
-                color={theme.textoTerciaria}
-              />
-            </View>
-
-            <View style={styles.infoContent}>
-              <Text
-                weight="Medium"
-                style={styles.label}
-              >
-                Nome
-              </Text>
-
-              <Text weight="SemiBold">
-                {funcionario.nome}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconContainer}>
-              <Ionicons
-                name="mail-outline"
-                size={21}
-                color={theme.textoTerciaria}
-              />
-            </View>
-
-            <View style={styles.infoContent}>
-              <Text
-                weight="Medium"
-                style={styles.label}
-              >
-                E-mail
-              </Text>
-
-              <Text weight="SemiBold">
-                {funcionario.email}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconContainer}>
-              <Ionicons
-                name="call-outline"
-                size={21}
-                color={theme.textoTerciaria}
-              />
-            </View>
-
-            <View style={styles.infoContent}>
-              <Text
-                weight="Medium"
-                style={styles.label}
-              >
-                Telefone
-              </Text>
-
-              <Text weight="SemiBold">
-                {funcionario.telefone ||
-                  "Não informado"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconContainer}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={21}
-                color={theme.textoTerciaria}
-              />
-            </View>
-
-            <View style={styles.infoContent}>
-              <Text
-                weight="Medium"
-                style={styles.label}
-              >
-                Perfil
-              </Text>
-
-              <Text weight="SemiBold">
-                Funcionário
-              </Text>
-            </View>
-          </View>
-        </View>
-
-
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor:
-                theme.background,
-              borderColor:
-                theme.borda,
-            },
-          ]}
-        >
-          <View style={styles.statusHeader}>
-            <View>
-              <Text
-                weight="Bold"
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color:
-                      theme.textoTerciaria,
-                  },
-                ]}
-              >
-                Status
-              </Text>
-
-              <Text
-                style={[
-                  styles.statusDescription,
-                  {
-                    color:
-                      theme.textoSub,
-                  },
-                ]}
-              >
-                Situação atual da conta
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    funcionario.ativo === 1
-                      ? theme.terciaria
-                      : "#EF4444",
-                },
-              ]}
-            >
-              <Text
-                weight="SemiBold"
-                style={{
-                  color: theme.branco,
-                  fontSize: 12,
-                }}
-              >
-                {funcionario.ativo === 1
-                ? "ATIVO"
-                : "INATIVO"}
-              </Text>
-            </View>
-          </View>
-        </View>
-        
-      {temPermissao("USUARIOS", "GERENCIAR_PERMISSOES") ? (
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor:
-                theme.background,
-              borderColor:
-                theme.borda,
-            },
-          ]}
-        >
-          <View style={styles.permissionHeader}>
-            <View style={styles.permissionTitle}>
-              <Ionicons
-                name="key-outline"
-                size={23}
-                color={theme.textoTerciaria}
-              />
-
-              <Text
-                weight="Bold"
-                style={styles.sectionTitle}
-              >
-                Permissões
-              </Text>
-            </View>
-
-            <Text
-              style={[
-                styles.permissionDescription,
-                {
-                  color:
-                    theme.textoSub,
-                },
-              ]}
-            >
-              Controle o que este funcionário
-              pode fazer no sistema.
-            </Text>
-          </View>
-          
           <Button
-            title="GERENCIAR PERMISSÕES"
-            onPress={() =>
-              router.push({
-                pathname:
-                  "/funcionarios/[id]/permissoes",
-                params: {
-                  id: funcionario.id.toString(),
-                },
-              })
-            }
+            title="TENTAR NOVAMENTE"
+            variant="outline"
+            onPress={() => setTentativa((atual) => atual + 1)}
           />
         </View>
-      ) : null }
-      </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingBottom: 24 + insets.bottom,
+              paddingLeft: 16 + insets.left,
+              paddingRight: 16 + insets.right,
+            },
+          ]}
+        >
+          <ResumoCadastro
+            nome={funcionario.nome}
+            categoria="FUNCIONÁRIO"
+            ativo={Number(funcionario.ativo) === 1}
+            avatar={<AvatarUsuario usuario={funcionario} tamanho={48} />}
+          />
+          <InformacoesCadastro
+            grupos={[
+              {
+                id: "contato",
+                titulo: "Contato",
+                campos: [
+                  {
+                    id: "email",
+                    icone: "mail-outline",
+                    rotulo: "E-mail",
+                    valor: funcionario.email,
+                  },
+                  {
+                    id: "telefone",
+                    icone: "call-outline",
+                    rotulo: "Telefone",
+                    valor: funcionario.telefone || "Não informado",
+                  },
+                ],
+              },
+              {
+                id: "profissional",
+                titulo: "Perfil profissional",
+                campos: [
+                  {
+                    id: "cargo",
+                    icone: "briefcase-outline",
+                    rotulo: "Cargo / função",
+                    valor: funcionario.cargo || "Não informado",
+                  },
+                  {
+                    id: "localizacao",
+                    icone: "location-outline",
+                    rotulo: "Localização",
+                    valor:
+                      [funcionario.cidade, funcionario.uf]
+                        .filter(Boolean)
+                        .join(" · ") || "Não informada",
+                  },
+                ],
+              },
+              {
+                id: "conta",
+                titulo: "Conta",
+                campos: [
+                  {
+                    id: "perfil",
+                    icone: "person-outline",
+                    rotulo: "Tipo de acesso",
+                    valor: "Funcionário",
+                  },
+                  {
+                    id: "verificacao",
+                    icone: "shield-checkmark-outline",
+                    rotulo: "E-mail",
+                    valor:
+                      Number(funcionario.email_verificado) === 1
+                        ? "Verificado"
+                        : "Verificação pendente",
+                  },
+                  {
+                    id: "cadastro",
+                    icone: "calendar-outline",
+                    rotulo: "Cadastro",
+                    valor: formatarData(funcionario.created_at),
+                  },
+                  {
+                    id: "login",
+                    icone: "time-outline",
+                    rotulo: "Último acesso",
+                    valor: formatarData(funcionario.ultimo_login),
+                  },
+                ],
+              },
+            ]}
+          />
+          {podeGerenciar && (
+            <Button
+              title="GERENCIAR PERMISSÕES"
+              icon="shield-checkmark-outline"
+              onPress={() =>
+                router.push({
+                  pathname: "/funcionarios/[id]/permissoes",
+                  params: { id: String(funcionario.id) },
+                })
+              }
+            />
+          )}
+        </ScrollView>
+      )}
     </View>
   );
+}
+
+function formatarData(valor: string | null) {
+  if (!valor) return "Não informado";
+  const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(valor);
+  return partes ? [partes[3], partes[2], partes[1]].join("/") : "Não informado";
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   content: {
-    padding: 20,
-    paddingBottom: 35,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    paddingTop: 16,
+    gap: 12,
   },
-
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 15,
-  },
-
-  sectionTitle: {
-    fontSize: 19,
-  },
-
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 19,
-  },
-
-  iconContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  infoContent: {
-    flex: 1,
-    marginLeft: 8,
-  },
-
-  label: {
-    fontSize: 12,
-    marginBottom: 3,
-    color: "#808080",
-  },
-
-  statusHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  statusDescription: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  statusBadge: {
-    minWidth: 70,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
-
-  permissionHeader: {
-    marginBottom: 18,
-  },
-
-  permissionTitle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  permissionDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 8,
-  },
-
-  loading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 25,
+    padding: 24,
+    gap: 16,
   },
-
-  centerText: {
+  mensagem: {
     textAlign: "center",
-    marginTop: 8,
-  },
-
-  error: {
-    color: "#EF4444",
-    marginBottom: 15,
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

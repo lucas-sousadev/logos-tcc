@@ -12,6 +12,7 @@ import { useState, type Ref } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -42,24 +43,26 @@ export default function Input({
   ...props
 }: InputProps) {
   const { theme } = useTheme();
+  const compacto = useEdicaoCompacta();
 
   const [senhaVisivel, setSenhaVisivel] = useState(false);
 
   const mostrarLimpar =
-    clearable &&
-    typeof value === "string" &&
-    value.length > 0;
+    clearable && typeof value === "string" && value.length > 0;
 
-  const mostrarBotaoSenha = Boolean(
-    showPasswordToggle && secureTextEntry
-  );
-  
+  const mostrarBotaoSenha = Boolean(showPasswordToggle && secureTextEntry);
+
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View
+      style={[styles.container, compacto && styles.compacto, containerStyle]}
+    >
       {label ? (
-        <View style={styles.labelRow}>
+        <View style={[styles.labelRow, compacto && styles.labelRowCompacta]}>
           <View style={styles.labelTitle}>
-            <Text weight="Medium" style={styles.label}>
+            <Text
+              weight="Medium"
+              style={[styles.label, compacto && styles.labelCompacta]}
+            >
               {label}
             </Text>
 
@@ -103,74 +106,56 @@ export default function Input({
           ref={inputRef}
           {...props}
           placeholderTextColor={
-            props.placeholderTextColor ??
-            `${theme.textoInput}80`
+            props.placeholderTextColor ?? `${theme.textoInput}80`
           }
           value={value}
           onChangeText={onChangeText}
-          secureTextEntry={
-            mostrarBotaoSenha
-              ? !senhaVisivel
-              : secureTextEntry
-          }
+          secureTextEntry={mostrarBotaoSenha ? !senhaVisivel : secureTextEntry}
           style={[
             styles.input,
             {
               color: theme.textoInput,
-              borderColor: error
-                ? "#EF4444"
-                : theme.borda,
+              borderColor: error ? "#EF4444" : theme.borda,
               backgroundColor: theme.surface,
             },
             mostrarLimpar && styles.inputWithClear,
-            mostrarBotaoSenha &&
-              styles.inputWithPasswordToggle,
-            mostrarLimpar &&
-              mostrarBotaoSenha &&
-              styles.inputWithTwoButtons,
+            mostrarBotaoSenha && styles.inputWithPasswordToggle,
+            mostrarLimpar && mostrarBotaoSenha && styles.inputWithTwoButtons,
             style,
           ]}
         />
 
         {mostrarLimpar ? (
           <TouchableOpacity
+            disabled={props.editable === false}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: props.editable === false }}
             onPress={() => {
               onChangeText?.("");
               onClear?.();
             }}
             style={[
               styles.clearButton,
-              mostrarBotaoSenha &&
-                styles.clearButtonWithPasswordToggle,
+              mostrarBotaoSenha && styles.clearButtonWithPasswordToggle,
             ]}
             accessibilityLabel="Limpar campo"
           >
-            <Ionicons
-              name="close"
-              size={18}
-              color={theme.textoSub}
-            />
+            <Ionicons name="close" size={18} color={theme.textoSub} />
           </TouchableOpacity>
         ) : null}
 
         {mostrarBotaoSenha ? (
           <TouchableOpacity
-            onPress={() =>
-              setSenhaVisivel((atual) => !atual)
-            }
+            disabled={props.editable === false}
+            accessibilityRole="button"
+            onPress={() => setSenhaVisivel((atual) => !atual)}
             style={styles.passwordToggle}
             accessibilityLabel={
-              senhaVisivel
-                ? "Ocultar senha"
-                : "Mostrar senha"
+              senhaVisivel ? "Ocultar senha" : "Mostrar senha"
             }
           >
             <Ionicons
-              name={
-                senhaVisivel
-                  ? "eye-off-outline"
-                  : "eye-outline"
-              }
+              name={senhaVisivel ? "eye-off-outline" : "eye-outline"}
               size={20}
               color={theme.textoSub}
             />
@@ -179,10 +164,7 @@ export default function Input({
       </View>
 
       {error ? (
-        <Text
-          weight="Medium"
-          style={styles.error}
-        >
+        <Text weight="Medium" style={styles.error}>
           {error}
         </Text>
       ) : null}
@@ -194,6 +176,16 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     marginBottom: 20,
+  },
+  compacto: {
+    marginBottom: 12,
+  },
+  labelRowCompacta: {
+    marginBottom: 6,
+  },
+  labelCompacta: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   labelRow: {
     flexDirection: "row",
@@ -219,11 +211,11 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingLeft: 6,
   },
-undoText: {
-  fontSize: 10,
-},
+  undoText: {
+    fontSize: 10,
+  },
   inputWrapper: {
-  position: "relative",
+    position: "relative",
   },
 
   inputWithClear: {
@@ -250,7 +242,7 @@ undoText: {
     top: 7,
     alignItems: "center",
     justifyContent: "center",
-},
+  },
   clearButton: {
     position: "absolute",
     width: 36,

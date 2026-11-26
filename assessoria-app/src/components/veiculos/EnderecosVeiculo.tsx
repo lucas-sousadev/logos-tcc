@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   StyleSheet,
   Switch,
   TouchableOpacity,
@@ -15,6 +13,8 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
+import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import { useFeedbackAlert } from "@/hooks/useFeedbackAlert";
 import {
   adicionarEnderecoVeiculo,
   listarEnderecosVeiculo,
@@ -47,48 +47,57 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
     (NovoEnderecoVeiculo & { id: number }) | null
   >(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const operacaoEmCurso = useRef(false);
 
   const ocupado = salvando || salvandoEdicao || removendoId !== null;
+  const { mostrar, alertaProps } = useFeedbackAlert(ocupado);
 
   useEffect(() => {
     let ativo = true;
-
-    setCarregando(true);
-    setErro("");
-
-    listarEnderecosVeiculo(veiculoId)
-      .then((lista) => {
-        if (ativo) {
-          setEnderecos(lista);
-        }
-      })
-      .catch((falha) => {
-        if (ativo) {
-          setErro(
-            falha instanceof Error
-              ? falha.message
-              : "Não foi possível carregar os endereços."
-          );
-        }
-      })
-      .finally(() => {
-        if (ativo) {
-          setCarregando(false);
-        }
-      });
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(), 15_000);
+    const inicio = setTimeout(() => {
+      setCarregando(true);
+      setErro("");
+      void listarEnderecosVeiculo(veiculoId, controller.signal)
+        .then((lista) => {
+          if (ativo) {
+            setEnderecos(lista);
+          }
+        })
+        .catch((falha) => {
+          if (ativo) {
+            setErro(
+              falha instanceof Error
+                ? falha.message
+                : "Não foi possível carregar os endereços."
+            );
+          }
+        })
+        .finally(() => {
+          clearTimeout(prazo);
+          if (ativo) {
+            setCarregando(false);
+          }
+        });
+    }, 0);
 
     return () => {
       ativo = false;
+      clearTimeout(inicio);
+      clearTimeout(prazo);
+      controller.abort();
     };
   }, [veiculoId]);
 
   async function adicionar() {
-    if (salvando) return;
+    if (operacaoEmCurso.current || !editavel) return;
     if (!host.trim()) {
       setErro("Informe o domínio do site.");
       return;
     }
 
+    operacaoEmCurso.current = true;
     setErro("");
     setSalvando(true);
 
@@ -117,11 +126,14 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
           : "Não foi possível adicionar o endereço."
       );
     } finally {
+      operacaoEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   async function remover(enderecoId: number) {
+    if (operacaoEmCurso.current || !editavel) return;
+    operacaoEmCurso.current = true;
     setErro("");
     setRemovendoId(enderecoId);
 
@@ -131,13 +143,24 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
       setEnderecos((anteriores) =>
         anteriores.filter((endereco) => endereco.id !== enderecoId)
       );
+      mostrar({
+        variant: "success",
+        title: "Endereço removido",
+        message: "O endereço foi removido deste veículo.",
+      });
     } catch (falha) {
-      setErro(
+      const mensagem =
         falha instanceof Error
           ? falha.message
-          : "Não foi possível remover o endereço."
-      );
+          : "Não foi possível remover o endereço.";
+      setErro(mensagem);
+      mostrar({
+        variant: "error",
+        title: "Não foi possível remover",
+        message: mensagem,
+      });
     } finally {
+      operacaoEmCurso.current = false;
       setRemovendoId(null);
     }
   }
@@ -163,7 +186,7 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
   }
 
   async function salvarEdicao() {
-    if (!edicao || ocupado) return;
+    if (!edicao || operacaoEmCurso.current || !editavel) return;
 
     if (!edicao.host.trim()) {
       setErro("Informe o domínio do site.");
@@ -171,6 +194,7 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
     }
 
     setErro("");
+    operacaoEmCurso.current = true;
     setSalvandoEdicao(true);
 
     try {
@@ -200,6 +224,7 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
           : "Não foi possível atualizar o endereço."
       );
     } finally {
+      operacaoEmCurso.current = false;
       setSalvandoEdicao(false);
     }
   }
@@ -219,26 +244,17 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
   }
 
   function confirmarRemocao(endereco: EnderecoVeiculo) {
+    if (ocupado || !editavel) return;
     const identificacao = endereco.host + endereco.caminho_prefixo;
-
-    if (Platform.OS === "web") {
-      if (window.confirm(`Remover ${identificacao} deste veículo?`)) {
-        void remover(endereco.id);
-      }
-
-      return;
-    }
-
-    Alert.alert("Remover endereço", `Remover ${identificacao} deste veículo?`, [
-      { text: "CANCELAR", style: "cancel" },
-      {
-        text: "REMOVER",
-        style: "destructive",
-        onPress: () => {
-          void remover(endereco.id);
-        },
-      },
-    ]);
+    mostrar({
+      variant: "warning",
+      title: "Remover endereço?",
+      message: `Remover ${identificacao} deste veículo?`,
+      primaryLabel: "REMOVER",
+      secondaryLabel: "CANCELAR",
+      primaryDanger: true,
+      onPrimary: () => void remover(endereco.id),
+    });
   }
 
   return (
@@ -533,6 +549,7 @@ export default function EnderecosVeiculo({ veiculoId, editavel }: Props) {
       ) : erro ? (
         <Text style={[styles.erro, { color: theme.erro }]}>{erro}</Text>
       ) : null}
+      <FeedbackAlert {...alertaProps} />
     </View>
   );
 }

@@ -8,6 +8,7 @@ use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\JwtService;
 use Logos\AssessoriaApi\Models\Usuario;
 use Logos\AssessoriaApi\Services\AuthService;
+use Logos\AssessoriaApi\Services\PerfilService;
 use Logos\AssessoriaApi\Services\AuthRateLimitService;
 use Logos\AssessoriaApi\Exceptions\ConviteInvalidoException;
 use Throwable;
@@ -99,16 +100,10 @@ class AuthController
             'message' => 'Login realizado com sucesso.',
             'token' => $token,
             'refresh_token' => $refreshToken,
-            'usuario' => [
-                'id' => $usuario['id'],
-                'assessoria_id' => $usuario['assessoria_id'],
-                'nome' => $usuario['nome'],
-                'email' => $usuario['email'],
-                'telefone' => $usuario['telefone'],
-                'foto_path' => $usuario['foto_path'],
-                'perfil' => $usuario['perfil'],
-                'email_verificado' => (bool) $usuario['email_verificado'],
-            ],
+            'usuario' => PerfilService::buscar(
+                (int) $usuario['id'],
+                (int) $usuario['assessoria_id']
+            ),
         ]);
     }
 
@@ -186,16 +181,10 @@ class AuthController
 
         echo json_encode([
             'success' => true,
-            'usuario' => [
-                'id' => (int) $usuario['id'],
-                'assessoria_id' => (int) $usuario['assessoria_id'],
-                'nome' => $usuario['nome'],
-                'email' => $usuario['email'],
-                'telefone' => $usuario['telefone'],
-                'foto_path' => $usuario['foto_path'],
-                'perfil' => $usuario['perfil'],
-                'email_verificado' => (bool) $usuario['email_verificado']
-            ]
+            'usuario' => PerfilService::buscar(
+                (int) $usuario['id'],
+                (int) $usuario['assessoria_id']
+            )
         ]);
     }
     public function registerAssessoria(): void

@@ -1,15 +1,17 @@
+import { useFeedbackAlert } from "@/hooks/useFeedbackAlert";
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
   View,
   Linking,
-  Platform,
 } from "react-native";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +23,8 @@ import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import UnsavedChanges from "@/components/forms/UnsavedChanges";
+import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import VeiculoSelector, {
   SelecaoVeiculo,
 } from "@/components/forms/VeiculoSelector";
@@ -59,6 +62,16 @@ interface Formulario {
 }
 
 export default function JornalistaDetalhes() {
+  const { usuario } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <JornalistaDetalhesConta
+      key={[usuario?.assessoria_id, usuario?.id, id].join(":")}
+    />
+  );
+}
+
+function JornalistaDetalhesConta() {
   const router = useRouter();
   const navigation = useNavigation();
   const retornar = useRetornoSeguro("/mailing");
@@ -108,13 +121,15 @@ export default function JornalistaDetalhes() {
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
+  const salvamentoEmCurso = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "error";
-    title: string;
-    message: string;
-  } | null>(null);
+  const { mostrar: setFeedback, alertaProps: feedbackProps } = useFeedbackAlert(
+    salvando || excluindo
+  );
+  const [erroCarregamento, setErroCarregamento] = useState("");
+  const exclusaoEmCurso = useRef(false);
+  const consultaEmCurso = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -124,26 +139,34 @@ export default function JornalistaDetalhes() {
     return () => cancelAnimationFrame(frame);
   }, [modoEdicao]);
 
-  useEffect(() => {
-    carregarJornalista();
-  }, [id]);
+  const voltarParaOrigem = useCallback(() => {
+    if (!navigation.isFocused()) return;
+    if (veioDaTelaVeiculo) {
+      router.replace({
+        pathname: "/veiculos/[id]",
+        params: {
+          id: veiculoOrigemId.toString(),
+        },
+      });
 
-  async function carregarJornalista() {
-    if (!id || Number.isNaN(id)) {
-      Alert.alert("Erro", "Contato inválido.");
-
-      voltarParaOrigem();
       return;
     }
 
+    retornar();
+  }, [navigation, router, veioDaTelaVeiculo, veiculoOrigemId, retornar]);
+  const carregarJornalista = useCallback(async () => {
+    consultaEmCurso.current?.abort();
+    const controller = new AbortController();
+    consultaEmCurso.current = controller;
+    const prazo = setTimeout(() => controller.abort(), 15000);
+    setCarregando(true);
+    setErroCarregamento("");
     try {
-      setCarregando(true);
-
-      const dados = await buscarJornalista(id);
-
-      setJornalista(dados);
-
-      const dadosFormulario: Formulario = {
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new Error("Contato inválido.");
+      const dados = await buscarJornalista(id, controller.signal);
+      if (consultaEmCurso.current !== controller) return;
+      const original: Formulario = {
         nome: dados.nome ?? "",
         email: dados.email ?? "",
         telefone: dados.telefone ?? "",
@@ -155,19 +178,39 @@ export default function JornalistaDetalhes() {
         veiculo_id: dados.veiculo_id,
         veiculo_nome: dados.veiculo_nome ?? "",
       };
-
-      setFormulario(dadosFormulario);
-      setFormularioOriginal(dadosFormulario);
+      setJornalista(dados);
+      setFormulario(original);
+      setFormularioOriginal(original);
     } catch (error) {
-      console.error("Erro ao carregar contato:", error);
-
-      Alert.alert("Erro", "Não foi possível carregar os dados do contato.");
-
-      voltarParaOrigem();
+      if (consultaEmCurso.current !== controller) return;
+      const mensagem = controller.signal.aborted
+        ? "A consulta demorou mais que o esperado. Tente novamente."
+        : error instanceof Error
+          ? error.message
+          : "Não foi possível carregar o contato.";
+      setErroCarregamento(mensagem);
+      setFeedback({
+        variant: "error",
+        title: "Não foi possível abrir o contato",
+        message: mensagem,
+      });
     } finally {
-      setCarregando(false);
+      clearTimeout(prazo);
+      if (consultaEmCurso.current === controller) {
+        consultaEmCurso.current = null;
+        setCarregando(false);
+      }
     }
-  }
+  }, [id, setFeedback]);
+  useEffect(() => {
+    const timer = setTimeout(() => void carregarJornalista(), 0);
+    return () => {
+      clearTimeout(timer);
+      const consulta = consultaEmCurso.current;
+      consultaEmCurso.current = null;
+      consulta?.abort();
+    };
+  }, [carregarJornalista]);
 
   function atualizarCampo(campo: keyof Formulario, valor: string | boolean) {
     setFormulario((atual) => ({
@@ -325,7 +368,13 @@ export default function JornalistaDetalhes() {
   }
 
   async function salvarAlteracoes() {
-    if (!jornalista) return;
+    if (
+      !jornalista ||
+      salvamentoEmCurso.current ||
+      excluindo ||
+      !temPermissao("MAILING", "EDITAR")
+    )
+      return;
 
     const errosValidacao = validarFormularioJornalista({
       nome: formulario.nome,
@@ -356,6 +405,7 @@ export default function JornalistaDetalhes() {
     }
 
     try {
+      salvamentoEmCurso.current = true;
       setSalvando(true);
 
       const { jornalista: atualizado } = await atualizarJornalista(
@@ -415,76 +465,62 @@ export default function JornalistaDetalhes() {
         message: mensagem,
       });
     } finally {
+      salvamentoEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   function confirmarExclusao() {
-    if (!jornalista) return;
-
-    if (Platform.OS === "web") {
-      const confirmar = window.confirm(
-        `Deseja realmente excluir ${jornalista.nome}?`
-      );
-
-      if (confirmar) {
-        excluir();
-      }
-
+    if (
+      !jornalista ||
+      exclusaoEmCurso.current ||
+      salvando ||
+      !temPermissao("MAILING", "EXCLUIR")
+    )
       return;
-    }
-
-    Alert.alert(
-      "Excluir contato",
-      `Deseja realmente excluir ${jornalista.nome}?`,
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: excluir,
-        },
-      ]
-    );
+    setFeedback({
+      variant: "warning",
+      title: "Excluir contato?",
+      message:
+        "Deseja realmente excluir " +
+        jornalista.nome +
+        "? Essa ação não pode ser desfeita.",
+      primaryLabel: "EXCLUIR",
+      secondaryLabel: "CANCELAR",
+      primaryDanger: true,
+      onPrimary: () => void excluir(),
+    });
   }
 
   async function excluir() {
-    if (!jornalista) return;
-
+    if (
+      !jornalista ||
+      exclusaoEmCurso.current ||
+      salvando ||
+      !temPermissao("MAILING", "EXCLUIR")
+    )
+      return;
+    exclusaoEmCurso.current = true;
+    setExcluindo(true);
     try {
-      setExcluindo(true);
-
       await excluirJornalista(jornalista.id);
-
-      if (Platform.OS === "web") {
-        window.alert("Contato excluído com sucesso.");
-        saida.concluirSaida(voltarParaOrigem);
-        return;
-      }
-
-      Alert.alert("Sucesso", "Contato excluído com sucesso.", [
-        {
-          text: "OK",
-          onPress: () => saida.concluirSaida(voltarParaOrigem),
-        },
-      ]);
+      setFeedback({
+        variant: "success",
+        title: "Contato excluído",
+        message: "Contato excluído com sucesso.",
+        onClose: () => saida.concluirSaida(voltarParaOrigem),
+      });
     } catch (error) {
-      console.error("Erro ao excluir contato:", error);
-
-      const mensagem =
-        error instanceof Error
-          ? error.message
-          : "Não foi possível excluir o contato.";
-
-      if (Platform.OS === "web") {
-        window.alert(mensagem);
-      } else {
-        Alert.alert("Erro", mensagem);
-      }
+      setFeedback({
+        variant: "error",
+        title: "Não foi possível excluir",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir o contato.",
+      });
     } finally {
+      exclusaoEmCurso.current = false;
       setExcluindo(false);
     }
   }
@@ -508,9 +544,27 @@ export default function JornalistaDetalhes() {
     );
   }
 
-  if (!jornalista) {
-    return null;
-  }
+  if (!jornalista)
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Header title="Contato" showBackButton onBackPress={voltarParaOrigem} />
+        <View style={[styles.loading, { padding: 24, gap: 14 }]}>
+          <Text style={{ color: theme.textoSub, textAlign: "center" }}>
+            {erroCarregamento || "Registro não encontrado."}
+          </Text>
+          {Number.isSafeInteger(id) && id > 0 ? (
+            <Button
+              title="TENTAR NOVAMENTE"
+              variant="outline"
+              onPress={() => void carregarJornalista()}
+            />
+          ) : null}
+          <Button title="VOLTAR" onPress={voltarParaOrigem} />
+        </View>
+        <FeedbackAlert {...feedbackProps} />
+        <FeedbackAlert {...saida.alertaProps} />
+      </View>
+    );
 
   function campoAlterado(campo: keyof Formulario) {
     if (!formularioOriginal) {
@@ -528,10 +582,11 @@ export default function JornalistaDetalhes() {
     const numeroLimpo = jornalista.telefone.replace(/\D/g, "");
 
     if (numeroLimpo.length < 10) {
-      Alert.alert(
-        "Telefone inválido",
-        "Não foi possível abrir o WhatsApp para este contato."
-      );
+      setFeedback({
+        variant: "error",
+        title: "Telefone inválido",
+        message: "Não foi possível abrir o WhatsApp para este contato.",
+      });
 
       return;
     }
@@ -545,10 +600,11 @@ export default function JornalistaDetalhes() {
     try {
       await Linking.openURL(`https://wa.me/${numeroWhatsApp}`);
     } catch {
-      Alert.alert(
-        "WhatsApp indisponível",
-        "Não foi possível abrir o WhatsApp."
-      );
+      setFeedback({
+        variant: "error",
+        title: "WhatsApp indisponível",
+        message: "Não foi possível abrir o WhatsApp.",
+      });
     }
   }
 
@@ -562,10 +618,11 @@ export default function JornalistaDetalhes() {
     try {
       await Linking.openURL(`mailto:${encodeURIComponent(email)}`);
     } catch {
-      Alert.alert(
-        "E-mail indisponível",
-        "Não foi possível abrir o aplicativo de e-mail."
-      );
+      setFeedback({
+        variant: "error",
+        title: "E-mail indisponível",
+        message: "Não foi possível abrir o aplicativo de e-mail.",
+      });
     }
   }
 
@@ -605,343 +662,324 @@ export default function JornalistaDetalhes() {
     });
   }
 
-  function voltarParaOrigem() {
-    if (!navigation.isFocused()) return;
-    if (veioDaTelaVeiculo) {
-      router.replace({
-        pathname: "/veiculos/[id]",
-        params: {
-          id: veiculoOrigemId.toString(),
-        },
-      });
-
-      return;
-    }
-
-    retornar();
-  }
-
   // modo de ediçao
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
-    >
-      <Header
-        title={modoEdicao ? "Editar contato" : "Contato"}
-        showBackButton
-        onBackPress={handleBack}
-      />
-
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+    <EdicaoCompacta ativa={modoEdicao}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
       >
-        {!modoEdicao ? (
-          <View style={styles.acoesDetalhes}>
-            {temPermissao("MAILING", "EDITAR") ? (
-              <Button
-                title="EDITAR"
-                icon="create-outline"
-                variant="outline"
-                disabled={excluindo}
-                onPress={() => setModoEdicao(true)}
-                style={styles.botaoDetalhes}
-              />
-            ) : null}
+        <Header
+          title={modoEdicao ? "Editar contato" : "Contato"}
+          showBackButton
+          onBackPress={handleBack}
+        />
 
-            {temPermissao("MAILING", "EXCLUIR") ? (
-              <Button
-                title="EXCLUIR"
-                variant="danger"
-                loading={excluindo}
-                onPress={confirmarExclusao}
-                style={styles.botaoDetalhes}
-              />
-            ) : null}
+        <ScrollView
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          {!modoEdicao ? (
+            <View style={styles.acoesDetalhes}>
+              {temPermissao("MAILING", "EDITAR") ? (
+                <Button
+                  title="EDITAR"
+                  icon="create-outline"
+                  variant="outline"
+                  disabled={excluindo}
+                  onPress={() => setModoEdicao(true)}
+                  style={styles.botaoDetalhes}
+                />
+              ) : null}
+
+              {temPermissao("MAILING", "EXCLUIR") ? (
+                <Button
+                  title="EXCLUIR"
+                  variant="danger"
+                  loading={excluindo}
+                  onPress={confirmarExclusao}
+                  style={styles.botaoDetalhes}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.resumoCadastro}>
+            <ResumoCadastro
+              nome={jornalista.nome}
+              categoria="CONTATO DO MAILING"
+              ativo={jornalista.ativo === 1}
+            />
           </View>
-        ) : null}
 
-        <View style={styles.resumoCadastro}>
-          <ResumoCadastro
-            nome={jornalista.nome}
-            categoria="CONTATO DO MAILING"
-            ativo={jornalista.ativo === 1}
-          />
-        </View>
-
-        {modoEdicao ? (
-          <>
-            <Text weight="Bold" style={styles.sectionTitle}>
-              DADOS DO CONTATO
-            </Text>
-
-            <Input
-              label="NOME"
-              value={formulario.nome}
-              onChangeText={(texto) => atualizarCampo("nome", texto)}
-              placeholder="Nome completo"
-              showChanged={campoAlterado("nome")}
-              error={erros.nome}
-            />
-
-            <Input
-              label="E-MAIL"
-              value={formulario.email}
-              onChangeText={(texto) => atualizarCampo("email", texto)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholder="E-mail"
-              showChanged={campoAlterado("email")}
-              error={erros.email}
-            />
-
-            <Input
-              label="TELEFONE"
-              value={formulario.telefone}
-              onChangeText={(texto) => atualizarCampo("telefone", texto)}
-              keyboardType="phone-pad"
-              placeholder="Telefone"
-              showChanged={campoAlterado("telefone")}
-              error={erros.telefone}
-            />
-
-            <Input
-              label="CARGO"
-              value={formulario.cargo}
-              onChangeText={(texto) => atualizarCampo("cargo", texto)}
-              placeholder="Ex.: Repórter"
-              showChanged={campoAlterado("cargo")}
-              error={erros.cargo}
-            />
-
-            <Input
-              label="ESTADO"
-              value={formulario.estado}
-              onChangeText={(texto) => atualizarCampo("estado", texto)}
-              placeholder="Ex.: São Paulo"
-              showChanged={campoAlterado("estado")}
-              error={erros.estado}
-            />
-
-            <Input
-              label="CIDADE"
-              value={formulario.cidade}
-              onChangeText={(texto) => atualizarCampo("cidade", texto)}
-              placeholder="Ex.: Campinas"
-              showChanged={campoAlterado("cidade")}
-              error={erros.cidade}
-            />
-
-            <Input
-              label="OBSERVAÇÕES"
-              value={formulario.observacoes}
-              onChangeText={(texto) => atualizarCampo("observacoes", texto)}
-              placeholder="Observações"
-              multiline
-              textAlignVertical="top"
-              style={styles.textArea}
-              showChanged={campoAlterado("observacoes")}
-              error={erros.observacoes}
-            />
-
-            <View
-              style={[
-                styles.statusRow,
-                {
-                  borderColor: theme.borda,
-                },
-              ]}
-            >
-              <View style={styles.statusInfo}>
-                <View style={styles.statusTitleRow}>
-                  <Text weight="SemiBold" style={styles.statusTitle}>
-                    STATUS
-                  </Text>
-
-                  {campoAlterado("ativo") && (
-                    <Ionicons
-                      name="create-outline"
-                      size={15}
-                      color={theme.primaria}
-                    />
-                  )}
-                </View>
-
-                <Text
+          {modoEdicao ? (
+            <View style={styles.formularioEdicao}>
+              <SecaoEdicao titulo="Dados pessoais">
+                <Input
+                  label="Nome"
+                  value={formulario.nome}
+                  onChangeText={(texto) => atualizarCampo("nome", texto)}
+                  placeholder="Nome completo"
+                  showChanged={campoAlterado("nome")}
+                  error={erros.nome}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="E-mail"
+                  value={formulario.email}
+                  onChangeText={(texto) => atualizarCampo("email", texto)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholder="E-mail"
+                  showChanged={campoAlterado("email")}
+                  error={erros.email}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Telefone"
+                  value={formulario.telefone}
+                  onChangeText={(texto) => atualizarCampo("telefone", texto)}
+                  keyboardType="phone-pad"
+                  placeholder="Telefone"
+                  showChanged={campoAlterado("telefone")}
+                  error={erros.telefone}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Perfil profissional">
+                <Input
+                  label="Cargo / função"
+                  value={formulario.cargo}
+                  onChangeText={(texto) => atualizarCampo("cargo", texto)}
+                  placeholder="Ex.: Repórter"
+                  showChanged={campoAlterado("cargo")}
+                  error={erros.cargo}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Estado"
+                  value={formulario.estado}
+                  onChangeText={(texto) => atualizarCampo("estado", texto)}
+                  placeholder="Ex.: São Paulo"
+                  showChanged={campoAlterado("estado")}
+                  error={erros.estado}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <Input
+                  label="Cidade"
+                  value={formulario.cidade}
+                  onChangeText={(texto) => atualizarCampo("cidade", texto)}
+                  placeholder="Ex.: Campinas"
+                  showChanged={campoAlterado("cidade")}
+                  error={erros.cidade}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+                <VeiculoSelector
+                  value={{
+                    id: formulario.veiculo_id,
+                    nome: formulario.veiculo_nome,
+                  }}
+                  onChange={atualizarVeiculo}
+                  showChanged={
+                    campoAlterado("veiculo_id") || campoAlterado("veiculo_nome")
+                  }
+                  criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
+                  error={erros.veiculo}
+                  disabled={salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Informações adicionais">
+                <Input
+                  label="Observações"
+                  value={formulario.observacoes}
+                  onChangeText={(texto) => atualizarCampo("observacoes", texto)}
+                  placeholder="Observações"
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.textArea}
+                  showChanged={campoAlterado("observacoes")}
+                  error={erros.observacoes}
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Disponibilidade">
+                <View
                   style={[
-                    styles.statusDescription,
+                    styles.statusRow,
                     {
-                      color: theme.textoSub,
+                      borderColor: theme.borda,
                     },
                   ]}
                 >
-                  Contato disponível no mailing
+                  <View style={styles.statusInfo}>
+                    <View style={styles.statusTitleRow}>
+                      <Text weight="SemiBold" style={styles.statusTitle}>
+                        STATUS
+                      </Text>
+
+                      {campoAlterado("ativo") && (
+                        <Ionicons
+                          name="create-outline"
+                          size={15}
+                          color={theme.primaria}
+                        />
+                      )}
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.statusDescription,
+                        {
+                          color: theme.textoSub,
+                        },
+                      ]}
+                    >
+                      Contato disponível no mailing
+                    </Text>
+                  </View>
+
+                  <Switch
+                    value={formulario.ativo}
+                    onValueChange={(valor) => atualizarCampo("ativo", valor)}
+                    trackColor={{
+                      false: theme.surface,
+                      true: theme.primaria,
+                    }}
+                    thumbColor={theme.branco}
+                    disabled={salvando}
+                  />
+                </View>
+              </SecaoEdicao>
+              {erroGeral ? (
+                <Text weight="Medium" style={styles.errorGeral}>
+                  {erroGeral}
                 </Text>
-              </View>
-
-              <Switch
-                value={formulario.ativo}
-                onValueChange={(valor) => atualizarCampo("ativo", valor)}
-                trackColor={{
-                  false: theme.surface,
-                  true: theme.primaria,
-                }}
-                thumbColor={theme.branco}
-              />
+              ) : null}
             </View>
-
-            <VeiculoSelector
-              value={{
-                id: formulario.veiculo_id,
-                nome: formulario.veiculo_nome,
-              }}
-              onChange={atualizarVeiculo}
-              showChanged={
-                campoAlterado("veiculo_id") || campoAlterado("veiculo_nome")
-              }
-              criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
-              error={erros.veiculo}
-            />
-            {erroGeral ? (
-              <Text weight="Medium" style={styles.errorGeral}>
-                {erroGeral}
-              </Text>
-            ) : null}
-            <View style={styles.actions}>
-              <Button
-                title="CANCELAR"
-                variant="outline"
-                onPress={cancelarEdicao}
-                style={styles.actionButton}
-              />
-
-              <Button
-                title="SALVAR"
-                loading={salvando}
-                onPress={salvarAlteracoes}
-                style={styles.actionButton}
-              />
-            </View>
-            <UnsavedChanges
-              visible={camposAlterados().length > 0}
-              saving={salvando}
-              alterations={quantidadeAlteracoes()}
-              onSave={salvarAlteracoes}
-              onDiscard={cancelarEdicao}
-            />
-          </>
-        ) : (
-          <InformacoesCadastro
-            grupos={[
-              {
-                id: "contato",
-                titulo: "Contato",
-                campos: [
-                  {
-                    id: "email",
-                    icone: "mail-outline",
-                    rotulo: "E-mail",
-                    valor: jornalista.email || "Não informado",
-                    acao: jornalista.email
-                      ? {
-                          icone: "mail-outline",
-                          rotulo: "Enviar e-mail para o contato",
-                          onPress: abrirEmail,
-                        }
-                      : undefined,
-                  },
-                  {
-                    id: "telefone",
-                    icone: "call-outline",
-                    rotulo: "Telefone",
-                    valor: jornalista.telefone || "Não informado",
-                    acao: jornalista.telefone
-                      ? {
-                          icone: "logo-whatsapp",
-                          rotulo: "Abrir conversa no WhatsApp",
-                          onPress: abrirWhatsApp,
-                        }
-                      : undefined,
-                  },
-                ],
-              },
-              {
-                id: "profissional",
-                titulo: "Perfil profissional",
-                campos: [
-                  {
-                    id: "cargo",
-                    icone: "briefcase-outline",
-                    rotulo: "Cargo",
-                    valor: jornalista.cargo || "Não informado",
-                  },
-                  {
-                    id: "localizacao",
-                    icone: "location-outline",
-                    rotulo: "Localização",
-                    valor:
-                      [jornalista.cidade, jornalista.estado]
-                        .filter(Boolean)
-                        .join(" · ") || "Não informado",
-                  },
-                  {
-                    id: "veiculo",
-                    icone: "newspaper-outline",
-                    rotulo: "Veículo",
-                    valor:
-                      jornalista.veiculo_nome || "Nenhum veículo vinculado",
-                    vinculo: Boolean(jornalista.veiculo_id),
-                    acao:
-                      Number.isSafeInteger(jornalista.veiculo_id) &&
-                      (jornalista.veiculo_id ?? 0) > 0 &&
-                      temPermissao("VEICULOS", "VISUALIZAR")
+          ) : (
+            <InformacoesCadastro
+              grupos={[
+                {
+                  id: "contato",
+                  titulo: "Contato",
+                  campos: [
+                    {
+                      id: "email",
+                      icone: "mail-outline",
+                      rotulo: "E-mail",
+                      valor: jornalista.email || "Não informado",
+                      acao: jornalista.email
                         ? {
-                            icone: "arrow-forward-outline",
-                            rotulo: "Ir para os detalhes do veículo",
-                            onPress: abrirVeiculoVinculado,
+                            icone: "mail-outline",
+                            rotulo: "Enviar e-mail para o contato",
+                            onPress: abrirEmail,
                           }
                         : undefined,
-                  },
-                ],
-              },
-              ...(jornalista.observacoes
-                ? [
-                    {
-                      id: "observacoes",
-                      titulo: "Observações",
-                      campos: [
-                        {
-                          id: "observacoes",
-                          icone: "document-text-outline" as const,
-                          rotulo: "Anotações do contato",
-                          valor: jornalista.observacoes,
-                        },
-                      ],
                     },
-                  ]
-                : []),
-            ]}
+                    {
+                      id: "telefone",
+                      icone: "call-outline",
+                      rotulo: "Telefone",
+                      valor: jornalista.telefone || "Não informado",
+                      acao: jornalista.telefone
+                        ? {
+                            icone: "logo-whatsapp",
+                            rotulo: "Abrir conversa no WhatsApp",
+                            onPress: abrirWhatsApp,
+                          }
+                        : undefined,
+                    },
+                  ],
+                },
+                {
+                  id: "profissional",
+                  titulo: "Perfil profissional",
+                  campos: [
+                    {
+                      id: "cargo",
+                      icone: "briefcase-outline",
+                      rotulo: "Cargo",
+                      valor: jornalista.cargo || "Não informado",
+                    },
+                    {
+                      id: "localizacao",
+                      icone: "location-outline",
+                      rotulo: "Localização",
+                      valor:
+                        [jornalista.cidade, jornalista.estado]
+                          .filter(Boolean)
+                          .join(" · ") || "Não informado",
+                    },
+                    {
+                      id: "veiculo",
+                      icone: "newspaper-outline",
+                      rotulo: "Veículo",
+                      valor:
+                        jornalista.veiculo_nome || "Nenhum veículo vinculado",
+                      vinculo: Boolean(jornalista.veiculo_id),
+                      acao:
+                        Number.isSafeInteger(jornalista.veiculo_id) &&
+                        (jornalista.veiculo_id ?? 0) > 0 &&
+                        temPermissao("VEICULOS", "VISUALIZAR")
+                          ? {
+                              icone: "arrow-forward-outline",
+                              rotulo: "Ir para os detalhes do veículo",
+                              onPress: abrirVeiculoVinculado,
+                            }
+                          : undefined,
+                    },
+                  ],
+                },
+                ...(jornalista.observacoes
+                  ? [
+                      {
+                        id: "observacoes",
+                        titulo: "Observações",
+                        campos: [
+                          {
+                            id: "observacoes",
+                            icone: "document-text-outline" as const,
+                            rotulo: "Anotações do contato",
+                            valor: jornalista.observacoes,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )}
+        </ScrollView>
+        {modoEdicao ? (
+          <SalvarAlteracoes
+            error={erroGeral || Object.values(erros).find(Boolean)}
+            alterations={quantidadeAlteracoes()}
+            saving={salvando}
+            onSave={salvarAlteracoes}
+            onDiscard={handleBack}
           />
-        )}
-      </ScrollView>
-      <FeedbackAlert
-        visible={feedback !== null}
-        variant={feedback?.variant ?? "success"}
-        title={feedback?.title ?? ""}
-        message={feedback?.message ?? ""}
-        primaryLabel="ENTENDI"
-        onClose={() => setFeedback(null)}
-      />
+        ) : null}
+        <FeedbackAlert {...feedbackProps} />
 
-      <FeedbackAlert {...saida.alertaProps} />
-    </View>
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -951,24 +989,17 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 16,
+    paddingBottom: 28,
   },
 
   loading: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-
-  profile: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
   },
   resumoCadastro: {
     marginBottom: 12,
@@ -984,21 +1015,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
-  sectionTitle: {
-    fontSize: 13,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-
   statusRow: {
-    minHeight: 68,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 22,
+    gap: 12,
+    minWidth: 0,
   },
   statusTitleRow: {
     flexDirection: "row",
@@ -1008,7 +1029,7 @@ const styles = StyleSheet.create({
 
   statusInfo: {
     flex: 1,
-    marginRight: 10,
+    minWidth: 0,
   },
 
   statusTitle: {
@@ -1020,47 +1041,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  infoBox: {
-    minHeight: 52,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  infoBoxText: {
-    marginLeft: 10,
-    fontSize: 14,
-  },
-
-  helperText: {
-    fontSize: 11,
-    marginTop: 6,
-    marginBottom: 20,
-  },
-
   textArea: {
     height: 100,
     paddingTop: 14,
-  },
-
-  actions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  actionButton: {
-    flex: 1,
-  },
-
-  primaryAction: {
-    flex: 1,
-  },
-
-  deleteButton: {
-    flex: 1,
   },
 
   errorGeral: {
@@ -1068,5 +1051,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginBottom: 10,
+  },
+  formularioEdicao: {
+    gap: 14,
   },
 });

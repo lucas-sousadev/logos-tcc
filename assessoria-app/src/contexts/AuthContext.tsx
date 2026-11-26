@@ -82,6 +82,7 @@ interface AuthContextData {
 
   temPermissao: (modulo: string, acao: string) => boolean;
   recarregarPermissoes: () => Promise<void>;
+  atualizarUsuario: (dados: Usuario) => void;
 }
 
 const AuthContext = createContext<AuthContextData | undefined>(undefined);
@@ -94,6 +95,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [permissoesUsuario, setPermissoesUsuario] = useState<Permissao[]>([]);
+  const atualizarUsuario = useCallback((dados: Usuario) => {
+    setUsuario((atual) => {
+      if (
+        !atual ||
+        atual.id !== dados.id ||
+        atual.assessoria_id !== dados.assessoria_id
+      )
+        return atual;
+      return JSON.stringify(atual) === JSON.stringify(dados) ? atual : dados;
+    });
+  }, []);
   const consultaPermissoes = useRef<{
     conta: string;
     controller: AbortController;
@@ -406,6 +418,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         listarPermissoesFuncionario,
         atualizarPermissoesFuncionario,
         recarregarPermissoes,
+        atualizarUsuario,
 
         temPermissao,
       }}

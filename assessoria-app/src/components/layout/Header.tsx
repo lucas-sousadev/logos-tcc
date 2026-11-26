@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Text from "@/components/ui/Text";
+import AvatarUsuario from "@/components/perfil/AvatarUsuario";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
@@ -41,11 +42,6 @@ export default function Header({
 
   const nome = usuario?.nome?.trim() || "Usuário";
   const partes = nome.split(/\s+/);
-  const iniciais = partes
-    .filter((_, indice) => indice === 0 || indice === partes.length - 1)
-    .map((parte) => Array.from(parte)[0])
-    .join("")
-    .toLocaleUpperCase("pt-BR");
   const noPerfil = pathname === "/perfil";
 
   const handleBack = useCallback(() => {
@@ -159,13 +155,7 @@ export default function Header({
               },
             ]}
           >
-            <Text
-              weight="Bold"
-              maxFontSizeMultiplier={1.5}
-              style={[styles.avatarText, { color: theme.textoContainer }]}
-            >
-              {iniciais}
-            </Text>
+            <AvatarUsuario usuario={usuario} tamanho={40} />
           </TouchableOpacity>
         </View>
       </View>
@@ -225,9 +215,5 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 14,
-    lineHeight: 21,
   },
 });

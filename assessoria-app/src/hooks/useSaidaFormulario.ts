@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Platform } from "react-native";
 import { useIsFocused, useNavigation } from "expo-router";
 import { usePreventRemove } from "expo-router/react-navigation";
 import type { ComponentProps } from "react";
@@ -11,9 +12,23 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
   const [avisar, setAvisar] = useState(false);
   const [liberado, setLiberado] = useState(false);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || liberado || !focado || (!alterado && !ocupado))
+      return;
+    const impedirSaida = (evento: BeforeUnloadEvent) => {
+      evento.preventDefault();
+      evento.returnValue = "";
+    };
+    window.addEventListener("beforeunload", impedirSaida);
+    return () => window.removeEventListener("beforeunload", impedirSaida);
+  }, [alterado, ocupado, liberado, focado]);
+
   usePreventRemove(!liberado && (alterado || ocupado), ({ data }) => {
     if (ocupado || pendente.current) return;
-    pendente.current = { acao: () => navigation.dispatch(data.action), remover: true };
+    pendente.current = {
+      acao: () => navigation.dispatch(data.action),
+      remover: true,
+    };
     setAvisar(true);
   });
 
@@ -31,7 +46,10 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
 
   function confirmarSaida(acao: () => void) {
     if (ocupado) return;
-    if (!alterado) { acao(); return; }
+    if (!alterado) {
+      acao();
+      return;
+    }
     pendente.current = { acao, remover: false };
     setAvisar(true);
   }
@@ -56,7 +74,10 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
       setAvisar(false);
       if (!pedido) return;
       if (pedido.remover) setLiberado(true);
-      else { pendente.current = null; pedido.acao(); }
+      else {
+        pendente.current = null;
+        pedido.acao();
+      }
     },
   };
 

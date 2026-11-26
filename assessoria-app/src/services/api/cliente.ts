@@ -1,10 +1,5 @@
-import {
-  authenticatedFetch,
-} from "@/services/api/auth";
-import {
-  anexarArquivo,
-  fetchUpload,
-} from "@/services/arquivoUpload";
+import { authenticatedFetch } from "@/services/api/auth";
+import { anexarArquivo, fetchUpload } from "@/services/arquivoUpload";
 
 import { API_URL } from "@/constants/api";
 
@@ -77,15 +72,9 @@ export async function listarClientes(
 ): Promise<ListarClientesResponse> {
   const query = new URLSearchParams();
 
-  query.set(
-    "page",
-    String(params.page ?? 1)
-  );
+  query.set("page", String(params.page ?? 1));
 
-  query.set(
-    "limit",
-    String(params.limit ?? 50)
-  );
+  query.set("limit", String(params.limit ?? 50));
 
   if (params.busca?.trim()) {
     query.set("busca", params.busca.trim());
@@ -100,10 +89,7 @@ export async function listarClientes(
   }
 
   if (params.segmento?.trim()) {
-    query.set(
-      "segmento",
-      params.segmento.trim()
-    );
+    query.set("segmento", params.segmento.trim());
   }
 
   if (params.ativo !== undefined) {
@@ -124,35 +110,25 @@ export async function listarClientes(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !dados.success ||
-    !dados.clientes ||
-    !dados.pagination
-  ) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível carregar os clientes."
-    );
+  if (!response.ok || !dados.success || !dados.clientes || !dados.pagination) {
+    throw new Error(dados.message || "Não foi possível carregar os clientes.");
   }
 
   return dados;
 }
 
 export async function buscarCliente(
-  id: number
+  id: number,
+  signal?: AbortSignal
 ): Promise<Cliente> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clientes/${id}`,
-    {
-      method: "GET",
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/clientes/${id}`, {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  });
 
   const textoResposta = await response.text();
 
@@ -165,20 +141,11 @@ export async function buscarCliente(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !dados.success ||
-    !dados.cliente
-  ) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível carregar o cliente."
-    );
+  if (!response.ok || !dados.success || !dados.cliente) {
+    throw new Error(dados.message || "Não foi possível carregar o cliente.");
   }
 
   return dados.cliente;
@@ -188,7 +155,7 @@ export async function criarCliente(
   dados: DadosCliente,
   logo?: ArquivoLogoCliente
 ): Promise<Cliente> {
-    const response = await authenticatedFetch(
+  const response = await authenticatedFetch(
     `${API_URL}/api/clientes`,
     {
       method: "POST",
@@ -197,10 +164,7 @@ export async function criarCliente(
     fetchUpload
   );
 
-  return lerRespostaCliente(
-    response,
-    "Não foi possível cadastrar o cliente."
-  );
+  return lerRespostaCliente(response, "Não foi possível cadastrar o cliente.");
 }
 
 export async function atualizarClienteComLogo(
@@ -213,30 +177,18 @@ export async function atualizarClienteComLogo(
     `${API_URL}/api/clientes/${id}/atualizar-com-logo`,
     {
       method: "POST",
-      body: criarFormDataCliente(
-        dados,
-        logo,
-        removerLogo
-      ),
+      body: criarFormDataCliente(dados, logo, removerLogo),
     },
     fetchUpload
   );
 
-  return lerRespostaCliente(
-    response,
-    "Não foi possível atualizar o cliente."
-  );
+  return lerRespostaCliente(response, "Não foi possível atualizar o cliente.");
 }
 
-export async function excluirCliente(
-  id: number
-): Promise<void> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clientes/${id}`,
-    {
-      method: "DELETE",
-    }
-  );
+export async function excluirCliente(id: number): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/api/clientes/${id}`, {
+    method: "DELETE",
+  });
 
   const textoResposta = await response.text();
 
@@ -248,16 +200,11 @@ export async function excluirCliente(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível excluir o cliente."
-    );
+    throw new Error(dados.message || "Não foi possível excluir o cliente.");
   }
 }
 
@@ -288,24 +235,17 @@ export async function excluirClientesEmLote(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !dados.success) {
-    throw new Error(
-      dados.message ||
-        "Não foi possível excluir os clientes."
-    );
+    throw new Error(dados.message || "Não foi possível excluir os clientes.");
   }
 
   return dados;
 }
 
-export function obterUrlLogoCliente(
-  logoPath?: string | null
-): string | null {
+export function obterUrlLogoCliente(logoPath?: string | null): string | null {
   const caminho = logoPath?.trim();
 
   if (!caminho) {
@@ -316,10 +256,7 @@ export function obterUrlLogoCliente(
     return caminho;
   }
 
-  return (
-    `${API_URL}/` +
-    caminho.replace(/^\/+/, "")
-  );
+  return `${API_URL}/` + caminho.replace(/^\/+/, "");
 }
 
 function criarFormDataCliente(
@@ -336,22 +273,10 @@ function criarFormDataCliente(
   formData.append("site", dados.site ?? "");
   formData.append("cidade", dados.cidade ?? "");
   formData.append("estado", dados.estado ?? "");
-  formData.append(
-    "descricao",
-    dados.descricao ?? ""
-  );
-  formData.append(
-    "segmento",
-    dados.segmento ?? ""
-  );
-  formData.append(
-    "responsavel",
-    dados.responsavel ?? ""
-  );
-  formData.append(
-    "ativo",
-    String(dados.ativo ?? true)
-  );
+  formData.append("descricao", dados.descricao ?? "");
+  formData.append("segmento", dados.segmento ?? "");
+  formData.append("responsavel", dados.responsavel ?? "");
+  formData.append("ativo", String(dados.ativo ?? true));
 
   if (removerLogo) {
     formData.append("remover_logo", "true");
@@ -379,19 +304,11 @@ async function lerRespostaCliente(
   try {
     dados = JSON.parse(textoResposta);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !dados.success ||
-    !dados.cliente
-  ) {
-    throw new Error(
-      dados.message || mensagemPadrao
-    );
+  if (!response.ok || !dados.success || !dados.cliente) {
+    throw new Error(dados.message || mensagemPadrao);
   }
 
   return dados.cliente;

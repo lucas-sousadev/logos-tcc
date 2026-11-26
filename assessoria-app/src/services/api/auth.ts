@@ -16,6 +16,12 @@ export interface Usuario {
   email: string;
   telefone: string | null;
   foto_path: string | null;
+  cargo?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  assessoria_nome?: string;
+  created_at?: string;
+  perfil_versao?: string;
   perfil: "ASSESSOR" | "FUNCIONARIO";
   email_verificado: boolean;
 }
@@ -56,22 +62,14 @@ export async function removeToken(): Promise<void> {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
-export async function saveRefreshToken(
-  refreshToken: string
-): Promise<void> {
+export async function saveRefreshToken(refreshToken: string): Promise<void> {
   if (Platform.OS === "web") {
-    localStorage.setItem(
-      REFRESH_TOKEN_KEY,
-      refreshToken
-    );
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 
     return;
   }
 
-  await SecureStore.setItemAsync(
-    REFRESH_TOKEN_KEY,
-    refreshToken
-  );
+  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
@@ -79,23 +77,17 @@ export async function getRefreshToken(): Promise<string | null> {
     return localStorage.getItem(REFRESH_TOKEN_KEY);
   }
 
-  return SecureStore.getItemAsync(
-    REFRESH_TOKEN_KEY
-  );
+  return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 }
 
 export async function removeRefreshToken(): Promise<void> {
   if (Platform.OS === "web") {
-    localStorage.removeItem(
-      REFRESH_TOKEN_KEY
-    );
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
 
     return;
   }
 
-  await SecureStore.deleteItemAsync(
-    REFRESH_TOKEN_KEY
-  );
+  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
 }
 
 export async function clearSession(): Promise<void> {
@@ -122,23 +114,18 @@ export async function refreshAccessToken(): Promise<string> {
       const refreshToken = await getRefreshToken();
 
       if (!refreshToken) {
-        throw new Error(
-          "Refresh token não encontrado."
-        );
+        throw new Error("Refresh token não encontrado.");
       }
 
-      const response = await fetch(
-        `${API_URL}/api/auth/refresh`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            refresh_token: refreshToken,
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+        }),
+      });
 
       const responseText = await response.text();
 
@@ -152,16 +139,8 @@ export async function refreshAccessToken(): Promise<string> {
         );
       }
 
-      if (
-        !response.ok ||
-        !data.success ||
-        !data.token ||
-        !data.refresh_token
-      ) {
-        throw new Error(
-          data.message ||
-          "Não foi possível renovar a sessão."
-        );
+      if (!response.ok || !data.success || !data.token || !data.refresh_token) {
+        throw new Error(data.message || "Não foi possível renovar a sessão.");
       }
 
       /*
@@ -171,9 +150,7 @@ export async function refreshAccessToken(): Promise<string> {
        * e criou um novo.
        */
       await saveToken(data.token);
-      await saveRefreshToken(
-        data.refresh_token
-      );
+      await saveRefreshToken(data.refresh_token);
 
       return data.token;
     } catch (error) {
@@ -194,10 +171,7 @@ export async function refreshAccessToken(): Promise<string> {
 
 // requisiçoes autenticadas
 
-type RequestExecutor = (
-  url: string,
-  options: RequestInit
-) => Promise<Response>;
+type RequestExecutor = (url: string, options: RequestInit) => Promise<Response>;
 
 export async function authenticatedFetch(
   url: string,
@@ -210,14 +184,9 @@ export async function authenticatedFetch(
     throw new Error("Usuário não autenticado.");
   }
 
-  const headers = new Headers(
-    options.headers || {}
-  );
+  const headers = new Headers(options.headers || {});
 
-  headers.set(
-    "Authorization",
-    `Bearer ${token}`
-  );
+  headers.set("Authorization", `Bearer ${token}`);
 
   let response = await request(url, {
     ...options,
@@ -230,14 +199,9 @@ export async function authenticatedFetch(
 
   token = await refreshAccessToken();
 
-  const retryHeaders = new Headers(
-    options.headers || {}
-  );
+  const retryHeaders = new Headers(options.headers || {});
 
-  retryHeaders.set(
-    "Authorization",
-    `Bearer ${token}`
-  );
+  retryHeaders.set("Authorization", `Bearer ${token}`);
 
   response = await request(url, {
     ...options,
@@ -252,19 +216,16 @@ export async function login(
   email: string,
   senha: string
 ): Promise<LoginResponse> {
-  const response = await fetch(
-    `${API_URL}/api/auth/login`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: email.trim(),
-        senha,
-      }),
-    }
-  );
+  const response = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: email.trim(),
+      senha,
+    }),
+  });
 
   const responseText = await response.text();
 
@@ -273,32 +234,19 @@ export async function login(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok) {
-    throw new Error(
-      data.message ||
-      "Não foi possível realizar o login."
-    );
+    throw new Error(data.message || "Não foi possível realizar o login.");
   }
 
-  if (
-    !data.token ||
-    !data.refresh_token ||
-    !data.usuario
-  ) {
-    throw new Error(
-      "A API não retornou os dados completos de autenticação."
-    );
+  if (!data.token || !data.refresh_token || !data.usuario) {
+    throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
   await saveToken(data.token);
-  await saveRefreshToken(
-    data.refresh_token
-  );
+  await saveRefreshToken(data.refresh_token);
 
   return data;
 }
@@ -306,42 +254,32 @@ export async function login(
 // logout
 
 export async function logout(): Promise<void> {
-  const refreshToken =
-    await getRefreshToken();
+  const refreshToken = await getRefreshToken();
 
   try {
     if (refreshToken) {
-      await fetch(
-        `${API_URL}/api/auth/logout`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            refresh_token: refreshToken,
-          }),
-        }
-      );
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+        }),
+      });
     }
   } finally {
-    
-      // mesmo se a API não estiver disponivel, ele remove a sessão local 
+    // mesmo se a API não estiver disponivel, ele remove a sessão local
     await clearSession();
   }
 }
 
-
 export async function me(): Promise<Usuario> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/auth/me`,
-    {
-      method: "GET",
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/auth/me`, {
+    method: "GET",
+  });
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: {
     success: boolean;
@@ -352,25 +290,15 @@ export async function me(): Promise<Usuario> {
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.usuario
-  ) {
-    throw new Error(
-      data.message ||
-      "Não foi possível validar a sessão."
-    );
+  if (!response.ok || !data.success || !data.usuario) {
+    throw new Error(data.message || "Não foi possível validar a sessão.");
   }
 
   return data.usuario;
 }
-
 
 // cadastro de assessoriA
 
@@ -388,56 +316,39 @@ export interface RegisterAssessoriaData {
 export async function registerAssessoria(
   dados: RegisterAssessoriaData
 ): Promise<LoginResponse> {
-  const response = await fetch(
-    `${API_URL}/api/auth/register-assessoria`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(dados),
-    }
-  );
+  const response = await fetch(`${API_URL}/api/auth/register-assessoria`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data: LoginResponse;
 
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok) {
-    throw new Error(
-      data.message ||
-      "Não foi possível criar a assessoria."
-    );
+    throw new Error(data.message || "Não foi possível criar a assessoria.");
   }
 
-  if (
-    !data.token ||
-    !data.refresh_token ||
-    !data.usuario
-  ) {
-    throw new Error(
-      "A API não retornou os dados completos de autenticação."
-    );
+  if (!data.token || !data.refresh_token || !data.usuario) {
+    throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
   await saveToken(data.token);
-  await saveRefreshToken(
-    data.refresh_token
-  );
+  await saveRefreshToken(data.refresh_token);
 
   return data;
 }
 
-// cadastro de funcionarios 
+// cadastro de funcionarios
 
 export interface RegisterFuncionarioData {
   codigo: string;
@@ -450,16 +361,13 @@ export interface RegisterFuncionarioData {
 export async function registerFuncionario(
   dados: RegisterFuncionarioData
 ): Promise<LoginResponse> {
-  const response = await fetch(
-    `${API_URL}/api/auth/register-funcionario`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(dados),
-    }
-  );
+  const response = await fetch(`${API_URL}/api/auth/register-funcionario`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
 
   const responseText = await response.text();
 
@@ -468,26 +376,17 @@ export async function registerFuncionario(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok) {
     throw new Error(
-      data.message ||
-        "Não foi possível cadastrar o funcionário."
+      data.message || "Não foi possível cadastrar o funcionário."
     );
   }
 
-  if (
-    !data.token ||
-    !data.refresh_token ||
-    !data.usuario
-  ) {
-    throw new Error(
-      "A API não retornou os dados completos de autenticação."
-    );
+  if (!data.token || !data.refresh_token || !data.usuario) {
+    throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
   await saveToken(data.token);
@@ -502,21 +401,16 @@ export interface ValidarConviteResponse {
   success: boolean;
   message: string;
 }
-export async function validarConvite(
-  codigo: string
-): Promise<void> {
-  const response = await fetch(
-    `${API_URL}/api/convites/validar`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        codigo: codigo.trim().toUpperCase(),
-      }),
-    }
-  );
+export async function validarConvite(codigo: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/convites/validar`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      codigo: codigo.trim().toUpperCase(),
+    }),
+  });
 
   const responseText = await response.text();
 
@@ -525,16 +419,11 @@ export async function validarConvite(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.message ||
-        "Não foi possível validar o convite."
-    );
+    throw new Error(data.message || "Não foi possível validar o convite.");
   }
 }
 
@@ -552,18 +441,15 @@ export interface CriarConviteResponse {
 export async function criarConvite(
   emailDestino?: string
 ): Promise<CriarConviteResponse> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/convites`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email_destino: emailDestino?.trim() || null,
-      }),
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/convites`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email_destino: emailDestino?.trim() || null,
+    }),
+  });
 
   const responseText = await response.text();
 
@@ -572,15 +458,11 @@ export async function criarConvite(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !data.success || !data.convite) {
-    throw new Error(
-      data.message || "Não foi possível criar o convite."
-    );
+    throw new Error(data.message || "Não foi possível criar o convite.");
   }
 
   return data;
@@ -628,16 +510,11 @@ export async function listarConvites(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.message ||
-        "Não foi possível carregar os convites."
-    );
+    throw new Error(data.message || "Não foi possível carregar os convites.");
   }
 
   return data;
@@ -651,6 +528,10 @@ export interface Funcionario {
   nome: string;
   email: string;
   telefone: string | null;
+  foto_path: string | null;
+  cargo: string | null;
+  cidade: string | null;
+  uf: string | null;
   perfil: "FUNCIONARIO";
   ativo: number;
   email_verificado: boolean;
@@ -677,34 +558,21 @@ export interface ListarFuncionariosResponse {
   };
 }
 
-
 export async function listarFuncionarios(
   params: ListarFuncionariosParams = {}
 ): Promise<ListarFuncionariosResponse> {
   const query = new URLSearchParams();
 
-  query.set(
-    "page",
-    String(params.page ?? 1)
-  );
+  query.set("page", String(params.page ?? 1));
 
-  query.set(
-    "limit",
-    String(params.limit ?? 50)
-  );
+  query.set("limit", String(params.limit ?? 50));
 
   if (params.busca?.trim()) {
-    query.set(
-      "busca",
-      params.busca.trim()
-    );
+    query.set("busca", params.busca.trim());
   }
 
   if (params.ativo !== undefined) {
-    query.set(
-      "ativo",
-      String(params.ativo)
-    );
+    query.set("ativo", String(params.ativo));
   }
 
   const response = await authenticatedFetch(
@@ -721,20 +589,12 @@ export async function listarFuncionarios(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.funcionarios ||
-    !data.pagination
-  ) {
+  if (!response.ok || !data.success || !data.funcionarios || !data.pagination) {
     throw new Error(
-      data.message ||
-        "Não foi possível carregar os funcionários."
+      data.message || "Não foi possível carregar os funcionários."
     );
   }
 
@@ -742,12 +602,15 @@ export async function listarFuncionarios(
 }
 
 export async function buscarFuncionario(
-  id: number
+  id: number,
+  signal?: AbortSignal
 ): Promise<Funcionario> {
   const response = await authenticatedFetch(
     `${API_URL}/api/funcionarios/${id}`,
     {
       method: "GET",
+      cache: "no-store",
+      signal,
     }
   );
 
@@ -762,20 +625,11 @@ export async function buscarFuncionario(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.funcionario
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível carregar o funcionário."
-    );
+  if (!response.ok || !data.success || !data.funcionario) {
+    throw new Error(data.message || "Não foi possível carregar o funcionário.");
   }
 
   return data.funcionario;
@@ -801,13 +655,14 @@ export interface ListarPermissoesFuncionarioResponse {
   permissoes?: Permissao[];
 }
 
-export async function listarTodasPermissoes(): Promise<Permissao[]> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/permissoes`,
-    {
-      method: "GET",
-    }
-  );
+export async function listarTodasPermissoes(
+  signal?: AbortSignal
+): Promise<Permissao[]> {
+  const response = await authenticatedFetch(`${API_URL}/api/permissoes`, {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  });
 
   const responseText = await response.text();
 
@@ -816,32 +671,26 @@ export async function listarTodasPermissoes(): Promise<Permissao[]> {
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.permissoes
-  ) {
-    throw new Error(
-      data.message ||
-        "Não foi possível carregar as permissões."
-    );
+  if (!response.ok || !data.success || !data.permissoes) {
+    throw new Error(data.message || "Não foi possível carregar as permissões.");
   }
 
   return data.permissoes;
 }
 
 export async function listarPermissoesFuncionario(
-  usuarioId: number
+  usuarioId: number,
+  signal?: AbortSignal
 ): Promise<Permissao[]> {
   const response = await authenticatedFetch(
     `${API_URL}/api/funcionarios/permissoes?usuario_id=${usuarioId}`,
     {
       method: "GET",
+      cache: "no-store",
+      signal,
     }
   );
 
@@ -852,19 +701,12 @@ export async function listarPermissoesFuncionario(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.permissoes
-  ) {
+  if (!response.ok || !data.success || !data.permissoes) {
     throw new Error(
-      data.message ||
-        "Não foi possível carregar as permissões do funcionário."
+      data.message || "Não foi possível carregar as permissões do funcionário."
     );
   }
 
@@ -899,15 +741,12 @@ export async function atualizarPermissoesFuncionario(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
   if (!response.ok || !data.success) {
     throw new Error(
-      data.message ||
-        "Não foi possível atualizar as permissões."
+      data.message || "Não foi possível atualizar as permissões."
     );
   }
 }
@@ -915,14 +754,11 @@ export async function atualizarPermissoesFuncionario(
 export async function listarMinhasPermissoes(
   signal?: AbortSignal
 ): Promise<Permissao[]> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/auth/permissoes`,
-    {
-      method: "GET",
-      cache: "no-store",
-      signal,
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/auth/permissoes`, {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  });
 
   const responseText = await response.text();
 
@@ -935,19 +771,12 @@ export async function listarMinhasPermissoes(
   try {
     data = JSON.parse(responseText);
   } catch {
-    throw new Error(
-      "A API retornou uma resposta inválida."
-    );
+    throw new Error("A API retornou uma resposta inválida.");
   }
 
-  if (
-    !response.ok ||
-    !data.success ||
-    !data.permissoes
-  ) {
+  if (!response.ok || !data.success || !data.permissoes) {
     throw new Error(
-      data.message ||
-        "Não foi possível carregar suas permissões."
+      data.message || "Não foi possível carregar suas permissões."
     );
   }
 

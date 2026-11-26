@@ -1,3 +1,4 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -20,17 +21,25 @@ export default function TierSelector({
   disabled = false,
   showChanged = false,
 }: TierSelectorProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
       <View style={styles.labelRow}>
-        <Text weight="Medium" style={styles.label}>TIER</Text>
+        <Text weight="Medium" style={styles.label}>
+          TIER
+        </Text>
         {showChanged && (
           <Ionicons name="create-outline" size={15} color={theme.primaria} />
         )}
       </View>
-      <View style={styles.options} accessibilityRole="radiogroup" accessibilityLabel="Tier do veículo">
+      <View
+        style={styles.options}
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Tier do veículo"
+      >
         {OPCOES.map((tier) => {
           const selecionado = value === tier;
           const label = tier === null ? "Não definido" : `Tier ${tier}`;
@@ -39,7 +48,9 @@ export default function TierSelector({
             <TouchableOpacity
               key={tier ?? "indefinido"}
               accessibilityRole="radio"
-              accessibilityLabel={tier === null ? label : `${label}: ${DESCRICOES_TIER[tier]}`}
+              accessibilityLabel={
+                tier === null ? label : `${label}: ${DESCRICOES_TIER[tier]}`
+              }
               accessibilityState={{ checked: selecionado, disabled }}
               aria-checked={selecionado}
               aria-disabled={disabled}
@@ -50,7 +61,9 @@ export default function TierSelector({
                 styles.option,
                 {
                   borderColor: selecionado ? theme.primaria : theme.borda,
-                  backgroundColor: selecionado ? theme.backgroundContainer : theme.background,
+                  backgroundColor: selecionado
+                    ? theme.backgroundContainer
+                    : theme.background,
                   opacity: disabled ? 0.6 : 1,
                 },
               ]}
@@ -62,7 +75,10 @@ export default function TierSelector({
               />
               <Text
                 weight={selecionado ? "SemiBold" : "Medium"}
-                style={[styles.optionText, { color: selecionado ? theme.textoContainer : theme.texto }]}
+                style={[
+                  styles.optionText,
+                  { color: selecionado ? theme.textoContainer : theme.texto },
+                ]}
               >
                 {label}
               </Text>
@@ -71,7 +87,8 @@ export default function TierSelector({
         })}
       </View>
       <Text style={[styles.hint, { color: theme.textoSub }]}>
-        Tier 1: mais conhecidos · Tier 2: intermediários · Tier 3: menos conhecidos.
+        Tier 1: mais conhecidos · Tier 2: intermediários · Tier 3: menos
+        conhecidos.
       </Text>
     </View>
   );
@@ -79,7 +96,12 @@ export default function TierSelector({
 
 const styles = StyleSheet.create({
   container: { marginBottom: 22 },
-  labelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
   label: { fontSize: 12 },
   options: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   option: {

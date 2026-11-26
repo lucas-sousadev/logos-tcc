@@ -1,10 +1,6 @@
+import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { useState } from "react";
-import {
-  Platform,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -38,6 +34,8 @@ export default function ClippingTrechoInput({
   erroFim,
   disabled = false,
 }: ClippingTrechoInputProps) {
+  const compacto = useEdicaoCompacta();
+
   const { theme } = useTheme();
   const { fontScale } = useWindowDimensions();
 
@@ -48,8 +46,7 @@ export default function ClippingTrechoInput({
   const fimConvertido = tempoParaSegundos(fim);
   const errosLocais = validarTrecho(inicio, fim);
 
-  const ambosValidos =
-    inicioConvertido !== null && fimConvertido !== null;
+  const ambosValidos = inicioConvertido !== null && fimConvertido !== null;
 
   const duracao =
     inicioConvertido !== null &&
@@ -59,29 +56,17 @@ export default function ClippingTrechoInput({
       : null;
 
   const erroInicioExibido =
-    erroInicio ||
-    (tocouInicio ? errosLocais.inicioSegundos : undefined);
+    erroInicio || (tocouInicio ? errosLocais.inicioSegundos : undefined);
 
   const erroFimExibido =
-    erroFim ||
-    (tocouFim || ambosValidos
-      ? errosLocais.fimSegundos
-      : undefined);
+    erroFim || (tocouFim || ambosValidos ? errosLocais.fimSegundos : undefined);
 
   // O teclado precisa permitir a digitação de ":".
-  const teclado =
-    Platform.OS === "ios"
-      ? "numbers-and-punctuation"
-      : "default";
+  const teclado = Platform.OS === "ios" ? "numbers-and-punctuation" : "default";
 
   return (
-    <View style={styles.container}>
-      <View
-        style={[
-          styles.linha,
-          fontScale > 1.2 && styles.coluna,
-        ]}
-      >
+    <View style={[styles.container, compacto && { marginBottom: 0 }]}>
+      <View style={[styles.linha, fontScale > 1.2 && styles.coluna]}>
         <View style={styles.campo}>
           <Input
             label="INÍCIO"
@@ -94,8 +79,7 @@ export default function ClippingTrechoInput({
               setTocouInicio(true);
 
               if (!disabled && inicioConvertido !== null) {
-                const formatado =
-                  segundosParaTempo(inicioConvertido);
+                const formatado = segundosParaTempo(inicioConvertido);
 
                 if (formatado !== inicio) {
                   onInicioChange(formatado);
@@ -126,8 +110,7 @@ export default function ClippingTrechoInput({
               setTocouFim(true);
 
               if (!disabled && fimConvertido !== null) {
-                const formatado =
-                  segundosParaTempo(fimConvertido);
+                const formatado = segundosParaTempo(fimConvertido);
 
                 if (formatado !== fim) {
                   onFimChange(formatado);
@@ -151,10 +134,7 @@ export default function ClippingTrechoInput({
         style={[
           styles.duracao,
           {
-            color:
-              duracao !== null
-                ? theme.textoTerciaria
-                : theme.textoSub,
+            color: duracao !== null ? theme.textoTerciaria : theme.textoSub,
           },
         ]}
       >

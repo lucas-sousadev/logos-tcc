@@ -6,6 +6,18 @@ $permissionMiddleware =
     \Logos\AssessoriaApi\Middleware\PermissionMiddleware::class;
 $router->get("/", "HomeController:index");
 
+// Perfil da própria conta
+$router->get(
+    "/api/perfil",
+    "PerfilController:buscar",
+    middleware: [$authMiddleware]
+);
+$router->post(
+    "/api/perfil",
+    "PerfilController:atualizar",
+    middleware: [$authMiddleware]
+);
+
 // login e logout 
 $router->post("/api/auth/login", "AuthController:login");
 $router->get(
