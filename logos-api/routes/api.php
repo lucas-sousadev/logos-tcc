@@ -502,6 +502,13 @@ $router->post(
 );
 
 $router->post(
+    "/api/clippings/{id}/duplicar",
+    "ClippingController:duplicar",
+    "CLIPPING.CRIAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
     "/api/clippings/capturar-pagina",
     "CapturaPaginaController:capturar",
     "CLIPPING.ANEXAR",
@@ -832,6 +839,13 @@ $router->put(
     "/api/releases/{id}",
     "ReleaseController:atualizar",
     "RELEASES.EDITAR",
+    middleware: [$authMiddleware, $permissionMiddleware]
+);
+
+$router->post(
+    "/api/releases/{id}/duplicar",
+    "ReleaseController:duplicar",
+    "RELEASES.CRIAR",
     middleware: [$authMiddleware, $permissionMiddleware]
 );
 

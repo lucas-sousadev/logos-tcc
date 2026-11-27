@@ -1,4 +1,3 @@
-import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
   KeyboardAvoidingView,
   ScrollView,
@@ -9,19 +8,19 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-
 import { useEffect, useRef, useState } from "react";
+
 import {
   useIsFocused,
   useNavigation,
   useRouter,
   useLocalSearchParams,
 } from "expo-router";
-
 import { CommonActions, usePreventRemove } from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
+
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import Header from "@/components/layout/Header";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -42,29 +41,13 @@ import ClippingArquivosInput, {
 import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
 import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import CapturaPaginaModal from "@/components/captura/CapturaPaginaModal";
-import {
-  normalizarSecaoAssociacao,
-  validarSecaoAssociacao,
-} from "@/utils/associacaoEnderecoLink";
 
-import {
-  dataBRParaISO,
-  tempoParaSegundos,
-  dataISOParaBR,
-  segundosParaTempo,
-} from "@/utils/clippingFormatacao";
-import {
-  type ErrosClipping,
-  identificarCampoErroClipping,
-  normalizarCategorias,
-  obterAnoDaPublicacao,
-  validarFormularioClipping,
-} from "@/utils/validarClipping";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
-import { rotaOrigemClipping } from "@/utils/retornoClipping";
-
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
+
 import type { Tier } from "@/constants/tier";
 
 import {
@@ -81,6 +64,25 @@ import {
   extrairDadosDoLink,
 } from "@/services/api/clipping";
 
+import {
+  normalizarSecaoAssociacao,
+  validarSecaoAssociacao,
+} from "@/utils/associacaoEnderecoLink";
+import {
+  dataBRParaISO,
+  tempoParaSegundos,
+  dataISOParaBR,
+  segundosParaTempo,
+} from "@/utils/clippingFormatacao";
+import {
+  type ErrosClipping,
+  identificarCampoErroClipping,
+  normalizarCategorias,
+  obterAnoDaPublicacao,
+  validarFormularioClipping,
+} from "@/utils/validarClipping";
+import { rotaOrigemClipping } from "@/utils/retornoClipping";
+
 const CATEGORIAS_SUGERIDAS = [
   "Site",
   "TV",
@@ -94,7 +96,9 @@ const CATEGORIAS_SUGERIDAS = [
 function compararData(valor: string): string {
   const texto = valor.trim();
 
-  if (!texto) return "";
+  if (!texto) {
+    return "";
+  }
 
   return dataBRParaISO(texto) ?? `invalida:${texto}`;
 }
@@ -102,7 +106,9 @@ function compararData(valor: string): string {
 function compararTempo(valor: string): string {
   const texto = valor.trim();
 
-  if (!texto) return "";
+  if (!texto) {
+    return "";
+  }
 
   const segundos = tempoParaSegundos(texto);
 
@@ -362,7 +368,9 @@ export default function FormularioClipping({
       selecionandoArquivos ||
       (temAlteracoesPendentes && !permitirSaida),
     ({ data }) => {
-      if (salvando || selecionandoArquivos) return;
+      if (salvando || selecionandoArquivos) {
+        return;
+      }
 
       saidaPendente.current = () => {
         navigation.dispatch(data.action);
@@ -374,7 +382,9 @@ export default function FormularioClipping({
   );
 
   useEffect(() => {
-    if (!permitirSaida) return;
+    if (!permitirSaida) {
+      return;
+    }
 
     const sair = saidaPendente.current;
     saidaPendente.current = null;
@@ -492,7 +502,9 @@ export default function FormularioClipping({
   }, [clienteId, pauta]);
 
   function adicionarCategoria(categoria: string) {
-    if (travaSalvar.current) return;
+    if (travaSalvar.current) {
+      return;
+    }
 
     setCategoriasTexto((atual) =>
       normalizarCategorias(atual ? `${atual}, ${categoria}` : categoria).join(
@@ -506,7 +518,9 @@ export default function FormularioClipping({
   async function buscarDadosDoLink() {
     const url = link.trim();
 
-    if (bloqueado || buscandoLink) return;
+    if (bloqueado || buscandoLink) {
+      return;
+    }
 
     if (!/^https?:\/\/\S+$/i.test(url)) {
       setErroBuscaLink("Informe um link completo com http:// ou https://.");
@@ -537,7 +551,9 @@ export default function FormularioClipping({
   }
 
   function aplicarDadosDoLink(modo: "tudo" | "vazios") {
-    if (!previaLink) return;
+    if (!previaLink) {
+      return;
+    }
 
     const tudo = modo === "tudo";
 
@@ -752,7 +768,9 @@ export default function FormularioClipping({
   }
 
   function descartarESair() {
-    if (salvando || selecionandoArquivos) return;
+    if (salvando || selecionandoArquivos) {
+      return;
+    }
 
     setConfirmarDescarte(false);
 
@@ -918,7 +936,9 @@ export default function FormularioClipping({
     // a associação já foi salva mesmo se algum anexo falhar depois
     setTransferenciaPendente(null);
 
-    if (!editando) marcarNovo(clipping.id);
+    if (!editando) {
+      marcarNovo(clipping.id);
+    }
 
     const falhas: string[] = [];
 
@@ -1095,7 +1115,7 @@ export default function FormularioClipping({
   }
 
   return (
-    <EdicaoCompacta ativa={editando}>
+    <EdicaoCompacta>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={[styles.container, { backgroundColor: theme.background }]}
@@ -1143,7 +1163,7 @@ export default function FormularioClipping({
               </Text>
             </View>
           ) : null}
-          <SecaoEdicao titulo="Cliente e referência" ativa={editando}>
+          <SecaoEdicao titulo="Cliente e referência">
             <ClippingContexto
               clienteId={clienteId}
               clienteNome={clienteNome}
@@ -1169,12 +1189,7 @@ export default function FormularioClipping({
               anoAlterado={campoAlterado("anoReferencia")}
             />
           </SecaoEdicao>
-          <SecaoEdicao titulo="Dados da publicação" ativa={editando}>
-            {!editando ? (
-              <Text weight="Bold" style={styles.sectionTitle}>
-                DADOS DA PUBLICAÇÃO
-              </Text>
-            ) : null}
+          <SecaoEdicao titulo="Dados da publicação">
             <Input
               label="LINK"
               value={link}
@@ -1196,15 +1211,12 @@ export default function FormularioClipping({
               editable={!bloqueado}
               showChanged={campoAlterado("link")}
               clearable
-              containerStyle={editando ? { marginBottom: 0 } : undefined}
+              containerStyle={{ marginBottom: 0 }}
             />
             <View
               style={[
-                [
-                  styles.acoesLink,
-                  { marginBottom: editando ? 0 : erroBuscaLink ? 8 : 18 },
-                ],
-                editando && styles.auxiliarEdicao,
+                [styles.acoesLink, { marginBottom: 0 }],
+                styles.auxiliarEdicao,
               ]}
             >
               <TouchableOpacity
@@ -1338,14 +1350,14 @@ export default function FormularioClipping({
               editable={!bloqueado}
               showChanged={campoAlterado("pauta")}
               clearable
-              containerStyle={editando ? { marginBottom: 0 } : undefined}
+              containerStyle={{ marginBottom: 0 }}
             />
             {pautasSugeridas.length > 0 ? (
               <View
                 testID="clipping-pautas-sugeridas"
                 style={[
                   [styles.suggestions, { borderColor: theme.borda }],
-                  editando && styles.auxiliarEdicao,
+                  styles.auxiliarEdicao,
                 ]}
               >
                 {pautasSugeridas.map((sugestao) => (
@@ -1374,7 +1386,7 @@ export default function FormularioClipping({
               </View>
             ) : null}
           </SecaoEdicao>
-          <SecaoEdicao titulo="Veículo e classificação" ativa={editando}>
+          <SecaoEdicao titulo="Veículo e classificação">
             <VeiculoSelector
               value={veiculo}
               onChange={alterarVeiculo}
@@ -1400,7 +1412,7 @@ export default function FormularioClipping({
                     styles.avisoAssociacao,
                     { backgroundColor: theme.textoTerciaria + "12" },
                   ],
-                  editando && styles.auxiliarEdicao,
+                  styles.auxiliarEdicao,
                 ]}
               >
                 <View style={styles.cabecalhoAvisoAssociacao}>
@@ -1477,7 +1489,7 @@ export default function FormularioClipping({
               editable={!bloqueado}
               showChanged={campoAlterado("programaSecao")}
               clearable
-              containerStyle={editando ? { marginBottom: 0 } : undefined}
+              containerStyle={{ marginBottom: 0 }}
             />
             <Input
               label="CATEGORIAS"
@@ -1491,11 +1503,11 @@ export default function FormularioClipping({
               editable={!bloqueado}
               showChanged={campoAlterado("categorias")}
               clearable
-              containerStyle={editando ? { marginBottom: 0 } : undefined}
+              containerStyle={{ marginBottom: 0 }}
             />
             <View
               testID="clipping-categorias-sugeridas"
-              style={[styles.chips, editando && styles.auxiliarEdicao]}
+              style={[styles.chips, styles.auxiliarEdicao]}
             >
               {CATEGORIAS_SUGERIDAS.map((categoria) => (
                 <TouchableOpacity
@@ -1520,25 +1532,12 @@ export default function FormularioClipping({
               showChanged={campoAlterado("tier")}
             />
             {erros.tier ? (
-              <Text
-                style={[styles.fieldError, editando && styles.auxiliarEdicao]}
-              >
+              <Text style={[styles.fieldError, styles.auxiliarEdicao]}>
                 {erros.tier}
               </Text>
             ) : null}
-            {veiculo.id !== null ? (
-              <Text
-                style={[
-                  [styles.tierHint, { color: theme.textoSub }],
-                  editando && styles.auxiliarEdicao,
-                ]}
-              >
-                O Tier selecionado será registrado neste clipping. Você pode
-                ajustá-lo para esta publicação.
-              </Text>
-            ) : null}
           </SecaoEdicao>
-          <SecaoEdicao titulo="Trecho e anexos" ativa={editando}>
+          <SecaoEdicao titulo="Trecho e anexos">
             <ClippingTrechoInput
               inicio={inicioSegundos}
               fim={fimSegundos}
@@ -1566,7 +1565,7 @@ export default function FormularioClipping({
               onOcupadoChange={setSelecionandoArquivos}
             />
           </SecaoEdicao>
-          <SecaoEdicao titulo="Informações adicionais" ativa={editando}>
+          <SecaoEdicao titulo="Informações adicionais">
             <Input
               label="OBSERVAÇÕES"
               value={observacoes}
@@ -1582,7 +1581,7 @@ export default function FormularioClipping({
               editable={!bloqueado}
               showChanged={campoAlterado("observacoes")}
               clearable
-              containerStyle={editando ? { marginBottom: 0 } : undefined}
+              containerStyle={{ marginBottom: 0 }}
             />
           </SecaoEdicao>
           {erroGeral ? (
@@ -1647,7 +1646,9 @@ export default function FormularioClipping({
             onClose={() => {
               setNomeCadastroVeiculo(null);
               setEnderecoCadastroVeiculo(null);
-              if (previaLink) setPreviaAberta(true);
+              if (previaLink) {
+                setPreviaAberta(true);
+              }
             }}
             onCriado={(criado, enderecosSalvos) => {
               if (previaLink) {
@@ -1852,12 +1853,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  sectionTitle: {
-    fontSize: 13,
-    marginBottom: 13,
-    marginTop: 4,
-  },
-
   suggestions: {
     borderWidth: 1.5,
     borderRadius: 13,
@@ -1923,7 +1918,6 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 8,
   },
 
   actionButton: {
@@ -1931,7 +1925,7 @@ const styles = StyleSheet.create({
   },
 
   addAnotherButton: {
-    marginTop: 10,
+    marginTop: 0,
   },
   acoesLink: {
     flexDirection: "row",

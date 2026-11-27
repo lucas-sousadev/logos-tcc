@@ -163,6 +163,16 @@ class ReleaseService
             }
         }
 
+        if (isset($dados['jornalista_id']) && $dados['jornalista_id'] !== '') {
+            $where .= ' AND EXISTS (
+                SELECT 1 FROM release_destinatarios vinculo
+                WHERE vinculo.release_id = r.id
+                  AND vinculo.assessoria_id = r.assessoria_id
+                  AND vinculo.jornalista_id = :jornalista_id
+            )';
+            $parametros['jornalista_id'] = self::id($dados['jornalista_id'], 'Contato');
+        }
+
         $status = $dados['status'] ?? '';
 
         if ($status !== '') {

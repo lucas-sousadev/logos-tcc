@@ -1,7 +1,10 @@
-import { API_URL } from "@/constants/api";
+import { Platform } from "react-native";
+
 import { fetch as expoFetch } from "expo/fetch";
 import { Directory, File as ExpoFile, Paths } from "expo-file-system";
-import { Platform } from "react-native";
+
+import { API_URL } from "@/constants/api";
+
 import { authenticatedFetch } from "@/services/api/auth";
 
 export interface PaginacaoRelatorio {
@@ -51,7 +54,9 @@ export interface SlideRelatorio {
   link: string | null;
   imagem_anexo_id: number | null;
   edicoes_json?: {
-    clipping?: Partial<Record<"pauta" | "data_publicacao" | "link", string | null>>;
+    clipping?: Partial<
+      Record<"pauta" | "data_publicacao" | "link", string | null>
+    >;
     veiculo?: Partial<Record<"nome" | "descricao" | "alcance", string | null>>;
     imagem_midia_id?: number | null;
     logo_midia_id?: number | null;
@@ -135,16 +140,20 @@ async function lerResposta<T>(
   return dados;
 }
 
-export async function listarRelatorios(params: {
-  page?: number;
-  limit?: number;
-  busca?: string;
-  cliente_id?: number;
-  ano?: number;
-  inclusao?: "todas" | "ativa" | "pausada";
-  pendencias?: "todas" | "com" | "sem";
-  ordem?: "recentes" | "antigos" | "mais_materias";
-} = {}): Promise<{
+export async function listarRelatorios(
+  params: {
+    page?: number;
+    limit?: number;
+    busca?: string;
+    cliente_id?: number;
+    clipping_id?: number;
+    ano?: number;
+    inclusao?: "todas" | "ativa" | "pausada";
+    pendencias?: "todas" | "com" | "sem";
+    ordem?: "recentes" | "antigos" | "mais_materias";
+  } = {},
+  signal?: AbortSignal
+): Promise<{
   relatorios: ResumoRelatorio[];
   pagination: PaginacaoRelatorio;
 }> {
@@ -159,6 +168,10 @@ export async function listarRelatorios(params: {
 
   if (params.cliente_id) {
     query.set("cliente_id", String(params.cliente_id));
+  }
+
+  if (params.clipping_id !== undefined) {
+    query.set("clipping_id", String(params.clipping_id));
   }
 
   if (params.ano) {
@@ -178,13 +191,11 @@ export async function listarRelatorios(params: {
   }
 
   const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios?${query.toString()}`
+    `${API_URL}/api/relatorios?${query.toString()}`,
+    { signal, cache: "no-store" }
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível carregar os relatórios."
-  );
+  return lerResposta(response, "Não foi possível carregar os relatórios.");
 }
 
 export async function listarMateriasRelatorio(params: {
@@ -220,28 +231,19 @@ export async function listarMateriasRelatorio(params: {
     `${API_URL}/api/relatorios/materias?${query.toString()}`
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível consultar as matérias."
-  );
+  return lerResposta(response, "Não foi possível consultar as matérias.");
 }
 
 export async function criarRelatorio(
   dados: DadosNovoRelatorio
 ): Promise<{ relatorio: { id: number; total_materias: number } }> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dados),
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/relatorios`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
 
-  return lerResposta(
-    response,
-    "Não foi possível criar o relatório."
-  );
+  return lerResposta(response, "Não foi possível criar o relatório.");
 }
 
 export async function buscarRelatorio(
@@ -272,10 +274,7 @@ export async function buscarRelatorio(
   return lerResposta(response, "Não foi possível abrir o relatório.");
 }
 
-export type DecisaoRevisaoSlide =
-  | "INCLUIR"
-  | "ALTERAR"
-  | "IGNORAR";
+export type DecisaoRevisaoSlide = "INCLUIR" | "ALTERAR" | "IGNORAR";
 
 export interface DadosEdicaoSlide {
   pauta?: string | null;
@@ -352,11 +351,12 @@ export async function enviarMidiaSlideRelatorio(
         throw new Error("O arquivo selecionado não está mais disponível.");
       }
 
-      const nome = arquivo.nome
-        .split(/[\\/]/)
-        .pop()
-        ?.replace(/[\u0000-\u001f\u007f]/g, "_")
-        .trim() || "imagem";
+      const nome =
+        arquivo.nome
+          .split(/[\\/]/)
+          .pop()
+          ?.replace(/[\u0000-\u001f\u007f]/g, "_")
+          .trim() || "imagem";
       pastaTemporaria = new Directory(
         Paths.cache,
         `slide-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -402,7 +402,7 @@ export async function decidirRevisaoSlide(
   slide_id: number;
   decisao: DecisaoRevisaoSlide;
   removido: boolean;
-  origens_decididas: Array<"VEICULO" | "CLIPPING">;
+  origens_decididas: ("VEICULO" | "CLIPPING")[];
 }> {
   const response = await authenticatedFetch(
     `${API_URL}/api/relatorios/${relatorioId}/slides/${slideId}/decisao`,
@@ -446,10 +446,7 @@ export async function listarClientesRelatorio(params: {
     `${API_URL}/api/relatorios/clientes?${query.toString()}`
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível carregar os clientes."
-  );
+  return lerResposta(response, "Não foi possível carregar os clientes.");
 }
 
 export interface DadosEdicaoRelatorio {
@@ -461,33 +458,23 @@ export async function atualizarRelatorio(
   id: number,
   dados: DadosEdicaoRelatorio
 ): Promise<{ relatorio: RelatorioDetalhado }> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${id}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dados),
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/relatorios/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
 
-  return lerResposta(
-    response,
-    "Não foi possível atualizar o relatório."
-  );
+  return lerResposta(response, "Não foi possível atualizar o relatório.");
 }
 
 export async function excluirRelatorio(
   id: number
 ): Promise<{ message: string }> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/relatorios/${id}`,
-    { method: "DELETE" }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/relatorios/${id}`, {
+    method: "DELETE",
+  });
 
-  return lerResposta(
-    response,
-    "Não foi possível excluir o relatório."
-  );
+  return lerResposta(response, "Não foi possível excluir o relatório.");
 }
 
 export async function excluirSlidesRelatorio(
@@ -503,10 +490,7 @@ export async function excluirSlidesRelatorio(
     }
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível excluir os slides."
-  );
+  return lerResposta(response, "Não foi possível excluir os slides.");
 }
 
 export interface ResumoMateriasEdicao {
@@ -574,15 +558,10 @@ export async function atualizarPeriodoRelatorio(
     }
   );
 
-  return lerResposta(
-    response,
-    "Não foi possível atualizar o período."
-  );
+  return lerResposta(response, "Não foi possível atualizar o período.");
 }
 
-export async function gerarPptxTeste(
-  id: number
-): Promise<ArrayBuffer> {
+export async function gerarPptxTeste(id: number): Promise<ArrayBuffer> {
   const response = await authenticatedFetch(
     `${API_URL}/api/relatorios/${id}/pptx-teste`
   );

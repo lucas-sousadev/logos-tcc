@@ -4,22 +4,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useRef
-} from "react";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usePreventRemove } from "expo-router/react-navigation";
 
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
+import ContadorLista from "@/components/ui/ContadorLista";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
@@ -37,7 +30,6 @@ import {
   type AnoClipping,
   type Clipping,
 } from "@/services/api/clipping";
-
 
 type TipoVinculo = "cliente" | "veiculo";
 
@@ -67,25 +59,12 @@ function AvisoAtualizacao({
   const { theme } = useTheme();
 
   return (
-    <View
-      style={[
-        styles.avisoAtualizacao,
-        { borderColor: theme.erro },
-      ]}
-    >
-      <Text
-        style={[
-          styles.avisoAtualizacaoTexto,
-          { color: theme.erro },
-        ]}
-      >
+    <View style={[styles.avisoAtualizacao, { borderColor: theme.erro }]}>
+      <Text style={[styles.avisoAtualizacaoTexto, { color: theme.erro }]}>
         {mensagem} Os dados exibidos podem estar desatualizados.
       </Text>
 
-      <TouchableOpacity
-        accessibilityRole="button"
-        onPress={onRetry}
-      >
+      <TouchableOpacity accessibilityRole="button" onPress={onRetry}>
         <Text
           weight="SemiBold"
           style={{ color: theme.textoTerciaria, fontSize: 11 }}
@@ -104,26 +83,24 @@ export default function ClippingsVinculados({
   onExcluindoChange,
 }: Props) {
   const router = useRouter();
+  const { origemClippingId } = useLocalSearchParams<{
+    origemClippingId?: string;
+  }>();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const podeVisualizar =
-    temPermissao("CLIPPING", "VISUALIZAR");
+  const podeVisualizar = temPermissao("CLIPPING", "VISUALIZAR");
 
-  const podeExcluir =
-    temPermissao("CLIPPING", "EXCLUIR");
+  const podeExcluir = temPermissao("CLIPPING", "EXCLUIR");
 
-  const [anoEscolhido, setAnoEscolhido] =
-    useState<number | null>(null);
+  const [anoEscolhido, setAnoEscolhido] = useState<number | null>(null);
   const [listaAnosAberta, setListaAnosAberta] = useState(false);
 
   const [pagina, setPagina] = useState(1);
   const [modoSelecao, setModoSelecao] = useState(false);
-  const [idsSelecionados, setIdsSelecionados] =
-    useState<number[]>([]);
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
 
-  const [confirmarExclusao, setConfirmarExclusao] =
-    useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
 
   const [excluindo, setExcluindo] = useState(false);
   const travaExclusao = useRef(false);
@@ -133,8 +110,7 @@ export default function ClippingsVinculados({
     onExcluindoChange?.(excluindo);
   }, [excluindo, onExcluindoChange]);
 
-  const [feedback, setFeedback] =
-    useState<Feedback | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const consultarAnos = useCallback(async () => {
     if (!podeVisualizar) {
@@ -146,16 +122,11 @@ export default function ClippingsVinculados({
     }
 
     return listarClippingAnos(
-      tipo === "cliente"
-        ? { cliente_id: id }
-        : { veiculo_id: id }
+      tipo === "cliente" ? { cliente_id: id } : { veiculo_id: id }
     );
   }, [id, podeVisualizar, tipo]);
 
-  const consultaAnos = useConsultaClipping(
-    consultarAnos,
-    `anos:${tipo}:${id}`
-  );
+  const consultaAnos = useConsultaClipping(consultarAnos, `anos:${tipo}:${id}`);
 
   const anos = consultaAnos.dados?.anos ?? [];
 
@@ -166,8 +137,7 @@ export default function ClippingsVinculados({
   const ano = Number(opcaoAno?.ano_referencia) || null;
 
   const totalGeral = anos.reduce(
-    (total, item) =>
-      total + Number(item.total_clippings),
+    (total, item) => total + Number(item.total_clippings),
     0
   );
 
@@ -185,25 +155,35 @@ export default function ClippingsVinculados({
     }
 
     return listarClippings({
-      ...(tipo === "cliente"
-        ? { cliente_id: id }
-        : { veiculo_id: id }),
+      ...(tipo === "cliente" ? { cliente_id: id } : { veiculo_id: id }),
       ano_referencia: ano,
       page: pagina,
       limit: POR_PAGINA,
     });
   }, [ano, id, pagina, podeVisualizar, tipo]);
 
-  const consultaLista = useConsultaClipping(
-    consultarLista,
-    `lista:${tipo}:${id}:${ano}:${pagina}`
+  const ajustarPagina = useCallback(
+    (resposta: Awaited<ReturnType<typeof listarClippings>>) => {
+      const ultimaPagina = Math.max(
+        1,
+        Math.ceil(resposta.pagination.total / POR_PAGINA)
+      );
+      if (pagina > ultimaPagina) {
+        setPagina(ultimaPagina);
+      }
+    },
+    [pagina]
   );
 
-  const clippings =
-    consultaLista.dados?.clippings ?? [];
+  const consultaLista = useConsultaClipping(
+    consultarLista,
+    `lista:${tipo}:${id}:${ano}:${pagina}`,
+    ajustarPagina
+  );
 
-  const totalNoAno =
-    consultaLista.dados?.pagination.total ?? 0;
+  const clippings = consultaLista.dados?.clippings ?? [];
+
+  const totalNoAno = consultaLista.dados?.pagination.total ?? 0;
 
   const clippingsPorCliente = new Map<number, Clipping[]>();
 
@@ -219,13 +199,17 @@ export default function ClippingsVinculados({
     }
   }
 
-  useEffect(() => {
+  const chaveSelecao = `${tipo}:${id}:${ano}`;
+  const [selecaoAnterior, setSelecaoAnterior] = useState(chaveSelecao);
+
+  if (selecaoAnterior !== chaveSelecao) {
+    setSelecaoAnterior(chaveSelecao);
     setPagina(1);
     setListaAnosAberta(false);
     setModoSelecao(false);
     setConfirmarExclusao(false);
     setIdsSelecionados([]);
-  }, [ano, id, tipo]);
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -233,49 +217,21 @@ export default function ClippingsVinculados({
       setModoSelecao(false);
       setIdsSelecionados([]);
       setConfirmarExclusao(false);
-    }, [id, tipo])
+    }, [])
   );
 
-  useEffect(() => {
-    if (!consultaLista.dados || consultaLista.erro) {
-      return;
-    }
-
-    const ultimaPagina = Math.max(
-      1,
-      Math.ceil(
-        consultaLista.dados.pagination.total /
-          POR_PAGINA
-      )
-    );
-
-    if (pagina > ultimaPagina) {
-      setPagina(ultimaPagina);
-    }
-  }, [
-    consultaLista.dados,
-    consultaLista.erro,
-    pagina,
-  ]);
-
-  const idsDaPagina = clippings.map(
-    (clipping) => clipping.id
-  );
+  const idsDaPagina = clippings.map((clipping) => clipping.id);
 
   const todosDaPagina =
     idsDaPagina.length > 0 &&
-    idsDaPagina.every((itemId) =>
-      idsSelecionados.includes(itemId)
-    );
+    idsDaPagina.every((itemId) => idsSelecionados.includes(itemId));
 
   const ocupado =
-    excluindo ||
-    consultaLista.carregando ||
-    consultaLista.atualizando;
+    excluindo || consultaLista.carregando || consultaLista.atualizando;
 
   const selecaoBloqueada = ocupado || Boolean(consultaLista.erro);
   const navegacaoBloqueada = excluindo || modoSelecao;
-  
+
   function escolherAno(novoAno: number) {
     if (navegacaoBloqueada) return;
 
@@ -286,13 +242,11 @@ export default function ClippingsVinculados({
   }
 
   function alternarSelecao(clippingId: number) {
-    if (selecaoBloqueada|| !modoSelecao) return;
+    if (selecaoBloqueada || !modoSelecao) return;
 
     if (idsSelecionados.includes(clippingId)) {
       setIdsSelecionados((atuais) =>
-        atuais.filter(
-          (itemId) => itemId !== clippingId
-        )
+        atuais.filter((itemId) => itemId !== clippingId)
       );
       return;
     }
@@ -301,16 +255,12 @@ export default function ClippingsVinculados({
       setFeedback({
         variant: "warning",
         title: "Limite de seleção",
-        message:
-          "Selecione até 100 clippings por vez.",
+        message: "Selecione até 100 clippings por vez.",
       });
       return;
     }
 
-    setIdsSelecionados((atuais) => [
-      ...atuais,
-      clippingId,
-    ]);
+    setIdsSelecionados((atuais) => [...atuais, clippingId]);
   }
 
   function alternarPaginaSelecionada() {
@@ -326,74 +276,73 @@ export default function ClippingsVinculados({
     }
 
     const faltantes = idsDaPagina.filter(
-      (itemId) =>
-        !idsSelecionados.includes(itemId)
+      (itemId) => !idsSelecionados.includes(itemId)
     );
 
-    const vagas =
-      LIMITE_SELECAO - idsSelecionados.length;
+    const vagas = LIMITE_SELECAO - idsSelecionados.length;
 
     if (vagas <= 0) {
       setFeedback({
         variant: "warning",
         title: "Limite de seleção",
-        message:
-          "Selecione até 100 clippings por vez.",
+        message: "Selecione até 100 clippings por vez.",
       });
       return;
     }
 
-    setIdsSelecionados((atuais) => [
-      ...atuais,
-      ...faltantes.slice(0, vagas),
-    ]);
+    setIdsSelecionados((atuais) => [...atuais, ...faltantes.slice(0, vagas)]);
   }
 
   function abrirAno() {
     if (ano === null || excluindo || modoSelecao) return;
 
-    router.push({
-        pathname: "/clipping/ano",
-        params: {
+    router.navigate({
+      pathname: "/clipping/ano",
+      params: {
         ano: String(ano),
         origemTipo: tipo,
         origemId: String(id),
-        },
+      },
     });
-    }
+  }
 
-    function abrirListaDoCliente(
-    clienteId: number,
-    clienteNome?: string
-    ) {
+  function abrirListaDoCliente(clienteId: number, clienteNome?: string) {
     if (ano === null || excluindo || modoSelecao) return;
 
-    router.push({
-        pathname: "/clipping/cliente/[id]" as never,
-        params: {
+    router.navigate({
+      pathname: "/clipping/cliente/[id]" as never,
+      params: {
         id: String(clienteId),
         ano: String(ano),
         clienteNome: clienteNome ?? "",
         origemTipo: tipo,
         origemId: String(id),
         retornoVinculado: "origem",
-        },
+      },
     });
-    }
+  }
 
-    function abrirDetalhes(clippingId: number) {
+  function abrirDetalhes(clippingId: number) {
     if (excluindo) return;
 
-    router.push({
-        pathname: "/clipping/[id]" as never,
-        params: {
+    if (tipo === "veiculo" && Number(origemClippingId) === clippingId) {
+      router.navigate({
+        pathname: "/clipping/[id]",
+        params: { id: String(clippingId) },
+      });
+      return;
+    }
+
+    router.navigate({
+      pathname: "/clipping/[id]" as never,
+      params: {
         id: String(clippingId),
         origemTipo: tipo,
         origemId: String(id),
         retornoVinculado: "origem",
-        },
+      },
     });
-    }
+  }
 
   function renderizarClipping(clipping: Clipping) {
     return (
@@ -437,9 +386,7 @@ export default function ClippingsVinculados({
 
       const mensagens = [
         `${resposta.excluidos} de ${ids.length} clipping(s) excluído(s).`,
-        ...preservados.map(
-          (item) => `#${item.id}: ${item.message}`
-        ),
+        ...preservados.map((item) => `#${item.id}: ${item.message}`),
       ];
 
       if (resposta.limpeza_pendente) {
@@ -505,41 +452,21 @@ export default function ClippingsVinculados({
   return (
     <View style={styles.secao}>
       <View style={styles.cabecalho}>
-        <View style={{ flex: 1 }}>
-          <Text weight="Bold">
-            CLIPPINGS VINCULADOS
+        <View style={styles.info}>
+          <Text weight="SemiBold" style={styles.titulo}>
+            Clippings vinculados
           </Text>
 
-          <Text
-            style={[
-              styles.descricao,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.descricao, { color: theme.textoSub }]}>
             {tipo === "cliente"
               ? "Publicações deste cliente"
               : "Publicações deste veículo"}
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.contador,
-            {
-              backgroundColor:
-                theme.backgroundContainer,
-            },
-          ]}
-        >
-          <Text
-            weight="Bold"
-            style={{
-              color: theme.textoContainer,
-            }}
-          >
-            {totalGeral}
-          </Text>
-        </View>
+        {!consultaAnos.erro && !consultaAnos.carregando ? (
+          <ContadorLista>{totalGeral}</ContadorLista>
+        ) : null}
       </View>
 
       {consultaAnos.erro && consultaAnos.dados ? (
@@ -554,8 +481,7 @@ export default function ClippingsVinculados({
           color={theme.textoTerciaria}
           style={styles.carregamento}
         />
-      ) : consultaAnos.erro &&
-        consultaAnos.dados === null ? (
+      ) : consultaAnos.erro && consultaAnos.dados === null ? (
         <View style={styles.mensagem}>
           <Text
             style={{
@@ -569,17 +495,18 @@ export default function ClippingsVinculados({
           <Button
             title="TENTAR NOVAMENTE"
             size="small"
-            onPress={() =>
-              void consultaAnos.recarregar()
-            }
+            onPress={() => void consultaAnos.recarregar()}
           />
         </View>
       ) : (
         <>
           {opcaoAno && ano !== null ? (
             <>
-              <Text weight="SemiBold" style={styles.rotuloAno}>
-                ANO DOS CLIPPINGS
+              <Text
+                weight="Medium"
+                style={[styles.rotuloAno, { color: theme.textoSub }]}
+              >
+                Ano das publicações
               </Text>
 
               <TouchableOpacity
@@ -596,22 +523,32 @@ export default function ClippingsVinculados({
                   styles.linhaAno,
                   styles.seletorAno,
                   {
-                    borderColor: theme.borda,
+                    borderColor: theme.borda + "45",
                     backgroundColor: theme.backgroundSecundario,
                     opacity: navegacaoBloqueada ? 0.6 : 1,
                   },
                 ]}
               >
-                <Ionicons
-                  name="calendar-outline"
-                  size={17}
-                  color={theme.textoTerciaria}
-                />
+                <View
+                  style={[
+                    styles.iconeAno,
+                    { backgroundColor: theme.primaria + "0C" },
+                  ]}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color={theme.textoTerciaria}
+                  />
+                </View>
                 <Text weight="Bold" style={styles.textoAno}>
                   {ano}
                 </Text>
                 <Text style={[styles.totalAno, { color: theme.textoSub }]}>
-                  {opcaoAno.total_clippings} clippings
+                  {opcaoAno.total_clippings}{" "}
+                  {Number(opcaoAno.total_clippings) === 1
+                    ? "clipping"
+                    : "clippings"}
                 </Text>
                 <Ionicons
                   name={listaAnosAberta ? "chevron-up" : "chevron-down"}
@@ -645,14 +582,14 @@ export default function ClippingsVinculados({
                         style={[
                           styles.linhaAno,
                           styles.opcaoAno,
-                          ativo && { backgroundColor: theme.backgroundContainer },
+                          ativo && { backgroundColor: theme.primaria + "12" },
                         ]}
                       >
                         <Text
                           weight="SemiBold"
                           style={[
                             styles.textoAno,
-                            ativo && { color: theme.textoContainer },
+                            ativo && { color: theme.textoTerciaria },
                           ]}
                         >
                           {anoItem}
@@ -660,15 +597,22 @@ export default function ClippingsVinculados({
                         <Text
                           style={[
                             styles.totalAno,
-                            { color: ativo ? theme.textoContainer : theme.textoSub },
+                            {
+                              color: ativo
+                                ? theme.textoTerciaria
+                                : theme.textoSub,
+                            },
                           ]}
                         >
-                          {item.total_clippings} clippings
+                          {item.total_clippings}{" "}
+                          {Number(item.total_clippings) === 1
+                            ? "clipping"
+                            : "clippings"}
                         </Text>
                         <Ionicons
                           name="checkmark"
                           size={16}
-                          color={theme.textoContainer}
+                          color={theme.textoTerciaria}
                           style={{ opacity: ativo ? 1 : 0 }}
                         />
                       </TouchableOpacity>
@@ -681,166 +625,121 @@ export default function ClippingsVinculados({
 
           {ano !== null ? (
             <View style={styles.atalhos}>
-            <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={excluindo || modoSelecao}
+              <Button
+                title={"ABRIR " + ano}
+                icon="calendar-outline"
+                variant="outline"
+                size="small"
+                disabled={navegacaoBloqueada}
                 onPress={abrirAno}
-                style={[
-                styles.atalho,
-                {
-                    backgroundColor: theme.backgroundContainer,
-                    borderColor: theme.borda,
-                },
-                ]}
-            >
-                <Text
-                weight="Bold"
-                style={[
-                    styles.atalhoTexto,
-                    { color: theme.textoContainer },
-                ]}
-                >
-                ABRIR ANO {ano}
-                </Text>
-            </TouchableOpacity>
-
-            {tipo === "cliente" ? (
-                <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={excluindo || modoSelecao}
-                onPress={() => abrirListaDoCliente(id, nome)}
-                style={[
-                    styles.atalho,
-                    {
-                    backgroundColor: theme.backgroundContainer,
-                    borderColor: theme.borda,
-                    },
-                ]}
-                >
-                <Text
-                    weight="Bold"
-                    style={[
-                    styles.atalhoTexto,
-                    { color: theme.textoContainer },
-                    ]}
-                >
-                    LISTAGEM DO CLIENTE
-                </Text>
-                </TouchableOpacity>
-            ) : null}
+                style={styles.atalho}
+              />
+              {tipo === "cliente" ? (
+                <Button
+                  title="VER LISTAGEM"
+                  icon="list-outline"
+                  variant="outline"
+                  size="small"
+                  disabled={navegacaoBloqueada}
+                  onPress={() => abrirListaDoCliente(id, nome)}
+                  style={styles.atalho}
+                />
+              ) : null}
             </View>
           ) : null}
 
           {podeExcluir &&
-          (clippings.length > 0 ||
-            idsSelecionados.length > 0) ? (
+          (clippings.length > 0 || idsSelecionados.length > 0) ? (
             modoSelecao ? (
               <View
                 style={[
-                    styles.selectionToolbar,
-                    {
+                  styles.selectionToolbar,
+                  {
                     backgroundColor: theme.background,
                     borderColor: theme.borda,
                     marginTop: 12,
-                    },
+                  },
                 ]}
-                >
+              >
                 <View style={styles.selectionInfo}>
-                    <Text
-                    weight="SemiBold"
-                    style={styles.selectionTitle}
-                    >
+                  <Text weight="SemiBold" style={styles.selectionTitle}>
                     {idsSelecionados.length} de {LIMITE_SELECAO} selecionado(s)
-                    </Text>
-                    <Text
+                  </Text>
+                  <Text
                     style={[
-                        styles.selectionSubtitle,
-                        { color: theme.textoSub },
+                      styles.selectionSubtitle,
+                      { color: theme.textoSub },
                     ]}
-                    >
+                  >
                     TODOS marca apenas esta página.
-                    </Text>
+                  </Text>
                 </View>
 
                 <TouchableOpacity
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
                     todosDaPagina
-                        ? "Limpar seleção desta página"
-                        : "Selecionar todos desta página"
-                    }
-                    disabled={selecaoBloqueada}
-                    onPress={alternarPaginaSelecionada}
-                    style={[
-                    styles.selectAllButton,
-                    { borderColor: theme.borda },
-                    ]}
+                      ? "Limpar seleção desta página"
+                      : "Selecionar todos desta página"
+                  }
+                  disabled={selecaoBloqueada}
+                  onPress={alternarPaginaSelecionada}
+                  style={[styles.selectAllButton, { borderColor: theme.borda }]}
                 >
-                    <Text
+                  <Text
                     weight="SemiBold"
-                    style={[
-                        styles.selectAllText,
-                        { color: theme.texto },
-                    ]}
-                    >
+                    style={[styles.selectAllText, { color: theme.texto }]}
+                  >
                     {todosDaPagina ? "LIMPAR" : "TODOS"}
-                    </Text>
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Excluir clippings selecionados"
-                    disabled={
-                    idsSelecionados.length === 0 ||
-                    selecaoBloqueada
-                    }
-                    onPress={() => setConfirmarExclusao(true)}
-                    style={[
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Excluir clippings selecionados"
+                  disabled={idsSelecionados.length === 0 || selecaoBloqueada}
+                  onPress={() => setConfirmarExclusao(true)}
+                  style={[
                     styles.selectionIconButton,
                     {
-                        backgroundColor: "#EF4444",
-                        opacity:
-                        idsSelecionados.length === 0 ||
-                        selecaoBloqueada
-                            ? 0.5
-                            : 1,
+                      backgroundColor: "#EF4444",
+                      opacity:
+                        idsSelecionados.length === 0 || selecaoBloqueada
+                          ? 0.5
+                          : 1,
                     },
-                    ]}
+                  ]}
                 >
-                    {excluindo ? (
+                  {excluindo ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                    <Ionicons
-                        name="trash-outline"
-                        size={19}
-                        color="#FFFFFF"
-                    />
-                    )}
+                  ) : (
+                    <Ionicons name="trash-outline" size={19} color="#FFFFFF" />
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Sair do modo de seleção"
-                    disabled={excluindo}
-                    onPress={() => {
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sair do modo de seleção"
+                  disabled={excluindo}
+                  onPress={() => {
                     setModoSelecao(false);
                     setIdsSelecionados([]);
-                    }}
-                    style={[
+                  }}
+                  style={[
                     styles.selectionIconButton,
                     { backgroundColor: theme.backgroundContainer },
-                    ]}
+                  ]}
                 >
-                    <Ionicons
+                  <Ionicons
                     name="close"
                     size={20}
                     color={theme.textoContainer}
-                    />
+                  />
                 </TouchableOpacity>
-                </View>
+              </View>
             ) : (
               <SelecaoListaButton
                 title="SELECIONAR CLIPPINGS"
@@ -866,8 +765,7 @@ export default function ClippingsVinculados({
               color={theme.textoTerciaria}
               style={styles.carregamento}
             />
-          ) : consultaLista.erro &&
-            consultaLista.dados === null ? (
+          ) : consultaLista.erro && consultaLista.dados === null ? (
             <View style={styles.mensagem}>
               <Text
                 style={{
@@ -881,9 +779,7 @@ export default function ClippingsVinculados({
               <Button
                 title="TENTAR NOVAMENTE"
                 size="small"
-                onPress={() =>
-                  void consultaLista.recarregar()
-                }
+                onPress={() => void consultaLista.recarregar()}
               />
             </View>
           ) : clippings.length === 0 ? (
@@ -922,7 +818,10 @@ export default function ClippingsVinculados({
                     onPress={() => abrirListaDoCliente(clienteId, clienteNome)}
                     style={[
                       styles.cabecalhoGrupoCliente,
-                      { backgroundColor: theme.backgroundSecundario },
+                      {
+                        backgroundColor: theme.primaria + "08",
+                        borderColor: theme.borda + "25",
+                      },
                     ]}
                   >
                     <Ionicons
@@ -930,7 +829,14 @@ export default function ClippingsVinculados({
                       size={17}
                       color={theme.textoTerciaria}
                     />
-                    <Text weight="Bold" style={styles.nomeGrupoCliente}>
+                    <Text
+                      weight="SemiBold"
+                      numberOfLines={1}
+                      style={[
+                        styles.nomeGrupoCliente,
+                        { color: theme.alteracao },
+                      ]}
+                    >
                       {clienteNome}
                     </Text>
                     {!navegacaoBloqueada ? (
@@ -951,13 +857,13 @@ export default function ClippingsVinculados({
           )}
           {consultaLista.dados && !consultaLista.erro ? (
             <PaginacaoLista
-                pagina={pagina}
-                limite={POR_PAGINA}
-                total={totalNoAno}
-                disabled={selecaoBloqueada}
-                onChange={setPagina}
+              pagina={pagina}
+              limite={POR_PAGINA}
+              total={totalNoAno}
+              disabled={selecaoBloqueada}
+              onChange={setPagina}
             />
-            ) : null}
+          ) : null}
         </>
       )}
 
@@ -972,27 +878,17 @@ export default function ClippingsVinculados({
         primaryLabel="EXCLUIR"
         secondaryLabel="CANCELAR"
         primaryDanger
-        onClose={() =>
-          setConfirmarExclusao(false)
-        }
-        onSecondary={() =>
-          setConfirmarExclusao(false)
-        }
-        onPrimary={() =>
-          void excluirSelecionados()
-        }
+        onClose={() => setConfirmarExclusao(false)}
+        onSecondary={() => setConfirmarExclusao(false)}
+        onPrimary={() => void excluirSelecionados()}
       />
 
       <FeedbackAlert
         visible={feedback !== null}
-        variant={
-          feedback?.variant ?? "info"
-        }
+        variant={feedback?.variant ?? "info"}
         title={feedback?.title ?? ""}
         message={feedback?.message ?? ""}
-        onClose={() =>
-          setFeedback(null)
-        }
+        onClose={() => setFeedback(null)}
       />
     </View>
   );
@@ -1012,41 +908,50 @@ const styles = StyleSheet.create({
   },
 
   secao: {
-    marginTop: 20,
+    marginTop: 16,
   },
   cabecalho: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 12,
+  },
+  info: {
+    flex: 1,
+    minWidth: 0,
+  },
+  titulo: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   descricao: {
-    fontSize: 11,
-    marginTop: 3,
-  },
-  contador: {
-    minWidth: 32,
-    height: 32,
-    paddingHorizontal: 8,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
   },
   rotuloAno: {
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
     marginBottom: 8,
   },
   linhaAno: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 44,
+    minHeight: 56,
     gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   seletorAno: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
+  },
+  iconeAno: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   textoAno: {
     flex: 1,
@@ -1067,36 +972,28 @@ const styles = StyleSheet.create({
   },
   atalhos: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 10,
   },
-atalho: {
-  flex: 1,
-  minWidth: 0,
-  minHeight: 44,
-  borderWidth: 1.5,
-  borderRadius: 12,
-  paddingHorizontal: 5,
-  alignItems: "center",
-  justifyContent: "center",
-},
-atalhoTexto: {
-  fontSize: 11,
-  textAlign: "center",
-},
-selectionStartButton: {
-  minHeight: 42,
-  borderWidth: 1.5,
-  borderRadius: 14,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-  marginBottom: 12,
-},
-selectionStartText: {
-  fontSize: 12,
-},
+  atalho: {
+    flex: 1,
+    width: "auto",
+    minWidth: 128,
+  },
+  selectionStartButton: {
+    minHeight: 42,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  selectionStartText: {
+    fontSize: 12,
+  },
   grupoCliente: {
     marginBottom: 6,
   },
@@ -1109,9 +1006,11 @@ selectionStartText: {
     paddingVertical: 6,
     marginBottom: 6,
     borderRadius: 10,
+    borderWidth: 1,
   },
   nomeGrupoCliente: {
     flex: 1,
+    minWidth: 0,
     fontSize: 13,
   },
   resumo: {
@@ -1120,42 +1019,42 @@ selectionStartText: {
     marginBottom: 10,
   },
   selectionToolbar: {
-  minHeight: 64,
-  borderWidth: 1.5,
-  borderRadius: 16,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  padding: 10,
-  marginBottom: 12,
-},
-selectionInfo: {
-  flex: 1,
-},
-selectionTitle: {
-  fontSize: 13,
-},
-selectionSubtitle: {
-  fontSize: 11,
-  marginTop: 2,
-},
-selectAllButton: {
-  height: 36,
-  borderWidth: 1.5,
-  borderRadius: 18,
-  justifyContent: "center",
-  paddingHorizontal: 11,
-},
-selectAllText: {
-  fontSize: 11,
-},
-selectionIconButton: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  alignItems: "center",
-  justifyContent: "center",
-},
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  selectionInfo: {
+    flex: 1,
+  },
+  selectionTitle: {
+    fontSize: 13,
+  },
+  selectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  selectAllButton: {
+    height: 36,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+  selectAllText: {
+    fontSize: 11,
+  },
+  selectionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   carregamento: {
     marginVertical: 24,
   },

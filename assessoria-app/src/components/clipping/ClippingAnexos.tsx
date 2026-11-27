@@ -87,11 +87,7 @@ export default function ClippingAnexos({
   const podeEditar = temPermissao("CLIPPING", "EDITAR");
   const podeExcluir = temPermissao("CLIPPING", "EXCLUIR");
 
-  const ocupado =
-    disabled ||
-    carregando ||
-    enviando ||
-    processandoId !== null;
+  const ocupado = disabled || carregando || enviando || processandoId !== null;
 
   useEffect(() => {
     onOcupadoChange?.(enviando || processandoId !== null);
@@ -136,8 +132,7 @@ export default function ClippingAnexos({
   ) {
     setFeedback({
       titulo,
-      mensagem:
-        falha instanceof Error ? falha.message : mensagemPadrao,
+      mensagem: falha instanceof Error ? falha.message : mensagemPadrao,
     });
   }
 
@@ -178,9 +173,7 @@ export default function ClippingAnexos({
         arquivo.size !== undefined &&
         (arquivo.size <= 0 || arquivo.size > MAX_BYTES)
       ) {
-        throw new Error(
-          `"${arquivo.name}" está vazio ou ultrapassa 30 MB.`
-        );
+        throw new Error(`"${arquivo.name}" está vazio ou ultrapassa 30 MB.`);
       }
 
       const criado = await enviarAnexo(clippingId, {
@@ -224,8 +217,7 @@ export default function ClippingAnexos({
 
     try {
       const atualizado = await atualizarAnexo(clippingId, anexo.id, {
-        imagem_relatorio:
-          anexo.imagem_relatorio === 1 ? null : true,
+        imagem_relatorio: anexo.imagem_relatorio === 1 ? null : true,
       });
 
       setAnexos((atuais) =>
@@ -242,11 +234,7 @@ export default function ClippingAnexos({
 
       await carregarAnexos();
     } catch (falha) {
-      informarFalha(
-        "Não foi possível atualizar",
-        falha,
-        "Tente novamente."
-      );
+      informarFalha("Não foi possível atualizar", falha, "Tente novamente.");
     } finally {
       travaAcao.current = false;
       setProcessandoId(null);
@@ -259,12 +247,7 @@ export default function ClippingAnexos({
   }
 
   async function removerAnexo() {
-    if (
-      !anexoParaExcluir ||
-      ocupado ||
-      travaAcao.current ||
-      !podeExcluir
-    ) {
+    if (!anexoParaExcluir || ocupado || travaAcao.current || !podeExcluir) {
       return;
     }
 
@@ -276,9 +259,7 @@ export default function ClippingAnexos({
     try {
       const resultado = await excluirAnexo(clippingId, anexo.id);
 
-      setAnexos((atuais) =>
-        atuais.filter((item) => item.id !== anexo.id)
-      );
+      setAnexos((atuais) => atuais.filter((item) => item.id !== anexo.id));
       setAnexoParaExcluir(null);
 
       await carregarAnexos();
@@ -292,11 +273,7 @@ export default function ClippingAnexos({
       }
     } catch (falha) {
       setAnexoParaExcluir(null);
-      informarFalha(
-        "Não foi possível excluir",
-        falha,
-        "Tente novamente."
-      );
+      informarFalha("Não foi possível excluir", falha, "Tente novamente.");
     } finally {
       travaAcao.current = false;
       setProcessandoId(null);
@@ -329,10 +306,7 @@ export default function ClippingAnexos({
 
           {anexos.length > 0 ? (
             <View
-              style={[
-                styles.contador,
-                { backgroundColor: theme.primaria },
-              ]}
+              style={[styles.contador, { backgroundColor: theme.primaria }]}
             >
               <Text
                 weight="Bold"
@@ -359,10 +333,7 @@ export default function ClippingAnexos({
             ]}
           >
             {enviando ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.textoTerciaria}
-              />
+              <ActivityIndicator size="small" color={theme.textoTerciaria} />
             ) : (
               <Ionicons
                 name="add-outline"
@@ -384,17 +355,12 @@ export default function ClippingAnexos({
         ) : null}
       </View>
 
-      {carregando ? (
-        <ActivityIndicator
-          color={theme.primaria}
-          style={styles.carregando}
-        />
+      {carregando && anexos.length === 0 ? (
+        <ActivityIndicator color={theme.primaria} style={styles.carregando} />
       ) : null}
 
       {erro ? (
-        <Text style={[styles.erro, { color: theme.erro }]}>
-          {erro}
-        </Text>
+        <Text style={[styles.erro, { color: theme.erro }]}>{erro}</Text>
       ) : null}
 
       {!carregando && !erro && anexos.length === 0 ? (
@@ -407,11 +373,7 @@ export default function ClippingAnexos({
             },
           ]}
         >
-          <Ionicons
-            name="images-outline"
-            size={20}
-            color={theme.textoSub}
-          />
+          <Ionicons name="images-outline" size={20} color={theme.textoSub} />
           <Text style={[styles.vazioTexto, { color: theme.textoSub }]}>
             Nenhum anexo adicionado
           </Text>
@@ -462,13 +424,9 @@ export default function ClippingAnexos({
                 </Text>
 
                 <Text
-                  style={[
-                    styles.detalhesArquivo,
-                    { color: theme.textoSub },
-                  ]}
+                  style={[styles.detalhesArquivo, { color: theme.textoSub }]}
                 >
-                  {tipoArquivo(anexo)} ·{" "}
-                  {tamanhoArquivo(anexo.tamanho_bytes)}
+                  {tipoArquivo(anexo)} · {tamanhoArquivo(anexo.tamanho_bytes)}
                 </Text>
 
                 {imagem ? (
@@ -516,9 +474,7 @@ export default function ClippingAnexos({
                     {conteudoArquivo}
                   </TouchableOpacity>
                 ) : (
-                  <View style={styles.arquivoPrincipal}>
-                    {conteudoArquivo}
-                  </View>
+                  <View style={styles.arquivoPrincipal}>{conteudoArquivo}</View>
                 )}
 
                 {podeExcluir ? (
@@ -533,10 +489,7 @@ export default function ClippingAnexos({
                     ]}
                   >
                     {processando ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={theme.erro}
-                      />
+                      <ActivityIndicator size="small" color={theme.erro} />
                     ) : (
                       <Ionicons
                         name="trash-outline"
@@ -602,9 +555,7 @@ export default function ClippingAnexos({
                 </TouchableOpacity>
               ) : null}
 
-              {imagem &&
-              !podeEditar &&
-              anexo.imagem_relatorio === 1 ? (
+              {imagem && !podeEditar && anexo.imagem_relatorio === 1 ? (
                 <View style={styles.indicadorRelatorio}>
                   <Ionicons
                     name="checkmark-circle-outline"
@@ -646,8 +597,7 @@ export default function ClippingAnexos({
 
               {anexoAberto ? (
                 <Text style={styles.modalDetalhe}>
-                  IMAGEM ·{" "}
-                  {tamanhoArquivo(anexoAberto.tamanho_bytes)}
+                  IMAGEM · {tamanhoArquivo(anexoAberto.tamanho_bytes)}
                 </Text>
               ) : null}
             </View>
@@ -699,13 +649,8 @@ export default function ClippingAnexos({
               accessibilityRole="button"
               accessibilityLabel="Diminuir zoom"
               disabled={zoom <= 1}
-              onPress={() =>
-                setZoom((atual) => Math.max(1, atual - 0.5))
-              }
-              style={[
-                styles.botaoZoom,
-                { opacity: zoom <= 1 ? 0.4 : 1 },
-              ]}
+              onPress={() => setZoom((atual) => Math.max(1, atual - 0.5))}
+              style={[styles.botaoZoom, { opacity: zoom <= 1 ? 0.4 : 1 }]}
             >
               <Ionicons name="remove" size={22} color="#FFFFFF" />
             </TouchableOpacity>
@@ -718,13 +663,8 @@ export default function ClippingAnexos({
               accessibilityRole="button"
               accessibilityLabel="Aumentar zoom"
               disabled={zoom >= 3}
-              onPress={() =>
-                setZoom((atual) => Math.min(3, atual + 0.5))
-              }
-              style={[
-                styles.botaoZoom,
-                { opacity: zoom >= 3 ? 0.4 : 1 },
-              ]}
+              onPress={() => setZoom((atual) => Math.min(3, atual + 0.5))}
+              style={[styles.botaoZoom, { opacity: zoom >= 3 ? 0.4 : 1 }]}
             >
               <Ionicons name="add" size={22} color="#FFFFFF" />
             </TouchableOpacity>

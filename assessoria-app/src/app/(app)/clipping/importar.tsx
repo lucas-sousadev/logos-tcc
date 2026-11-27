@@ -2615,7 +2615,7 @@ export default function ImportarClippings() {
 
                 <View style={styles.acoesSelecao}>
                 <Button
-                    title="SEM AVISOS"
+                    title="MARCAR SEM AVISOS"
                     variant="outline"
                     size="small"
                     disabled={
@@ -2629,7 +2629,7 @@ export default function ImportarClippings() {
                 />
 
                 <Button
-                    title="TODOS VÁLIDOS"
+                    title="MARCAR VÁLIDOS"
                     variant="outline"
                     size="small"
                     disabled={

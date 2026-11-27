@@ -117,6 +117,7 @@ export async function listarReleases(
     ordem?: "recentes" | "antigos" | "titulo" | "criados_recentes";
     busca?: string;
     status?: StatusRelease | "";
+    jornalista_id?: number;
   } = {},
   signal?: AbortSignal
 ): Promise<{
@@ -134,6 +135,10 @@ export async function listarReleases(
 
   if (params.status) {
     query.set("status", params.status);
+  }
+
+  if (params.jornalista_id !== undefined) {
+    query.set("jornalista_id", String(params.jornalista_id));
   }
 
   if (params.ordem) {

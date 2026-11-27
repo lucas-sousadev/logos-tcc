@@ -5,6 +5,7 @@ namespace Logos\AssessoriaApi\Controllers;
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\PermissaoService;
 use Logos\AssessoriaApi\Services\ReleaseService;
+use Logos\AssessoriaApi\Services\DuplicacaoCadastroService;
 use Logos\AssessoriaApi\Services\TemplateService;
 use Logos\AssessoriaApi\Services\ReleaseEnvioTesteService;
 use Logos\AssessoriaApi\Services\ReleaseImagemService;
@@ -120,6 +121,24 @@ class ReleaseController
                 'message' => 'Rascunho de release cadastrado com sucesso.',
                 'release' => ReleaseService::criar($assessoriaId, $usuarioId, $dados),
             ];
+        }, 201);
+    }
+
+    public function duplicar(array $rota): void
+    {
+        $this->executar(function (int $assessoriaId, int $usuarioId, string $perfil) use ($rota): array {
+            $dados = $this->corpo();
+            if (array_diff(array_keys($dados), ['chave_rascunho'])) {
+                throw new \InvalidArgumentException('A duplicação contém campos não permitidos.');
+            }
+
+            return DuplicacaoCadastroService::release(
+                $assessoriaId,
+                $usuarioId,
+                $perfil,
+                $rota['id'] ?? null,
+                $dados['chave_rascunho'] ?? null
+            );
         }, 201);
     }
 

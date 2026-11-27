@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import Header from "@/components/layout/Header";
+import ReleasesVinculados from "@/components/releases/ReleasesVinculados";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
 import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
@@ -142,7 +143,7 @@ function JornalistaDetalhesConta() {
   const voltarParaOrigem = useCallback(() => {
     if (!navigation.isFocused()) return;
     if (veioDaTelaVeiculo) {
-      router.replace({
+      router.navigate({
         pathname: "/veiculos/[id]",
         params: {
           id: veiculoOrigemId.toString(),
@@ -652,12 +653,19 @@ function JornalistaDetalhesConta() {
       params: {
         id: String(veiculoId),
         origemMailingId: String(jornalista.id),
-        ...(veioDaTelaVeiculo
-          ? { origemMailingVeiculoId: String(veiculoOrigemId) }
-          : {}),
-        ...(params.origemNavegacao === "inicio" || params.origem === "dashboard"
-          ? { origemMailingInicio: "1" }
-          : {}),
+        origemMailingVeiculoId: veioDaTelaVeiculo
+          ? String(veiculoOrigemId)
+          : undefined,
+        origemMailingInicio:
+          params.origemNavegacao === "inicio" || params.origem === "dashboard"
+            ? "1"
+            : undefined,
+        origemClippingId: undefined,
+        origemRelatorioId: undefined,
+        origemTipo: undefined,
+        origemId: undefined,
+        retornoVinculado: undefined,
+        origemNavegacao: undefined,
       },
     });
   }
@@ -965,6 +973,12 @@ function JornalistaDetalhesConta() {
               ]}
             />
           )}
+          {!modoEdicao && temPermissao("RELEASES", "VISUALIZAR") ? (
+            <ReleasesVinculados
+              contatoId={jornalista.id}
+              disabled={salvando || excluindo}
+            />
+          ) : null}
         </ScrollView>
         {modoEdicao ? (
           <SalvarAlteracoes

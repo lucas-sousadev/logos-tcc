@@ -13,13 +13,10 @@ import {
   useIsFocused,
   useLocalSearchParams,
   useRouter,
-  useNavigation
+  useNavigation,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  CommonActions,
-  usePreventRemove,
-} from "expo-router/react-navigation";
+import { CommonActions, usePreventRemove } from "expo-router/react-navigation";
 
 import Header from "@/components/layout/Header";
 import { useVoltarNaPilha } from "@/hooks/useNavegacaoModulos";
@@ -27,13 +24,19 @@ import Text from "@/components/ui/Text";
 import Button from "@/components/ui/Button";
 import ClippingAnexos from "@/components/clipping/ClippingAnexos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import BotaoDuplicarCadastro from "@/components/forms/BotaoDuplicarCadastro";
+import RelatoriosVinculados from "@/components/relatorios/RelatoriosVinculados";
 import FormularioClipping from "@/components/clipping/FormularioClipping";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useClippingNovos } from "@/contexts/ClippingNovosContext";
 import { useConsultaClipping } from "@/hooks/useConsultaClipping";
-import { buscarClipping, excluirClipping, type Clipping,} from "@/services/api/clipping";
+import {
+  buscarClipping,
+  excluirClipping,
+  type Clipping,
+} from "@/services/api/clipping";
 import { segundosParaTempo } from "@/utils/clippingFormatacao";
 import { rotaOrigemClipping } from "@/utils/retornoClipping";
 
@@ -80,10 +83,7 @@ function Marcador({
     >
       <Ionicons name={icone} size={14} color={cor} />
 
-      <Text
-        weight="Medium"
-        style={[styles.marcadorTexto, { color: cor }]}
-      >
+      <Text weight="Medium" style={[styles.marcadorTexto, { color: cor }]}>
         {texto}
       </Text>
     </View>
@@ -103,10 +103,7 @@ function Campo({
 
   return (
     <View style={styles.campo}>
-      <Text
-        weight="Medium"
-        style={[styles.rotulo, { color: theme.textoSub }]}
-      >
+      <Text weight="Medium" style={[styles.rotulo, { color: theme.textoSub }]}>
         {rotulo}
       </Text>
 
@@ -147,13 +144,13 @@ export default function ClippingDetalhes() {
   const id = Number(params.id);
 
   const [erroLink, setErroLink] = useState("");
-  const [mostrarSobreVeiculo, setMostrarSobreVeiculo] =
-    useState(false);
+  const [mostrarSobreVeiculo, setMostrarSobreVeiculo] = useState(false);
   const navigation = useNavigation();
 
   const [editando, setEditando] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
   const [anexosOcupados, setAnexosOcupados] = useState(false);
   const travaExcluir = useRef(false);
 
@@ -163,7 +160,7 @@ export default function ClippingDetalhes() {
     excluido?: Clipping;
   } | null>(null);
 
-  const ocupado = excluindo || anexosOcupados;
+  const ocupado = excluindo || anexosOcupados || duplicando;
 
   usePreventRemove(ocupado, () => {});
 
@@ -199,23 +196,23 @@ export default function ClippingDetalhes() {
     temPermissao("VEICULOS", "VISUALIZAR");
 
   useEffect(() => {
-    setErroLink("");
-    setMostrarSobreVeiculo(false);
+    const timer = setTimeout(() => {
+      setErroLink("");
+      setMostrarSobreVeiculo(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [id]);
-  
+
   useEffect(() => {
     if (focado && clipping) {
       marcarVisualizado(clipping.id);
     }
   }, [focado, clipping, marcarVisualizado]);
-  
+
   function voltar() {
     if (ocupado || travaExcluir.current) return;
 
-    const origem = rotaOrigemClipping(
-      params.origemTipo,
-      params.origemId
-    );
+    const origem = rotaOrigemClipping(params.origemTipo, params.origemId);
 
     if (params.retornoVinculado === "origem" && origem) {
       router.navigate(origem);
@@ -244,11 +241,25 @@ export default function ClippingDetalhes() {
       return;
     }
 
-    router.push({
+    if (
+      params.origemTipo === "veiculo" &&
+      Number(params.origemId) === veiculoId &&
+      params.retornoVinculado === "origem"
+    ) {
+      voltar();
+      return;
+    }
+
+    router.navigate({
       pathname: "/veiculos/[id]",
       params: {
         id: String(veiculoId),
         origemClippingId: String(clipping.id),
+        origemRelatorioId: undefined,
+        origemMailingId: undefined,
+        origemMailingVeiculoId: undefined,
+        origemMailingInicio: undefined,
+        origemNavegacao: undefined,
         origemTipo: params.origemTipo,
         origemId: params.origemId,
         retornoVinculado: params.retornoVinculado,
@@ -271,61 +282,57 @@ export default function ClippingDetalhes() {
   }
 
   function atualizarContextoDeRetorno(registro: Clipping) {
-  const estado = navigation.getState();
+    const estado = navigation.getState();
 
-  if (!estado) return;
+    if (!estado) return;
 
-  const anteriores = estado.routes.slice(0, estado.index);
+    const anteriores = estado.routes.slice(0, estado.index);
 
-  const rotaAno = [...anteriores]
-    .reverse()
-    .find((rota) => rota.name === "ano");
+    const rotaAno = [...anteriores]
+      .reverse()
+      .find((rota) => rota.name === "ano");
 
-  const rotaLista = [...anteriores]
-    .reverse()
-    .find(
-      (rota) =>
-        rota.name === "cliente/[id]" ||
-        rota.name === "cliente/[id]/index"
-    );
+    const rotaLista = [...anteriores]
+      .reverse()
+      .find(
+        (rota) =>
+          rota.name === "cliente/[id]" || rota.name === "cliente/[id]/index"
+      );
 
-  if (rotaAno) {
-    navigation.dispatch({
-      ...CommonActions.setParams({
-        ano: String(registro.ano_referencia),
-      }),
-      source: rotaAno.key,
-      target: estado.key,
-    });
+    if (rotaAno) {
+      navigation.dispatch({
+        ...CommonActions.setParams({
+          ano: String(registro.ano_referencia),
+        }),
+        source: rotaAno.key,
+        target: estado.key,
+      });
+    }
+
+    if (rotaLista) {
+      navigation.dispatch({
+        ...CommonActions.setParams({
+          id: String(registro.cliente_id),
+          ano: String(registro.ano_referencia),
+          clienteNome: registro.cliente_nome,
+        }),
+        source: rotaLista.key,
+        target: estado.key,
+      });
+    }
   }
 
-  if (rotaLista) {
-    navigation.dispatch({
-      ...CommonActions.setParams({
-        id: String(registro.cliente_id),
-        ano: String(registro.ano_referencia),
-        clienteNome: registro.cliente_nome,
-      }),
-      source: rotaLista.key,
-      target: estado.key,
-    });
+  function concluirEdicao(registro: Clipping) {
+    atualizarDados(registro);
+    atualizarContextoDeRetorno(registro);
+
+    setErroLink("");
+    setEditando(false);
+    setEdicaoSalva(true);
   }
-}
-
-function concluirEdicao(registro: Clipping) {
-  atualizarDados(registro);
-  atualizarContextoDeRetorno(registro);
-
-  setErroLink("");
-  setEditando(false);
-  setEdicaoSalva(true);
-}
 
   function irParaLista(registro: Clipping) {
-    const origem = rotaOrigemClipping(
-      params.origemTipo,
-      params.origemId
-    );
+    const origem = rotaOrigemClipping(params.origemTipo, params.origemId);
 
     if (params.retornoVinculado === "origem" && origem) {
       router.navigate(origem);
@@ -333,10 +340,8 @@ function concluirEdicao(registro: Clipping) {
     }
 
     const estado = navigation.getState();
-      
-    const anteriores = estado
-      ? estado.routes.slice(0, estado.index)
-      : [];
+
+    const anteriores = estado ? estado.routes.slice(0, estado.index) : [];
 
     const anterior = anteriores[anteriores.length - 1];
 
@@ -359,28 +364,28 @@ function concluirEdicao(registro: Clipping) {
         source: rotaAno.key,
         target: estado.key,
       });
-  }
+    }
 
-  const anteriorEhLista =
-    anterior?.name === "cliente/[id]" ||
-    anterior?.name === "cliente/[id]/index";
+    const anteriorEhLista =
+      anterior?.name === "cliente/[id]" ||
+      anterior?.name === "cliente/[id]/index";
 
-  if (anteriorEhLista && anterior && estado) {
-    navigation.dispatch({
-      ...CommonActions.setParams(parametros),
-      source: anterior.key,
-      target: estado.key,
+    if (anteriorEhLista && anterior && estado) {
+      navigation.dispatch({
+        ...CommonActions.setParams(parametros),
+        source: anterior.key,
+        target: estado.key,
+      });
+
+      router.back();
+      return;
+    }
+
+    router.replace({
+      pathname: "/clipping/cliente/[id]",
+      params: parametros,
     });
-
-    router.back();
-    return;
   }
-
-  router.replace({
-    pathname: "/clipping/cliente/[id]",
-    params: parametros,
-  });
-}
 
   async function removerClipping() {
     if (
@@ -413,10 +418,7 @@ function concluirEdicao(registro: Clipping) {
 
       setFeedbackAcao({
         titulo: "Não foi possível excluir",
-        mensagem:
-          error instanceof Error
-            ? error.message
-            : "Tente novamente.",
+        mensagem: error instanceof Error ? error.message : "Tente novamente.",
       });
     } finally {
       travaExcluir.current = false;
@@ -450,24 +452,12 @@ function concluirEdicao(registro: Clipping) {
 
   if (carregando || !clipping) {
     return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: theme.background },
-        ]}
-      >
-        <Header
-          title="Detalhes"
-          showBackButton
-          onBackPress={voltar}
-        />
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Header title="Detalhes" showBackButton onBackPress={voltar} />
 
         <View style={styles.estadoContainer}>
           {carregando ? (
-            <ActivityIndicator
-              size="large"
-              color={theme.primaria}
-            />
+            <ActivityIndicator size="large" color={theme.primaria} />
           ) : (
             <View
               style={[
@@ -488,12 +478,7 @@ function concluirEdicao(registro: Clipping) {
                 Não foi possível carregar
               </Text>
 
-              <Text
-                style={[
-                  styles.estadoTexto,
-                  { color: theme.textoSub },
-                ]}
-              >
+              <Text style={[styles.estadoTexto, { color: theme.textoSub }]}>
                 {erro || "Clipping não encontrado."}
               </Text>
 
@@ -533,17 +518,8 @@ function concluirEdicao(registro: Clipping) {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header
-        title="Detalhes"
-        showBackButton
-        onBackPress={voltar}
-      />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Header title="Detalhes" showBackButton onBackPress={voltar} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -575,12 +551,7 @@ function concluirEdicao(registro: Clipping) {
             />
 
             <View style={styles.flexivel}>
-              <Text
-                style={[
-                  styles.textoAuxiliar,
-                  { color: cores.pendencia },
-                ]}
-              >
+              <Text style={[styles.textoAuxiliar, { color: cores.pendencia }]}>
                 {erro}
               </Text>
 
@@ -591,10 +562,7 @@ function concluirEdicao(registro: Clipping) {
               >
                 <Text
                   weight="SemiBold"
-                  style={[
-                    styles.textoAuxiliar,
-                    { color: theme.texto },
-                  ]}
+                  style={[styles.textoAuxiliar, { color: theme.texto }]}
                 >
                   Tentar novamente
                 </Text>
@@ -621,10 +589,7 @@ function concluirEdicao(registro: Clipping) {
             />
 
             <Text
-              style={[
-                styles.textoAuxiliar,
-                { color: theme.textoTerciaria },
-              ]}
+              style={[styles.textoAuxiliar, { color: theme.textoTerciaria }]}
             >
               Alterações salvas com sucesso
             </Text>
@@ -652,9 +617,7 @@ function concluirEdicao(registro: Clipping) {
                     borderColor: cores.borda,
                     backgroundColor: cores.cartao,
                     opacity:
-                      ocupado || clipping.arquivado_em !== null
-                        ? 0.5
-                        : 1,
+                      ocupado || clipping.arquivado_em !== null ? 0.5 : 1,
                   },
                 ]}
               >
@@ -697,10 +660,7 @@ function concluirEdicao(registro: Clipping) {
 
                 <Text
                   weight="SemiBold"
-                  style={[
-                    styles.textoAuxiliar,
-                    { color: cores.pendencia },
-                  ]}
+                  style={[styles.textoAuxiliar, { color: cores.pendencia }]}
                 >
                   Excluir
                 </Text>
@@ -708,6 +668,29 @@ function concluirEdicao(registro: Clipping) {
             ) : null}
           </View>
         ) : null}
+
+        <BotaoDuplicarCadastro
+          key={"duplicar-" + clipping.id}
+          modulo="clipping"
+          id={clipping.id}
+          totalAnexos={clipping.total_anexos}
+          style={styles.duplicarClipping}
+          disabled={ocupado || feedbackAcao?.excluido !== undefined}
+          onOcupado={(valor) => {
+            travaExcluir.current = valor;
+            setDuplicando(valor);
+          }}
+          onDuplicado={(novoId) =>
+            router.push({
+              pathname: "/clipping/[id]",
+              params: {
+                id: String(novoId),
+                origemTipo: params.origemTipo,
+                origemId: params.origemId,
+              },
+            })
+          }
+        />
 
         {/* identificação principal do clipping */}
         <View
@@ -721,26 +704,15 @@ function concluirEdicao(registro: Clipping) {
           <View style={styles.contexto}>
             <Text
               weight="SemiBold"
-              style={[
-                styles.cliente,
-                { color: theme.textoTerciaria },
-              ]}
+              style={[styles.cliente, { color: theme.textoTerciaria }]}
             >
               {clipping.cliente_nome}
             </Text>
 
-            <View
-              style={[
-                styles.ano,
-                { backgroundColor: cores.destaque },
-              ]}
-            >
+            <View style={[styles.ano, { backgroundColor: cores.destaque }]}>
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.anoTexto,
-                  { color: theme.textoTerciaria },
-                ]}
+                style={[styles.anoTexto, { color: theme.textoTerciaria }]}
               >
                 {clipping.ano_referencia}
               </Text>
@@ -750,10 +722,7 @@ function concluirEdicao(registro: Clipping) {
           <Text
             selectable
             weight="Bold"
-            style={[
-              styles.pauta,
-              !pauta && { color: cores.pendencia },
-            ]}
+            style={[styles.pauta, !pauta && { color: cores.pendencia }]}
           >
             {pauta || "Pauta não informada"}
           </Text>
@@ -764,7 +733,6 @@ function concluirEdicao(registro: Clipping) {
               texto={formatarData(clipping.data_publicacao)}
               pendente={!clipping.data_publicacao}
             />
-
           </View>
         </View>
 
@@ -787,7 +755,9 @@ function concluirEdicao(registro: Clipping) {
               activeOpacity={0.7}
               accessibilityRole="link"
               accessibilityLabel={
-                veiculo ? `Abrir veículo ${veiculo}` : "Abrir cadastro do veículo"
+                veiculo
+                  ? `Abrir veículo ${veiculo}`
+                  : "Abrir cadastro do veículo"
               }
               accessibilityState={{ disabled: ocupado }}
               disabled={ocupado}
@@ -881,9 +851,7 @@ function concluirEdicao(registro: Clipping) {
               <Marcador
                 icone="podium-outline"
                 texto={
-                  clipping.tier === null
-                    ? "Sem Tier"
-                    : `Tier ${clipping.tier}`
+                  clipping.tier === null ? "Sem Tier" : `Tier ${clipping.tier}`
                 }
                 pendente={clipping.tier === null}
               />
@@ -899,13 +867,8 @@ function concluirEdicao(registro: Clipping) {
                 accessibilityState={{
                   expanded: mostrarSobreVeiculo,
                 }}
-                onPress={() =>
-                  setMostrarSobreVeiculo((anterior) => !anterior)
-                }
-                style={[
-                  styles.expandir,
-                  { borderTopColor: cores.borda },
-                ]}
+                onPress={() => setMostrarSobreVeiculo((anterior) => !anterior)}
+                style={[styles.expandir, { borderTopColor: cores.borda }]}
               >
                 <Text
                   weight="SemiBold"
@@ -918,11 +881,7 @@ function concluirEdicao(registro: Clipping) {
                 </Text>
 
                 <Ionicons
-                  name={
-                    mostrarSobreVeiculo
-                      ? "chevron-up"
-                      : "chevron-down"
-                  }
+                  name={mostrarSobreVeiculo ? "chevron-up" : "chevron-down"}
                   size={17}
                   color={theme.textoTerciaria}
                 />
@@ -967,22 +926,14 @@ function concluirEdicao(registro: Clipping) {
 
           {temTrecho ? (
             <View style={styles.intervalo}>
-              <Text
-                selectable
-                weight="SemiBold"
-                style={styles.intervaloTexto}
-              >
-                <Text
-                  style={!inicio ? { color: cores.pendencia } : undefined}
-                >
+              <Text selectable weight="SemiBold" style={styles.intervaloTexto}>
+                <Text style={!inicio ? { color: cores.pendencia } : undefined}>
                   {inicio || "Início pendente"}
                 </Text>
 
                 {" → "}
 
-                <Text
-                  style={!fim ? { color: cores.pendencia } : undefined}
-                >
+                <Text style={!fim ? { color: cores.pendencia } : undefined}>
                   {fim || "Fim pendente"}
                 </Text>
 
@@ -1025,9 +976,7 @@ function concluirEdicao(registro: Clipping) {
             style={[
               styles.link,
               {
-                color: link
-                  ? theme.textoTerciaria
-                  : cores.pendencia,
+                color: link ? theme.textoTerciaria : cores.pendencia,
               },
             ]}
           >
@@ -1050,10 +999,7 @@ function concluirEdicao(registro: Clipping) {
             >
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.textoAuxiliar,
-                  { color: theme.textoTerciaria },
-                ]}
+                style={[styles.textoAuxiliar, { color: theme.textoTerciaria }]}
               >
                 Abrir publicação
               </Text>
@@ -1065,11 +1011,9 @@ function concluirEdicao(registro: Clipping) {
               />
             </TouchableOpacity>
           ) : (
-            <Text
-              style={[styles.nota, { color: theme.textoSub }]}
-            >
-              A publicação também pode ser registrada pelos arquivos
-              anexados abaixo.
+            <Text style={[styles.nota, { color: theme.textoSub }]}>
+              A publicação também pode ser registrada pelos arquivos anexados
+              abaixo.
             </Text>
           )}
 
@@ -1115,9 +1059,15 @@ function concluirEdicao(registro: Clipping) {
         <ClippingAnexos
           key={clipping.id}
           clippingId={clipping.id}
-          disabled={excluindo || feedbackAcao?.excluido !== undefined}
+          disabled={
+            excluindo || duplicando || feedbackAcao?.excluido !== undefined
+          }
           onOcupadoChange={setAnexosOcupados}
         />
+
+        {temPermissao("RELATORIOS", "VISUALIZAR") && !feedbackAcao?.excluido ? (
+          <RelatoriosVinculados clippingId={clipping.id} disabled={ocupado} />
+        ) : null}
       </ScrollView>
       <FeedbackAlert
         visible={confirmarExclusao}
@@ -1142,9 +1092,7 @@ function concluirEdicao(registro: Clipping) {
         variant={feedbackAcao?.excluido ? "success" : "error"}
         title={feedbackAcao?.titulo ?? ""}
         message={feedbackAcao?.mensagem ?? ""}
-        primaryLabel={
-          feedbackAcao?.excluido ? "VOLTAR À LISTA" : "ENTENDI"
-        }
+        primaryLabel={feedbackAcao?.excluido ? "VOLTAR À LISTA" : "ENTENDI"}
         onClose={fecharFeedbackAcao}
       />
     </View>
@@ -1430,6 +1378,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  duplicarClipping: {
+    marginBottom: 12,
+  },
+
   acaoClipping: {
     minHeight: 44,
     borderWidth: 1,
@@ -1441,5 +1393,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 7,
   },
-
 });

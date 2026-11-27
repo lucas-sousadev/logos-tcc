@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   View,
   Linking,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/contexts/AuthContext";
 import Text from "@/components/ui/Text";
@@ -25,6 +25,7 @@ import type {
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 interface Props {
+  visible?: boolean;
   slide: SlideRelatorio;
   relatorio: RelatorioDetalhado;
   onClose: () => void;
@@ -50,14 +51,13 @@ function BotaoAlteracao({
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={aberto ? "Ver original" : plural ? "Ver alterações" : "Ver alteração"}
+      accessibilityLabel={
+        aberto ? "Ver original" : plural ? "Ver alterações" : "Ver alteração"
+      }
       accessibilityState={{ expanded: aberto }}
       onPress={onPress}
       activeOpacity={0.75}
-      style={[
-        styles.seloAlterado,
-        { backgroundColor: `${cor}18` },
-      ]}
+      style={[styles.seloAlterado, { backgroundColor: `${cor}18` }]}
     >
       <Ionicons name="sync-outline" size={12} color={cor} />
       <Text weight="SemiBold" style={{ color: cor, fontSize: 10 }}>
@@ -72,6 +72,7 @@ function textoAlterado(valor: unknown): string {
 }
 
 export default function RelatorioSlidePreview({
+  visible = true,
   slide,
   relatorio,
   onClose,
@@ -80,22 +81,52 @@ export default function RelatorioSlidePreview({
   onEditar,
   onExcluir,
   revisando,
-  erroRevisao
+  erroRevisao,
 }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const posicao = useRef(0);
+  const restaurando = useRef(true);
+  const quadro = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      restaurando.current = true;
+    }
+    return () => {
+      if (quadro.current !== null) {
+        cancelAnimationFrame(quadro.current);
+      }
+    };
+  }, [visible]);
+
+  function restaurarRolagem() {
+    if (!visible) {
+      return;
+    }
+    if (quadro.current !== null) {
+      cancelAnimationFrame(quadro.current);
+    }
+    const y = posicao.current;
+    quadro.current = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y, animated: false });
+      restaurando.current = false;
+      quadro.current = null;
+    });
+  }
+  const { origemClippingId } = useLocalSearchParams<{
+    origemClippingId?: string;
+  }>();
   const { temPermissao } = useAuth();
   const [erroLink, setErroLink] = useState("");
   const [mostrarMateriaNova, setMostrarMateriaNova] = useState(false);
   const [mostrarVeiculoNovo, setMostrarVeiculoNovo] = useState(false);
   const [confirmacao, setConfirmacao] = useState<
     "INCLUIR" | "ALTERAR" | "IGNORAR" | null
-  >(null);  
-  const podeVerClipping = temPermissao(
-    "CLIPPING",
-    "VISUALIZAR"
-  );
+  >(null);
+  const podeVerClipping = temPermissao("CLIPPING", "VISUALIZAR");
   const ehMateria = slide.tipo === "CLIPPING";
   const revisaoAtiva =
     slide.revisao_pendente ||
@@ -105,13 +136,9 @@ export default function RelatorioSlidePreview({
   const clipping = slide.dados_json?.clipping;
   const veiculo = slide.dados_json?.veiculo;
 
-  const pauta = ehMateria
-    ? clipping?.pauta?.trim()
-    : slide.titulo?.trim();
+  const pauta = ehMateria ? clipping?.pauta?.trim() : slide.titulo?.trim();
 
-  const data =
-    dataISOParaBR(clipping?.data_publicacao ?? null) ||
-    "Sem data";
+  const data = dataISOParaBR(clipping?.data_publicacao ?? null) || "Sem data";
 
   const descricao = veiculo?.descricao?.trim();
   const alcance = veiculo?.alcance?.trim();
@@ -120,10 +147,10 @@ export default function RelatorioSlidePreview({
   const imagemDefinida = Boolean(
     slide.imagem_midia_id || slide.imagem_anexo_id
   );
-  
+
   const camposVeiculoOrigem = slide.revisao_pendente
-  ? []
-  : (slide.campos_alterados?.veiculo ?? []);
+    ? []
+    : (slide.campos_alterados?.veiculo ?? []);
 
   const camposClippingOrigem = slide.revisao_pendente
     ? []
@@ -152,21 +179,19 @@ export default function RelatorioSlidePreview({
   const linkAlterado = camposClipping.includes("link");
 
   const materiaAlterada =
-  pautaAlterada || dataAlterada || imagemAlterada || linkAlterado;
+    pautaAlterada || dataAlterada || imagemAlterada || linkAlterado;
 
   const dadosVeiculoAlterados =
-    veiculoAlterado ||
-    logoAlterada ||
-    descricaoAlterada ||
-    alcanceAlterado;
+    veiculoAlterado || logoAlterada || descricaoAlterada || alcanceAlterado;
 
-  const novoVeiculoId = Number(
-    camposVeiculo.includes("id")
-      ? novosVeiculo?.id
-      : camposClipping.includes("veiculo_id")
-        ? novosClipping?.veiculo_id
-        : veiculo?.id
-  ) || 0;
+  const novoVeiculoId =
+    Number(
+      camposVeiculo.includes("id")
+        ? novosVeiculo?.id
+        : camposClipping.includes("veiculo_id")
+          ? novosClipping?.veiculo_id
+          : veiculo?.id
+    ) || 0;
 
   const novoNomeVeiculo = camposVeiculo.includes("nome")
     ? textoAlterado(novosVeiculo?.nome)
@@ -207,14 +232,12 @@ export default function RelatorioSlidePreview({
 
   const imagemPathAtual = camposClipping.includes("imagem_path")
     ? textoAlterado(novosClipping?.imagem_path) || null
-    : slide.dados_json?.imagem?.arquivo_path ?? null;
+    : (slide.dados_json?.imagem?.arquivo_path ?? null);
 
   const imagemNovaDefinida = Boolean(imagemAnexoAtual || imagemPathAtual);
 
   const imagemExibida =
-    mostrarMateriaNova && imagemAlterada
-      ? imagemNovaDefinida
-      : imagemDefinida;
+    mostrarMateriaNova && imagemAlterada ? imagemNovaDefinida : imagemDefinida;
 
   const corImagem =
     mostrarMateriaNova && imagemAlterada
@@ -225,7 +248,7 @@ export default function RelatorioSlidePreview({
 
   const logoPathAtual = logoAlterada
     ? textoAlterado(novosVeiculo?.logo_path) || null
-    : veiculo?.logo_path ?? null;
+    : (veiculo?.logo_path ?? null);
 
   const slideParaPrevia: SlideRelatorio =
     mostrarMateriaNova || mostrarVeiculoNovo
@@ -236,13 +259,9 @@ export default function RelatorioSlidePreview({
               ? textoAlterado(novosClipping?.link) || null
               : slide.link,
           logo_midia_id:
-            mostrarVeiculoNovo && logoAlterada
-              ? null
-              : slide.logo_midia_id,
+            mostrarVeiculoNovo && logoAlterada ? null : slide.logo_midia_id,
           imagem_midia_id:
-            mostrarMateriaNova && imagemAlterada
-              ? null
-              : slide.imagem_midia_id,
+            mostrarMateriaNova && imagemAlterada ? null : slide.imagem_midia_id,
           imagem_anexo_id:
             mostrarMateriaNova && imagemAlterada
               ? imagemAnexoAtual
@@ -300,22 +319,21 @@ export default function RelatorioSlidePreview({
 
   const logoDefinida = Boolean(
     slideParaPrevia.logo_midia_id ||
-      slideParaPrevia.dados_json?.veiculo?.logo_path?.trim()
+    slideParaPrevia.dados_json?.veiculo?.logo_path?.trim()
   );
 
   const logoEmAlteracao = mostrarVeiculoNovo && logoAlterada;
 
   const corLogo =
-    logoEmAlteracao || logoDefinida
-      ? theme.textoSecundaria
-      : theme.aviso;
+    logoEmAlteracao || logoDefinida ? theme.textoSecundaria : theme.aviso;
 
   const camposDadosAlterados = [
     ...camposVeiculoOrigem
       .filter(
         (campo) =>
-          !["id", "nome", "logo_path", "descricao", "alcance"].includes(campo) ||
-          !camposVeiculo.includes(campo)
+          !["id", "nome", "logo_path", "descricao", "alcance"].includes(
+            campo
+          ) || !camposVeiculo.includes(campo)
       )
       .map((campo) => ({ origem: "veiculo" as const, campo })),
 
@@ -340,11 +358,19 @@ export default function RelatorioSlidePreview({
   function abrirVeiculo() {
     if (!podeAbrirVeiculo) return;
 
-    router.push({
+    router.navigate({
       pathname: "/veiculos/[id]",
       params: {
         id: String(veiculoIdExibido),
         origemRelatorioId: String(relatorio.id),
+        origemClippingId: undefined,
+        origemMailingId: undefined,
+        origemMailingVeiculoId: undefined,
+        origemMailingInicio: undefined,
+        origemTipo: undefined,
+        origemId: undefined,
+        retornoVinculado: undefined,
+        origemNavegacao: undefined,
       },
     });
   }
@@ -382,15 +408,18 @@ export default function RelatorioSlidePreview({
     )
   );
 
-  const descricaoExibida = mostrarVeiculoNovo && descricaoAlterada
-    ? textoAlterado(novosVeiculo?.descricao)
-    : descricao;
-  const alcanceExibido = mostrarVeiculoNovo && alcanceAlterado
-    ? textoAlterado(novosVeiculo?.alcance)
-    : alcance;
-  const linkExibido = mostrarMateriaNova && linkAlterado
-    ? textoAlterado(novosClipping?.link)
-    : link;
+  const descricaoExibida =
+    mostrarVeiculoNovo && descricaoAlterada
+      ? textoAlterado(novosVeiculo?.descricao)
+      : descricao;
+  const alcanceExibido =
+    mostrarVeiculoNovo && alcanceAlterado
+      ? textoAlterado(novosVeiculo?.alcance)
+      : alcance;
+  const linkExibido =
+    mostrarMateriaNova && linkAlterado
+      ? textoAlterado(novosClipping?.link)
+      : link;
 
   async function abrirLink() {
     if (!linkExibido) return;
@@ -398,36 +427,45 @@ export default function RelatorioSlidePreview({
     setErroLink("");
 
     if (!/^https?:\/\/\S+$/i.test(linkExibido)) {
-        setErroLink(
+      setErroLink(
         "O link desta matéria não tem um endereço válido para abrir."
-        );
-        return;
+      );
+      return;
     }
 
     try {
-        await Linking.openURL(linkExibido);
+      await Linking.openURL(linkExibido);
     } catch {
-        setErroLink("Não foi possível abrir o link da matéria.");
+      setErroLink("Não foi possível abrir o link da matéria.");
     }
   }
 
   function abrirClipping() {
     if (!slide.clipping_id || !podeVerClipping) return;
 
-    router.push({
+    if (Number(origemClippingId) === slide.clipping_id) {
+      router.navigate({
         pathname: "/clipping/[id]",
-        params: {
+        params: { id: String(slide.clipping_id) },
+      });
+      return;
+    }
+
+    router.navigate({
+      pathname: "/clipping/[id]",
+      params: {
         id: String(slide.clipping_id),
         origemTipo: "relatorio",
         origemId: String(relatorio.id),
         retornoVinculado: "origem",
-        },
+      },
     });
   }
 
   return (
     <Modal
-      visible
+      visible={visible}
+      onShow={restaurarRolagem}
       transparent
       animationType="slide"
       onRequestClose={() => {
@@ -450,10 +488,7 @@ export default function RelatorioSlidePreview({
           ]}
         >
           <View
-            style={[
-              styles.header,
-              { borderBottomColor: `${theme.borda}55` },
-            ]}
+            style={[styles.header, { borderBottomColor: `${theme.borda}55` }]}
           >
             <View style={styles.headerTextos}>
               <Text weight="Bold" style={styles.headerTitulo}>
@@ -461,10 +496,7 @@ export default function RelatorioSlidePreview({
               </Text>
               <Text
                 numberOfLines={1}
-                style={[
-                  styles.headerSubtitulo,
-                  { color: theme.textoSub },
-                ]}
+                style={[styles.headerSubtitulo, { color: theme.textoSub }]}
               >
                 {relatorio.titulo}
               </Text>
@@ -486,50 +518,65 @@ export default function RelatorioSlidePreview({
                     },
                   ]}
                 >
-                  <Ionicons name="create-outline" size={18} color={theme.textoTerciaria} />
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={theme.textoTerciaria}
+                  />
                 </TouchableOpacity>
               ) : null}
               {onExcluir &&
-                slide.tipo !== "CAPA" &&
-                slide.tipo !== "ENCERRAMENTO" ? (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Excluir este slide"
-                    accessibilityHint="Abre a confirmação de exclusão"
-                    activeOpacity={0.8}
-                    disabled={revisando}
-                    onPress={onExcluir}
-                    style={[
-                      styles.acaoHeader,
-                      {
-                        backgroundColor: `${theme.erro}10`,
-                        borderColor: `${theme.erro}70`,
-                        opacity: revisando ? 0.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={theme.erro} />
-                  </TouchableOpacity>
-                ) : null}
+              slide.tipo !== "CAPA" &&
+              slide.tipo !== "ENCERRAMENTO" ? (
                 <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Fechar slide"
-                    onPress={onClose}
-                    style={[
-                    styles.fechar,
-                    { backgroundColor: theme.backgroundContainer },
-                    ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Excluir este slide"
+                  accessibilityHint="Abre a confirmação de exclusão"
+                  activeOpacity={0.8}
+                  disabled={revisando}
+                  onPress={onExcluir}
+                  style={[
+                    styles.acaoHeader,
+                    {
+                      backgroundColor: `${theme.erro}10`,
+                      borderColor: `${theme.erro}70`,
+                      opacity: revisando ? 0.5 : 1,
+                    },
+                  ]}
                 >
-                    <Ionicons
-                    name="close"
-                    size={22}
-                    color={theme.textoContainer}
-                    />
+                  <Ionicons name="trash-outline" size={18} color={theme.erro} />
                 </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Fechar slide"
+                onPress={onClose}
+                style={[
+                  styles.fechar,
+                  { backgroundColor: theme.backgroundContainer },
+                ]}
+              >
+                <Ionicons name="close" size={22} color={theme.textoContainer} />
+              </TouchableOpacity>
             </View>
           </View>
-                    
+
           <ScrollView
+            ref={scrollRef}
+            scrollEventThrottle={16}
+            onScroll={(evento) => {
+              if (visible && !restaurando.current) {
+                posicao.current = Math.max(
+                  0,
+                  evento.nativeEvent.contentOffset.y
+                );
+              }
+            }}
+            onContentSizeChange={() => {
+              if (restaurando.current) {
+                restaurarRolagem();
+              }
+            }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.conteudo}
           >
@@ -551,7 +598,10 @@ export default function RelatorioSlidePreview({
                   ]}
                 >
                   <View style={styles.rotuloComEstado}>
-                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                    <Text
+                      weight="SemiBold"
+                      style={[styles.rotulo, { color: theme.textoSub }]}
+                    >
                       MATÉRIA
                     </Text>
                     {materiaAlterada ? (
@@ -589,7 +639,7 @@ export default function RelatorioSlidePreview({
                                     ? theme.alteracao
                                     : theme.textoTerciaria,
                                 flex: 1,
-                                minWidth: 0,                          
+                                minWidth: 0,
                               },
                             ]}
                           >
@@ -635,8 +685,12 @@ export default function RelatorioSlidePreview({
                         </Text>
                       )}
                     </View>
-                    <View style={[styles.semImagem, {marginTop: -4}]}>
-                      <Ionicons name="image-outline" size={18} color={corImagem} />
+                    <View style={[styles.semImagem, { marginTop: -4 }]}>
+                      <Ionicons
+                        name="image-outline"
+                        size={18}
+                        color={corImagem}
+                      />
                       <Text weight="SemiBold" style={{ color: corImagem }}>
                         {imagemExibida
                           ? "Imagem definida"
@@ -646,7 +700,11 @@ export default function RelatorioSlidePreview({
                       </Text>
                     </View>
                     <View style={styles.metadados}>
-                      <Ionicons name="calendar-outline" size={16} color={theme.texto} />
+                      <Ionicons
+                        name="calendar-outline"
+                        size={16}
+                        color={theme.texto}
+                      />
                       <Text
                         style={{
                           color:
@@ -658,13 +716,14 @@ export default function RelatorioSlidePreview({
                         {dataExibida}
                       </Text>
                     </View>
-                    
                   </View>
-                  
 
                   {link || linkAlterado ? (
                     <View style={styles.campo}>
-                      <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                      <Text
+                        weight="SemiBold"
+                        style={[styles.rotulo, { color: theme.textoSub }]}
+                      >
                         LINK
                       </Text>
 
@@ -716,7 +775,10 @@ export default function RelatorioSlidePreview({
                       )}
 
                       {erroLink ? (
-                        <Text accessibilityRole="alert" style={{ color: theme.erro }}>
+                        <Text
+                          accessibilityRole="alert"
+                          style={{ color: theme.erro }}
+                        >
                           {erroLink}
                         </Text>
                       ) : null}
@@ -731,7 +793,10 @@ export default function RelatorioSlidePreview({
                   ]}
                 >
                   <View style={styles.rotuloComEstado}>
-                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                    <Text
+                      weight="SemiBold"
+                      style={[styles.rotulo, { color: theme.textoSub }]}
+                    >
                       VEÍCULO
                     </Text>
                     {dadosVeiculoAlterados ? (
@@ -762,16 +827,23 @@ export default function RelatorioSlidePreview({
                       />
                       <Text
                         weight="SemiBold"
-                        style={[styles.titulo, {
-                          color:
-                            mostrarVeiculoNovo && veiculoAlterado
-                              ? theme.alteracao
-                              : theme.textoTerciaria,
-                        }]}
+                        style={[
+                          styles.titulo,
+                          {
+                            color:
+                              mostrarVeiculoNovo && veiculoAlterado
+                                ? theme.alteracao
+                                : theme.textoTerciaria,
+                          },
+                        ]}
                       >
                         {nomeVeiculoExibido || "Veículo sem nome"}
                       </Text>
-                      <Ionicons name="open-outline" size={12} color={theme.textoTerciaria} />
+                      <Ionicons
+                        name="open-outline"
+                        size={12}
+                        color={theme.textoTerciaria}
+                      />
                     </TouchableOpacity>
                   ) : (
                     <Text
@@ -788,21 +860,24 @@ export default function RelatorioSlidePreview({
                     </Text>
                   )}
 
-                    <View style={[styles.semImagem, {marginTop: -4}]}>
-                      <Ionicons name="image-outline" size={18} color={corLogo} />
-                      <Text weight="SemiBold" style={{ color: corLogo }}>
-                        {logoEmAlteracao
-                          ? logoDefinida
-                            ? "Nova logo do veículo definida"
-                            : "Logo removida"
-                          : logoDefinida
-                            ? "Logo definida para este slide"
-                            : "Sem logo do veículo"}
-                      </Text>
-                    </View>
+                  <View style={[styles.semImagem, { marginTop: -4 }]}>
+                    <Ionicons name="image-outline" size={18} color={corLogo} />
+                    <Text weight="SemiBold" style={{ color: corLogo }}>
+                      {logoEmAlteracao
+                        ? logoDefinida
+                          ? "Nova logo do veículo definida"
+                          : "Logo removida"
+                        : logoDefinida
+                          ? "Logo definida para este slide"
+                          : "Sem logo do veículo"}
+                    </Text>
+                  </View>
 
                   <View style={styles.campo}>
-                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                    <Text
+                      weight="SemiBold"
+                      style={[styles.rotulo, { color: theme.textoSub }]}
+                    >
                       DESCRIÇÃO
                     </Text>
                     <Text
@@ -824,7 +899,10 @@ export default function RelatorioSlidePreview({
                   </View>
 
                   <View style={styles.campo}>
-                    <Text weight="SemiBold" style={[styles.rotulo, { color: theme.textoSub }]}>
+                    <Text
+                      weight="SemiBold"
+                      style={[styles.rotulo, { color: theme.textoSub }]}
+                    >
                       ALCANCE
                     </Text>
                     <Text
@@ -892,7 +970,11 @@ export default function RelatorioSlidePreview({
                 ]}
               >
                 <View style={styles.pendenciaCabecalho}>
-                  <Ionicons name="alert-circle-outline" size={18} color={theme.aviso} />
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={theme.aviso}
+                  />
                   <Text style={{ color: theme.aviso, flex: 1 }}>
                     {slide.revisao_pendente
                       ? "Este slide novo precisa de revisão."
@@ -910,7 +992,11 @@ export default function RelatorioSlidePreview({
                       }
                       accessibilityState={{ disabled: revisando }}
                       disabled={revisando}
-                      onPress={() => setConfirmacao(slide.revisao_pendente ? "INCLUIR" : "ALTERAR")}
+                      onPress={() =>
+                        setConfirmacao(
+                          slide.revisao_pendente ? "INCLUIR" : "ALTERAR"
+                        )
+                      }
                       style={[
                         styles.slideRevisaoBotao,
                         {
@@ -922,9 +1008,16 @@ export default function RelatorioSlidePreview({
                       {revisando ? (
                         <ActivityIndicator size="small" color={theme.branco} />
                       ) : (
-                        <Ionicons name="checkmark-outline" size={16} color={theme.branco} />
+                        <Ionicons
+                          name="checkmark-outline"
+                          size={16}
+                          color={theme.branco}
+                        />
                       )}
-                      <Text weight="Bold" style={{ color: theme.branco, fontSize: 11 }}>
+                      <Text
+                        weight="Bold"
+                        style={{ color: theme.branco, fontSize: 11 }}
+                      >
                         {slide.revisao_pendente ? "INCLUIR" : "ATUALIZAR"}
                       </Text>
                     </TouchableOpacity>
@@ -944,14 +1037,27 @@ export default function RelatorioSlidePreview({
                         },
                       ]}
                     >
-                      <Ionicons name="close-outline" size={16} color={theme.textoSub} />
-                      <Text weight="SemiBold" style={{ color: theme.textoSub, fontSize: 11 }}>
+                      <Ionicons
+                        name="close-outline"
+                        size={16}
+                        color={theme.textoSub}
+                      />
+                      <Text
+                        weight="SemiBold"
+                        style={{ color: theme.textoSub, fontSize: 11 }}
+                      >
                         IGNORAR
                       </Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <Text style={{ color: theme.textoSub, marginTop: 8, fontSize: 12 }}>
+                  <Text
+                    style={{
+                      color: theme.textoSub,
+                      marginTop: 8,
+                      fontSize: 12,
+                    }}
+                  >
                     Você não tem permissão para concluir a revisão.
                   </Text>
                 )}
@@ -965,10 +1071,10 @@ export default function RelatorioSlidePreview({
             ) : null}
           </ScrollView>
         </View>
-        
+
         <FeedbackAlert
           inline
-          visible={confirmacao !== null}
+          visible={visible && confirmacao !== null}
           variant="warning"
           title={
             confirmacao === "INCLUIR"
@@ -983,7 +1089,8 @@ export default function RelatorioSlidePreview({
             confirmacao === "INCLUIR"
               ? "A matéria será incluída no relatório com os dados atuais do clipping e do veículo."
               : confirmacao === "ALTERAR"
-                ? slide.revisao_veiculo_pendente && slide.revisao_clipping_pendente
+                ? slide.revisao_veiculo_pendente &&
+                  slide.revisao_clipping_pendente
                   ? "Os campos alterados no clipping ou veículo atualizarão os dados do slide. Edições individuais de campos não alterados na origem serão mantidas."
                   : slide.revisao_veiculo_pendente
                     ? "Os campos alterados no veículo atualizarão este slide. Edições individuais dos demais campos serão mantidas."
@@ -993,7 +1100,7 @@ export default function RelatorioSlidePreview({
                   : "O slide será mantido como está. Todas as alterações pendentes do veículo e do clipping serão desconsideradas."
           }
           primaryLabel={
-            confirmacao === "ALTERAR" ? "ATUALIZAR" : confirmacao ?? "INCLUIR"
+            confirmacao === "ALTERAR" ? "ATUALIZAR" : (confirmacao ?? "INCLUIR")
           }
           secondaryLabel="CANCELAR"
           primaryDanger={
@@ -1045,9 +1152,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   headerSubtitulo: {
-  fontSize: 12,
-  marginTop: 2,
-},
+    fontSize: 12,
+    marginTop: 2,
+  },
   fechar: {
     width: 40,
     height: 40,
@@ -1059,7 +1166,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    },
+  },
   acaoHeader: {
     width: 40,
     height: 40,
@@ -1190,28 +1297,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
   },
   linhaLink: {
-  flexDirection: "row",
-  alignItems: "flex-start",
-  width: "100%",
-  gap: 6,
-},
-valorLink: {
-  flex: 1,
-  minWidth: 0,
-  fontSize: 12,
-  lineHeight: 16,
-},
-abrirLink: {
-  width: 40,
-  height: 40,
-  borderWidth: 1,
-  borderRadius: 10,
-  alignItems: "center",
-  justifyContent: "center",
-},
-erroLink: {
-  fontSize: 11,
-  lineHeight: 16,
-  marginTop: 3,
-},
+    flexDirection: "row",
+    alignItems: "flex-start",
+    width: "100%",
+    gap: 6,
+  },
+  valorLink: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  abrirLink: {
+    width: 40,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  erroLink: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
 });

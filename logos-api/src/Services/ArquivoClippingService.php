@@ -288,6 +288,35 @@ class ArquivoClippingService
         return $arquivo;
     }
 
+    public static function copiar(array $anexo, int $clippingId): string
+    {
+        $origem = self::caminho($anexo);
+        $assessoriaId = (int) $anexo['assessoria_id'];
+        $base = self::base(true);
+        $pasta = $base . '/' . $assessoriaId . '/' . $clippingId;
+
+        if (!is_dir($pasta) && !@mkdir($pasta, 0750, true) && !is_dir($pasta)) {
+            throw new \RuntimeException('Não foi possível preparar os anexos da cópia.');
+        }
+
+        $pastaReal = realpath($pasta);
+        if ($pastaReal === false || !self::dentro($pastaReal, $base)) {
+            throw new \RuntimeException('Pasta de armazenamento inválida.');
+        }
+
+        $nome = bin2hex(random_bytes(16)) . '.' . pathinfo($origem, PATHINFO_EXTENSION);
+        $destino = $pastaReal . '/' . $nome;
+        if (
+            !@copy($origem, $destino)
+            || filesize($destino) !== filesize($origem)
+        ) {
+            @unlink($destino);
+            throw new \RuntimeException('Não foi possível copiar um dos anexos. A duplicação foi cancelada.');
+        }
+
+        return $assessoriaId . '/' . $clippingId . '/' . $nome;
+    }
+
     private static function caminho(array $anexo): string
     {
         $prefixo =

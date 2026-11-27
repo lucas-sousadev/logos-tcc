@@ -4,6 +4,7 @@ namespace Logos\AssessoriaApi\Controllers;
 
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\ClippingService;
+use Logos\AssessoriaApi\Services\DuplicacaoCadastroService;
 use Logos\AssessoriaApi\Services\ClippingAnexoService;
 use Logos\AssessoriaApi\Services\ClippingCsvService;
 use Logos\AssessoriaApi\Services\ClippingImportacaoService;
@@ -136,6 +137,10 @@ class ClippingController
                 400
             );
         } catch (\Throwable $e) {
+            if ($e instanceof \RuntimeException && $e->getCode() === 403) {
+                $this->responder(['success' => false, 'message' => $e->getMessage()], 403);
+                return;
+            }
             error_log(
                 'Erro no módulo Clipping: '
                     . $e->getMessage()
@@ -217,6 +222,27 @@ class ClippingController
             ],
             201
         );
+    }
+
+    public function duplicar(array $rota): void
+    {
+        $this->executar(function (int $assessoriaId, int $usuarioId) use ($rota): array {
+            $dados = $this->corpo();
+            if (
+                array_diff(array_keys($dados), ['incluir_anexos'])
+                || !is_bool($dados['incluir_anexos'] ?? null)
+            ) {
+                throw new \InvalidArgumentException('Informe se os anexos devem ser copiados.');
+            }
+
+            return DuplicacaoCadastroService::clipping(
+                $assessoriaId,
+                $usuarioId,
+                AuthContext::get()->perfil,
+                $rota['id'] ?? null,
+                $dados['incluir_anexos']
+            );
+        }, 201);
     }
 
     public function atualizar(

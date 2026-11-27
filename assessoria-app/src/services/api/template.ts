@@ -1,4 +1,5 @@
 import { API_URL } from "@/constants/api";
+
 import { authenticatedFetch } from "@/services/api/auth";
 import {
   ErroApiRelease,
@@ -30,11 +31,14 @@ async function ler<T>(resposta: Response): Promise<T> {
   return dados as T;
 }
 
-export async function listarTemplates(params: {
-  page: number;
-  busca: string;
-  origem: OrigemTemplate;
-}) {
+export async function listarTemplates(
+  params: {
+    page: number;
+    busca: string;
+    origem: OrigemTemplate;
+  },
+  signal?: AbortSignal
+) {
   const query = new URLSearchParams({
     page: String(params.page),
     limit: "20",
@@ -51,9 +55,10 @@ export async function listarTemplates(params: {
       has_next: boolean;
     };
   }>(
-    await authenticatedFetch(
-      API_URL + "/api/templates?" + query
-    )
+    await authenticatedFetch(API_URL + "/api/templates?" + query, {
+      signal,
+      cache: "no-store",
+    })
   );
 }
 
@@ -74,23 +79,18 @@ export async function salvarTemplate(
       method: atual ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        atual
-          ? { ...dados, assinatura: atual.assinatura }
-          : dados
+        atual ? { ...dados, assinatura: atual.assinatura } : dados
       ),
     }
   );
 
-  return (
-    await ler<{ template: TemplateRelease }>(resposta)
-  ).template;
+  return (await ler<{ template: TemplateRelease }>(resposta)).template;
 }
 
 export async function removerTemplate(id: number): Promise<void> {
   await ler(
-    await authenticatedFetch(
-      API_URL + "/api/templates/" + id,
-      { method: "DELETE" }
-    )
+    await authenticatedFetch(API_URL + "/api/templates/" + id, {
+      method: "DELETE",
+    })
   );
 }

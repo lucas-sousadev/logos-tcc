@@ -1189,6 +1189,19 @@ class RelatorioService
             );
         }
 
+        if (isset($dados['clipping_id']) && $dados['clipping_id'] !== '') {
+            $where .= ' AND EXISTS (
+                SELECT 1 FROM relatorio_slides vinculo
+                WHERE vinculo.relatorio_id = r.id
+                  AND vinculo.assessoria_id = r.assessoria_id
+                  AND vinculo.clipping_id = :clipping_id
+            )';
+            $parametros['clipping_id'] = self::id(
+                $dados['clipping_id'],
+                'Clipping'
+            );
+        }
+
         if (isset($dados['ano']) && $dados['ano'] !== '') {
             $ano = self::id($dados['ano'], 'Ano');
 

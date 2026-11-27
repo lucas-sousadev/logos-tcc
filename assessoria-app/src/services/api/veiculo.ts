@@ -1,8 +1,8 @@
-import { authenticatedFetch } from "@/services/api/auth";
-import { anexarArquivo, fetchUpload } from "@/services/arquivoUpload";
-
 import { API_URL } from "@/constants/api";
 import type { Tier } from "@/constants/tier";
+
+import { authenticatedFetch } from "@/services/api/auth";
+import { anexarArquivo, fetchUpload } from "@/services/arquivoUpload";
 
 export interface Veiculo {
   id: number;
@@ -63,7 +63,8 @@ export interface ListarVeiculosResponse {
 }
 
 export async function listarVeiculos(
-  params: ListarVeiculosParams = {}
+  params: ListarVeiculosParams = {},
+  signal?: AbortSignal
 ): Promise<ListarVeiculosResponse> {
   const query = new URLSearchParams();
 
@@ -106,6 +107,8 @@ export async function listarVeiculos(
   const response = await authenticatedFetch(
     `${API_URL}/api/veiculos?${query.toString()}`,
     {
+      signal,
+      cache: "no-store",
       method: "GET",
     }
   );

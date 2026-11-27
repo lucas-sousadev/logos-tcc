@@ -27,10 +27,7 @@ interface ClippingCardProps {
   mostrarCliente?: boolean;
 }
 
-function formatarData(
-  data: string | null,
-  completa = false
-): string {
+function formatarData(data: string | null, completa = false): string {
   if (!data) return "Não informada";
 
   const partes = data.split("-");
@@ -38,9 +35,7 @@ function formatarData(
 
   const [ano, mes, dia] = partes;
 
-  return completa
-    ? dia + "/" + mes + "/" + ano
-    : dia + "/" + mes;
+  return completa ? dia + "/" + mes + "/" + ano : dia + "/" + mes;
 }
 
 function formatarTempo(segundos: number | null): string {
@@ -82,8 +77,7 @@ export default function ClippingCard({
 
   const fonteAmpliada = fontScale > 1.2;
 
-  const corPendente =
-  mode === "dark" ? "#E79A9A" : "#B45353";
+  const corPendente = mode === "dark" ? "#E79A9A" : "#B45353";
 
   const pendencias = {
     data: !clipping.data_publicacao,
@@ -100,16 +94,13 @@ export default function ClippingCard({
   };
 
   const veiculo = clipping.veiculo_nome?.trim()
-  ? (
-      clipping.veiculo_id === null
-        ? `${clipping.veiculo_nome.trim()} · vínculo pendente`
-        : clipping.veiculo_nome.trim()
-    )
-  : "Sem veículo";
+    ? clipping.veiculo_id === null
+      ? `${clipping.veiculo_nome.trim()} · vínculo pendente`
+      : clipping.veiculo_nome.trim()
+    : "Sem veículo";
 
   const pauta =
-    clipping.pauta?.trim() ||
-    "Clipping #" + clipping.id + " — pauta pendente";
+    clipping.pauta?.trim() || "Clipping #" + clipping.id + " — pauta pendente";
 
   const categorias = clipping.categorias;
   const resumoCategorias = categorias.slice(0, 2).join(", ");
@@ -118,8 +109,7 @@ export default function ClippingCard({
   const temDuracao = clipping.duracao_segundos !== null;
 
   const temPosicoes =
-    clipping.inicio_segundos !== null ||
-    clipping.fim_segundos !== null;
+    clipping.inicio_segundos !== null || clipping.fim_segundos !== null;
 
   const detalhes = [
     {
@@ -127,7 +117,7 @@ export default function ClippingCard({
       valor: formatarData(clipping.data_publicacao, true),
       pendente: pendencias.data,
     },
-        {
+    {
       rotulo: "Categorias",
       valor: categorias.join(", ") || "Não informadas",
       pendente: pendencias.categorias,
@@ -159,9 +149,7 @@ export default function ClippingCard({
         : temDuracao
           ? formatarTempo(clipping.duracao_segundos)
           : null,
-      pendente: temPosicoes
-        ? pendencias.trecho
-        : !temDuracao,
+      pendente: temPosicoes ? pendencias.trecho : !temDuracao,
     },
     {
       rotulo: "Observações",
@@ -181,7 +169,7 @@ export default function ClippingCard({
               ? " arquivo nos detalhes"
               : " arquivos nos detalhes")
           : "Nenhum arquivo anexado",
-        pendente: pendencias.arquivos,
+      pendente: pendencias.arquivos,
     },
   ];
 
@@ -193,9 +181,7 @@ export default function ClippingCard({
     try {
       await Linking.openURL(clipping.link);
     } catch {
-      setErroLink(
-        "Não foi possível abrir o link. Tente novamente."
-      );
+      setErroLink("Não foi possível abrir o link. Tente novamente.");
     }
   }
 
@@ -203,12 +189,15 @@ export default function ClippingCard({
     <View
       style={[
         styles.card,
+        abrirAoTocar && styles.cardVinculado,
         {
           backgroundColor: theme.backgroundSecundario,
           borderColor:
-          modoSelecao && selecionado
-            ? theme.textoTerciaria
-            : theme.borda,
+            modoSelecao && selecionado
+              ? theme.textoTerciaria
+              : abrirAoTocar
+                ? theme.borda + "45"
+                : theme.borda,
         },
       ]}
     >
@@ -252,17 +241,15 @@ export default function ClippingCard({
           <Text
             weight="SemiBold"
             style={[
-                styles.data,
-                {
-                color: pendencias.data
-                ? corPendente
-                : theme.textoTerciaria,
+              styles.data,
+              {
+                color: pendencias.data ? corPendente : theme.textoTerciaria,
                 backgroundColor: theme.borda + "18",
-                },
+              },
             ]}
-            >
-                {formatarData(clipping.data_publicacao)}
-            </Text>
+          >
+            {formatarData(clipping.data_publicacao)}
+          </Text>
 
           {fonteAmpliada ? (
             <View style={styles.espaco} />
@@ -272,14 +259,12 @@ export default function ClippingCard({
               numberOfLines={1}
               ellipsizeMode="tail"
               style={[
-              styles.veiculo,
-              styles.veiculoNaLinha,
-              {
-                color: pendencias.veiculo
-                  ? corPendente
-                  : theme.texto,
-              },
-            ]}
+                styles.veiculo,
+                styles.veiculoNaLinha,
+                {
+                  color: pendencias.veiculo ? corPendente : theme.texto,
+                },
+              ]}
             >
               {veiculo || "Não informado"}
             </Text>
@@ -293,18 +278,19 @@ export default function ClippingCard({
               {
                 color: pendencias.tier
                   ? corPendente
-                  : theme.textoContainer,
-                backgroundColor:
-                  clipping.tier === null
+                  : abrirAoTocar
+                    ? theme.textoTerciaria
+                    : theme.textoContainer,
+                backgroundColor: abrirAoTocar
+                  ? theme.primaria + "12"
+                  : clipping.tier === null
                     ? theme.background
                     : theme.backgroundContainer,
-                borderColor: theme.borda,
+                borderColor: abrirAoTocar ? theme.borda + "25" : theme.borda,
               },
             ]}
           >
-            {clipping.tier === null
-              ? "Tier —"
-              : "Tier " + clipping.tier}
+            {clipping.tier === null ? "Tier —" : "Tier " + clipping.tier}
           </Text>
         </View>
 
@@ -314,9 +300,7 @@ export default function ClippingCard({
             style={[
               styles.veiculo,
               {
-                color: pendencias.veiculo
-                  ? corPendente
-                  : theme.texto,
+                color: pendencias.veiculo ? corPendente : theme.texto,
               },
             ]}
           >
@@ -325,43 +309,36 @@ export default function ClippingCard({
         ) : null}
 
         <Text
-            weight="SemiBold"
-            numberOfLines={
-              !modoSelecao && expandido && !abrirAoTocar
-                ? undefined
-                : 2
-            }
-            ellipsizeMode="tail"
-            style={[
-              styles.pauta,
-              {
-                color: pendencias.pauta
-                  ? corPendente
-                  : theme.texto,
-              },
-            ]}
+          weight="SemiBold"
+          numberOfLines={
+            !modoSelecao && expandido && !abrirAoTocar ? undefined : 2
+          }
+          ellipsizeMode="tail"
+          style={[
+            styles.pauta,
+            {
+              color: pendencias.pauta ? corPendente : theme.texto,
+            },
+          ]}
+        >
+          {novo ? (
+            <Text
+              weight="Bold"
+              style={{
+                fontSize: 10,
+                color: mode === "dark" ? "#86EFAC" : "#15803D",
+              }}
             >
-            {novo ? (
-              <Text
-                weight="Bold"
-                style={{
-                  fontSize: 10,
-                  color: mode === "dark" ? "#86EFAC" : "#15803D",
-                }}
-              >
-                NOVO{" • "}
-              </Text>
-            ) : null}
-            {pauta}
+              NOVO{" • "}
+            </Text>
+          ) : null}
+          {pauta}
         </Text>
 
         {mostrarCliente ? (
           <Text
             numberOfLines={1}
-            style={[
-              styles.clienteVinculado,
-              { color: theme.textoSub },
-            ]}
+            style={[styles.clienteVinculado, { color: theme.textoSub }]}
           >
             Cliente: {clipping.cliente_nome}
           </Text>
@@ -370,128 +347,113 @@ export default function ClippingCard({
         <View style={styles.rodape}>
           <View style={styles.informacoesRodape}>
             <View
-                style={[
+              style={[
                 styles.categorias,
-                programaSecao
-                    ? styles.categoriasComPrograma
-                    : undefined,
-                ]}
+                programaSecao ? styles.categoriasComPrograma : undefined,
+              ]}
             >
-                <Text
+              <Text
                 numberOfLines={1}
                 ellipsizeMode="tail"
                 style={[
                   styles.categoriaTexto,
                   {
-                    color: pendencias.categorias
-                      ? corPendente
-                      : theme.textoSub,
+                    color: pendencias.categorias ? corPendente : theme.textoSub,
                   },
                 ]}
-                >
+              >
                 {resumoCategorias || "Sem categoria"}
-                </Text>
+              </Text>
 
-                {categoriasExtras > 0 ? (
+              {categoriasExtras > 0 ? (
                 <Text
-                    weight="SemiBold"
-                    style={[
-                    styles.extra,
-                    { color: theme.textoSub },
-                    ]}
+                  weight="SemiBold"
+                  style={[styles.extra, { color: theme.textoSub }]}
                 >
-                    +{categoriasExtras}
+                  +{categoriasExtras}
                 </Text>
-                ) : null}
+              ) : null}
             </View>
 
             {programaSecao ? (
-                <>
+              <>
                 <Text
-                    accessible={false}
-                    style={[
-                    styles.separador,
-                    { color: theme.textoSub },
-                    ]}
+                  accessible={false}
+                  style={[styles.separador, { color: theme.textoSub }]}
                 >
-                    •
+                  •
                 </Text>
 
                 <Text
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={[
-                    styles.programa,
-                    { color: theme.textoSub },
-                    ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.programa, { color: theme.textoSub }]}
                 >
-                    {programaSecao}
+                  {programaSecao}
                 </Text>
-                </>
+              </>
             ) : null}
-            </View>
+          </View>
 
           <View style={styles.indicadores}>
             {temDuracao ? (
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.duracao,
-                  { color: theme.texto },
-                ]}
+                style={[styles.duracao, { color: theme.texto }]}
               >
-                Trecho:{" "}
-                {formatarTempo(clipping.duracao_segundos)}
+                Trecho: {formatarTempo(clipping.duracao_segundos)}
               </Text>
             ) : null}
 
-            <Ionicons
-            name={
-              modoSelecao
-                ? selecionado
-                  ? "checkbox"
-                  : "square-outline"
-                : abrirAoTocar
-                  ? "chevron-forward"
-                  : expandido
-                    ? "chevron-up"
-                    : "chevron-down"
-            }
-            size={modoSelecao ? 22 : 17}
-            color={
-              modoSelecao && selecionado
-                ? theme.textoTerciaria
-                : theme.textoSub
-            }
-            accessible={false}
-          />
+            {abrirAoTocar && !modoSelecao ? (
+              <View
+                style={[
+                  styles.abrirVinculo,
+                  { backgroundColor: theme.primaria + "0C" },
+                ]}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={theme.textoTerciaria}
+                />
+              </View>
+            ) : (
+              <Ionicons
+                name={
+                  modoSelecao
+                    ? selecionado
+                      ? "checkbox"
+                      : "square-outline"
+                    : abrirAoTocar
+                      ? "chevron-forward"
+                      : expandido
+                        ? "chevron-up"
+                        : "chevron-down"
+                }
+                size={modoSelecao ? 22 : 17}
+                color={
+                  modoSelecao && selecionado
+                    ? theme.textoTerciaria
+                    : theme.textoSub
+                }
+                accessible={false}
+              />
+            )}
           </View>
         </View>
       </TouchableOpacity>
 
       {!modoSelecao && !abrirAoTocar && expandido ? (
-        <View
-          style={[
-            styles.expansao,
-            { borderTopColor: theme.borda + "66" },
-          ]}
-        >
+        <View style={[styles.expansao, { borderTopColor: theme.borda + "66" }]}>
           {detalhes.map(({ rotulo, valor, pendente }) =>
             valor?.trim() ? (
-              <Text
-                key={rotulo}
-                selectable
-                style={styles.detalhe}
-              >
-                <Text weight="SemiBold">
-                  {rotulo}:{" "}
-                </Text>
+              <Text key={rotulo} selectable style={styles.detalhe}>
+                <Text weight="SemiBold">{rotulo}: </Text>
 
                 <Text
                   style={{
-                    color: pendente
-                      ? corPendente
-                      : theme.texto,
+                    color: pendente ? corPendente : theme.texto,
                   }}
                 >
                   {valor}
@@ -517,21 +479,11 @@ export default function ClippingCard({
                 accessibilityRole="button"
                 accessibilityLabel="Abrir link da publicação"
                 onPress={() => void abrirLink()}
-                style={[
-                  styles.acao,
-                  { borderColor: theme.borda },
-                ]}
+                style={[styles.acao, { borderColor: theme.borda }]}
               >
-                <Ionicons
-                  name="open-outline"
-                  size={17}
-                  color={theme.texto}
-                />
+                <Ionicons name="open-outline" size={17} color={theme.texto} />
 
-                <Text
-                  weight="SemiBold"
-                  style={styles.acaoTexto}
-                >
+                <Text weight="SemiBold" style={styles.acaoTexto}>
                   Abrir link
                 </Text>
               </TouchableOpacity>
@@ -541,25 +493,20 @@ export default function ClippingCard({
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={
-                "Ver detalhes e arquivos do clipping " +
-                clipping.id
+                "Ver detalhes e arquivos do clipping " + clipping.id
               }
               onPress={onAbrirDetalhes}
               style={[
                 styles.acao,
                 {
                   borderColor: theme.backgroundContainer,
-                  backgroundColor:
-                    theme.backgroundContainer,
+                  backgroundColor: theme.backgroundContainer,
                 },
               ]}
             >
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.acaoTexto,
-                  { color: theme.textoContainer },
-                ]}
+                style={[styles.acaoTexto, { color: theme.textoContainer }]}
               >
                 Ver detalhes
               </Text>
@@ -578,11 +525,22 @@ export default function ClippingCard({
 }
 
 const styles = StyleSheet.create({
+  cardVinculado: {
+    borderWidth: 1,
+  },
+  abrirVinculo: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   card: {
     borderWidth: 2,
     borderRadius: 16,
     marginBottom: 8,
-    },
+  },
 
   resumo: {
     paddingHorizontal: 12,
@@ -596,14 +554,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-data: {
+  data: {
     fontSize: 12,
     lineHeight: 18,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     flexShrink: 0,
-},
+  },
 
   veiculo: {
     fontSize: 13,
@@ -647,39 +605,39 @@ data: {
   },
 
   informacoesRodape: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 6,
-  flexGrow: 1,
-  flexShrink: 1,
-  flexBasis: 150,
-  minWidth: 120,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 150,
+    minWidth: 120,
+  },
 
-categorias: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  flexShrink: 1,
-  minWidth: 0,
-},
+  categorias: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+    minWidth: 0,
+  },
 
-categoriasComPrograma: {
-  maxWidth: "52%",
-},
+  categoriasComPrograma: {
+    maxWidth: "52%",
+  },
 
-separador: {
-  fontSize: 12,
-  lineHeight: 18,
-  flexShrink: 0,
-},
+  separador: {
+    fontSize: 12,
+    lineHeight: 18,
+    flexShrink: 0,
+  },
 
-programa: {
-  flex: 1,
-  minWidth: 0,
-  fontSize: 12,
-  lineHeight: 18,
-},
+  programa: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 18,
+  },
 
   categoriaTexto: {
     fontSize: 12,

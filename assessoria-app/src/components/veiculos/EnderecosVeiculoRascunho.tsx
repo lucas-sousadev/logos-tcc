@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
 
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
+
 import { useTheme } from "@/contexts/ThemeContext";
+
 import type { NovoEnderecoVeiculo } from "@/services/api/veiculo";
 
 interface Props {
@@ -20,6 +23,7 @@ interface Props {
   onChange: (enderecos: NovoEnderecoVeiculo[]) => void;
   disabled?: boolean;
   error?: string;
+  abrirPrimeiro?: boolean;
 }
 
 function urlDoEndereco(endereco: NovoEnderecoVeiculo): string {
@@ -33,13 +37,18 @@ export default function EnderecosVeiculoRascunho({
   onChange,
   disabled = false,
   error,
+  abrirPrimeiro = false,
 }: Props) {
   const { theme } = useTheme();
-  const [editando, setEditando] = useState<number | null>(null);
+  const [editando, setEditando] = useState<number | null>(
+    abrirPrimeiro && value.length > 0 ? 0 : null
+  );
   const [erroAbertura, setErroAbertura] = useState("");
 
   function alterar(indice: number, campos: Partial<NovoEnderecoVeiculo>) {
-    if (disabled) return;
+    if (disabled) {
+      return;
+    }
     onChange(
       value.map((endereco, atual) =>
         atual === indice ? { ...endereco, ...campos } : endereco
@@ -48,7 +57,9 @@ export default function EnderecosVeiculoRascunho({
   }
 
   function adicionar() {
-    if (disabled || value.length >= 20) return;
+    if (disabled || value.length >= 20) {
+      return;
+    }
     onChange([
       ...value,
       { host: "", caminho_prefixo: "", incluir_subdominios: false },
@@ -57,7 +68,9 @@ export default function EnderecosVeiculoRascunho({
   }
 
   function remover(indice: number) {
-    if (disabled) return;
+    if (disabled) {
+      return;
+    }
     onChange(value.filter((_, atual) => atual !== indice));
     setEditando(null);
   }

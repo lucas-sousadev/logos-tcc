@@ -5,20 +5,16 @@ import {
   View,
 } from "react-native";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { usePreventRemove } from "expo-router/react-navigation";
 import { Ionicons } from "@expo/vector-icons";
 
 import Button from "@/components/ui/Button";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import Text from "@/components/ui/Text";
+import ContadorLista from "@/components/ui/ContadorLista";
 import FeedbackAlert, {
   type FeedbackAlertVariant,
 } from "@/components/forms/FeedbackAlert";
@@ -60,58 +56,36 @@ export default function ContatosVinculados({
   onExcluindoChange,
 }: ContatosVinculadosProps) {
   const router = useRouter();
+  const { origemMailingId } = useLocalSearchParams<{
+    origemMailingId?: string;
+  }>();
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
 
-  const podeVisualizar =
-    temPermissao("MAILING", "VISUALIZAR");
+  const podeVisualizar = temPermissao("MAILING", "VISUALIZAR");
 
-  const podeExcluir =
-    temPermissao("MAILING", "EXCLUIR");
+  const podeExcluir = temPermissao("MAILING", "EXCLUIR");
 
-  const [
-    contatos,
-    setContatos,
-  ] = useState<Jornalista[]>([]);
+  const [contatos, setContatos] = useState<Jornalista[]>([]);
 
-  const [
-    pagina,
-    setPagina,
-  ] = useState(1);
+  const [pagina, setPagina] = useState(1);
 
   const [total, setTotal] = useState(totalVinculados);
   const requisicao = useRef(0);
+  const travaExclusao = useRef(false);
 
-  const [
-    carregando,
-    setCarregando,
-  ] = useState(true);
+  const [carregando, setCarregando] = useState(true);
 
-  const [
-    erro,
-    setErro,
-  ] = useState("");
+  const [erro, setErro] = useState("");
 
-  const [
-    modoSelecao,
-    setModoSelecao,
-  ] = useState(false);
+  const [modoSelecao, setModoSelecao] = useState(false);
 
-  const [
-    idsSelecionados,
-    setIdsSelecionados,
-  ] = useState<number[]>([]);
+  const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
 
-  const [
-    excluindo,
-    setExcluindo,
-  ] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   usePreventRemove(excluindo, () => {});
 
-  const [
-    feedback,
-    setFeedback,
-  ] = useState<FeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   useEffect(() => {
     onExcluindoChange?.(excluindo);
@@ -175,17 +149,21 @@ export default function ContatosVinculados({
     }
   }, [pagina, podeVisualizar, veiculoId]);
 
-  useEffect(() => {
+  const [veiculoAnterior, setVeiculoAnterior] = useState(veiculoId);
+  if (veiculoAnterior !== veiculoId) {
+    setVeiculoAnterior(veiculoId);
+    setContatos([]);
+    setTotal(totalVinculados);
     setPagina(1);
     setModoSelecao(false);
     setIdsSelecionados([]);
-  }, [veiculoId]);
+  }
 
   useFocusEffect(
     useCallback(() => {
       setModoSelecao(false);
       setIdsSelecionados([]);
-    }, [veiculoId])
+    }, [])
   );
 
   useFocusEffect(
@@ -208,51 +186,36 @@ export default function ContatosVinculados({
     setModoSelecao(false);
   }
 
-  function alternarContatoSelecionado(
-    contatoId: number
-  ) {
+  function alternarContatoSelecionado(contatoId: number) {
     if (carregando || excluindo || erro || !modoSelecao) return;
 
     if (idsSelecionados.includes(contatoId)) {
-      setIdsSelecionados((atual) =>
-        atual.filter((id) => id !== contatoId)
-      );
+      setIdsSelecionados((atual) => atual.filter((id) => id !== contatoId));
 
       return;
     }
 
-    if (
-      idsSelecionados.length >=
-      LIMITE_SELECAO_EM_LOTE
-    ) {
+    if (idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE) {
       mostrarFeedback({
         variant: "warning",
         title: "Limite de seleção atingido",
-        message:
-          "Você pode selecionar até 100 contatos por vez.",
+        message: "Você pode selecionar até 100 contatos por vez.",
       });
 
       return;
     }
 
-    setIdsSelecionados((atual) => [
-      ...atual,
-      contatoId,
-    ]);
+    setIdsSelecionados((atual) => [...atual, contatoId]);
   }
 
   function selecionarTodosVisiveis() {
     if (carregando || excluindo || erro || !modoSelecao) return;
 
-    const idsVisiveis = contatos.map(
-      (contato) => contato.id
-    );
+    const idsVisiveis = contatos.map((contato) => contato.id);
 
     const todosSelecionados =
       idsVisiveis.length > 0 &&
-      idsVisiveis.every((contatoId) =>
-        idsSelecionados.includes(contatoId)
-      );
+      idsVisiveis.every((contatoId) => idsSelecionados.includes(contatoId));
 
     if (todosSelecionados) {
       const idsDaPagina = new Set(idsVisiveis);
@@ -262,9 +225,7 @@ export default function ContatosVinculados({
       return;
     }
 
-    const vagasRestantes =
-      LIMITE_SELECAO_EM_LOTE -
-      idsSelecionados.length;
+    const vagasRestantes = LIMITE_SELECAO_EM_LOTE - idsSelecionados.length;
 
     if (vagasRestantes <= 0) {
       mostrarFeedback({
@@ -276,16 +237,10 @@ export default function ContatosVinculados({
     }
 
     const idsParaAdicionar = idsVisiveis
-      .filter(
-        (contatoId) =>
-          !idsSelecionados.includes(contatoId)
-      )
+      .filter((contatoId) => !idsSelecionados.includes(contatoId))
       .slice(0, vagasRestantes);
 
-    setIdsSelecionados((atual) => [
-      ...atual,
-      ...idsParaAdicionar,
-    ]);
+    setIdsSelecionados((atual) => [...atual, ...idsParaAdicionar]);
   }
 
   function confirmarExclusao() {
@@ -295,8 +250,7 @@ export default function ContatosVinculados({
       mostrarFeedback({
         variant: "warning",
         title: "Nenhum contato selecionado",
-        message:
-          "Selecione pelo menos um contato para excluir.",
+        message: "Selecione pelo menos um contato para excluir.",
       });
 
       return;
@@ -317,16 +271,22 @@ export default function ContatosVinculados({
   async function excluirSelecionados() {
     const ids = [...idsSelecionados];
 
-    if (ids.length === 0) {
+    if (
+      travaExclusao.current ||
+      ids.length === 0 ||
+      !podeExcluir ||
+      carregando ||
+      erro
+    ) {
       return;
     }
 
+    travaExclusao.current = true;
     fecharFeedback();
     setExcluindo(true);
 
     try {
-      const resultado =
-        await excluirJornalistasEmLote(ids);
+      const resultado = await excluirJornalistasEmLote(ids);
 
       sairModoSelecao();
 
@@ -360,6 +320,7 @@ export default function ContatosVinculados({
             : "Não foi possível excluir os contatos.",
       });
     } finally {
+      travaExclusao.current = false;
       setExcluindo(false);
     }
   }
@@ -370,50 +331,22 @@ export default function ContatosVinculados({
 
   const todosVisiveisSelecionados =
     contatos.length > 0 &&
-    contatos.every((contato) =>
-      idsSelecionados.includes(contato.id)
-    );
+    contatos.every((contato) => idsSelecionados.includes(contato.id));
 
   return (
     <View style={styles.section}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text
-            weight="Bold"
-            style={styles.title}
-          >
-            CONTATOS VINCULADOS
+          <Text weight="SemiBold" style={styles.title}>
+            Contatos vinculados
           </Text>
 
-          <Text
-            style={[
-              styles.subtitle,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.subtitle, { color: theme.textoSub }]}>
             Contatos atualmente associados a este veículo.
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.count,
-            {
-              backgroundColor:
-                theme.backgroundContainer,
-            },
-          ]}
-        >
-          <Text
-            weight="Bold"
-            style={{
-              color: theme.textoContainer,
-              fontSize: 12,
-            }}
-          >
-            {total}
-          </Text>
-        </View>
+        {!erro ? <ContadorLista>{total}</ContadorLista> : null}
       </View>
 
       {podeExcluir && (contatos.length > 0 || idsSelecionados.length > 0) ? (
@@ -428,19 +361,13 @@ export default function ContatosVinculados({
             ]}
           >
             <View style={styles.selectionInfo}>
-              <Text
-                weight="SemiBold"
-                style={styles.selectionTitle}
-              >
-                {idsSelecionados.length} de{" "}
-                {LIMITE_SELECAO_EM_LOTE} selecionado(s)
+              <Text weight="SemiBold" style={styles.selectionTitle}>
+                {idsSelecionados.length} de {LIMITE_SELECAO_EM_LOTE}{" "}
+                selecionado(s)
               </Text>
 
               <Text
-                style={[
-                  styles.selectionSubtitle,
-                  { color: theme.textoSub },
-                ]}
+                style={[styles.selectionSubtitle, { color: theme.textoSub }]}
               >
                 TODOS marca apenas esta página.
               </Text>
@@ -450,17 +377,11 @@ export default function ContatosVinculados({
               activeOpacity={0.8}
               onPress={selecionarTodosVisiveis}
               disabled={carregando || excluindo || Boolean(erro)}
-              style={[
-                styles.selectAllButton,
-                { borderColor: theme.borda },
-              ]}
+              style={[styles.selectAllButton, { borderColor: theme.borda }]}
             >
               <Text
                 weight="SemiBold"
-                style={[
-                  styles.selectAllText,
-                  { color: theme.texto },
-                ]}
+                style={[styles.selectAllText, { color: theme.texto }]}
               >
                 {todosVisiveisSelecionados ? "LIMPAR" : "TODOS"}
               </Text>
@@ -471,7 +392,9 @@ export default function ContatosVinculados({
               onPress={confirmarExclusao}
               disabled={
                 idsSelecionados.length === 0 ||
-                carregando || excluindo || Boolean(erro)
+                carregando ||
+                excluindo ||
+                Boolean(erro)
               }
               style={[
                 styles.selectionIconButton,
@@ -479,23 +402,18 @@ export default function ContatosVinculados({
                   backgroundColor: "#EF4444",
                   opacity:
                     idsSelecionados.length === 0 ||
-                    carregando || excluindo || Boolean(erro)
+                    carregando ||
+                    excluindo ||
+                    Boolean(erro)
                       ? 0.5
                       : 1,
                 },
               ]}
             >
               {excluindo ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#FFFFFF"
-                />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons
-                  name="trash-outline"
-                  size={19}
-                  color="#FFFFFF"
-                />
+                <Ionicons name="trash-outline" size={19} color="#FFFFFF" />
               )}
             </TouchableOpacity>
 
@@ -506,16 +424,11 @@ export default function ContatosVinculados({
               style={[
                 styles.selectionIconButton,
                 {
-                  backgroundColor:
-                    theme.backgroundContainer,
+                  backgroundColor: theme.backgroundContainer,
                 },
               ]}
             >
-              <Ionicons
-                name="close"
-                size={20}
-                color={theme.textoContainer}
-              />
+              <Ionicons name="close" size={20} color={theme.textoContainer} />
             </TouchableOpacity>
           </View>
         ) : (
@@ -527,20 +440,12 @@ export default function ContatosVinculados({
         )
       ) : null}
 
-      {carregando ? (
+      {carregando && contatos.length === 0 ? (
         <View style={styles.loading}>
-          <ActivityIndicator
-            size="small"
-            color={theme.textoTerciaria}
-          />
+          <ActivityIndicator size="small" color={theme.textoTerciaria} />
         </View>
       ) : erro ? (
-        <View
-          style={[
-            styles.empty,
-            { borderColor: theme.borda },
-          ]}
-        >
+        <View style={[styles.empty, { borderColor: theme.borda }]}>
           <Text
             style={{
               color: "#EF4444",
@@ -556,24 +461,10 @@ export default function ContatosVinculados({
           />
         </View>
       ) : contatos.length === 0 ? (
-        <View
-          style={[
-            styles.empty,
-            { borderColor: theme.borda },
-          ]}
-        >
-          <Ionicons
-            name="people-outline"
-            size={28}
-            color={theme.textoSub}
-          />
+        <View style={[styles.empty, { borderColor: theme.borda }]}>
+          <Ionicons name="people-outline" size={28} color={theme.textoSub} />
 
-          <Text
-            style={[
-              styles.emptyText,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.emptyText, { color: theme.textoSub }]}>
             Nenhum contato está vinculado a este veículo.
           </Text>
         </View>
@@ -581,6 +472,16 @@ export default function ContatosVinculados({
         contatos.map((contato) => (
           <TouchableOpacity
             key={contato.id}
+            accessibilityRole="button"
+            accessibilityLabel={
+              modoSelecao
+                ? `Selecionar contato ${contato.nome}`
+                : `Abrir contato ${contato.nome}`
+            }
+            accessibilityState={{
+              disabled: carregando || excluindo || Boolean(erro),
+              selected: modoSelecao && idsSelecionados.includes(contato.id),
+            }}
             activeOpacity={0.8}
             disabled={carregando || excluindo || Boolean(erro)}
             onPress={() => {
@@ -589,20 +490,26 @@ export default function ContatosVinculados({
                 return;
               }
 
-              router.push({
+              router.navigate({
                 pathname: "/mailing/[id]",
                 params: {
                   id: contato.id.toString(),
-                  origem: "veiculo",
-                  veiculo_id: veiculoId.toString(),
+                  ...(Number(origemMailingId) === contato.id
+                    ? {}
+                    : {
+                        origem: "veiculo",
+                        veiculo_id: veiculoId.toString(),
+                        origemNavegacao: undefined,
+                      }),
                 },
               });
             }}
             style={[
               styles.card,
               {
-                backgroundColor: theme.background,
-                borderColor: theme.borda,
+                backgroundColor: theme.backgroundSecundario,
+                borderColor: theme.borda + "45",
+                opacity: carregando || excluindo ? 0.6 : 1,
               },
             ]}
           >
@@ -610,15 +517,14 @@ export default function ContatosVinculados({
               style={[
                 styles.avatar,
                 {
-                  backgroundColor:
-                    theme.backgroundContainer,
+                  backgroundColor: theme.primaria + "12",
                 },
               ]}
             >
               <Text
                 weight="Bold"
                 style={{
-                  color: theme.textoContainer,
+                  color: theme.textoTerciaria,
                 }}
               >
                 {contato.nome.charAt(0).toUpperCase()}
@@ -629,28 +535,22 @@ export default function ContatosVinculados({
               <Text
                 weight="SemiBold"
                 style={styles.cardName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {contato.nome}
               </Text>
 
               <Text
                 numberOfLines={1}
-                style={[
-                  styles.cardDetail,
-                  { color: theme.textoSub },
-                ]}
+                style={[styles.cardDetail, { color: theme.textoSub }]}
               >
-                {contato.email ||
-                  contato.telefone ||
-                  "Sem e-mail e telefone"}
+                {contato.email || contato.telefone || "Sem e-mail e telefone"}
               </Text>
 
               <Text
                 numberOfLines={1}
-                style={[
-                  styles.cardMeta,
-                  { color: theme.texto },
-                ]}
+                style={[styles.cardMeta, { color: theme.texto }]}
               >
                 {[
                   contato.cargo,
@@ -659,8 +559,7 @@ export default function ContatosVinculados({
                     : contato.cidade || contato.estado,
                 ]
                   .filter(Boolean)
-                  .join(" • ") ||
-                  "Sem informações adicionais"}
+                  .join(" • ") || "Sem informações adicionais"}
               </Text>
             </View>
 
@@ -669,24 +568,16 @@ export default function ContatosVinculados({
                 style={[
                   styles.checkbox,
                   {
-                    borderColor:
-                      idsSelecionados.includes(
-                        contato.id
-                      )
-                        ? theme.backgroundContainer
-                        : theme.borda,
-                    backgroundColor:
-                      idsSelecionados.includes(
-                        contato.id
-                      )
-                        ? theme.backgroundContainer
-                        : theme.background,
+                    borderColor: idsSelecionados.includes(contato.id)
+                      ? theme.backgroundContainer
+                      : theme.borda,
+                    backgroundColor: idsSelecionados.includes(contato.id)
+                      ? theme.backgroundContainer
+                      : theme.background,
                   },
                 ]}
               >
-                {idsSelecionados.includes(
-                  contato.id
-                ) ? (
+                {idsSelecionados.includes(contato.id) ? (
                   <Ionicons
                     name="checkmark"
                     size={16}
@@ -695,17 +586,24 @@ export default function ContatosVinculados({
                 ) : null}
               </View>
             ) : (
-              <Ionicons
-                name="chevron-forward-outline"
-                size={21}
-                color={theme.texto}
-              />
+              <View
+                style={[
+                  styles.cardArrow,
+                  { backgroundColor: theme.primaria + "0C" },
+                ]}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={theme.textoTerciaria}
+                />
+              </View>
             )}
           </TouchableOpacity>
         ))
       )}
 
-      {!carregando && !erro ? (
+      {!erro && contatos.length > 0 ? (
         <PaginacaoLista
           pagina={pagina}
           limite={POR_PAGINA}
@@ -740,36 +638,31 @@ export default function ContatosVinculados({
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: 20,
+    marginTop: 16,
   },
 
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   headerText: {
     flex: 1,
+    minWidth: 0,
   },
 
   title: {
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
   },
 
   subtitle: {
-    fontSize: 11,
-    marginTop: 3,
-  },
-
-  count: {
-    minWidth: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
   },
 
   selectionStartButton: {
@@ -862,40 +755,52 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    minHeight: 74,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 13,
-    marginBottom: 10,
+    minHeight: 82,
+    minWidth: 0,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
   avatar: {
-    width: 43,
-    height: 43,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
 
   cardInfo: {
     flex: 1,
-    marginHorizontal: 12,
+    minWidth: 0,
+    gap: 2,
   },
 
   cardName: {
-    fontSize: 15,
+    fontSize: 14,
+    lineHeight: 19,
   },
 
   cardDetail: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
   },
 
   cardMeta: {
     fontSize: 11,
-    marginTop: 3,
+    lineHeight: 15,
   },
-
+  cardArrow: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

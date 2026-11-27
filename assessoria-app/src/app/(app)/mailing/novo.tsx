@@ -1,388 +1,377 @@
+import { useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
 
-import { useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import Header from "@/components/layout/Header";
-import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import VeiculoSelector, {
+  SelecaoVeiculo,
+} from "@/components/forms/VeiculoSelector";
+import Text from "@/components/ui/Text";
+
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+
+import { criarJornalista } from "@/services/api/jornalista";
 
 import {
   ErrosJornalista,
   validarFormularioJornalista,
 } from "@/utils/validarMailing";
 
-import VeiculoSelector, {
-  SelecaoVeiculo,
-} from "@/components/forms/VeiculoSelector";
-import { useAuth } from "@/contexts/AuthContext";
-import Text from "@/components/ui/Text";
-import { useTheme } from "@/contexts/ThemeContext";
-import { criarJornalista } from "@/services/api/jornalista";
-
 export default function FormularioJornalista() {
-        const { theme } = useTheme();
-        const { temPermissao } = useAuth();
+  const insets = useSafeAreaInsets();
 
-       const [erros, setErros] = useState<ErrosJornalista>({});
-        const [erroGeral, setErroGeral] = useState("");
+  const { theme } = useTheme();
+  const { temPermissao } = useAuth();
 
-        const [nome, setNome] = useState("");
-        const [email, setEmail] = useState("");
-        const [telefone, setTelefone] = useState("");
-        const [cargo, setCargo] = useState("");
-        const [estado, setEstado] = useState("");
-        const [cidade, setCidade] = useState("");
-        const [observacoes, setObservacoes] =
-            useState("");
-        const [veiculo, setVeiculo] =
-            useState<SelecaoVeiculo>({
-              id: null,
-              nome: "",
-            });
+  const [erros, setErros] = useState<ErrosJornalista>({});
+  const [erroGeral, setErroGeral] = useState("");
 
-  const [salvando, setSalvando] =
-    useState(false);
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [cargo, setCargo] = useState("");
+  const [estado, setEstado] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+  const [veiculo, setVeiculo] = useState<SelecaoVeiculo>({
+    id: null,
+    nome: "",
+  });
+
+  const [salvando, setSalvando] = useState(false);
+  const envioEmCurso = useRef(false);
 
   const retornar = useRetornoSeguro("/mailing");
-  const saida = useSaidaFormulario(Boolean(nome || email || telefone || cargo || estado || cidade || observacoes || veiculo.id || veiculo.nome), salvando);
+  const saida = useSaidaFormulario(
+    Boolean(
+      nome ||
+      email ||
+      telefone ||
+      cargo ||
+      estado ||
+      cidade ||
+      observacoes ||
+      veiculo.id ||
+      veiculo.nome
+    ),
+    salvando
+  );
 
-    function limparErro(
-      campo: keyof ErrosJornalista
+  function limparErro(campo: keyof ErrosJornalista) {
+    setErros((atual) => ({
+      ...atual,
+      [campo]: undefined,
+    }));
+
+    setErroGeral("");
+  }
+
+  function limparErrosDeContato() {
+    setErros((atual) => ({
+      ...atual,
+      email: undefined,
+      telefone: undefined,
+    }));
+
+    setErroGeral("");
+  }
+
+  function exibirErroDaApi(mensagemOriginal: string) {
+    const mensagem = mensagemOriginal;
+
+    const texto = mensagem.toLocaleLowerCase();
+
+    let campo: keyof ErrosJornalista | null = null;
+
+    if (
+      texto.includes("e-mail ou telefone") ||
+      texto.includes("email ou telefone")
     ) {
-      setErros((atual) => ({
-        ...atual,
-        [campo]: undefined,
-      }));
+      setErros({
+        email: mensagem,
+        telefone: mensagem,
+      });
 
-      setErroGeral("");
+      return;
     }
-    
-    function limparErrosDeContato() {
-      setErros((atual) => ({
-        ...atual,
-        email: undefined,
-        telefone: undefined,
-      }));
-
-      setErroGeral("");
-    }
-
-    function exibirErroDaApi(mensagemOriginal: string) {
-      const mensagem = mensagemOriginal;
-
-      const texto = mensagem.toLocaleLowerCase();
-
-      let campo: keyof ErrosJornalista | null = null;
-
-      if (
-        texto.includes("e-mail ou telefone") ||
-        texto.includes("email ou telefone")
-      ) {
-        setErros({
-          email: mensagem,
-          telefone: mensagem,
-        });
-
-        return;
-      }
-      if (texto.includes("veículo")) {
-        campo = "veiculo";
-      } else if (
-        texto.includes("e-mail") ||
-        texto.includes("email")
-      ) {
-        campo = "email";
-      } else if (texto.includes("telefone")) {
-        campo = "telefone";
-      } else if (texto.includes("cargo")) {
-        campo = "cargo";
-      } else if (texto.includes("estado")) {
-        campo = "estado";
-      } else if (texto.includes("cidade")) {
-        campo = "cidade";
-      } else if (texto.includes("observações")) {
-        campo = "observacoes";
-      } else if (texto.includes("nome")) {
-        campo = "nome";
-      }
-
-      if (campo) {
-        setErros({ [campo]: mensagem });
-        return;
-      }
-
-      setErroGeral(mensagem);
+    if (texto.includes("veículo")) {
+      campo = "veiculo";
+    } else if (texto.includes("e-mail") || texto.includes("email")) {
+      campo = "email";
+    } else if (texto.includes("telefone")) {
+      campo = "telefone";
+    } else if (texto.includes("cargo")) {
+      campo = "cargo";
+    } else if (texto.includes("estado")) {
+      campo = "estado";
+    } else if (texto.includes("cidade")) {
+      campo = "cidade";
+    } else if (texto.includes("observações")) {
+      campo = "observacoes";
+    } else if (texto.includes("nome")) {
+      campo = "nome";
     }
 
-    async function cadastrar() {
-        const nomeFormatado = nome.trim();
-        const emailFormatado = email.trim();
-
-        const errosValidacao =
-          validarFormularioJornalista({
-            nome,
-            email,
-            telefone,
-            cargo,
-            estado,
-            cidade,
-            observacoes,
-            veiculoId: veiculo.id,
-            veiculoNome: veiculo.nome,
-          });
-
-        if (
-          !temPermissao("VEICULOS", "CRIAR") &&
-          veiculo.id === null &&
-          veiculo.nome.trim()
-        ) {
-          errosValidacao.veiculo =
-            "Selecione um veículo existente. Você não possui permissão para criar outro.";
-        }
-
-        setErros(errosValidacao);
-        setErroGeral("");
-
-        if (Object.keys(errosValidacao).length > 0) {
-          return;
-        }
-
-        try {
-            setSalvando(true);
-
-            await criarJornalista({
-            nome: nomeFormatado,
-            email: emailFormatado || undefined,
-            telefone:
-                telefone.trim() || undefined,
-            cargo:
-                cargo.trim() || undefined,
-            estado:
-                estado.trim() || undefined,
-            cidade:
-                cidade.trim() || undefined,
-            observacoes:
-                observacoes.trim() || undefined,
-            veiculo_id: veiculo.id ?? undefined,
-            veiculo_nome:
-                veiculo.id === null
-                  ? veiculo.nome.trim() || undefined
-                  : undefined,
-            });
-
-            saida.concluirSaida(retornar);
-        } catch (error) {
-            console.error(
-            "Erro ao cadastrar contato:",
-            error
-            );
-
-            const mensagem =
-              error instanceof Error
-                ? error.message
-                : "Não foi possível cadastrar o contato.";
-
-            exibirErroDaApi(mensagem);
-        } finally {
-            setSalvando(false);
-        }
+    if (campo) {
+      setErros({ [campo]: mensagem });
+      return;
     }
+
+    setErroGeral(mensagem);
+  }
+
+  async function cadastrar() {
+    if (envioEmCurso.current) {
+      return;
+    }
+
+    const nomeFormatado = nome.trim();
+    const emailFormatado = email.trim();
+
+    const errosValidacao = validarFormularioJornalista({
+      nome,
+      email,
+      telefone,
+      cargo,
+      estado,
+      cidade,
+      observacoes,
+      veiculoId: veiculo.id,
+      veiculoNome: veiculo.nome,
+    });
+
+    if (
+      !temPermissao("VEICULOS", "CRIAR") &&
+      veiculo.id === null &&
+      veiculo.nome.trim()
+    ) {
+      errosValidacao.veiculo =
+        "Selecione um veículo existente. Você não possui permissão para criar outro.";
+    }
+
+    setErros(errosValidacao);
+    setErroGeral("");
+
+    if (Object.keys(errosValidacao).length > 0) {
+      return;
+    }
+
+    try {
+      envioEmCurso.current = true;
+      setSalvando(true);
+
+      await criarJornalista({
+        nome: nomeFormatado,
+        email: emailFormatado || undefined,
+        telefone: telefone.trim() || undefined,
+        cargo: cargo.trim() || undefined,
+        estado: estado.trim() || undefined,
+        cidade: cidade.trim() || undefined,
+        observacoes: observacoes.trim() || undefined,
+        veiculo_id: veiculo.id ?? undefined,
+        veiculo_nome:
+          veiculo.id === null ? veiculo.nome.trim() || undefined : undefined,
+      });
+
+      saida.concluirSaida(retornar);
+    } catch (error) {
+      console.error("Erro ao cadastrar contato:", error);
+
+      const mensagem =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível cadastrar o contato.";
+
+      exibirErroDaApi(mensagem);
+    } finally {
+      envioEmCurso.current = false;
+      setSalvando(false);
+    }
+  }
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor:
-            theme.background,
-        },
-      ]}
-    >
-      <Header
-        title="Novo contato"
-        showBackButton
-        backFallback="/mailing"
-      />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+    <EdicaoCompacta>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
-        <View
-          style={[
-            styles.intro,
+        <Header title="Novo contato" showBackButton backFallback="/mailing" />
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.content,
             {
-              borderColor: theme.borda,
+              paddingLeft: 16 + insets.left,
+              paddingRight: 16 + insets.right,
+              paddingBottom: 28 + insets.bottom,
             },
           ]}
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={false}
         >
-          <Text
-            weight="Bold"
-            style={styles.introTitle}
-          >
-            CADASTRAR CONTATO
+          <Text style={[styles.introText, { color: theme.textoSub }]}>
+            Adicione um contato ao mailing. Informe o nome e pelo menos um
+            telefone ou e-mail.
           </Text>
-
-          <Text
-            style={[
-                styles.introText,
-                {
-                color: theme.textoSub,
-                },
-            ]}
-            >
-            Adicione um novo contato ao mailing
-            da assessoria. Nome e telefone OU e-mail são obrigatórios.
-            </Text>
-        </View>
-
-        <Text
-          weight="Bold"
-          style={styles.sectionTitle}
-        >
-          DADOS DO CONTATO
-        </Text>
-
-        <Input
-            label="NOME *"
-            value={nome}
-            onChangeText={(texto) => {
+          <SecaoEdicao titulo="Dados do contato">
+            <Input
+              label="Nome *"
+              value={nome}
+              onChangeText={(texto) => {
                 setNome(texto);
                 limparErro("nome");
-            }}
-            placeholder="Nome do contato"
-            autoCapitalize="words"
-            error={erros.nome}
-        />
-
-        <Input
-            label="E-MAIL"
-            value={email}
-            onChangeText={(texto) => {
+              }}
+              placeholder="Nome do contato"
+              autoCapitalize="words"
+              error={erros.nome}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="E-mail"
+              value={email}
+              onChangeText={(texto) => {
                 setEmail(texto);
                 limparErrosDeContato();
-            }}
-            placeholder="E-mail"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            error={erros.email}
-        />
+              }}
+              placeholder="E-mail"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={erros.email}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Telefone"
+              value={telefone}
+              onChangeText={(texto) => {
+                setTelefone(texto);
+                limparErrosDeContato();
+              }}
+              placeholder="Ex: (11) 00000-0000"
+              keyboardType="phone-pad"
+              error={erros.telefone}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Perfil profissional">
+            <Input
+              label="Cargo"
+              value={cargo}
+              onChangeText={(texto) => {
+                setCargo(texto);
+                limparErro("cargo");
+              }}
+              placeholder="Ex.: Repórter"
+              autoCapitalize="words"
+              error={erros.cargo}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Estado"
+              value={estado}
+              onChangeText={(texto) => {
+                setEstado(texto);
+                limparErro("estado");
+              }}
+              placeholder="Ex.: São Paulo"
+              autoCapitalize="words"
+              error={erros.estado}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Cidade"
+              value={cidade}
+              onChangeText={(texto) => {
+                setCidade(texto);
+                limparErro("cidade");
+              }}
+              placeholder="Ex.: Campinas"
+              autoCapitalize="words"
+              error={erros.cidade}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <VeiculoSelector
+              value={veiculo}
+              onChange={(selecao) => {
+                setVeiculo(selecao);
+                limparErro("veiculo");
+              }}
+              criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
+              error={erros.veiculo}
+              disabled={salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Informações adicionais">
+            <Input
+              label="Observações"
+              value={observacoes}
+              onChangeText={(texto) => {
+                setObservacoes(texto);
+                limparErro("observacoes");
+              }}
+              placeholder="Informações adicionais"
+              multiline
+              textAlignVertical="top"
+              style={styles.textArea}
+              error={erros.observacoes}
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+          </SecaoEdicao>
+          {erroGeral ? (
+            <Text
+              weight="Medium"
+              style={[styles.errorGeral, { color: theme.erro }]}
+            >
+              {erroGeral}
+            </Text>
+          ) : null}
+          <View style={styles.actions}>
+            <Button
+              title="CANCELAR"
+              variant="outline"
+              onPress={() => {
+                retornar();
+              }}
+              style={styles.actionButton}
+              disabled={salvando}
+            />
 
-        <Input
-          label="TELEFONE"
-          value={telefone}
-          onChangeText={(texto) => {
-            setTelefone(texto);
-            limparErrosDeContato();
-          }}
-          placeholder="Ex: (11) 00000-0000"
-          keyboardType="phone-pad"
-          error={erros.telefone}
-
-        />
-
-        <Input
-          label="CARGO"
-          value={cargo}
-          onChangeText={(texto) => {
-            setCargo(texto);
-            limparErro("cargo");
-          }}
-          placeholder="Ex.: Repórter"
-          autoCapitalize="words"
-          error={erros.cargo}
-        />
-
-        <Input
-          label="ESTADO"
-          value={estado}
-          onChangeText={(texto) => {
-            setEstado(texto);
-            limparErro("estado");
-          }}
-          placeholder="Ex.: São Paulo"
-          autoCapitalize="words"
-          error={erros.estado}
-
-        />
-
-        <Input
-          label="CIDADE"
-          value={cidade}
-          onChangeText={(texto) => {
-            setCidade(texto);
-            limparErro("cidade");
-          }}
-          placeholder="Ex.: Campinas"
-          autoCapitalize="words"
-          error={erros.cidade}
-        />
-
-        <Input
-          label="OBSERVAÇÕES"
-          value={observacoes}
-          onChangeText={(texto) => {
-            setObservacoes(texto);
-            limparErro("observacoes");
-          }}
-          placeholder="Informações adicionais"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-          error={erros.observacoes}
-        />
-
-        <VeiculoSelector
-          value={veiculo}
-          onChange={(selecao) => {
-            setVeiculo(selecao);
-            limparErro("veiculo");
-          }}
-          criacaoAoSalvar={temPermissao("VEICULOS", "CRIAR")}
-          error={erros.veiculo}
-        />
-
-        {erroGeral ? (
-        <Text
-            weight="Medium"
-            style={[
-            styles.errorGeral,
-            {
-                color: "#EF4444",
-            },
-            ]}
-        >
-            {erroGeral}
-        </Text>
-        ) : null}
-        <View style={styles.actions}>
-          <Button
-            title="CANCELAR"
-            variant="outline"
-            onPress={() => {
-              retornar();
-            }}
-            style={styles.actionButton}
-          />
-
-          <Button
-            title="CADASTRAR"
-            loading={salvando}
-            onPress={cadastrar}
-            style={styles.actionButton}
-          />
-        </View>
-      </ScrollView>
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+            <Button
+              title="CADASTRAR"
+              loading={salvando}
+              onPress={cadastrar}
+              style={styles.actionButton}
+            />
+          </View>
+        </ScrollView>
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -392,48 +381,37 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  intro: {
-    borderWidth: 1.5,
-    borderRadius: 18,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
     padding: 16,
-    marginBottom: 25,
-  },
-
-  introTitle: {
-    fontSize: 17,
+    paddingBottom: 28,
+    gap: 12,
   },
 
   introText: {
     fontSize: 12,
-    marginTop: 5,
-  },
-
-  sectionTitle: {
-    fontSize: 13,
-    marginBottom: 14,
+    lineHeight: 18,
   },
 
   textArea: {
-    height: 110,
+    height: 100,
     paddingTop: 14,
   },
   actions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 5,
   },
 
   actionButton: {
     flex: 1,
+    minWidth: 0,
+    width: "auto",
   },
 
   errorGeral: {
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: "center",
-    marginBottom: 10,
-    },
+  },
 });

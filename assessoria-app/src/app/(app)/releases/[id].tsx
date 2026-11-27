@@ -11,10 +11,13 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+import { useRetornoVinculo } from "@/hooks/useRetornoVinculo";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
+import BotaoDuplicarCadastro from "@/components/forms/BotaoDuplicarCadastro";
 import ReleaseBlocosPrevia from "@/components/releases/ReleaseBlocosPrevia";
 import ReleaseAgendamentoModal from "@/components/releases/ReleaseAgendamentoModal";
 import {
@@ -97,6 +100,11 @@ function ConteudoRelease({ id }: { id: number }) {
   const { theme } = useTheme();
   const { temPermissao, usuario } = useAuth();
   const router = useRouter();
+  const { origemContatoId } = useLocalSearchParams<{
+    origemContatoId?: string;
+  }>();
+  const retornarAoContato = useRetornoVinculo("contato", origemContatoId);
+  const retornar = useRetornoSeguro("/releases");
   const podeVer = temPermissao("RELEASES", "VISUALIZAR");
   const podeEnviar = temPermissao("RELEASES", "ENVIAR");
   const trava = useRef(false);
@@ -146,6 +154,7 @@ function ConteudoRelease({ id }: { id: number }) {
   const [confirmarRepeticao, setConfirmarRepeticao] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
   const [agendamentoAberto, setAgendamentoAberto] = useState(false);
   const [alterandoProgramacao, setAlterandoProgramacao] = useState(false);
@@ -155,7 +164,7 @@ function ConteudoRelease({ id }: { id: number }) {
   const [feedbackProgramacao, setFeedbackProgramacao] = useState("");
   const saida = useSaidaFormulario(
     false,
-    enviando || excluindo || repetindo || alterandoProgramacao
+    enviando || excluindo || repetindo || alterandoProgramacao || duplicando
   );
 
   useFocusEffect(
@@ -367,7 +376,11 @@ function ConteudoRelease({ id }: { id: number }) {
       await excluirRelease(id, release.versao_edicao);
       await encerrarRascunhoLocal();
       setConfirmarExclusao(false);
-      saida.concluirSaida(() => router.dismissTo("/releases"));
+      saida.concluirSaida(() => {
+        if (!retornarAoContato()) {
+          router.dismissTo("/releases");
+        }
+      });
     } catch (falha) {
       setErroExclusao(
         falha instanceof Error
@@ -508,7 +521,18 @@ function ConteudoRelease({ id }: { id: number }) {
 
   return (
     <View style={[styles.tela, { backgroundColor: theme.background }]}>
-      <Header title="Release" showBackButton backFallback="/releases" />
+      <Header
+        title="Release"
+        showBackButton
+        onBackPress={() => {
+          if (trava.current) {
+            return;
+          }
+          if (!retornarAoContato()) {
+            retornar();
+          }
+        }}
+      />
 
       <ScrollView contentContainerStyle={styles.conteudo}>
         <View style={styles.corpo}>
@@ -523,6 +547,7 @@ function ConteudoRelease({ id }: { id: number }) {
                   title="ATUALIZAR"
                   variant="outline"
                   onPress={() => setConsulta((atual) => ({ ...atual }))}
+                  disabled={duplicando}
                 />
               ) : null}
             </View>
@@ -538,6 +563,7 @@ function ConteudoRelease({ id }: { id: number }) {
                     variant="outline"
                     style={styles.botao}
                     disabled={
+                      duplicando ||
                       carregando ||
                       enviando ||
                       excluindo ||
@@ -562,11 +588,40 @@ function ConteudoRelease({ id }: { id: number }) {
                     variant="danger"
                     style={styles.botao}
                     loading={excluindo}
-                    disabled={carregando || enviando || alterandoProgramacao}
+                    disabled={
+                      duplicando ||
+                      carregando ||
+                      enviando ||
+                      alterandoProgramacao
+                    }
                     onPress={() => void pedirExclusao()}
                   />
                 ) : null}
               </View>
+
+              <BotaoDuplicarCadastro
+                key={"duplicar-" + id}
+                modulo="releases"
+                id={id}
+                disabled={
+                  carregando ||
+                  enviando ||
+                  excluindo ||
+                  repetindo ||
+                  alterandoProgramacao ||
+                  duplicando
+                }
+                onOcupado={(valor) => {
+                  trava.current = valor;
+                  setDuplicando(valor);
+                }}
+                onDuplicado={(novoId) =>
+                  router.push({
+                    pathname: "/releases/[id]",
+                    params: { id: String(novoId) },
+                  })
+                }
+              />
 
               {erroExclusao ? (
                 <Text style={{ color: theme.erro }}>{erroExclusao}</Text>
@@ -603,7 +658,9 @@ function ConteudoRelease({ id }: { id: number }) {
                         icon="calendar-outline"
                         size="small"
                         style={styles.botao}
-                        disabled={carregando || alterandoProgramacao}
+                        disabled={
+                          duplicando || carregando || alterandoProgramacao
+                        }
                         onPress={() => {
                           setErroEnvio("");
                           setAgendamentoAberto(true);
@@ -614,7 +671,9 @@ function ConteudoRelease({ id }: { id: number }) {
                         variant="outline"
                         size="small"
                         style={styles.botao}
-                        disabled={carregando || alterandoProgramacao}
+                        disabled={
+                          duplicando || carregando || alterandoProgramacao
+                        }
                         onPress={() => {
                           setErroEnvio("");
                           setCancelamento("agendamento");
@@ -647,7 +706,11 @@ function ConteudoRelease({ id }: { id: number }) {
                   icon="stop-circle-outline"
                   variant="outline"
                   disabled={
-                    carregando || enviando || repetindo || alterandoProgramacao
+                    duplicando ||
+                    carregando ||
+                    enviando ||
+                    repetindo ||
+                    alterandoProgramacao
                   }
                   onPress={() => {
                     setErroEnvio("");
@@ -736,7 +799,7 @@ function ConteudoRelease({ id }: { id: number }) {
                   icon="refresh-outline"
                   variant="outline"
                   loading={repetindo}
-                  disabled={carregando || enviando || excluindo}
+                  disabled={duplicando || carregando || enviando || excluindo}
                   onPress={() => {
                     setErroEnvio("");
                     setConfirmarRepeticao(true);
@@ -772,6 +835,7 @@ function ConteudoRelease({ id }: { id: number }) {
                   icon="calendar-outline"
                   variant="outline"
                   disabled={
+                    duplicando ||
                     carregando ||
                     enviando ||
                     excluindo ||
@@ -791,6 +855,7 @@ function ConteudoRelease({ id }: { id: number }) {
                   icon="paper-plane-outline"
                   loading={enviando}
                   disabled={
+                    duplicando ||
                     carregando ||
                     excluindo ||
                     repetindo ||
@@ -829,6 +894,7 @@ function ConteudoRelease({ id }: { id: number }) {
                         status: filtro.valor,
                       })
                     }
+                    disabled={duplicando}
                   />
                 ))}
               </View>

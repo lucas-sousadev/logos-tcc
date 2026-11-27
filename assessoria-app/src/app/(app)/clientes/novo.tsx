@@ -1,27 +1,30 @@
+import { useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
   View,
 } from "react-native";
 
-import { useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import Header from "@/components/layout/Header";
-import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import LogoPicker from "@/components/forms/LogoPicker";
 
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+
 import { useTheme } from "@/contexts/ThemeContext";
 
-import {
-  ArquivoLogoCliente,
-  criarCliente,
-} from "@/services/api/cliente";
+import { ArquivoLogoCliente, criarCliente } from "@/services/api/cliente";
 
 import {
   CampoCliente,
@@ -44,29 +47,31 @@ const formularioInicial: DadosClienteParaValidacao = {
 };
 
 export default function NovoCliente() {
+  const insets = useSafeAreaInsets();
+
   const { theme } = useTheme();
 
-  const [formulario, setFormulario] = useState(
-    formularioInicial
-  );
+  const [formulario, setFormulario] = useState(formularioInicial);
 
   const [ativo, setAtivo] = useState(true);
 
-  const [logo, setLogo] =
-    useState<ArquivoLogoCliente | null>(null);
+  const [logo, setLogo] = useState<ArquivoLogoCliente | null>(null);
 
   const [erros, setErros] = useState<ErrosCliente>({});
   const [erroGeral, setErroGeral] = useState("");
 
   const [salvando, setSalvando] = useState(false);
+  const envioEmCurso = useRef(false);
 
   const retornar = useRetornoSeguro("/clientes");
-  const saida = useSaidaFormulario(JSON.stringify(formulario) !== JSON.stringify(formularioInicial) || !ativo || logo !== null, salvando);
+  const saida = useSaidaFormulario(
+    JSON.stringify(formulario) !== JSON.stringify(formularioInicial) ||
+      !ativo ||
+      logo !== null,
+    salvando
+  );
 
-  function alterarCampo(
-    campo: CampoCliente,
-    valor: string
-  ) {
+  function alterarCampo(campo: CampoCliente, valor: string) {
     setFormulario((atual) => ({
       ...atual,
       [campo]: valor,
@@ -90,28 +95,27 @@ export default function NovoCliente() {
   function mostrarErroApi(mensagem: string) {
     const texto = mensagem.toLocaleLowerCase();
 
-    const campo: CampoCliente | null =
-      texto.includes("cnpj")
-        ? "cnpj"
-        : texto.includes("e-mail")
-          ? "email"
-          : texto.includes("telefone")
-            ? "telefone"
-            : texto.includes("site")
-              ? "site"
-              : texto.includes("cidade")
-                ? "cidade"
-                : texto.includes("estado")
-                  ? "estado"
-                  : texto.includes("segmento")
-                    ? "segmento"
-                    : texto.includes("responsável")
-                      ? "responsavel"
-                      : texto.includes("descrição")
-                        ? "descricao"
-                        : texto.includes("nome")
-                          ? "nome"
-                          : null;
+    const campo: CampoCliente | null = texto.includes("cnpj")
+      ? "cnpj"
+      : texto.includes("e-mail")
+        ? "email"
+        : texto.includes("telefone")
+          ? "telefone"
+          : texto.includes("site")
+            ? "site"
+            : texto.includes("cidade")
+              ? "cidade"
+              : texto.includes("estado")
+                ? "estado"
+                : texto.includes("segmento")
+                  ? "segmento"
+                  : texto.includes("responsável")
+                    ? "responsavel"
+                    : texto.includes("descrição")
+                      ? "descricao"
+                      : texto.includes("nome")
+                        ? "nome"
+                        : null;
 
     if (campo) {
       setErros({
@@ -125,8 +129,11 @@ export default function NovoCliente() {
   }
 
   async function cadastrar() {
-    const errosValidacao =
-      validarFormularioCliente(formulario);
+    if (envioEmCurso.current) {
+      return;
+    }
+
+    const errosValidacao = validarFormularioCliente(formulario);
 
     setErros(errosValidacao);
     setErroGeral("");
@@ -136,29 +143,21 @@ export default function NovoCliente() {
     }
 
     try {
+      envioEmCurso.current = true;
       setSalvando(true);
 
       await criarCliente(
         {
           nome: formulario.nome.trim(),
-          email:
-            formulario.email.trim() || undefined,
-          telefone:
-            formulario.telefone.trim() || undefined,
-          cnpj:
-            formulario.cnpj.trim() || undefined,
-          site:
-            formulario.site.trim() || undefined,
-          cidade:
-            formulario.cidade.trim() || undefined,
-          estado:
-            formulario.estado.trim() || undefined,
-          descricao:
-            formulario.descricao.trim() || undefined,
-          segmento:
-            formulario.segmento.trim() || undefined,
-          responsavel:
-            formulario.responsavel.trim() || undefined,
+          email: formulario.email.trim() || undefined,
+          telefone: formulario.telefone.trim() || undefined,
+          cnpj: formulario.cnpj.trim() || undefined,
+          site: formulario.site.trim() || undefined,
+          cidade: formulario.cidade.trim() || undefined,
+          estado: formulario.estado.trim() || undefined,
+          descricao: formulario.descricao.trim() || undefined,
+          segmento: formulario.segmento.trim() || undefined,
+          responsavel: formulario.responsavel.trim() || undefined,
           ativo,
         },
         logo ?? undefined
@@ -172,287 +171,228 @@ export default function NovoCliente() {
           : "Não foi possível cadastrar o cliente."
       );
     } finally {
+      envioEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
-    >
-      <Header
-        title="Novo cliente"
-        showBackButton
-        backFallback="/clientes"
-      />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+    <EdicaoCompacta>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
-        <View
-          style={[
-            styles.intro,
+        <Header title="Novo cliente" showBackButton backFallback="/clientes" />
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.content,
             {
-              borderColor: theme.borda,
+              paddingLeft: 16 + insets.left,
+              paddingRight: 16 + insets.right,
+              paddingBottom: 28 + insets.bottom,
             },
           ]}
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={false}
         >
-          <Text
-            weight="Bold"
-            style={styles.introTitle}
-          >
-            CADASTRAR CLIENTE
+          <Text style={[styles.introText, { color: theme.textoSub }]}>
+            Adicione um cliente à assessoria. Campos com * são obrigatórios.
           </Text>
+          <SecaoEdicao titulo="Dados principais">
+            <Input
+              label="Nome *"
+              value={formulario.nome}
+              onChangeText={(valor) => alterarCampo("nome", valor)}
+              placeholder="Nome do cliente"
+              autoCapitalize="words"
+              error={erros.nome}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Segmento"
+              value={formulario.segmento}
+              onChangeText={(valor) => alterarCampo("segmento", valor)}
+              placeholder="Ex.: Tecnologia, Saúde, Varejo"
+              autoCapitalize="words"
+              error={erros.segmento}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Responsável"
+              value={formulario.responsavel}
+              onChangeText={(valor) => alterarCampo("responsavel", valor)}
+              placeholder="Nome do responsável pelo cliente"
+              autoCapitalize="words"
+              error={erros.responsavel}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="CNPJ"
+              value={formulario.cnpj}
+              onChangeText={(valor) => alterarCampo("cnpj", valor)}
+              placeholder="Ex.: 12.345.678/0001-95"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              error={erros.cnpj}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Descrição"
+              value={formulario.descricao}
+              onChangeText={(valor) => alterarCampo("descricao", valor)}
+              placeholder="Informações sobre o cliente"
+              multiline
+              textAlignVertical="top"
+              style={styles.textArea}
+              error={erros.descricao}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Contato">
+            <Input
+              label="E-mail"
+              value={formulario.email}
+              onChangeText={(valor) => alterarCampo("email", valor)}
+              placeholder="contato@cliente.com.br"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={erros.email}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Telefone"
+              value={formulario.telefone}
+              onChangeText={(valor) => alterarCampo("telefone", valor)}
+              placeholder="Ex.: (11) 99999-9999"
+              keyboardType="phone-pad"
+              error={erros.telefone}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Site"
+              value={formulario.site}
+              onChangeText={(valor) => alterarCampo("site", valor)}
+              placeholder="https://www.exemplo.com.br"
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={erros.site}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Localização">
+            <Input
+              label="Cidade"
+              value={formulario.cidade}
+              onChangeText={(valor) => alterarCampo("cidade", valor)}
+              placeholder="Ex.: São Paulo"
+              autoCapitalize="words"
+              error={erros.cidade}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+            <Input
+              label="Estado"
+              value={formulario.estado}
+              onChangeText={(valor) => alterarCampo("estado", valor)}
+              placeholder="Ex.: São Paulo"
+              autoCapitalize="words"
+              error={erros.estado}
+              clearable
+              containerStyle={{ marginBottom: 0 }}
+              editable={!salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Identidade visual">
+            <LogoPicker
+              logoSelecionado={logo}
+              onSelect={setLogo}
+              onRemove={() => setLogo(null)}
+              disabled={salvando}
+            />
+          </SecaoEdicao>
+          <SecaoEdicao titulo="Disponibilidade">
+            <View style={styles.statusRow}>
+              <View style={styles.statusInfo}>
+                <Text weight="SemiBold" style={styles.statusTitle}>
+                  STATUS
+                </Text>
 
-          <Text
-            style={[
-              styles.introText,
-              {
-                color: theme.textoSub,
-              },
-            ]}
-          >
-            Adicione um cliente à assessoria. Campos
-            marcados com * são obrigatórios.
-          </Text>
-        </View>
+                <Text
+                  style={[
+                    styles.statusDescription,
+                    {
+                      color: theme.textoSub,
+                    },
+                  ]}
+                >
+                  Cliente ativo e disponível no sistema.
+                </Text>
+              </View>
 
-        <Text
-          weight="Bold"
-          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
-        >
-          DADOS PRINCIPAIS
-        </Text>
-
-        <Input
-          label="NOME *"
-          value={formulario.nome}
-          onChangeText={(valor) =>
-            alterarCampo("nome", valor)
-          }
-          placeholder="Nome do cliente"
-          autoCapitalize="words"
-          error={erros.nome}
-          clearable
-        />
-
-        <Input
-          label="SEGMENTO"
-          value={formulario.segmento}
-          onChangeText={(valor) =>
-            alterarCampo("segmento", valor)
-          }
-          placeholder="Ex.: Tecnologia, Saúde, Varejo"
-          autoCapitalize="words"
-          error={erros.segmento}
-          clearable
-        />
-
-        <Input
-          label="RESPONSÁVEL"
-          value={formulario.responsavel}
-          onChangeText={(valor) =>
-            alterarCampo("responsavel", valor)
-          }
-          placeholder="Nome do responsável pelo cliente"
-          autoCapitalize="words"
-          error={erros.responsavel}
-          clearable
-        />
-
-        <Input
-          label="CNPJ"
-          value={formulario.cnpj}
-          onChangeText={(valor) =>
-            alterarCampo("cnpj", valor)
-          }
-          placeholder="Ex.: 12.345.678/0001-95"
-          autoCapitalize="characters"
-          autoCorrect={false}
-          error={erros.cnpj}
-          clearable
-        />
-
-        <Input
-          label="DESCRIÇÃO"
-          value={formulario.descricao}
-          onChangeText={(valor) =>
-            alterarCampo("descricao", valor)
-          }
-          placeholder="Informações sobre o cliente"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-          error={erros.descricao}
-          clearable
-        />
-
-        <Text
-          weight="Bold"
-          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
-        >
-          CONTATO
-        </Text>
-
-        <Input
-          label="E-MAIL"
-          value={formulario.email}
-          onChangeText={(valor) =>
-            alterarCampo("email", valor)
-          }
-          placeholder="contato@cliente.com.br"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          error={erros.email}
-          clearable
-        />
-
-        <Input
-          label="TELEFONE"
-          value={formulario.telefone}
-          onChangeText={(valor) =>
-            alterarCampo("telefone", valor)
-          }
-          placeholder="Ex.: (11) 99999-9999"
-          keyboardType="phone-pad"
-          error={erros.telefone}
-          clearable
-        />
-
-        <Input
-          label="SITE"
-          value={formulario.site}
-          onChangeText={(valor) =>
-            alterarCampo("site", valor)
-          }
-          placeholder="https://www.exemplo.com.br"
-          keyboardType="url"
-          autoCapitalize="none"
-          autoCorrect={false}
-          error={erros.site}
-          clearable
-        />
-
-        <Text
-          weight="Bold"
-          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
-        >
-          LOCALIZAÇÃO
-        </Text>
-
-        <Input
-          label="CIDADE"
-          value={formulario.cidade}
-          onChangeText={(valor) =>
-            alterarCampo("cidade", valor)
-          }
-          placeholder="Ex.: São Paulo"
-          autoCapitalize="words"
-          error={erros.cidade}
-          clearable
-        />
-
-        <Input
-          label="ESTADO"
-          value={formulario.estado}
-          onChangeText={(valor) =>
-            alterarCampo("estado", valor)
-          }
-          placeholder="Ex.: São Paulo"
-          autoCapitalize="words"
-          error={erros.estado}
-          clearable
-        />
-
-        <Text
-          weight="Bold"
-          style={[styles.sectionTitle, {color: theme.textoTerciaria, borderBottomColor: theme.borda}]}
-        >
-           IDENTIDADE VISUAL
-        </Text>
-
-        <LogoPicker
-          logoSelecionado={logo}
-          onSelect={setLogo}
-          onRemove={() => setLogo(null)}
-          disabled={salvando}
-        />
-
-        <View
-          style={[
-            styles.statusRow,
-            {
-              borderColor: theme.borda,
-            },
-          ]}
-        >
-          <View style={styles.statusInfo}>
+              <Switch
+                value={ativo}
+                onValueChange={setAtivo}
+                trackColor={{
+                  false: theme.surface,
+                  true: theme.primaria,
+                }}
+                thumbColor={theme.branco}
+                disabled={salvando}
+              />
+            </View>
+          </SecaoEdicao>
+          {erroGeral ? (
             <Text
-              weight="SemiBold"
-              style={styles.statusTitle}
+              weight="Medium"
+              style={[styles.errorGeral, { color: theme.erro }]}
             >
-              STATUS
+              {erroGeral}
             </Text>
+          ) : null}
+          <View style={styles.actions}>
+            <Button
+              title="CANCELAR"
+              variant="outline"
+              onPress={() => {
+                retornar();
+              }}
+              style={styles.actionButton}
+              disabled={salvando}
+            />
 
-            <Text
-              style={[
-                styles.statusDescription,
-                {
-                  color: theme.textoSub,
-                },
-              ]}
-            >
-              Cliente ativo e disponível no sistema.
-            </Text>
+            <Button
+              title="CADASTRAR"
+              loading={salvando}
+              onPress={cadastrar}
+              style={styles.actionButton}
+            />
           </View>
-
-          <Switch
-            value={ativo}
-            onValueChange={setAtivo}
-            trackColor={{
-              false: theme.surface,
-              true: theme.primaria,
-            }}
-            thumbColor={theme.branco}
-          />
-        </View>
-
-        {erroGeral ? (
-          <Text
-            weight="Medium"
-            style={styles.errorGeral}
-          >
-            {erroGeral}
-          </Text>
-        ) : null}
-
-        <View style={styles.actions}>
-          <Button
-            title="CANCELAR"
-            variant="outline"
-            onPress={() => {
-              retornar();
-            }}
-            style={styles.actionButton}
-          />
-
-          <Button
-            title="CADASTRAR"
-            loading={salvando}
-            onPress={cadastrar}
-            style={styles.actionButton}
-          />
-        </View>
-      </ScrollView>
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+        </ScrollView>
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -462,32 +402,17 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  intro: {
-    borderWidth: 1.5,
-    borderRadius: 18,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
     padding: 16,
-    marginBottom: 25,
-  },
-
-  introTitle: {
-    fontSize: 17,
+    paddingBottom: 28,
+    gap: 12,
   },
 
   introText: {
     fontSize: 12,
-    marginTop: 5,
-  },
-
-  sectionTitle: {
-    fontSize: 13,
-    marginBottom: 14,
-    borderBottomWidth: 1.5,
-    paddingBottom: 2,
-    textAlign: "center"
+    lineHeight: 18,
   },
 
   textArea: {
@@ -496,44 +421,42 @@ const styles = StyleSheet.create({
   },
 
   statusRow: {
-    minHeight: 68,
-    borderWidth: 1.5,
-    borderRadius: 15,
-    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 22,
+    gap: 12,
+    minWidth: 0,
   },
 
   statusInfo: {
     flex: 1,
-    marginRight: 10,
+    minWidth: 0,
+    gap: 4,
   },
 
   statusTitle: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
   },
 
   statusDescription: {
-    fontSize: 11,
-    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   errorGeral: {
-    color: "#EF4444",
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: "center",
-    marginBottom: 10,
   },
 
   actions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 5,
   },
 
   actionButton: {
     flex: 1,
+    minWidth: 0,
+    width: "auto",
   },
 });

@@ -12,6 +12,8 @@ tests/
 !/logos-api/tests/releases_agendamento.php
 !/logos-api/tests/releases_aberturas.php
 !/logos-api/tests/perfil.php
+!/logos-api/tests/duplicacao.php
+!/logos-api/tests/vinculos.php
 !/assessoria-app/tests/
 /assessoria-app/tests/*
 !/assessoria-app/tests/navegacao.test.cjs

@@ -7,9 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { useSincronizacaoPermissoes } from "@/hooks/useSincronizacaoPermissoes";
+
 import {
   clearSession,
+  observarEncerramentoSessao,
   getToken,
   login as authLogin,
   logout as authLogout,
@@ -101,8 +104,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         !atual ||
         atual.id !== dados.id ||
         atual.assessoria_id !== dados.assessoria_id
-      )
+      ) {
         return atual;
+      }
       return JSON.stringify(atual) === JSON.stringify(dados) ? atual : dados;
     });
   }, []);
@@ -116,6 +120,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     consultaPermissoes.current?.controller.abort();
     consultaPermissoes.current = null;
   }, []);
+
+  useEffect(
+    () =>
+      observarEncerramentoSessao(() => {
+        cancelarConsultaPermissoes();
+        setUsuario(null);
+        setPermissoesUsuario([]);
+      }),
+    [cancelarConsultaPermissoes]
+  );
 
   useEffect(
     () => cancelarConsultaPermissoes,
@@ -168,7 +182,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const conta = usuario.assessoria_id + ":" + usuario.id;
     const pendente = consultaPermissoes.current;
-    if (pendente?.conta === conta) return pendente.promessa;
+    if (pendente?.conta === conta) {
+      return pendente.promessa;
+    }
 
     cancelarConsultaPermissoes();
     const pedido = {
@@ -187,19 +203,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (
           pedido.controller.signal.aborted ||
           consultaPermissoes.current !== pedido
-        )
+        ) {
           return;
+        }
         setPermissoesUsuario((atuais) =>
           JSON.stringify(atuais) === JSON.stringify(permissoes)
             ? atuais
             : permissoes
         );
       } catch (erro) {
-        if (!pedido.controller.signal.aborted) throw erro;
+        if (!pedido.controller.signal.aborted) {
+          throw erro;
+        }
       } finally {
         clearTimeout(prazo);
-        if (consultaPermissoes.current === pedido)
+        if (consultaPermissoes.current === pedido) {
           consultaPermissoes.current = null;
+        }
       }
     })();
 
@@ -267,9 +287,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function logout(): Promise<void> {
     cancelarConsultaPermissoes();
     await authLogout();
-
-    setUsuario(null);
-    setPermissoesUsuario([]);
   }
 
   async function validarConvite(codigo: string): Promise<void> {

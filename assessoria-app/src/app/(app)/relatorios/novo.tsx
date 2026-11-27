@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Pressable,
   ScrollView,
@@ -7,19 +9,26 @@ import {
   Switch,
   View,
 } from "react-native";
+
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
+import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import Header from "@/components/layout/Header";
-import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
-import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
 import ClippingContexto from "@/components/clipping/ClippingContexto";
+
+import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
+
 import { useTheme } from "@/contexts/ThemeContext";
+
 import {
   criarRelatorio,
   listarMateriasRelatorio,
@@ -27,15 +36,10 @@ import {
   type MateriaRelatorio,
   type PaginacaoRelatorio,
 } from "@/services/api/relatorio";
-import {
-  dataBRParaISO,
-  dataISOParaBR,
-} from "@/utils/clippingFormatacao";
 
-type TipoLista =
-  | "periodo"
-  | "sem_data"
-  | "desmarcados";
+import { dataBRParaISO, dataISOParaBR } from "@/utils/clippingFormatacao";
+
+type TipoLista = "periodo" | "sem_data" | "desmarcados";
 
 type ErrosCampos = {
   cliente?: string;
@@ -47,6 +51,8 @@ type ErrosCampos = {
 const LIMITE_PAGINA = 20;
 
 export default function NovoRelatorio() {
+  const insets = useSafeAreaInsets();
+
   const router = useRouter();
   const { theme } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
@@ -67,9 +73,7 @@ export default function NovoRelatorio() {
     Number.isSafeInteger(clienteInicialId) && clienteInicialId > 0
       ? {
           id: clienteInicialId,
-          nome:
-            params.clienteNome ??
-            `Cliente #${clienteInicialId}`,
+          nome: params.clienteNome ?? `Cliente #${clienteInicialId}`,
         }
       : null
   );
@@ -77,10 +81,8 @@ export default function NovoRelatorio() {
   const [titulo, setTitulo] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
-  const [inclusaoAutomatica, setInclusaoAutomatica] =
-    useState(true);
-  const [errosCampos, setErrosCampos] =
-    useState<ErrosCampos>({});
+  const [inclusaoAutomatica, setInclusaoAutomatica] = useState(true);
+  const [errosCampos, setErrosCampos] = useState<ErrosCampos>({});
 
   const [periodo, setPeriodo] = useState<{
     inicio: string;
@@ -91,33 +93,37 @@ export default function NovoRelatorio() {
   const [page, setPage] = useState(1);
   const [buscaMateria, setBuscaMateria] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
-  const [materias, setMaterias] = useState<
-    MateriaRelatorio[]
-  >([]);
+  const [materias, setMaterias] = useState<MateriaRelatorio[]>([]);
   const [resumo, setResumo] = useState({
     no_periodo: 0,
     sem_data: 0,
   });
-  const [pagination, setPagination] =
-    useState<PaginacaoRelatorio | null>(null);
+  const [pagination, setPagination] = useState<PaginacaoRelatorio | null>(null);
   const [tentativa, setTentativa] = useState(0);
 
-  const [excluidos, setExcluidos] = useState<
-    Map<number, MateriaRelatorio>
-  >(() => new Map());
+  const [excluidos, setExcluidos] = useState<Map<number, MateriaRelatorio>>(
+    () => new Map()
+  );
 
-  const [semDataIncluidos, setSemDataIncluidos] =
-    useState<Set<number>>(() => new Set());
+  const [semDataIncluidos, setSemDataIncluidos] = useState<Set<number>>(
+    () => new Set()
+  );
 
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const envioEmCurso = useRef(false);
   const [erroConsulta, setErroConsulta] = useState("");
   const [erroSalvar, setErroSalvar] = useState("");
 
   const retornar = useRetornoSeguro("/relatorios");
   const estadoFormulario = JSON.stringify({
-    cliente: cliente?.id ?? null, titulo, dataInicio, dataFim, inclusaoAutomatica,
-    excluidos: [...excluidos.keys()], semDataIncluidos: [...semDataIncluidos],
+    cliente: cliente?.id ?? null,
+    titulo,
+    dataInicio,
+    dataFim,
+    inclusaoAutomatica,
+    excluidos: [...excluidos.keys()],
+    semDataIncluidos: [...semDataIncluidos],
   });
   const [inicial] = useState(estadoFormulario);
   const saida = useSaidaFormulario(estadoFormulario !== inicial, salvando);
@@ -139,11 +145,7 @@ export default function NovoRelatorio() {
   }, [periodo]);
 
   useEffect(() => {
-    if (!periodo || !cliente) return;
-
-    if (tipo === "desmarcados") {
-      setCarregando(false);
-      setErroConsulta("");
+    if (!periodo || !cliente) {
       return;
     }
 
@@ -166,13 +168,17 @@ export default function NovoRelatorio() {
           busca: buscaAplicada,
         });
 
-        if (!ativo) return;
+        if (!ativo) {
+          return;
+        }
 
         setMaterias(resposta.materias);
         setResumo(resposta.resumo);
         setPagination(resposta.pagination);
       } catch (e) {
-        if (!ativo) return;
+        if (!ativo) {
+          return;
+        }
 
         setErroConsulta(
           e instanceof Error
@@ -180,47 +186,44 @@ export default function NovoRelatorio() {
             : "Não foi possível consultar as matérias."
         );
       } finally {
-        if (ativo) setCarregando(false);
+        if (ativo) {
+          setCarregando(false);
+        }
       }
     }
 
-    void carregar();
+    const timer = setTimeout(() => {
+      if (tipo === "desmarcados") {
+        setCarregando(false);
+        setErroConsulta("");
+      } else {
+        void carregar();
+      }
+    }, 0);
 
     return () => {
       ativo = false;
+      clearTimeout(timer);
     };
-  }, [
-    periodo,
-    cliente,
-    tipo,
-    page,
-    buscaAplicada,
-    tentativa,
-  ]);
-    
+  }, [periodo, cliente, tipo, page, buscaAplicada, tentativa]);
+
   const materiasRetiradas = useMemo(() => {
-    const termo = buscaAplicada
-      .trim()
-      .toLocaleLowerCase("pt-BR");
+    const termo = buscaAplicada.trim().toLocaleLowerCase("pt-BR");
 
     return [...excluidos.values()]
       .filter((materia) => {
-        if (!termo) return true;
+        if (!termo) {
+          return true;
+        }
 
-        return [
-          materia.pauta,
-          materia.veiculo_nome,
-        ].some((valor) =>
-          (valor ?? "")
-            .toLocaleLowerCase("pt-BR")
-            .includes(termo)
+        return [materia.pauta, materia.veiculo_nome].some((valor) =>
+          (valor ?? "").toLocaleLowerCase("pt-BR").includes(termo)
         );
       })
       .sort(
         (a, b) =>
-          (a.data_publicacao ?? "").localeCompare(
-            b.data_publicacao ?? ""
-          ) || a.id - b.id
+          (a.data_publicacao ?? "").localeCompare(b.data_publicacao ?? "") ||
+          a.id - b.id
       );
   }, [excluidos, buscaAplicada]);
 
@@ -238,33 +241,30 @@ export default function NovoRelatorio() {
           page,
           limit: LIMITE_PAGINA,
           total: materiasRetiradas.length,
-          has_next:
-            page * LIMITE_PAGINA <
-            materiasRetiradas.length,
+          has_next: page * LIMITE_PAGINA < materiasRetiradas.length,
         }
       : pagination;
 
   useEffect(() => {
-    if (tipo !== "desmarcados") return;
+    if (tipo !== "desmarcados") {
+      return;
+    }
 
     const ultimaPagina = Math.max(
       1,
-      Math.ceil(
-        materiasRetiradas.length / LIMITE_PAGINA
-      )
+      Math.ceil(materiasRetiradas.length / LIMITE_PAGINA)
     );
 
-    if (page > ultimaPagina) {
-      setPage(ultimaPagina);
+    if (page <= ultimaPagina) {
+      return;
     }
+    const timer = setTimeout(() => setPage(ultimaPagina), 0);
+    return () => clearTimeout(timer);
   }, [tipo, page, materiasRetiradas.length]);
 
   const totalSelecionado = useMemo(
     () =>
-      Math.max(
-        0,
-        resumo.no_periodo - excluidos.size
-      ) + semDataIncluidos.size,
+      Math.max(0, resumo.no_periodo - excluidos.size) + semDataIncluidos.size,
     [resumo.no_periodo, excluidos, semDataIncluidos]
   );
 
@@ -278,38 +278,28 @@ export default function NovoRelatorio() {
     }
 
     if (!titulo.trim()) {
-      novosErros.titulo =
-        "Informe o título do relatório.";
+      novosErros.titulo = "Informe o título do relatório.";
     }
 
     if (!dataInicio.trim()) {
-      novosErros.inicio =
-        "Informe o início do período.";
+      novosErros.inicio = "Informe o início do período.";
     } else if (!inicio) {
-      novosErros.inicio =
-        "Informe uma data válida em DD/MM/AAAA.";
+      novosErros.inicio = "Informe uma data válida em DD/MM/AAAA.";
     }
 
     if (!dataFim.trim()) {
-      novosErros.fim =
-        "Informe o fim do período.";
+      novosErros.fim = "Informe o fim do período.";
     } else if (!fim) {
-      novosErros.fim =
-        "Informe uma data válida em DD/MM/AAAA.";
+      novosErros.fim = "Informe uma data válida em DD/MM/AAAA.";
     }
 
     if (inicio && fim && inicio > fim) {
-      novosErros.fim =
-        "O fim não pode ser anterior ao início.";
+      novosErros.fim = "O fim não pode ser anterior ao início.";
     }
 
     setErrosCampos(novosErros);
 
-    if (
-      Object.keys(novosErros).length > 0 ||
-      !inicio ||
-      !fim
-    ) {
+    if (Object.keys(novosErros).length > 0 || !inicio || !fim) {
       return;
     }
 
@@ -329,6 +319,9 @@ export default function NovoRelatorio() {
   }
 
   function alternarMateria(materia: MateriaRelatorio) {
+    if (envioEmCurso.current) {
+      return;
+    }
     if (tipo === "sem_data") {
       setSemDataIncluidos((atual) => {
         const proximo = new Set(atual);
@@ -359,16 +352,15 @@ export default function NovoRelatorio() {
   }
 
   async function salvar() {
-    if (
-      !cliente ||
-      !periodo ||
-      salvando ||
-      carregando ||
-      erroConsulta
-    ) {
+    if (envioEmCurso.current) {
       return;
     }
 
+    if (!cliente || !periodo || salvando || carregando || erroConsulta) {
+      return;
+    }
+
+    envioEmCurso.current = true;
     setSalvando(true);
     setErroSalvar("");
 
@@ -380,657 +372,596 @@ export default function NovoRelatorio() {
         periodo_fim: periodo.fim,
         inclusao_automatica: inclusaoAutomatica,
         ids_excluidos: [...excluidos.keys()],
-        ids_sem_data_incluidos: [
-          ...semDataIncluidos,
-        ],
+        ids_sem_data_incluidos: [...semDataIncluidos],
       });
 
-      saida.concluirSaida(() => router.replace({
-        pathname: "/relatorios/[id]",
-        params: {
-          id: String(resposta.relatorio.id),
-          ...(params.origemNavegacao === "inicio" ? { origemNavegacao: "inicio" } : {}),
-        },
-      }));
+      saida.concluirSaida(() =>
+        router.replace({
+          pathname: "/relatorios/[id]",
+          params: {
+            id: String(resposta.relatorio.id),
+            ...(params.origemNavegacao === "inicio"
+              ? { origemNavegacao: "inicio" }
+              : {}),
+          },
+        })
+      );
     } catch (e) {
       setErroSalvar(
-        e instanceof Error
-          ? e.message
-          : "Não foi possível criar o relatório."
+        e instanceof Error ? e.message : "Não foi possível criar o relatório."
       );
     } finally {
+      envioEmCurso.current = false;
       setSalvando(false);
     }
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
-    >
-      <Header
-        title={
-          periodo
-            ? "Escolher matérias"
-            : "Novo relatório"
-        }
-        showBackButton
-        onBackPress={() => {
-          if (salvando) return;
-          if (periodo) {
-            setPeriodo(null);
-            setErroConsulta("");
-            setErroSalvar("");
-          } else {
-            retornar();
-          }
-        }}
-      />
-
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          periodo
-            ? styles.contentSelection
-            : styles.contentForm,
-        ]}
+    <EdicaoCompacta>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.background }]}
       >
-        {!periodo ? (
-          <>
-            <Text
-              weight="Bold"
-              style={styles.sectionTitle}
-            >
-              Dados do relatório
-            </Text>
+        <Header
+          title={periodo ? "Escolher matérias" : "Novo relatório"}
+          showBackButton
+          onBackPress={() => {
+            if (salvando) {
+              return;
+            }
+            if (periodo) {
+              setPeriodo(null);
+              setErroConsulta("");
+              setErroSalvar("");
+            } else {
+              retornar();
+            }
+          }}
+        />
 
-            <ClippingContexto
-              apenasCliente
-              buscarClientes={listarClientesRelatorio}
-              clienteId={cliente?.id ?? null}
-              clienteNome={cliente?.nome ?? ""}
-              ano={anoCalendario}
-              anoPelaData={false}
-              erroCliente={errosCampos.cliente}
-              onCliente={(selecionado) => {
-                setCliente({
-                  id: selecionado.id,
-                  nome: selecionado.nome,
-                });
-                setErrosCampos((atual) => ({
-                  ...atual,
-                  cliente: undefined,
-                }));
-              }}
-            />
-
-            <Input
-              label="TÍTULO"
-              value={titulo}
-              onChangeText={(valor) => {
-                setTitulo(valor);
-                setErrosCampos((atual) => ({
-                  ...atual,
-                  titulo: undefined,
-                }));
-              }}
-              error={errosCampos.titulo}
-              placeholder="Ex.: Relatório de março"
-              maxLength={200}
-              clearable
-            />
-
-            <ClippingDataInput
-              label="INÍCIO DO PERÍODO"
-              value={dataInicio}
-              anoReferencia={anoCalendario}
-              onChangeText={(valor) => {
-                setDataInicio(valor);
-                setErrosCampos((atual) => ({
-                  ...atual,
-                  inicio: undefined,
-                  fim: undefined,
-                }));
-              }}
-              error={errosCampos.inicio}
-            />
-
-            <ClippingDataInput
-              label="FIM DO PERÍODO"
-              value={dataFim}
-              anoReferencia={anoCalendario}
-              onChangeText={(valor) => {
-                setDataFim(valor);
-                setErrosCampos((atual) => ({
-                  ...atual,
-                  fim: undefined,
-                }));
-              }}
-              error={errosCampos.fim}
-            />
-
-            <View
-              style={[
-                styles.automaticCard,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            >
-              <View style={styles.automaticText}>
-                <Text weight="SemiBold">
-                  Incluir novas matérias automaticamente
-                </Text>
-
-                <Text
-                  style={{ color: theme.textoSub }}
-                >
-                  Novos clippings deste cliente dentro
-                  do período entrarão para revisão.
-                </Text>
-              </View>
-
-              <Switch
-                value={inclusaoAutomatica}
-                onValueChange={
-                  setInclusaoAutomatica
-                }
-                trackColor={{
-                  true: theme.borda,
-                  false: theme.textoSub,
-                }}
-              />
-            </View>
-
-            <Button
-              title="ESCOLHER MATÉRIAS"
-              onPress={verMaterias}
-            />
-          </>
-        ) : (
-          <>
-            <View
-              style={[
-                styles.reportSummary,
-                { borderColor: theme.borda,
-                  backgroundColor: theme.background
-                 },
-              ]}
-            >
-              <Text
-                weight="Bold"
-                style={[styles.reportTitle, {color: theme.texto}]}
-              >
-                {titulo.trim()}
+        <ScrollView
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingLeft: 16 + insets.left,
+              paddingRight: 16 + insets.right,
+              paddingBottom: 28 + insets.bottom,
+            },
+          ]}
+          style={{ flex: 1 }}
+          automaticallyAdjustKeyboardInsets={false}
+        >
+          {!periodo ? (
+            <>
+              <Text style={[styles.introText, { color: theme.textoSub }]}>
+                Defina o cliente e o período para organizar as matérias do
+                relatório.
               </Text>
+              <SecaoEdicao titulo="Dados do relatório">
+                <ClippingContexto
+                  apenasCliente
+                  buscarClientes={listarClientesRelatorio}
+                  clienteId={cliente?.id ?? null}
+                  clienteNome={cliente?.nome ?? ""}
+                  ano={anoCalendario}
+                  anoPelaData={false}
+                  erroCliente={errosCampos.cliente}
+                  onCliente={(selecionado) => {
+                    setCliente({
+                      id: selecionado.id,
+                      nome: selecionado.nome,
+                    });
+                    setErrosCampos((atual) => ({
+                      ...atual,
+                      cliente: undefined,
+                    }));
+                  }}
+                  disabled={salvando}
+                />
+                <Input
+                  label="Título"
+                  value={titulo}
+                  onChangeText={(valor) => {
+                    setTitulo(valor);
+                    setErrosCampos((atual) => ({
+                      ...atual,
+                      titulo: undefined,
+                    }));
+                  }}
+                  error={errosCampos.titulo}
+                  placeholder="Ex.: Relatório de março"
+                  maxLength={200}
+                  clearable
+                  containerStyle={{ marginBottom: 0 }}
+                  editable={!salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Período de publicação">
+                <ClippingDataInput
+                  label="Início do período"
+                  value={dataInicio}
+                  anoReferencia={anoCalendario}
+                  onChangeText={(valor) => {
+                    setDataInicio(valor);
+                    setErrosCampos((atual) => ({
+                      ...atual,
+                      inicio: undefined,
+                      fim: undefined,
+                    }));
+                  }}
+                  error={errosCampos.inicio}
+                  disabled={salvando}
+                />
+                <ClippingDataInput
+                  label="Fim do período"
+                  value={dataFim}
+                  anoReferencia={anoCalendario}
+                  onChangeText={(valor) => {
+                    setDataFim(valor);
+                    setErrosCampos((atual) => ({
+                      ...atual,
+                      fim: undefined,
+                    }));
+                  }}
+                  error={errosCampos.fim}
+                  disabled={salvando}
+                />
+              </SecaoEdicao>
+              <SecaoEdicao titulo="Atualização do relatório">
+                <View style={styles.automaticCard}>
+                  <View style={styles.automaticText}>
+                    <Text weight="SemiBold" style={styles.automaticTitle}>
+                      Incluir novas matérias automaticamente
+                    </Text>
 
-              <Text
-                style={{ color: theme.textoTerciaria }}
-              >
-                {cliente?.nome}
-              </Text>
-                
-              <Text
-                style={{ color: theme.texto, fontSize: 13}}
-              >
-                {dataISOParaBR(periodo.inicio)} a{" "}
-                {dataISOParaBR(periodo.fim)}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.selectionHelp,
-                {
-                  borderColor: theme.borda,
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={19}
-                color={theme.textoSecundaria}
-              />
-
-              <Text
-                style={[
-                  styles.selectionHelpText,
-                  { color: theme.textoSub },
-                ]}
-              >
-                As matérias do período já estão
-                selecionadas. As sem data só entram se você as
-                selecionar.
-              </Text>
-            </View>
-
-            <View style={styles.tabs}>
-              {(
-                [
-                  {
-                    chave: "periodo",
-                    texto: "NO PERÍODO",
-                    quantidade: resumo.no_periodo,
-                  },
-                  {
-                    chave: "sem_data",
-                    texto: "SEM DATA",
-                    quantidade: resumo.sem_data,
-                  },
-                  {
-                    chave: "desmarcados",
-                    texto: "DESMARCADOS",
-                    quantidade: excluidos.size,
-                  },
-                ] as const
-              ).map((aba) => {
-                const ativa = tipo === aba.chave;
-
-                return (
-                  <Pressable
-                    key={aba.chave}
-                    accessibilityRole="tab"
-                    accessibilityLabel={`${aba.texto}: ${aba.quantidade} matérias`}
-                    accessibilityState={{ selected: ativa }}
-                    onPress={() => {
-                      if (ativa) return;
-                      setTipo(aba.chave);
-                      setPage(1);
-                    }}
-                    style={[
-                      styles.tab,
-                      {
-                        borderColor: theme.borda,
-                        backgroundColor: ativa
-                          ? theme.backgroundContainer
-                          : theme.background,
-                      },
-                    ]}
-                  >
                     <Text
-                      weight="Bold"
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
                       style={[
-                        styles.tabText,
-                        {
-                          color: ativa
-                            ? theme.textoContainer
-                            : theme.texto,
-                        },
+                        styles.automaticDescription,
+                        { color: theme.textoSub },
                       ]}
                     >
-                      {aba.texto}
+                      Novos clippings deste cliente dentro do período entrarão
+                      para revisão.
                     </Text>
+                  </View>
 
-                    <Text
-                      weight="Bold"
-                      style={{
-                        color: ativa
-                          ? theme.textoContainer
-                          : theme.textoTerciaria,
-                        fontSize: 12,
-                      }}
-                    >
-                      {aba.quantidade}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Input
-              label="BUSCAR MATÉRIAS"
-              value={buscaMateria}
-              onChangeText={setBuscaMateria}
-              placeholder="Pauta ou veículo"
-              clearable
-              containerStyle={
-                styles.searchContainer
-              }
-            />
-
-            {carregando ? (
-              <ActivityIndicator
-                color={theme.textoTerciaria}
-                style={styles.loading}
+                  <Switch
+                    value={inclusaoAutomatica}
+                    onValueChange={setInclusaoAutomatica}
+                    trackColor={{
+                      true: theme.borda,
+                      false: theme.textoSub,
+                    }}
+                    disabled={salvando}
+                  />
+                </View>
+              </SecaoEdicao>
+              <Button
+                title="ESCOLHER MATÉRIAS"
+                onPress={verMaterias}
+                disabled={salvando}
               />
-            ) : null}
-
-            {erroConsulta ? (
+            </>
+          ) : (
+            <>
               <View
                 style={[
-                  styles.messageCard,
-                  { borderColor: theme.erro },
+                  styles.reportSummary,
+                  {
+                    borderColor: theme.borda,
+                    backgroundColor: theme.background,
+                  },
                 ]}
               >
                 <Text
-                  style={{ color: theme.erro }}
+                  weight="Bold"
+                  style={[styles.reportTitle, { color: theme.texto }]}
                 >
-                  {erroConsulta}
+                  {titulo.trim()}
                 </Text>
 
-                <Button
-                  title="TENTAR NOVAMENTE"
-                  variant="outline"
-                  size="small"
-                  onPress={() =>
-                    setTentativa(
-                      (atual) => atual + 1
-                    )
-                  }
-                />
-              </View>
-            ) : null}
+                <Text style={{ color: theme.textoTerciaria }}>
+                  {cliente?.nome}
+                </Text>
 
-            {!carregando &&
-            !erroConsulta &&
-            materiasVisiveis.length === 0 ? (
+                <Text style={{ color: theme.texto, fontSize: 13 }}>
+                  {dataISOParaBR(periodo.inicio)} a {dataISOParaBR(periodo.fim)}
+                </Text>
+              </View>
+
               <View
                 style={[
-                  styles.emptyCard,
-                  { borderColor: theme.borda },
+                  styles.selectionHelp,
+                  {
+                    borderColor: theme.borda,
+                    backgroundColor: theme.background,
+                  },
                 ]}
               >
                 <Ionicons
-                  name="document-text-outline"
-                  size={26}
-                  color={theme.textoSub}
+                  name="information-circle-outline"
+                  size={19}
+                  color={theme.textoSecundaria}
                 />
 
                 <Text
-                  weight="SemiBold"
-                  style={{
-                    textAlign: "center",
-                  }}
+                  style={[styles.selectionHelpText, { color: theme.textoSub }]}
                 >
-                  Nenhuma matéria encontrada
+                  As matérias do período já estão selecionadas. As sem data só
+                  entram se você as selecionar.
                 </Text>
-
-                <Text
-                  style={{
-                    color: theme.textoSub,
-                    textAlign: "center",
-                  }}
-                >
-                  {buscaAplicada
-                    ? "Tente outra pauta ou veículo."
-                    : tipo === "desmarcados"
-                      ? "Nenhuma matéria foi retirada do relatório."
-                      : tipo === "sem_data"
-                        ? "Este cliente não tem clippings sem data."
-                        : "Confira o cliente e as datas do período."}
-                </Text>
-
-                {!buscaAplicada &&
-                tipo === "periodo" ? (
-                  <Button
-                    title="ALTERAR DADOS"
-                    variant="outline"
-                    size="small"
-                    onPress={() =>
-                      setPeriodo(null)
-                    }
-                  />
-                ) : null}
               </View>
-            ) : null}
 
-            {!carregando && !erroConsulta
-              ? materiasVisiveis.map((materia) => {
-                  const selecionada =
-                    tipo === "sem_data"
-                      ? semDataIncluidos.has(materia.id)
-                      : !excluidos.has(materia.id);
+              <View style={styles.tabs}>
+                {(
+                  [
+                    {
+                      chave: "periodo",
+                      texto: "NO PERÍODO",
+                      quantidade: resumo.no_periodo,
+                    },
+                    {
+                      chave: "sem_data",
+                      texto: "SEM DATA",
+                      quantidade: resumo.sem_data,
+                    },
+                    {
+                      chave: "desmarcados",
+                      texto: "DESMARCADOS",
+                      quantidade: excluidos.size,
+                    },
+                  ] as const
+                ).map((aba) => {
+                  const ativa = tipo === aba.chave;
 
                   return (
                     <Pressable
-                      key={materia.id}
-                      accessibilityRole="checkbox"
+                      key={aba.chave}
+                      accessibilityRole="tab"
+                      accessibilityLabel={`${aba.texto}: ${aba.quantidade} matérias`}
                       accessibilityState={{
-                        checked: selecionada,
+                        selected: ativa,
+                        disabled: salvando,
                       }}
-                      onPress={() =>
-                        alternarMateria(materia)
-                      }
-                      style={[
-                        styles.materiaCard,
-                        {
-                          borderColor: selecionada ? theme.borda : theme.textoSub,
-                          borderWidth: selecionada ? 2 : 1.5,
-                          backgroundColor: selecionada
-                            ? theme.backgroundSecundario
-                            : theme.background,
+                      disabled={salvando}
+                      onPress={() => {
+                        if (ativa || salvando) {
+                          return;
                         }
+                        setTipo(aba.chave);
+                        setPage(1);
+                      }}
+                      style={[
+                        styles.tab,
+                        {
+                          borderColor: theme.borda,
+                          backgroundColor: ativa
+                            ? theme.backgroundContainer
+                            : theme.background,
+                        },
                       ]}
                     >
-                      <View
+                      <Text
+                        weight="Bold"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
                         style={[
-                          styles.materiaTop,
-                          { paddingRight: selecionada ? 30 : 82 },
+                          styles.tabText,
+                          {
+                            color: ativa ? theme.textoContainer : theme.texto,
+                          },
                         ]}
                       >
-                        <View
-                          style={
-                            styles.materiaInfo
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.materiaData
-                            }
-                          >
-                            {materia.data_publicacao
-                              ? dataISOParaBR(
-                                  materia.data_publicacao
-                                )
-                              : "SEM DATA"}
-                          </Text>
-
-                          <Text
-                            weight="SemiBold"
-                            numberOfLines={1}
-                            style={{ color: theme.textoTerciaria }}
-                          >
-                            {materia.veiculo_nome || "Sem veículo"}
-                          </Text>
-                        </View>
-
-                        <View style={styles.materiaAcao}>
-                          <Ionicons
-                            name={
-                              selecionada
-                                ? "checkmark-circle"
-                                : "add-circle-outline"
-                            }
-                            size={25}
-                            color={theme.textoTerciaria}
-                          />
-
-                          {!selecionada ? (
-                            <Text
-                              weight="SemiBold"
-                              style={{
-                                color: theme.textoTerciaria,
-                                fontSize: 11,
-                              }}
-                            >
-                              INCLUIR
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
+                        {aba.texto}
+                      </Text>
 
                       <Text
                         weight="Bold"
-                        style={
-                          styles.materiaPauta
-                        }
+                        style={{
+                          color: ativa
+                            ? theme.textoContainer
+                            : theme.textoTerciaria,
+                          fontSize: 12,
+                        }}
                       >
-                        {materia.pauta ||
-                          "Sem pauta"}
+                        {aba.quantidade}
                       </Text>
-
-                      {materia.programa_secao ||
-                      materia.categorias
-                        .length > 0 ? (
-                        <Text
-                          numberOfLines={2}
-                          style={{
-                            color:
-                              theme.textoSub,
-                          }}
-                        >
-                          {[
-                            materia.programa_secao,
-                            materia.categorias.join(
-                              ", "
-                            ),
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </Text>
-                      ) : null}
-
-                      {selecionada &&
-                      materia.imagem_anexo_id ===
-                        null ? (
-                        <View
-                          style={
-                            styles.imageNotice
-                          }
-                        >
-                          <Ionicons
-                            name="image-outline"
-                            size={15}
-                            color={
-                              theme.aviso
-                            }
-                          />
-                          <Text
-                            style={{
-                              color:
-                                theme.aviso,
-                              fontSize: 12,
-                            }}
-                          >
-                            Sem imagem para o
-                            slide
-                          </Text>
-                        </View>
-                      ) : null}
                     </Pressable>
                   );
-                })
-              : null}
+                })}
+              </View>
 
-            {!carregando &&
-          !erroConsulta &&
-          paginacaoVisivel &&
-          paginacaoVisivel.total > 0 ? (
-            <View style={styles.pagination}>
-              <Text
-                style={{
-                  color: theme.textoSub,
-                  textAlign: "center",
-                }}
-              >
-                Página {page} de{" "}
-                {Math.ceil(
-                  paginacaoVisivel.total / LIMITE_PAGINA
-                )}{" "}
-                · {paginacaoVisivel.total}{" "}
-                {paginacaoVisivel.total === 1
-                  ? "matéria"
-                  : "matérias"}{" "}
-                nesta aba
+              <Input
+                label="BUSCAR MATÉRIAS"
+                value={buscaMateria}
+                onChangeText={setBuscaMateria}
+                placeholder="Pauta ou veículo"
+                clearable
+                containerStyle={{ marginBottom: 0 }}
+                editable={!salvando}
+              />
+
+              {carregando ? (
+                <ActivityIndicator
+                  color={theme.textoTerciaria}
+                  style={styles.loading}
+                />
+              ) : null}
+
+              {erroConsulta ? (
+                <View style={[styles.messageCard, { borderColor: theme.erro }]}>
+                  <Text style={{ color: theme.erro }}>{erroConsulta}</Text>
+
+                  <Button
+                    title="TENTAR NOVAMENTE"
+                    variant="outline"
+                    size="small"
+                    onPress={() => setTentativa((atual) => atual + 1)}
+                    disabled={salvando}
+                  />
+                </View>
+              ) : null}
+
+              {!carregando && !erroConsulta && materiasVisiveis.length === 0 ? (
+                <View style={[styles.emptyCard, { borderColor: theme.borda }]}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={26}
+                    color={theme.textoSub}
+                  />
+
+                  <Text
+                    weight="SemiBold"
+                    style={{
+                      textAlign: "center",
+                    }}
+                  >
+                    Nenhuma matéria encontrada
+                  </Text>
+
+                  <Text
+                    style={{
+                      color: theme.textoSub,
+                      textAlign: "center",
+                    }}
+                  >
+                    {buscaAplicada
+                      ? "Tente outra pauta ou veículo."
+                      : tipo === "desmarcados"
+                        ? "Nenhuma matéria foi retirada do relatório."
+                        : tipo === "sem_data"
+                          ? "Este cliente não tem clippings sem data."
+                          : "Confira o cliente e as datas do período."}
+                  </Text>
+
+                  {!buscaAplicada && tipo === "periodo" ? (
+                    <Button
+                      title="ALTERAR DADOS"
+                      variant="outline"
+                      size="small"
+                      onPress={() => setPeriodo(null)}
+                      disabled={salvando}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+
+              {!carregando && !erroConsulta
+                ? materiasVisiveis.map((materia) => {
+                    const selecionada =
+                      tipo === "sem_data"
+                        ? semDataIncluidos.has(materia.id)
+                        : !excluidos.has(materia.id);
+
+                    return (
+                      <Pressable
+                        key={materia.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{
+                          checked: selecionada,
+                          disabled: salvando,
+                        }}
+                        disabled={salvando}
+                        onPress={() => alternarMateria(materia)}
+                        style={[
+                          styles.materiaCard,
+                          {
+                            borderColor: selecionada
+                              ? theme.borda
+                              : theme.textoSub,
+                            borderWidth: selecionada ? 2 : 1.5,
+                            backgroundColor: selecionada
+                              ? theme.backgroundSecundario
+                              : theme.background,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.materiaTop,
+                            { paddingRight: selecionada ? 30 : 82 },
+                          ]}
+                        >
+                          <View style={styles.materiaInfo}>
+                            <Text style={styles.materiaData}>
+                              {materia.data_publicacao
+                                ? dataISOParaBR(materia.data_publicacao)
+                                : "SEM DATA"}
+                            </Text>
+
+                            <Text
+                              weight="SemiBold"
+                              numberOfLines={1}
+                              style={{ color: theme.textoTerciaria }}
+                            >
+                              {materia.veiculo_nome || "Sem veículo"}
+                            </Text>
+                          </View>
+
+                          <View style={styles.materiaAcao}>
+                            <Ionicons
+                              name={
+                                selecionada
+                                  ? "checkmark-circle"
+                                  : "add-circle-outline"
+                              }
+                              size={25}
+                              color={theme.textoTerciaria}
+                            />
+
+                            {!selecionada ? (
+                              <Text
+                                weight="SemiBold"
+                                style={{
+                                  color: theme.textoTerciaria,
+                                  fontSize: 11,
+                                }}
+                              >
+                                INCLUIR
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        <Text weight="Bold" style={styles.materiaPauta}>
+                          {materia.pauta || "Sem pauta"}
+                        </Text>
+
+                        {materia.programa_secao ||
+                        materia.categorias.length > 0 ? (
+                          <Text
+                            numberOfLines={2}
+                            style={{
+                              color: theme.textoSub,
+                            }}
+                          >
+                            {[
+                              materia.programa_secao,
+                              materia.categorias.join(", "),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </Text>
+                        ) : null}
+
+                        {selecionada && materia.imagem_anexo_id === null ? (
+                          <View style={styles.imageNotice}>
+                            <Ionicons
+                              name="image-outline"
+                              size={15}
+                              color={theme.aviso}
+                            />
+                            <Text
+                              style={{
+                                color: theme.aviso,
+                                fontSize: 12,
+                              }}
+                            >
+                              Sem imagem para o slide
+                            </Text>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  })
+                : null}
+
+              {!carregando &&
+              !erroConsulta &&
+              paginacaoVisivel &&
+              paginacaoVisivel.total > 0 ? (
+                <View style={styles.pagination}>
+                  <Text
+                    style={{
+                      color: theme.textoSub,
+                      textAlign: "center",
+                    }}
+                  >
+                    Página {page} de{" "}
+                    {Math.ceil(paginacaoVisivel.total / LIMITE_PAGINA)} ·{" "}
+                    {paginacaoVisivel.total}{" "}
+                    {paginacaoVisivel.total === 1 ? "matéria" : "matérias"}{" "}
+                    nesta aba
+                  </Text>
+
+                  <View style={styles.paginationButtons}>
+                    <Button
+                      title="ANTERIOR"
+                      variant="outline"
+                      size="small"
+                      disabled={salvando || page === 1}
+                      onPress={() => setPage((atual) => atual - 1)}
+                      style={styles.paginationButton}
+                    />
+
+                    <Button
+                      title="PRÓXIMA"
+                      variant="outline"
+                      size="small"
+                      disabled={salvando || !paginacaoVisivel.has_next}
+                      onPress={() => setPage((atual) => atual + 1)}
+                      style={styles.paginationButton}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </>
+          )}
+        </ScrollView>
+
+        {periodo ? (
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingLeft: 16 + insets.left,
+                paddingRight: 16 + insets.right,
+                paddingBottom: Math.max(12, insets.bottom),
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.footerCard,
+                {
+                  borderColor: theme.borda + "60",
+                  backgroundColor: theme.backgroundSecundario,
+                },
+              ]}
+            >
+              <Text weight="SemiBold" style={styles.footerCount}>
+                {totalSelecionado}{" "}
+                {totalSelecionado === 1
+                  ? "matéria selecionada"
+                  : "matérias selecionadas"}
               </Text>
 
-              <View style={styles.paginationButtons}>
-                <Button
-                  title="ANTERIOR"
-                  variant="outline"
-                  size="small"
-                  disabled={page === 1}
-                  onPress={() =>
-                    setPage((atual) => atual - 1)
-                  }
-                  style={styles.paginationButton}
-                />
+              {erroSalvar ? (
+                <Text
+                  style={{
+                    color: theme.erro,
+                    textAlign: "center",
+                  }}
+                >
+                  {erroSalvar}
+                </Text>
+              ) : null}
 
-                <Button
-                  title="PRÓXIMA"
-                  variant="outline"
-                  size="small"
-                  disabled={!paginacaoVisivel.has_next}
-                  onPress={() =>
-                    setPage((atual) => atual + 1)
-                  }
-                  style={styles.paginationButton}
-                />
-              </View>
+              <Button
+                title="CRIAR RELATÓRIO"
+                loading={salvando}
+                disabled={salvando || carregando || Boolean(erroConsulta)}
+                onPress={salvar}
+              />
             </View>
-          ) : null}
-          </>
-        )}
-      </ScrollView>
-
-      {periodo ? (
-        <View
-          style={[
-            styles.footer,
-            {
-              borderTopColor:
-                theme.borda,
-              backgroundColor:
-                theme.background,
-            },
-          ]}
-        >
-          <Text
-            weight="SemiBold"
-            style={{
-              textAlign: "center",
-            }}
-          >
-            {totalSelecionado}{" "}
-            {totalSelecionado === 1
-              ? "matéria selecionada"
-              : "matérias selecionadas"}
-          </Text>
-
-          {erroSalvar ? (
-            <Text
-              style={{
-                color: theme.erro,
-                textAlign: "center",
-              }}
-            >
-              {erroSalvar}
-            </Text>
-          ) : null}
-
-          <Button
-            title="CRIAR RELATÓRIO"
-            loading={salvando}
-            disabled={
-              carregando ||
-              Boolean(erroConsulta)
-            }
-            onPress={salvar}
-          />
-        </View>
-      ) : null}
-    <FeedbackAlert {...saida.alertaProps} />
-      </View>
+          </View>
+        ) : null}
+        <FeedbackAlert {...saida.alertaProps} />
+      </KeyboardAvoidingView>
+    </EdicaoCompacta>
   );
 }
 
@@ -1039,45 +970,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 14,
-    paddingBottom: 24,
-  },
-  contentForm: {
-    gap: 0,
-  },
-  contentSelection: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 16,
+    paddingBottom: 28,
     gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    marginBottom: 12,
   },
   automaticCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 12,
-    marginBottom: 14,
+    gap: 12,
+    minWidth: 0,
   },
   automaticText: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   reportSummary: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    gap: 3,
+    borderRadius: 16,
+    padding: 14,
+    gap: 6,
   },
   reportTitle: {
     fontSize: 16,
+    lineHeight: 23,
   },
   selectionHelp: {
     flexDirection: "row",
     alignItems: "center",
-  
     gap: 8,
     padding: 5,
   },
@@ -1105,9 +1028,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textAlign: "center",
   },
-  searchContainer: {
-    marginBottom: 0,
-  },
   loading: {
     marginVertical: 25,
   },
@@ -1125,9 +1045,9 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   materiaCard: {
-    borderRadius: 13,
-    padding: 12,
-    gap: 4.5,
+    borderRadius: 16,
+    padding: 14,
+    gap: 6,
   },
   materiaAcao: {
     position: "absolute",
@@ -1145,15 +1065,15 @@ const styles = StyleSheet.create({
   },
   materiaInfo: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    minWidth: 0,
+    gap: 4,
   },
   materiaData: {
     fontSize: 13,
   },
   materiaPauta: {
     fontSize: 14,
+    lineHeight: 20,
   },
   imageNotice: {
     flexDirection: "row",
@@ -1174,8 +1094,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   footer: {
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  introText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  automaticTitle: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  automaticDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  footerCard: {
+    width: "100%",
+    maxWidth: 728,
+    alignSelf: "center",
     padding: 12,
-    borderTopWidth: 1,
-    gap: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+  },
+  footerCount: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
   },
 });

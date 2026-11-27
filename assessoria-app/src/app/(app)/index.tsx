@@ -8,19 +8,24 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 
 import Header from "@/components/layout/Header";
+import Text from "@/components/ui/Text";
+import Button from "@/components/ui/Button";
+import ReleaseDashboardCard from "@/components/releases/ReleaseDashboardCard";
+
 import {
   useAbrirModulo,
   useAbrirTelaInicial,
 } from "@/hooks/useNavegacaoModulos";
-import Text from "@/components/ui/Text";
-import Button from "@/components/ui/Button";
-import ReleaseDashboardCard from "@/components/releases/ReleaseDashboardCard";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+
+import { listarFuncionarios } from "@/services/api/auth";
 import { listarClientes } from "@/services/api/cliente";
 import { listarClippings } from "@/services/api/clipping";
 import { listarJornalistas } from "@/services/api/jornalista";
@@ -65,7 +70,7 @@ export default function Dashboard() {
   const abrirTela = useAbrirTelaInicial();
   const { theme } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const { listarFuncionarios, temPermissao, usuario } = useAuth();
+  const { temPermissao, usuario } = useAuth();
 
   const podeVerRelatorios = temPermissao("RELATORIOS", "VISUALIZAR");
   const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
@@ -91,10 +96,13 @@ export default function Dashboard() {
   const [carregando, setCarregando] = useState(true);
   const [falha, setFalha] = useState(false);
   const [recarga, setRecarga] = useState(0);
+  const [recargaConcluida, setRecargaConcluida] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let ativo = true;
+      const controller = new AbortController();
+      const prazo = setTimeout(() => controller.abort(), 20000);
 
       async function carregar() {
         setCarregando(true);
@@ -108,45 +116,60 @@ export default function Dashboard() {
           consultas.push({
             chave: "relatorios",
             buscar: async () =>
-              (await listarRelatorios({ page: 1, limit: 1 })).pagination.total,
+              (await listarRelatorios({ page: 1, limit: 1 }, controller.signal))
+                .pagination.total,
           });
         }
         if (podeVerClippings) {
           consultas.push({
             chave: "clippings",
             buscar: async () =>
-              (await listarClippings({ page: 1, limit: 1 })).pagination.total,
+              (await listarClippings({ page: 1, limit: 1 }, controller.signal))
+                .pagination.total,
           });
         }
         if (podeVerVeiculos) {
           consultas.push({
             chave: "veiculos",
             buscar: async () =>
-              (await listarVeiculos({ page: 1, limit: 1 })).pagination.total,
+              (await listarVeiculos({ page: 1, limit: 1 }, controller.signal))
+                .pagination.total,
           });
         }
         if (podeVerClientes) {
           consultas.push({
             chave: "clientes",
             buscar: async () =>
-              (await listarClientes({ page: 1, limit: 1, ativo: 1 })).pagination
-                .total,
+              (
+                await listarClientes(
+                  { page: 1, limit: 1, ativo: 1 },
+                  controller.signal
+                )
+              ).pagination.total,
           });
         }
         if (podeVerContatos) {
           consultas.push({
             chave: "contatos",
             buscar: async () =>
-              (await listarJornalistas({ page: 1, limit: 1, ativo: 1 }))
-                .pagination.total,
+              (
+                await listarJornalistas(
+                  { page: 1, limit: 1, ativo: 1 },
+                  controller.signal
+                )
+              ).pagination.total,
           });
         }
         if (podeVerFuncionarios) {
           consultas.push({
             chave: "funcionarios",
             buscar: async () =>
-              (await listarFuncionarios({ page: 1, limit: 1 })).pagination
-                .total,
+              (
+                await listarFuncionarios(
+                  { page: 1, limit: 1 },
+                  controller.signal
+                )
+              ).pagination.total,
           });
         }
 
@@ -154,13 +177,20 @@ export default function Dashboard() {
           consultas.push({
             chave: "templates",
             buscar: async () =>
-              (await listarTemplates({ page: 1, busca: "", origem: "TODOS" }))
-                .pagination.total,
+              (
+                await listarTemplates(
+                  { page: 1, busca: "", origem: "TODOS" },
+                  controller.signal
+                )
+              ).pagination.total,
           });
         }
 
         const buscaRevisoes = podeVerRelatorios
-          ? listarRelatorios({ page: 1, limit: 2, pendencias: "com" }).then(
+          ? listarRelatorios(
+              { page: 1, limit: 2, pendencias: "com" },
+              controller.signal
+            ).then(
               (dados) => ({ dados, erro: false }),
               () => ({ dados: null, erro: true })
             )
@@ -171,7 +201,11 @@ export default function Dashboard() {
           buscaRevisoes,
         ]);
 
-        if (!ativo) return;
+        clearTimeout(prazo);
+
+        if (!ativo) {
+          return;
+        }
 
         const proximosTotais = { ...TOTAIS_VAZIOS };
         resultados.forEach((resultado, indice) => {
@@ -194,14 +228,16 @@ export default function Dashboard() {
             resultados.some((resultado) => resultado.status === "rejected")
         );
         setCarregando(false);
+        setRecargaConcluida(recarga);
       }
 
       void carregar();
       return () => {
         ativo = false;
+        clearTimeout(prazo);
+        controller.abort();
       };
     }, [
-      listarFuncionarios,
       podeVerRelatorios,
       podeVerClippings,
       podeVerVeiculos,
@@ -357,9 +393,11 @@ export default function Dashboard() {
         contentContainerStyle={styles.conteudo}
         refreshControl={
           <RefreshControl
-            refreshing={carregando && recarga > 0}
+            refreshing={carregando && recarga !== recargaConcluida}
             onRefresh={() => {
-              if (!carregando) setRecarga((atual) => atual + 1);
+              if (!carregando) {
+                setRecarga((atual) => atual + 1);
+              }
             }}
             tintColor={theme.textoTerciaria}
             colors={[theme.textoTerciaria]}

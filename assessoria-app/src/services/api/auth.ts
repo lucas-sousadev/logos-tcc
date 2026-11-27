@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+
 import * as SecureStore from "expo-secure-store";
 
 import { API_URL } from "@/constants/api";
@@ -7,6 +8,17 @@ const TOKEN_KEY = "logos_token";
 const REFRESH_TOKEN_KEY = "logos_refresh_token";
 
 let refreshPromise: Promise<string> | null = null;
+// Respostas pendentes pertencem à sessão que iniciou a operação.
+let versaoSessao = 0;
+let versaoRefresh = -1;
+const ouvintesSessao = new Set<() => void>();
+
+export function observarEncerramentoSessao(ouvinte: () => void) {
+  ouvintesSessao.add(ouvinte);
+  return () => {
+    ouvintesSessao.delete(ouvinte);
+  };
+}
 // interfaces
 
 export interface Usuario {
@@ -91,82 +103,83 @@ export async function removeRefreshToken(): Promise<void> {
 }
 
 export async function clearSession(): Promise<void> {
-  await removeToken();
-  await removeRefreshToken();
+  versaoSessao++;
+  try {
+    await removeToken();
+    await removeRefreshToken();
+  } finally {
+    for (const ouvinte of ouvintesSessao) ouvinte();
+  }
 }
 
 // REFRESH TOKEN
 
 export async function refreshAccessToken(): Promise<string> {
-  /*
- Se já existe uma renovação acontecendo, reutiliza a mesma Promise.
-   
-    Isso evita duas requisições /refresh simultâneas,
-    o que é importante porque nosso backend faz
-    rotação do refresh token.
-   */
-  if (refreshPromise) {
+  const versao = versaoSessao;
+  if (refreshPromise && versaoRefresh === versao) {
     return refreshPromise;
   }
-
-  refreshPromise = (async () => {
+  versaoRefresh = versao;
+  let promessa!: Promise<string>;
+  promessa = (async () => {
+    let refreshToken: string | null = null;
+    let invalida = false;
+    const controller = new AbortController();
+    const prazo = setTimeout(() => controller.abort(), 15000);
     try {
-      const refreshToken = await getRefreshToken();
-
-      if (!refreshToken) {
-        throw new Error("Refresh token não encontrado.");
+      refreshToken = await getRefreshToken();
+      if (versao !== versaoSessao) {
+        throw new Error("A sessão mudou. Tente a operação novamente.");
       }
-
-      const response = await fetch(`${API_URL}/api/auth/refresh`, {
+      if (!refreshToken) {
+        invalida = true;
+        throw new Error("Sua sessão expirou. Entre novamente.");
+      }
+      const response = await fetch(API_URL + "/api/auth/refresh", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: controller.signal,
       });
-
-      const responseText = await response.text();
-
-      let data: LoginResponse;
-
-      try {
-        data = JSON.parse(responseText);
-      } catch {
+      invalida = response.status === 401 || response.status === 403;
+      const data: LoginResponse = await response.json().catch(() => {
         throw new Error(
           "A API retornou uma resposta inválida ao renovar a sessão."
         );
-      }
-
+      });
       if (!response.ok || !data.success || !data.token || !data.refresh_token) {
         throw new Error(data.message || "Não foi possível renovar a sessão.");
       }
-
-      /*
-       * Salva os DOIS novos tokens.
-       *
-       * O backend revogou o refresh token anterior
-       * e criou um novo.
-       */
+      if (
+        versao !== versaoSessao ||
+        (await getRefreshToken()) !== refreshToken
+      ) {
+        throw new Error("A sessão mudou. Tente a operação novamente.");
+      }
       await saveToken(data.token);
+      if (versao !== versaoSessao) {
+        throw new Error("A sessão mudou. Tente a operação novamente.");
+      }
       await saveRefreshToken(data.refresh_token);
-
       return data.token;
     } catch (error) {
-      /*
-       * Se o refresh falhar, a sessão não pode mais
-       * ser considerada válida.
-       */
-      await clearSession();
-
+      if (
+        invalida &&
+        versao === versaoSessao &&
+        (await getRefreshToken()) === refreshToken
+      ) {
+        await clearSession();
+      }
       throw error;
     } finally {
-      refreshPromise = null;
+      clearTimeout(prazo);
+      if (refreshPromise === promessa) {
+        refreshPromise = null;
+      }
     }
   })();
-
-  return refreshPromise;
+  refreshPromise = promessa;
+  return promessa;
 }
 
 // requisiçoes autenticadas
@@ -178,36 +191,43 @@ export async function authenticatedFetch(
   options: RequestInit = {},
   request: RequestExecutor = fetch
 ): Promise<Response> {
+  const versao = versaoSessao;
   let token = await getToken();
-
+  if (versao !== versaoSessao) {
+    throw new Error("A sessão mudou. Tente a operação novamente.");
+  }
   if (!token) {
     throw new Error("Usuário não autenticado.");
   }
-
   const headers = new Headers(options.headers || {});
-
-  headers.set("Authorization", `Bearer ${token}`);
-
-  let response = await request(url, {
-    ...options,
-    headers,
-  });
-
+  headers.set("Authorization", "Bearer " + token);
+  let response = await request(url, { ...options, headers });
+  if (versao !== versaoSessao) {
+    throw new Error("A sessão mudou. Tente a operação novamente.");
+  }
   if (response.status !== 401) {
     return response;
   }
-
-  token = await refreshAccessToken();
-
+  if (options.signal?.aborted) {
+    throw new Error("A operação foi interrompida.");
+  }
+  const atual = await getToken();
+  if (versao !== versaoSessao) {
+    throw new Error("A sessão mudou. Tente a operação novamente.");
+  }
+  token = atual && atual !== token ? atual : await refreshAccessToken();
+  if (versao !== versaoSessao) {
+    throw new Error("A sessão mudou. Tente a operação novamente.");
+  }
   const retryHeaders = new Headers(options.headers || {});
-
-  retryHeaders.set("Authorization", `Bearer ${token}`);
-
-  response = await request(url, {
-    ...options,
-    headers: retryHeaders,
-  });
-
+  retryHeaders.set("Authorization", "Bearer " + token);
+  response = await request(url, { ...options, headers: retryHeaders });
+  if (versao !== versaoSessao) {
+    throw new Error("A sessão mudou. Tente a operação novamente.");
+  }
+  if (response.status === 401) {
+    await clearSession();
+  }
   return response;
 }
 // login
@@ -245,6 +265,7 @@ export async function login(
     throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
+  versaoSessao++;
   await saveToken(data.token);
   await saveRefreshToken(data.refresh_token);
 
@@ -255,22 +276,23 @@ export async function login(
 
 export async function logout(): Promise<void> {
   const refreshToken = await getRefreshToken();
-
+  await clearSession();
+  if (!refreshToken) {
+    return;
+  }
+  const controller = new AbortController();
+  const prazo = setTimeout(() => controller.abort(), 5000);
   try {
-    if (refreshToken) {
-      await fetch(`${API_URL}/api/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          refresh_token: refreshToken,
-        }),
-      });
-    }
+    await fetch(API_URL + "/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller.signal,
+    });
+  } catch {
+    // A sessão local já foi encerrada, mesmo sem conexão para revogar no servidor.
   } finally {
-    // mesmo se a API não estiver disponivel, ele remove a sessão local
-    await clearSession();
+    clearTimeout(prazo);
   }
 }
 
@@ -342,6 +364,7 @@ export async function registerAssessoria(
     throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
+  versaoSessao++;
   await saveToken(data.token);
   await saveRefreshToken(data.refresh_token);
 
@@ -389,6 +412,7 @@ export async function registerFuncionario(
     throw new Error("A API não retornou os dados completos de autenticação.");
   }
 
+  versaoSessao++;
   await saveToken(data.token);
   await saveRefreshToken(data.refresh_token);
 
@@ -559,7 +583,8 @@ export interface ListarFuncionariosResponse {
 }
 
 export async function listarFuncionarios(
-  params: ListarFuncionariosParams = {}
+  params: ListarFuncionariosParams = {},
+  signal?: AbortSignal
 ): Promise<ListarFuncionariosResponse> {
   const query = new URLSearchParams();
 
@@ -578,6 +603,8 @@ export async function listarFuncionarios(
   const response = await authenticatedFetch(
     `${API_URL}/api/funcionarios?${query.toString()}`,
     {
+      signal,
+      cache: "no-store",
       method: "GET",
     }
   );

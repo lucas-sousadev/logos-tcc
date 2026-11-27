@@ -1,17 +1,13 @@
-import { API_URL } from "@/constants/api";
-import { fetch as expoFetch } from "expo/fetch";
-import {
-  Directory,
-  File as ExpoFile,
-  Paths,
-} from "expo-file-system";
 import { Platform } from "react-native";
-import {
-  authenticatedFetch,
-  getToken,
-} from "@/services/api/auth";
-import { anexarArquivo } from "@/services/arquivoUpload";
+
+import { fetch as expoFetch } from "expo/fetch";
+import { Directory, File as ExpoFile, Paths } from "expo-file-system";
+
+import { API_URL } from "@/constants/api";
 import type { Tier } from "@/constants/tier";
+
+import { authenticatedFetch, getToken } from "@/services/api/auth";
+import { anexarArquivo } from "@/services/arquivoUpload";
 
 interface ApiEnvelope {
   success: boolean;
@@ -43,10 +39,7 @@ async function lerResposta<T>(
   }
 
   if (!response.ok || !dados.success) {
-    throw new ErroApiClipping(
-      dados.message || mensagemPadrao,
-      response.status
-    );
+    throw new ErroApiClipping(dados.message || mensagemPadrao, response.status);
   }
 
   return dados as T;
@@ -136,8 +129,7 @@ export interface DadosClipping {
   transferir_endereco_veiculo?: TransferenciaEnderecoVeiculo;
 }
 
-export type DadosAtualizacaoClipping =
-  Partial<DadosClipping>;
+export type DadosAtualizacaoClipping = Partial<DadosClipping>;
 
 export interface Paginacao {
   page: number;
@@ -191,10 +183,7 @@ export async function listarClippingAnos(
 
   const dados = await lerResposta<{
     anos: AnoClipping[];
-  }>(
-    response,
-    "Não foi possível carregar os anos dos clippings."
-  );
+  }>(response, "Não foi possível carregar os anos dos clippings.");
 
   return {
     anos: dados.anos,
@@ -223,10 +212,7 @@ export async function listarClientesDoAno(
     ano_referencia: number;
     clientes: ClienteClippingAno[];
     pagination: Paginacao;
-  }>(
-    response,
-    "Não foi possível carregar os clientes do ano."
-  );
+  }>(response, "Não foi possível carregar os clientes do ano.");
 }
 
 export async function listarPautas(
@@ -247,10 +233,7 @@ export async function listarPautas(
 
   const dados = await lerResposta<{
     pautas: string[];
-  }>(
-    response,
-    "Não foi possível carregar as pautas."
-  );
+  }>(response, "Não foi possível carregar as pautas.");
 
   return {
     pautas: dados.pautas,
@@ -258,7 +241,8 @@ export async function listarPautas(
 }
 
 export async function listarClippings(
-  params: ListarClippingsParams
+  params: ListarClippingsParams,
+  signal?: AbortSignal
 ): Promise<{
   clippings: Clipping[];
   pagination: Paginacao;
@@ -270,33 +254,24 @@ export async function listarClippings(
   });
 
   const response = await authenticatedFetch(
-    `${API_URL}/api/clippings?${query.toString()}`
+    `${API_URL}/api/clippings?${query.toString()}`,
+    { signal, cache: "no-store" }
   );
 
   return lerResposta<{
     clippings: Clipping[];
     pagination: Paginacao;
-  }>(
-    response,
-    "Não foi possível carregar os clippings."
-  );
+  }>(response, "Não foi possível carregar os clippings.");
 }
 
-export async function buscarClipping(
-  id: number
-): Promise<Clipping> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clippings/${id}`
-  );
+export async function buscarClipping(id: number): Promise<Clipping> {
+  const response = await authenticatedFetch(`${API_URL}/api/clippings/${id}`);
 
   const dados = await lerResposta<{
     success: boolean;
     message?: string;
     clipping?: Clipping;
-  }>(
-    response,
-    "Não foi possível carregar o clipping."
-  );
+  }>(response, "Não foi possível carregar o clipping.");
 
   if (!dados.clipping) {
     throw new Error("Clipping não encontrado.");
@@ -305,28 +280,20 @@ export async function buscarClipping(
   return dados.clipping;
 }
 
-export async function criarClipping(
-  dados: DadosClipping
-): Promise<Clipping> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clippings`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(dados),
-    }
-  );
+export async function criarClipping(dados: DadosClipping): Promise<Clipping> {
+  const response = await authenticatedFetch(`${API_URL}/api/clippings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
 
   const resposta = await lerResposta<{
     success: boolean;
     message?: string;
     clipping?: Clipping;
-  }>(
-    response,
-    "Não foi possível criar o clipping."
-  );
+  }>(response, "Não foi possível criar o clipping.");
 
   if (!resposta.clipping) {
     throw new Error("A API não retornou o clipping criado.");
@@ -339,25 +306,19 @@ export async function atualizarClipping(
   id: number,
   dados: DadosAtualizacaoClipping
 ): Promise<Clipping> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clippings/${id}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(dados),
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/clippings/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dados),
+  });
 
   const resposta = await lerResposta<{
     success: boolean;
     message?: string;
     clipping?: Clipping;
-  }>(
-    response,
-    "Não foi possível atualizar o clipping."
-  );
+  }>(response, "Não foi possível atualizar o clipping.");
 
   if (!resposta.clipping) {
     throw new Error("A API não retornou o clipping atualizado.");
@@ -388,10 +349,7 @@ export async function listarAnexos(
   const dados = await lerResposta<{
     anexos: AnexoClipping[];
     pagination: Paginacao;
-  }>(
-    response,
-    "Não foi possível carregar os anexos."
-  );
+  }>(response, "Não foi possível carregar os anexos.");
 
   return {
     anexos: dados.anexos,
@@ -409,7 +367,9 @@ export async function enviarAnexo(
   try {
     if (Platform.OS === "web") {
       if (!arquivo.file) {
-        throw new Error("O arquivo selecionado não está disponível para envio.");
+        throw new Error(
+          "O arquivo selecionado não está disponível para envio."
+        );
       }
 
       formData.append("arquivo", arquivo.file, arquivo.nome);
@@ -421,11 +381,12 @@ export async function enviarAnexo(
       }
 
       // o seletor salva com nome aleatório, então copiamos com o nome original
-      const nome = arquivo.nome
-        .split(/[\\/]/)
-        .pop()
-        ?.replace(/[\u0000-\u001f\u007f]/g, "_")
-        .trim() || "arquivo";
+      const nome =
+        arquivo.nome
+          .split(/[\\/]/)
+          .pop()
+          ?.replace(/[\u0000-\u001f\u007f]/g, "_")
+          .trim() || "arquivo";
 
       diretorioTemporario = new Directory(
         Paths.cache,
@@ -451,10 +412,7 @@ export async function enviarAnexo(
       success: boolean;
       message?: string;
       anexo?: AnexoClipping;
-    }>(
-      response,
-      "Não foi possível enviar o anexo."
-    );
+    }>(response, "Não foi possível enviar o anexo.");
 
     if (!dados.anexo) {
       throw new Error("A API não retornou o anexo enviado.");
@@ -496,10 +454,7 @@ export async function atualizarAnexo(
     success: boolean;
     message?: string;
     anexo?: AnexoClipping;
-  }>(
-    response,
-    "Não foi possível atualizar o anexo."
-  );
+  }>(response, "Não foi possível atualizar o anexo.");
 
   if (!resposta.anexo) {
     throw new Error("A API não retornou o anexo atualizado.");
@@ -525,23 +480,17 @@ export async function excluirAnexo(
   );
 }
 
-export function obterUrlArquivoAnexo(
-  endpoint: string
-): string {
+export function obterUrlArquivoAnexo(endpoint: string): string {
   if (/^https?:\/\//i.test(endpoint)) {
     return endpoint;
   }
 
-  const caminho = endpoint.startsWith("/")
-    ? endpoint
-    : `/${endpoint}`;
+  const caminho = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
   return `${API_URL}/api${caminho}`;
 }
 
-export async function obterTokenParaArquivo(): Promise<
-  string | null
-> {
+export async function obterTokenParaArquivo(): Promise<string | null> {
   return getToken();
 }
 
@@ -553,12 +502,9 @@ export interface ResultadoExclusaoClipping {
 export async function excluirClipping(
   id: number
 ): Promise<ResultadoExclusaoClipping> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/clippings/${id}`,
-    {
-      method: "DELETE",
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/clippings/${id}`, {
+    method: "DELETE",
+  });
 
   return lerResposta<ResultadoExclusaoClipping>(
     response,
@@ -584,8 +530,7 @@ export interface FiltrosConsultaClipping {
   direcao?: "ASC" | "DESC";
 }
 
-export interface ListarClippingsParams
-  extends FiltrosConsultaClipping {
+export interface ListarClippingsParams extends FiltrosConsultaClipping {
   cliente_id?: number;
   ano_referencia?: number;
   busca?: string;
@@ -607,11 +552,15 @@ function montarQueryClipping(params: object) {
   const query = new URLSearchParams();
 
   for (const [campo, valor] of Object.entries(params)) {
-    if (valor === undefined || valor === null) continue;
+    if (valor === undefined || valor === null) {
+      continue;
+    }
 
     if (typeof valor === "string") {
       const texto = valor.trim();
-      if (texto) query.set(campo, texto);
+      if (texto) {
+        query.set(campo, texto);
+      }
     } else if (typeof valor === "boolean") {
       query.set(campo, valor ? "1" : "0");
     } else if (typeof valor === "number") {
@@ -622,15 +571,11 @@ function montarQueryClipping(params: object) {
   return query;
 }
 
-// exclusao multipla 
+// exclusao multipla
 
 export interface ItemExclusaoClipping {
   id: number;
-  status:
-    | "excluido"
-    | "protegido"
-    | "nao_encontrado"
-    | "erro";
+  status: "excluido" | "protegido" | "nao_encontrado" | "erro";
   message: string;
   limpeza_pendente: boolean;
 }
@@ -714,9 +659,7 @@ export async function exportarClippingsCsv(
   const tipo = response.headers.get("Content-Type") ?? "";
 
   if (!tipo.toLowerCase().includes("text/csv")) {
-    throw new Error(
-      "O servidor não retornou um arquivo CSV válido."
-    );
+    throw new Error("O servidor não retornou um arquivo CSV válido.");
   }
 
   return response.arrayBuffer();
@@ -784,10 +727,7 @@ export async function inspecionarColunasClipping(
   });
 
   if (linhaCabecalho !== undefined) {
-    formulario.append(
-      "linha_cabecalho",
-      String(linhaCabecalho)
-    );
+    formulario.append("linha_cabecalho", String(linhaCabecalho));
   }
 
   const response = await authenticatedFetch(
@@ -821,7 +761,7 @@ export interface LinhaPreviaImportacao {
     link: string | null;
     observacoes: string | null;
     veiculo_id: number | null;
-    veiculo_nome_informado: string | null
+    veiculo_nome_informado: string | null;
   } | null;
   cliente_nome: string | null;
   cliente_para_criar: string | null;
@@ -897,7 +837,7 @@ export async function obterPreviaImportacaoClipping(
   clienteId: number | null,
   ano: number,
   veiculos: AssociacaoVeiculoImportacao[] = [],
-  mapeamento?: Array<CampoImportacaoClipping | null>,
+  mapeamento?: (CampoImportacaoClipping | null)[],
   linhaCabecalho?: number,
   clientes: AssociacaoClienteImportacao[] = []
 ): Promise<PreviaImportacaoClipping> {
@@ -916,17 +856,11 @@ export async function obterPreviaImportacaoClipping(
   formulario.append("clientes", JSON.stringify(clientes));
 
   if (mapeamento !== undefined) {
-    formulario.append(
-      "mapeamento",
-      JSON.stringify(mapeamento)
-    );
+    formulario.append("mapeamento", JSON.stringify(mapeamento));
   }
 
   if (linhaCabecalho !== undefined) {
-    formulario.append(
-      "linha_cabecalho",
-      String(linhaCabecalho)
-    );
+    formulario.append("linha_cabecalho", String(linhaCabecalho));
   }
 
   const response = await authenticatedFetch(
@@ -989,9 +923,7 @@ export interface ExtracaoLink {
     incluir_subdominios: boolean;
   };
   endereco_associavel: boolean;
-  sugestoes_veiculos: NonNullable<
-    ExtracaoLink["veiculo_sugerido"]
-  >[];
+  sugestoes_veiculos: NonNullable<ExtracaoLink["veiculo_sugerido"]>[];
   associar_endereco_ao_salvar?: boolean;
   escopo_associacao?: "site" | "secao" | "nenhum";
   portal_confiavel: boolean;
@@ -1011,9 +943,7 @@ export interface ExtracaoLink {
   transferir_endereco_ao_salvar?: boolean;
 }
 
-export async function extrairDadosDoLink(
-  link: string
-): Promise<ExtracaoLink> {
+export async function extrairDadosDoLink(link: string): Promise<ExtracaoLink> {
   const response = await authenticatedFetch(
     `${API_URL}/api/clippings/extrair-link`,
     {
@@ -1027,15 +957,10 @@ export async function extrairDadosDoLink(
 
   const dados = await lerResposta<{
     extracao?: ExtracaoLink;
-  }>(
-    response,
-    "Não foi possível consultar o link."
-  );
+  }>(response, "Não foi possível consultar o link.");
 
   if (!dados.extracao) {
-    throw new Error(
-      "A API não retornou os dados da página."
-    );
+    throw new Error("A API não retornou os dados da página.");
   }
 
   return dados.extracao;

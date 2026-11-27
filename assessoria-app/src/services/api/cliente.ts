@@ -1,7 +1,7 @@
+import { API_URL } from "@/constants/api";
+
 import { authenticatedFetch } from "@/services/api/auth";
 import { anexarArquivo, fetchUpload } from "@/services/arquivoUpload";
-
-import { API_URL } from "@/constants/api";
 
 export interface Cliente {
   id: number;
@@ -68,7 +68,8 @@ export interface ListarClientesResponse {
 }
 
 export async function listarClientes(
-  params: ListarClientesParams = {}
+  params: ListarClientesParams = {},
+  signal?: AbortSignal
 ): Promise<ListarClientesResponse> {
   const query = new URLSearchParams();
 
@@ -99,6 +100,8 @@ export async function listarClientes(
   const response = await authenticatedFetch(
     `${API_URL}/api/clientes?${query.toString()}`,
     {
+      signal,
+      cache: "no-store",
       method: "GET",
     }
   );

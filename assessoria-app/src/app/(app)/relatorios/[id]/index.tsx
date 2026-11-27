@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
+  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -16,11 +17,11 @@ import {
   useRouter,
   useNavigation
 } from "expo-router";
-import { Platform } from "react-native";
 
 import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useRetornoVinculo } from "@/hooks/useRetornoVinculo";
 import { useVoltarNaPilha, useAbrirModulo } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -417,7 +418,12 @@ export default function DetalheRelatorio() {
     id: string;
     origem?: string;
     origemClienteId?: string;
+    origemClippingId?: string;
   }>();
+  const retornarAoClipping = useRetornoVinculo(
+    "clipping",
+    params.origemClippingId
+  );
   const id = Number(params.id);
   const clienteOrigemId = Number(params.origemClienteId);
   const veioDoCliente =
@@ -446,6 +452,7 @@ export default function DetalheRelatorio() {
   const [slideAberto, setSlideAberto] =useState<SlideRelatorio | null>(null);
   const [slideParaEditar, setSlideParaEditar] = useState<SlideRelatorio | null>(null);
   const slideReabrirId = useRef<number | null>(null);
+  const ultimaConsultaSlides = useRef("");
   const [slideDecidindoId, setSlideDecidindoId] = useState<number | null>(null);
   const [slideParaIgnorar, setSlideParaIgnorar] = useState<SlideRelatorio | null>(null);
   const [slideParaValidar, setSlideParaValidar] = useState<SlideRelatorio | null>(null);
@@ -481,7 +488,10 @@ export default function DetalheRelatorio() {
 
   const saida = useSaidaFormulario(false, excluindo);
 
-  const voltarParaCliente = useCallback(() => {
+  const voltarParaOrigemVinculada = useCallback(() => {
+    if (retornarAoClipping()) {
+      return true;
+    }
     if (!veioDoCliente) return false;
 
     router.navigate({
@@ -489,7 +499,7 @@ export default function DetalheRelatorio() {
       params: { id: String(clienteOrigemId), vinculo: "relatorios" },
     });
     return true;
-  }, [clienteOrigemId, router, veioDoCliente]);
+  }, [clienteOrigemId, router, veioDoCliente, retornarAoClipping]);
 
   useFocusEffect(
     useCallback(() => {
@@ -497,11 +507,11 @@ export default function DetalheRelatorio() {
 
       const inscricao = BackHandler.addEventListener(
         "hardwareBackPress",
-        voltarParaCliente
+        voltarParaOrigemVinculada
       );
 
       return () => inscricao.remove();
-    }, [excluindo, veioDoCliente, voltarParaCliente])
+    }, [excluindo, veioDoCliente, voltarParaOrigemVinculada])
   );
 
   const slidesSelecionaveis = slides.filter(
@@ -535,11 +545,23 @@ export default function DetalheRelatorio() {
       }
 
       let ativo = true;
+      const chave = JSON.stringify([
+        id,
+        pagina,
+        tentativa,
+        buscaAplicada,
+        filtroRevisao,
+        origensRevisao,
+      ]);
+      const manterSlides = ultimaConsultaSlides.current === chave;
+      ultimaConsultaSlides.current = chave;
 
       async function carregar() {
         setCarregando(true);
         setErro("");
-        setSlides([]);
+        if (!manterSlides) {
+          setSlides([]);
+        }
 
         try {
           const resposta = await buscarRelatorio(id, pagina, buscaAplicada, filtroRevisao, origensRevisao);
@@ -815,7 +837,7 @@ export default function DetalheRelatorio() {
     try {
       await excluirRelatorio(relatorio.id);
       setConfirmarExclusao(false);
-      if (!voltarParaCliente()) {
+      if (!voltarParaOrigemVinculada()) {
         saida.concluirSaida(() => router.dismissTo("/relatorios"));
       }
     } catch (e) {
@@ -1008,7 +1030,7 @@ export default function DetalheRelatorio() {
         showBackButton
         onBackPress={() => {
           if (excluindo) return;
-          if (voltarParaCliente()) return;
+          if (voltarParaOrigemVinculada()) return;
 
           if (params.origem === "dashboard") {
             abrirModulo("index");
@@ -1711,7 +1733,7 @@ export default function DetalheRelatorio() {
             {mensagemAcaoSlides}
           </Text>
         ) : null}
-        {carregando ? (
+        {carregando && slides.length === 0 ? (
           <ActivityIndicator
             size="small"
             color={theme.textoTerciaria}
@@ -1743,7 +1765,7 @@ export default function DetalheRelatorio() {
           </View>
         ) : null}
 
-        {!carregando && !erro && relatorio ? (
+        {(!carregando || slides.length > 0) && !erro && relatorio ? (
           <>
             {slides.length === 0 ? (
               <View
@@ -1835,8 +1857,9 @@ export default function DetalheRelatorio() {
           </>
         ) : null}
       </ScrollView>
-      {focado && slideAberto && !slideParaEditar && relatorio ? (
+      {slideAberto && !slideParaEditar && relatorio ? (
         <RelatorioSlidePreview
+          visible={focado}
           slide={slideAberto}
           relatorio={relatorio}
           onClose={() => setSlideAberto(null)}

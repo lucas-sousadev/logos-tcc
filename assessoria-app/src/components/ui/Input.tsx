@@ -1,4 +1,5 @@
 import {
+  Platform,
   StyleProp,
   StyleSheet,
   TextInput,
@@ -8,7 +9,7 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { useState, type Ref } from "react";
+import { useEffect, useState, type Ref } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +52,27 @@ export default function Input({
     clearable && typeof value === "string" && value.length > 0;
 
   const mostrarBotaoSenha = Boolean(showPasswordToggle && secureTextEntry);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      !mostrarBotaoSenha ||
+      typeof document === "undefined"
+    ) {
+      return;
+    }
+
+    const id = "logos-password-reveal-style";
+    if (document.getElementById(id)) {
+      return;
+    }
+
+    const estilo = document.createElement("style");
+    estilo.id = id;
+    estilo.textContent =
+      'input[type="password"]::-ms-reveal { display: none; }';
+    document.head.appendChild(estilo);
+  }, [mostrarBotaoSenha]);
 
   return (
     <View

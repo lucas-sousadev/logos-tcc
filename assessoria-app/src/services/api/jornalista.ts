@@ -1,5 +1,6 @@
-import { authenticatedFetch } from "@/services/api/auth";
 import { API_URL } from "@/constants/api";
+
+import { authenticatedFetch } from "@/services/api/auth";
 
 export interface Jornalista {
   id: number;
@@ -94,7 +95,8 @@ export interface ExcluirJornalistaResponse {
 }
 
 export async function listarJornalistas(
-  params: ListarJornalistasParams = {}
+  params: ListarJornalistasParams = {},
+  signal?: AbortSignal
 ): Promise<ListarJornalistasResponse> {
   const query = new URLSearchParams();
 
@@ -137,6 +139,8 @@ export async function listarJornalistas(
   const response = await authenticatedFetch(
     `${API_URL}/api/jornalistas?${query.toString()}`,
     {
+      signal,
+      cache: "no-store",
       method: "GET",
     }
   );
