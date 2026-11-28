@@ -5,6 +5,13 @@ import ClippingImagemPreview from "@/components/clipping/ClippingImagePreview";
 import Text from "@/components/ui/Text";
 import type { SlideRelatorio } from "@/services/api/relatorio";
 import { obterUrlLogoVeiculo } from "@/services/api/veiculo";
+import {
+  calcularLayoutLinkSlide,
+  calcularLayoutDadosSlide,
+  normalizarEscalaImagemSlide,
+  LIMITE_DESCRICAO_SLIDE,
+  limitarDescricaoSlide,
+} from "@/utils/relatorioSlideLayout";
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
 
 interface Props {
@@ -23,8 +30,6 @@ export default function RelatorioSlideVisual({
 }: Props) {
   const { width: larguraJanela } = useWindowDimensions();
   const [larguraArea, setLarguraArea] = useState<number | null>(null);
-  const [alturaDados, setAlturaDados] = useState(0);
-  const [alturaLink, setAlturaLink] = useState(0);
 
   const larguraVisivel = Math.min(
     LARGURA_SLIDE,
@@ -73,18 +78,29 @@ export default function RelatorioSlideVisual({
     };
   }, [logoVeiculo]);
   const nomeVeiculo = veiculo?.nome?.trim() || "Veículo não informado";
-  const descricao = veiculo?.descricao?.trim();
+  const descricao = limitarDescricaoSlide(veiculo?.descricao);
+  const descricaoAbreviada =
+    Array.from(veiculo?.descricao?.replace(/\s+/gu, " ").trim() ?? "").length >
+    LIMITE_DESCRICAO_SLIDE;
   const alcance = veiculo?.alcance?.trim();
   const data = dataISOParaBR(clipping?.data_publicacao ?? null);
   const link = slide.link?.trim();
+  const layoutLink = calcularLayoutLinkSlide(link);
   const endpointImagem = slide.imagem_midia_id
     ? `/relatorios/${slide.relatorio_id}/midias/${slide.imagem_midia_id}`
     : slide.clipping_id && slide.imagem_anexo_id
       ? `/clippings/${slide.clipping_id}/anexos/${slide.imagem_anexo_id}/arquivo`
       : null;
 
-  const limiteDados = data ? 310 : 355;
-  const excedeuSlide = alturaDados > limiteDados + 2 || alturaLink > 60 + 2;
+  const camposDados = calcularLayoutDadosSlide(
+    nomeVeiculo,
+    descricao,
+    alcance,
+    Boolean(data)
+  );
+  const escalaImagem =
+    normalizarEscalaImagemSlide(slide.dados_json?.imagem?.escala) / 100;
+  const excedeuSlide = camposDados.some((campo) => campo.abreviado);
 
   return (
     <View
@@ -169,78 +185,38 @@ export default function RelatorioSlideVisual({
             ) : null}
           </View>
 
-          <View
-            style={{
-              position: "absolute",
-              left: 42,
-              top: 145,
-              width: 350,
-              height: limiteDados,
-              justifyContent: "flex-end",
-            }}
-          >
+          {camposDados.map((campo) => (
             <View
-              onLayout={({ nativeEvent }) => {
-                const altura = nativeEvent.layout.height;
-                setAlturaDados((atual) =>
-                  Math.abs(atual - altura) > 1 ? altura : atual
-                );
+              key={campo.rotulo}
+              style={{
+                position: "absolute",
+                left: 42,
+                top: campo.topo,
+                width: 350,
+                height: campo.altura,
+                overflow: "hidden",
               }}
-              style={{ gap: 8 }}
             >
-              <Text
-                style={{
-                  color: "#172033",
-                  fontSize: 16,
-                  lineHeight: 22,
-                }}
-              >
+              {campo.linhas.map((linha, indice) => (
                 <Text
-                  weight="ExtraBold"
-                  style={{ color: "#172033", fontSize: 18 }}
+                  key={indice}
+                  numberOfLines={1}
+                  style={{ color: "#172033", fontSize: 16, lineHeight: 22 }}
                 >
-                  Veículo:{" "}
+                  {indice === 0 ? (
+                    <>
+                      <Text weight="ExtraBold" style={{ fontSize: 16 }}>
+                        {campo.rotulo}:{" "}
+                      </Text>
+                      {linha.slice(campo.rotulo.length + 2)}
+                    </>
+                  ) : (
+                    linha
+                  )}
                 </Text>
-                {nomeVeiculo}
-              </Text>
-
-              {descricao ? (
-                <Text
-                  style={{
-                    color: "#172033",
-                    fontSize: 16,
-                    lineHeight: 22,
-                  }}
-                >
-                  <Text
-                    weight="ExtraBold"
-                    style={{ color: "#172033", fontSize: 18 }}
-                  >
-                    Descrição:{" "}
-                  </Text>
-                  {descricao}
-                </Text>
-              ) : null}
-
-              {alcance ? (
-                <Text
-                  style={{
-                    color: "#172033",
-                    fontSize: 16,
-                    lineHeight: 22,
-                  }}
-                >
-                  <Text
-                    weight="ExtraBold"
-                    style={{ color: "#172033", fontSize: 18 }}
-                  >
-                    Alcance:{" "}
-                  </Text>
-                  {alcance}
-                </Text>
-              ) : null}
+              ))}
             </View>
-          </View>
+          ))}
 
           {data ? (
             <View
@@ -269,29 +245,38 @@ export default function RelatorioSlideVisual({
             style={{
               position: "absolute",
               left: 430,
-              top: 155,
+              top: layoutLink.topoImagem,
               width: 480,
-              height: 275,
+              height: layoutLink.alturaImagem,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             {imagemUri ? (
               <Image
                 source={{ uri: imagemUri }}
                 resizeMode="contain"
-                style={{ width: 480, height: 275 }}
+                style={{
+                  width: 480 * escalaImagem,
+                  height: layoutLink.alturaImagem * escalaImagem,
+                }}
               />
             ) : endpointImagem ? (
               <ClippingImagemPreview
                 endpoint={endpointImagem}
                 nome={`Imagem do slide ${slide.ordem}`}
                 resizeMode="contain"
-                style={{ width: 480, height: 275, borderRadius: 0 }}
+                style={{
+                  width: 480 * escalaImagem,
+                  height: layoutLink.alturaImagem * escalaImagem,
+                  borderRadius: 0,
+                }}
               />
             ) : (
               <View
                 style={{
                   width: 480,
-                  height: 275,
+                  height: layoutLink.alturaImagem,
                   borderWidth: 1,
                   borderColor: "#D7DEEA",
                   alignItems: "center",
@@ -310,31 +295,40 @@ export default function RelatorioSlideVisual({
               style={{
                 position: "absolute",
                 left: 430,
-                top: 430,
+                top: layoutLink.topoLink,
                 width: 480,
-                height: 60,
+                height: layoutLink.alturaLink,
+                overflow: "hidden",
                 justifyContent: "flex-end",
               }}
             >
               <Text
-                onLayout={({ nativeEvent }) => {
-                  const altura = nativeEvent.layout.height;
-                  setAlturaLink((atual) =>
-                    Math.abs(atual - altura) > 1 ? altura : atual
-                  );
-                }}
+                numberOfLines={5}
                 style={{
                   color: "#008C95",
                   fontSize: 15,
                   lineHeight: 20,
                 }}
               >
-                {link}
+                {layoutLink.texto}
               </Text>
             </View>
           ) : null}
         </View>
       </View>
+
+      {descricaoAbreviada ? (
+        <Text style={{ width: larguraVisivel, color: "#A45B00", fontSize: 12 }}>
+          Descrição abreviada no slide. Edite o texto para usar até 200
+          caracteres.
+        </Text>
+      ) : null}
+
+      {layoutLink.abreviado ? (
+        <Text style={{ width: larguraVisivel, color: "#526073", fontSize: 12 }}>
+          Link abreviado no slide. O endereço completo será mantido no PPTX.
+        </Text>
+      ) : null}
 
       {excedeuSlide ? (
         <Text
@@ -344,8 +338,8 @@ export default function RelatorioSlideVisual({
             fontSize: 12,
           }}
         >
-          O conteúdo não cabe no slide 16:9. Revise os textos deste slide antes
-          de exportar.
+          Textos extensos foram abreviados para caber no slide. Revise antes de
+          exportar.
         </Text>
       ) : null}
     </View>

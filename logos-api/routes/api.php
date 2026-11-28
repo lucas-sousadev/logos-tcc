@@ -216,7 +216,14 @@ $router->delete(
     ]
 );
 
-// veiculos 
+// veiculos
+$router->post(
+    "/api/veiculos/capturar-pagina",
+    "CapturaPaginaController:capturar",
+    "VEICULOS.CAPTURAR",
+    middleware: [$authMiddleware]
+);
+
 $router->get(
     "/api/veiculos",
     "VeiculoController:listar",

@@ -1,16 +1,11 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
-import {
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
 import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
+import type { Tier } from "@/constants/tier";
 
 import FiltroModalBase from "@/components/ui/Filtros/FiltroModalBase";
 import FiltroStatus from "@/components/ui/Filtros/FiltroStatus";
@@ -18,6 +13,7 @@ import FiltroStatus from "@/components/ui/Filtros/FiltroStatus";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export interface FiltrosVeiculos {
+  tier?: Tier | null;
   ativo?: number;
   ordem: "nome" | "vinculos" | "clippings";
   direcao: "ASC" | "DESC";
@@ -26,6 +22,14 @@ export interface FiltrosVeiculos {
   minClippings: string;
   maxClippings: string;
 }
+
+const OPCOES_TIER: { titulo: string; valor: Tier | null | undefined }[] = [
+  { titulo: "Todos", valor: undefined },
+  { titulo: "Tier 1", valor: 1 },
+  { titulo: "Tier 2", valor: 2 },
+  { titulo: "Tier 3", valor: 3 },
+  { titulo: "Não definido", valor: null },
+];
 
 interface VeiculoFilterModalProps {
   visible: boolean;
@@ -40,22 +44,12 @@ export default function VeiculoFilterModal({
   onClose,
   onApply,
 }: VeiculoFilterModalProps) {
-  const { theme } = useTheme();
+  const [filtrosTemporarios, setFiltrosTemporarios] =
+    useState<FiltrosVeiculos>(filtros);
 
-  const [
-    filtrosTemporarios,
-    setFiltrosTemporarios,
-  ] = useState<FiltrosVeiculos>(filtros);
+  const [erroMinContatos, setErroMinContatos] = useState("");
 
-  const [
-    erroMinContatos,
-    setErroMinContatos,
-  ] = useState("");
-
-  const [
-    erroMaxContatos,
-    setErroMaxContatos,
-  ] = useState("");
+  const [erroMaxContatos, setErroMaxContatos] = useState("");
 
   const [erroMinClippings, setErroMinClippings] = useState("");
   const [erroMaxClippings, setErroMaxClippings] = useState("");
@@ -107,12 +101,12 @@ export default function VeiculoFilterModal({
   }
 
   function aplicarFiltros() {
-  const minContatos = filtrosTemporarios.minContatos.trim();
-  const maxContatos = filtrosTemporarios.maxContatos.trim();
-  const minClippings = filtrosTemporarios.minClippings.trim();
-  const maxClippings = filtrosTemporarios.maxClippings.trim();
+    const minContatos = filtrosTemporarios.minContatos.trim();
+    const maxContatos = filtrosTemporarios.maxContatos.trim();
+    const minClippings = filtrosTemporarios.minClippings.trim();
+    const maxClippings = filtrosTemporarios.maxClippings.trim();
 
-  function quantidadeValida(valor: string) {
+    function quantidadeValida(valor: string) {
       return (
         valor === "" ||
         (/^\d+$/.test(valor) && Number.isSafeInteger(Number(valor)))
@@ -120,12 +114,16 @@ export default function VeiculoFilterModal({
     }
 
     if (!quantidadeValida(minContatos)) {
-      setErroMinContatos("Informe uma quantidade inteira igual ou maior que zero.");
+      setErroMinContatos(
+        "Informe uma quantidade inteira igual ou maior que zero."
+      );
       return;
     }
 
     if (!quantidadeValida(maxContatos)) {
-      setErroMaxContatos("Informe uma quantidade inteira igual ou maior que zero.");
+      setErroMaxContatos(
+        "Informe uma quantidade inteira igual ou maior que zero."
+      );
       return;
     }
 
@@ -134,17 +132,23 @@ export default function VeiculoFilterModal({
       maxContatos !== "" &&
       Number(maxContatos) < Number(minContatos)
     ) {
-      setErroMaxContatos("A quantidade máxima não pode ser menor que a mínima.");
+      setErroMaxContatos(
+        "A quantidade máxima não pode ser menor que a mínima."
+      );
       return;
     }
 
     if (!quantidadeValida(minClippings)) {
-      setErroMinClippings("Informe uma quantidade inteira igual ou maior que zero.");
+      setErroMinClippings(
+        "Informe uma quantidade inteira igual ou maior que zero."
+      );
       return;
     }
 
     if (!quantidadeValida(maxClippings)) {
-      setErroMaxClippings("Informe uma quantidade inteira igual ou maior que zero.");
+      setErroMaxClippings(
+        "Informe uma quantidade inteira igual ou maior que zero."
+      );
       return;
     }
 
@@ -153,7 +157,9 @@ export default function VeiculoFilterModal({
       maxClippings !== "" &&
       Number(maxClippings) < Number(minClippings)
     ) {
-      setErroMaxClippings("A quantidade máxima não pode ser menor que a mínima.");
+      setErroMaxClippings(
+        "A quantidade máxima não pode ser menor que a mínima."
+      );
       return;
     }
 
@@ -185,10 +191,30 @@ export default function VeiculoFilterModal({
         marginBottom={20}
       />
 
-      <Text
-        weight="SemiBold"
-        style={styles.sectionTitle}
-      >
+      <Text weight="SemiBold" style={styles.sectionTitle}>
+        TIER
+      </Text>
+      <View style={styles.opcoesTier}>
+        {OPCOES_TIER.map((opcao) => (
+          <Button
+            key={opcao.titulo}
+            title={opcao.titulo}
+            size="small"
+            variant={
+              filtrosTemporarios.tier === opcao.valor ? "primary" : "outline"
+            }
+            style={styles.opcaoTier}
+            onPress={() =>
+              setFiltrosTemporarios((atual) => ({
+                ...atual,
+                tier: opcao.valor,
+              }))
+            }
+          />
+        ))}
+      </View>
+
+      <Text weight="SemiBold" style={styles.sectionTitle}>
         ORDENAÇÃO
       </Text>
 
@@ -199,33 +225,25 @@ export default function VeiculoFilterModal({
             filtrosTemporarios.ordem === "nome" &&
             filtrosTemporarios.direcao === "ASC"
           }
-          onPress={() =>
-            definirOrdenacao("nome", "ASC")
-          }
+          onPress={() => definirOrdenacao("nome", "ASC")}
         />
 
         <OpcaoOrdenacao
           label="MAIS CONTATOS"
           selecionada={
-            filtrosTemporarios.ordem ===
-              "vinculos" &&
+            filtrosTemporarios.ordem === "vinculos" &&
             filtrosTemporarios.direcao === "DESC"
           }
-          onPress={() =>
-            definirOrdenacao("vinculos", "DESC")
-          }
+          onPress={() => definirOrdenacao("vinculos", "DESC")}
         />
 
         <OpcaoOrdenacao
           label="MENOS CONTATOS"
           selecionada={
-            filtrosTemporarios.ordem ===
-              "vinculos" &&
+            filtrosTemporarios.ordem === "vinculos" &&
             filtrosTemporarios.direcao === "ASC"
           }
-          onPress={() =>
-            definirOrdenacao("vinculos", "ASC")
-          }
+          onPress={() => definirOrdenacao("vinculos", "ASC")}
         />
 
         <OpcaoOrdenacao
@@ -284,7 +302,7 @@ export default function VeiculoFilterModal({
         clearable
         error={erroMaxContatos}
       />
-        
+
       <Input
         label="MÍNIMO DE CLIPPINGS VINCULADOS"
         value={filtrosTemporarios.minClippings}
@@ -316,7 +334,6 @@ export default function VeiculoFilterModal({
         clearable
         error={erroMaxClippings}
       />
-
     </FiltroModalBase>
   );
 }
@@ -339,9 +356,7 @@ function OpcaoOrdenacao({
       style={[
         styles.option,
         {
-          borderColor: selecionada
-            ? theme.primaria
-            : theme.borda,
+          borderColor: selecionada ? theme.primaria : theme.borda,
           backgroundColor: selecionada
             ? theme.backgroundContainer
             : theme.background,
@@ -353,9 +368,7 @@ function OpcaoOrdenacao({
         style={[
           styles.optionText,
           {
-            color: selecionada
-              ? theme.textoContainer
-              : theme.texto,
+            color: selecionada ? theme.textoContainer : theme.texto,
           },
         ]}
       >
@@ -366,6 +379,17 @@ function OpcaoOrdenacao({
 }
 
 const styles = StyleSheet.create({
+  opcoesTier: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 20,
+  },
+  opcaoTier: {
+    width: "auto",
+    flexGrow: 1,
+    flexBasis: 88,
+  },
   sectionTitle: {
     fontSize: 13,
     marginBottom: 10,

@@ -550,6 +550,7 @@ export default function RelatorioSlidePreview({
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Fechar slide"
+                disabled={revisando}
                 onPress={onClose}
                 style={[
                   styles.fechar,
@@ -582,27 +583,64 @@ export default function RelatorioSlidePreview({
           >
             {ehMateria ? (
               <>
-                <Text
-                  weight="SemiBold"
-                  style={{ color: theme.textoSub, fontSize: 11 }}
+                <View
+                  style={[
+                    styles.blocoDados,
+                    {
+                      borderColor: theme.borda + "40",
+                      backgroundColor: theme.backgroundSecundario,
+                    },
+                  ]}
                 >
-                  PRÉVIA DO SLIDE
-                </Text>
-
-                <RelatorioSlideVisual slide={slideParaPrevia} />
+                  <View style={styles.rotuloComEstado}>
+                    <Text weight="SemiBold" style={styles.tituloSecao}>
+                      Prévia no relatório
+                    </Text>
+                    <View
+                      style={[
+                        styles.estado,
+                        {
+                          backgroundColor:
+                            (revisaoAtiva ? theme.aviso : theme.alteracao) +
+                            "12",
+                        },
+                      ]}
+                    >
+                      <Text
+                        weight="SemiBold"
+                        style={{
+                          fontSize: 10,
+                          color: revisaoAtiva ? theme.aviso : theme.alteracao,
+                        }}
+                      >
+                        {revisaoAtiva ? "Revisão pendente" : "Sem pendências"}
+                      </Text>
+                    </View>
+                  </View>
+                  <RelatorioSlideVisual slide={slideParaPrevia} />
+                  <Text
+                        weight="SemiBold"
+                        style={{
+                          fontSize: 10,
+                          color: theme.textoSub
+                        }}
+                      >
+                        (!) Algumas imagens/textos podem ficar diferentes na exportação final
+                      </Text>
+                </View>
 
                 <View
                   style={[
                     styles.blocoDados,
-                    { borderTopColor: `${theme.borda}70` },
+                    {
+                      borderColor: theme.borda + "40",
+                      backgroundColor: theme.backgroundSecundario,
+                    },
                   ]}
                 >
                   <View style={styles.rotuloComEstado}>
-                    <Text
-                      weight="SemiBold"
-                      style={[styles.rotulo, { color: theme.textoSub }]}
-                    >
-                      MATÉRIA
+                    <Text weight="SemiBold" style={styles.tituloSecao}>
+                      Matéria
                     </Text>
                     {materiaAlterada ? (
                       <BotaoAlteracao
@@ -629,8 +667,6 @@ export default function RelatorioSlidePreview({
                         >
                           <Text
                             weight="Bold"
-                            numberOfLines={3}
-                            ellipsizeMode="tail"
                             style={[
                               styles.titulo,
                               {
@@ -656,8 +692,6 @@ export default function RelatorioSlidePreview({
                         <Text
                           selectable
                           weight="Bold"
-                          numberOfLines={3}
-                          ellipsizeMode="tail"
                           style={[
                             styles.titulo,
                             {
@@ -685,7 +719,7 @@ export default function RelatorioSlidePreview({
                         </Text>
                       )}
                     </View>
-                    <View style={[styles.semImagem, { marginTop: -4 }]}>
+                    <View style={styles.semImagem}>
                       <Ionicons
                         name="image-outline"
                         size={18}
@@ -724,7 +758,7 @@ export default function RelatorioSlidePreview({
                         weight="SemiBold"
                         style={[styles.rotulo, { color: theme.textoSub }]}
                       >
-                        LINK
+                        Link original
                       </Text>
 
                       {linkExibido ? (
@@ -736,6 +770,8 @@ export default function RelatorioSlidePreview({
                           style={styles.linhaLink}
                         >
                           <Text
+                            numberOfLines={3}
+                            ellipsizeMode="middle"
                             style={[
                               styles.valorLink,
                               {
@@ -789,15 +825,15 @@ export default function RelatorioSlidePreview({
                 <View
                   style={[
                     styles.blocoDados,
-                    { borderTopColor: `${theme.borda}70` },
+                    {
+                      borderColor: theme.borda + "40",
+                      backgroundColor: theme.backgroundSecundario,
+                    },
                   ]}
                 >
                   <View style={styles.rotuloComEstado}>
-                    <Text
-                      weight="SemiBold"
-                      style={[styles.rotulo, { color: theme.textoSub }]}
-                    >
-                      VEÍCULO
+                    <Text weight="SemiBold" style={styles.tituloSecao}>
+                      Veículo
                     </Text>
                     {dadosVeiculoAlterados ? (
                       <BotaoAlteracao
@@ -860,7 +896,7 @@ export default function RelatorioSlidePreview({
                     </Text>
                   )}
 
-                  <View style={[styles.semImagem, { marginTop: -4 }]}>
+                  <View style={styles.semImagem}>
                     <Ionicons name="image-outline" size={18} color={corLogo} />
                     <Text weight="SemiBold" style={{ color: corLogo }}>
                       {logoEmAlteracao
@@ -878,7 +914,7 @@ export default function RelatorioSlidePreview({
                       weight="SemiBold"
                       style={[styles.rotulo, { color: theme.textoSub }]}
                     >
-                      DESCRIÇÃO
+                      Descrição
                     </Text>
                     <Text
                       selectable
@@ -903,7 +939,7 @@ export default function RelatorioSlidePreview({
                       weight="SemiBold"
                       style={[styles.rotulo, { color: theme.textoSub }]}
                     >
-                      ALCANCE
+                      Alcance
                     </Text>
                     <Text
                       selectable
@@ -1129,11 +1165,14 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
+    alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   container: {
     maxHeight: "92%",
-    borderWidth: 1.5,
+    width: "100%",
+    maxWidth: 860,
+    borderWidth: 1,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     overflow: "hidden",
@@ -1176,27 +1215,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   conteudo: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    gap: 6,
+    padding: 14,
+    gap: 12,
   },
   blocoDados: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-    marginTop: 8,
-    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
   },
   identificacao: {
     gap: 2,
     marginBottom: 4,
   },
+  tituloSecao: {
+    fontSize: 13,
+    flex: 1,
+    minWidth: 80,
+  },
+  estado: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
   titulo: {
-    fontSize: 14,
-    lineHeight: 21,
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 15,
+    lineHeight: 22,
   },
   resumoMateria: {
-    gap: 6,
+    gap: 10,
   },
   metadados: {
     flexDirection: "row",
@@ -1220,13 +1269,14 @@ const styles = StyleSheet.create({
     height: 240,
   },
   semImagem: {
+    flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
   },
   campo: {
     gap: 5,
-    marginTop: 4,
+    minWidth: 0,
   },
   linkMateria: {
     flexDirection: "row",
@@ -1287,14 +1337,14 @@ const styles = StyleSheet.create({
   },
   slideRevisaoBotao: {
     flex: 1,
-    minHeight: 35,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 7,
+    borderRadius: 12,
+    paddingHorizontal: 10,
   },
   linhaLink: {
     flexDirection: "row",

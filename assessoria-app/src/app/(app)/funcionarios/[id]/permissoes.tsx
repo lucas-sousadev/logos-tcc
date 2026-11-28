@@ -231,7 +231,7 @@ function PermissoesFuncionario({ id }: { id: number }) {
             >
               <ResumoCadastro
                 nome={funcionario.nome}
-                categoria="PERMISSÕES DO FUNCIONÁRIO"
+                categoria="PERMISSÕES DO COLABORADOR"
                 ativo={Number(funcionario.ativo) === 1}
                 avatar={<AvatarUsuario usuario={funcionario} tamanho={48} />}
               />

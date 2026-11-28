@@ -4,7 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
-  Image
+  Image,
 } from "react-native";
 
 import { useCallback, useState, useRef } from "react";
@@ -17,8 +17,12 @@ import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import { rotuloTier } from "@/constants/tier";
-import VeiculoFilterModal, { FiltrosVeiculos } from "@/components/ui/Filtros/VeiculoFilterModal";
-import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
+import VeiculoFilterModal, {
+  FiltrosVeiculos,
+} from "@/components/ui/Filtros/VeiculoFilterModal";
+import FeedbackAlert, {
+  type FeedbackAlertVariant,
+} from "@/components/forms/FeedbackAlert";
 import ContadorLista from "@/components/ui/ContadorLista";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
 import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
@@ -63,17 +67,15 @@ function resumoVinculos(veiculo: Veiculo): string {
 
 const LIMITE_SELECAO_EM_LOTE = 100;
 
-  function quantidadeFiltro(
-    valorOriginal: string
-  ): number | undefined {
-    const valor = valorOriginal.trim();
+function quantidadeFiltro(valorOriginal: string): number | undefined {
+  const valor = valorOriginal.trim();
 
-    if (valor === "" || !/^\d+$/.test(valor)) {
-      return undefined;
-    }
-
-    return Number(valor);
+  if (valor === "" || !/^\d+$/.test(valor)) {
+    return undefined;
   }
+
+  return Number(valor);
+}
 
 export default function Veiculos() {
   const router = useRouter();
@@ -117,20 +119,13 @@ export default function Veiculos() {
         limit,
         busca: buscaAplicada,
         ativo: filtros.ativo,
+        tier: filtros.tier,
         ordem: filtros.ordem,
         direcao: filtros.direcao,
-        min_contatos: quantidadeFiltro(
-          filtros.minContatos
-        ),
-        max_contatos: quantidadeFiltro(
-          filtros.maxContatos
-        ),
-        min_clippings: quantidadeFiltro(
-          filtros.minClippings
-        ),
-        max_clippings: quantidadeFiltro(
-          filtros.maxClippings
-        ),
+        min_contatos: quantidadeFiltro(filtros.minContatos),
+        max_contatos: quantidadeFiltro(filtros.maxContatos),
+        min_clippings: quantidadeFiltro(filtros.minClippings),
+        max_clippings: quantidadeFiltro(filtros.maxClippings),
       });
 
       return {
@@ -141,6 +136,7 @@ export default function Veiculos() {
     [
       buscaAplicada,
       filtros.ativo,
+      filtros.tier,
       filtros.ordem,
       filtros.direcao,
       filtros.minContatos,
@@ -168,10 +164,13 @@ export default function Veiculos() {
   }
 
   useFocusEffect(
-    useCallback(() => () => {
-      setIdsSelecionados([]);
-      setModoSelecao(false);
-    }, [])
+    useCallback(
+      () => () => {
+        setIdsSelecionados([]);
+        setModoSelecao(false);
+      },
+      []
+    )
   );
 
   function realizarBusca() {
@@ -197,14 +196,10 @@ export default function Veiculos() {
     }
   }
 
-  function aplicarFiltros(
-    novosFiltros: FiltrosVeiculos
-  ) {
+  function aplicarFiltros(novosFiltros: FiltrosVeiculos) {
     sairModoSelecao();
 
-    const mesmos =
-      JSON.stringify(novosFiltros) ===
-      JSON.stringify(filtros);
+    const mesmos = JSON.stringify(novosFiltros) === JSON.stringify(filtros);
 
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
@@ -217,6 +212,7 @@ export default function Veiculos() {
   function filtrosAtivos() {
     return (
       filtros.ativo !== undefined ||
+      filtros.tier !== undefined ||
       filtros.ordem !== "nome" ||
       filtros.direcao !== "ASC" ||
       filtros.minContatos.trim() !== "" ||
@@ -247,17 +243,12 @@ export default function Veiculos() {
 
   function alternarVeiculoSelecionado(id: number) {
     if (idsSelecionados.includes(id)) {
-      setIdsSelecionados((atual) =>
-        atual.filter((item) => item !== id)
-      );
+      setIdsSelecionados((atual) => atual.filter((item) => item !== id));
 
       return;
     }
 
-    if (
-      idsSelecionados.length >=
-      LIMITE_SELECAO_EM_LOTE
-    ) {
+    if (idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE) {
       mostrarFeedback({
         variant: "warning",
         title: "Limite de seleção atingido",
@@ -268,51 +259,32 @@ export default function Veiculos() {
       return;
     }
 
-    setIdsSelecionados((atual) => [
-      ...atual,
-      id,
-    ]);
+    setIdsSelecionados((atual) => [...atual, id]);
   }
 
   function selecionarTodosVisiveis() {
-    const idsVisiveis = veiculos.map(
-      (veiculo) => veiculo.id
-    );
+    const idsVisiveis = veiculos.map((veiculo) => veiculo.id);
 
     const todosSelecionados =
       idsVisiveis.length > 0 &&
-      idsVisiveis.every((id) =>
-        idsSelecionados.includes(id)
-      );
+      idsVisiveis.every((id) => idsSelecionados.includes(id));
 
-    if (
-      todosSelecionados ||
-      idsSelecionados.length >=
-        LIMITE_SELECAO_EM_LOTE
-    ) {
+    if (todosSelecionados || idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE) {
       setIdsSelecionados([]);
       return;
     }
 
-    const vagasRestantes =
-      LIMITE_SELECAO_EM_LOTE -
-      idsSelecionados.length;
+    const vagasRestantes = LIMITE_SELECAO_EM_LOTE - idsSelecionados.length;
 
     const idsParaAdicionar = idsVisiveis
-      .filter(
-        (id) => !idsSelecionados.includes(id)
-      )
+      .filter((id) => !idsSelecionados.includes(id))
       .slice(0, vagasRestantes);
 
-    setIdsSelecionados((atual) => [
-      ...atual,
-      ...idsParaAdicionar,
-    ]);
+    setIdsSelecionados((atual) => [...atual, ...idsParaAdicionar]);
 
     const existemMaisVisiveis =
-      idsVisiveis.filter(
-        (id) => !idsSelecionados.includes(id)
-      ).length > idsParaAdicionar.length;
+      idsVisiveis.filter((id) => !idsSelecionados.includes(id)).length >
+      idsParaAdicionar.length;
 
     if (existemMaisVisiveis) {
       mostrarFeedback({
@@ -331,8 +303,7 @@ export default function Veiculos() {
       mostrarFeedback({
         variant: "warning",
         title: "Nenhum veículo selecionado",
-        message:
-          "Selecione pelo menos um veículo para excluir.",
+        message: "Selecione pelo menos um veículo para excluir.",
       });
 
       return;
@@ -342,7 +313,7 @@ export default function Veiculos() {
       variant: "warning",
       title: `Excluir ${quantidade} veículo(s)?`,
       message:
-        "Essa ação não pode ser desfeita. Caso algum veículo esteja vinculado a contatos, nenhum veículo será excluído.",
+        "Essa ação não pode ser desfeita. Caso algum veículo possua contatos ou clippings vinculados, nenhum veículo será excluído.",
       primaryLabel: "EXCLUIR",
       secondaryLabel: "CANCELAR",
       primaryDanger: true,
@@ -361,8 +332,7 @@ export default function Veiculos() {
     setExcluindoSelecionados(true);
 
     try {
-      const resultado =
-        await excluirVeiculosEmLote(ids);
+      const resultado = await excluirVeiculosEmLote(ids);
 
       sairModoSelecao();
 
@@ -372,8 +342,7 @@ export default function Veiculos() {
         variant: "success",
         title: "Veículos excluídos",
         message:
-          `${resultado.excluidos} veículo(s) ` +
-          "foram excluídos com sucesso.",
+          `${resultado.excluidos} veículo(s) ` + "foram excluídos com sucesso.",
       });
     } catch (error) {
       mostrarFeedback({
@@ -391,9 +360,7 @@ export default function Veiculos() {
 
   const todosVeiculosVisiveisSelecionados =
     veiculos.length > 0 &&
-    veiculos.every((veiculo) =>
-      idsSelecionados.includes(veiculo.id)
-    );
+    veiculos.every((veiculo) => idsSelecionados.includes(veiculo.id));
   if (carregando) {
     return (
       <View
@@ -407,10 +374,7 @@ export default function Veiculos() {
         <Header title="Veículos" showBackButton />
 
         <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.primaria}
-          />
+          <ActivityIndicator size="large" color={theme.primaria} />
         </View>
       </View>
     );
@@ -450,19 +414,12 @@ export default function Veiculos() {
             {total} {total === 1 ? "veiculo" : "veiculos"}
           </ContadorLista>
 
-          {temPermissao(
-            "VEICULOS",
-            "CRIAR"
-          ) && (
+          {temPermissao("VEICULOS", "CRIAR") && (
             <Button
               icon="add-outline"
               title="VEÍCULO"
               size="small"
-              onPress={() =>
-                router.push(
-                  "/veiculos/novo"
-                )
-              }
+              onPress={() => router.push("/veiculos/novo")}
               style={styles.newButton}
             />
           )}
@@ -474,8 +431,7 @@ export default function Veiculos() {
               styles.errorBox,
               {
                 borderColor: theme.borda,
-                backgroundColor:
-                  theme.backgroundContainer,
+                backgroundColor: theme.backgroundContainer,
               },
             ]}
           >
@@ -500,19 +456,14 @@ export default function Veiculos() {
             <Button
               title="TENTAR NOVAMENTE"
               size="small"
-              onPress={() =>
-                carregarVeiculos(true)
-              }
+              onPress={() => carregarVeiculos(true)}
             />
           </View>
         )}
 
         <LimparFiltrosButton
           visible={filtrosAtivos()}
-          disabled={
-            carregando ||
-            excluindoSelecionados
-          }
+          disabled={carregando || excluindoSelecionados}
           onPress={() => {
             aplicarFiltros({
               ativo: undefined,
@@ -525,123 +476,92 @@ export default function Veiculos() {
             });
           }}
         />
-        {temPermissao("VEICULOS", "EXCLUIR") &&
-          veiculos.length > 0 ? (
-            modoSelecao ? (
-              <View
+        {temPermissao("VEICULOS", "EXCLUIR") && veiculos.length > 0 ? (
+          modoSelecao ? (
+            <View
+              style={[
+                styles.selectionToolbar,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.borda,
+                },
+              ]}
+            >
+              <View style={styles.selectionInfo}>
+                <Text weight="SemiBold" style={styles.selectionTitle}>
+                  {idsSelecionados.length} de {LIMITE_SELECAO_EM_LOTE}{" "}
+                  selecionado(s)
+                </Text>
+
+                <Text
+                  style={[styles.selectionSubtitle, { color: theme.textoSub }]}
+                >
+                  Escolha os veículos que deseja excluir.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={selecionarTodosVisiveis}
+                disabled={excluindoSelecionados}
+                style={[styles.selectAllButton, { borderColor: theme.borda }]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={[styles.selectAllText, { color: theme.texto }]}
+                >
+                  {todosVeiculosVisiveisSelecionados ||
+                  idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE
+                    ? "LIMPAR"
+                    : "TODOS"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={confirmarExclusaoSelecionados}
+                disabled={idsSelecionados.length === 0 || excluindoSelecionados}
                 style={[
-                  styles.selectionToolbar,
+                  styles.selectionIconButton,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
+                    backgroundColor: "#EF4444",
+                    opacity:
+                      idsSelecionados.length === 0 || excluindoSelecionados
+                        ? 0.5
+                        : 1,
                   },
                 ]}
               >
-                <View style={styles.selectionInfo}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.selectionTitle}
-                  >
-                    {idsSelecionados.length} de{" "}
-                    {LIMITE_SELECAO_EM_LOTE} selecionado(s)
-                  </Text>
+                {excluindoSelecionados ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="trash-outline" size={19} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
 
-                  <Text
-                    style={[
-                      styles.selectionSubtitle,
-                      { color: theme.textoSub },
-                    ]}
-                  >
-                    Escolha os veículos que deseja excluir.
-                  </Text>
-                </View>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={sairModoSelecao}
+                disabled={excluindoSelecionados}
+                style={[
+                  styles.selectionIconButton,
+                  {
+                    backgroundColor: theme.backgroundContainer,
+                  },
+                ]}
+              >
+                <Ionicons name="close" size={20} color={theme.textoContainer} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <SelecaoListaButton
+              title="SELECIONAR VEÍCULOS"
+              onPress={abrirModoSelecao}
+            />
+          )
+        ) : null}
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={selecionarTodosVisiveis}
-                  disabled={excluindoSelecionados}
-                  style={[
-                    styles.selectAllButton,
-                    { borderColor: theme.borda },
-                  ]}
-                >
-                  <Text
-                    weight="SemiBold"
-                    style={[
-                      styles.selectAllText,
-                      { color: theme.texto },
-                    ]}
-                  >
-                    {todosVeiculosVisiveisSelecionados ||
-                    idsSelecionados.length >=
-                      LIMITE_SELECAO_EM_LOTE
-                      ? "LIMPAR"
-                      : "TODOS"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={confirmarExclusaoSelecionados}
-                  disabled={
-                    idsSelecionados.length === 0 ||
-                    excluindoSelecionados
-                  }
-                  style={[
-                    styles.selectionIconButton,
-                    {
-                      backgroundColor: "#EF4444",
-                      opacity:
-                        idsSelecionados.length === 0 ||
-                        excluindoSelecionados
-                          ? 0.5
-                          : 1,
-                    },
-                  ]}
-                >
-                  {excluindoSelecionados ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFFFFF"
-                    />
-                  ) : (
-                    <Ionicons
-                      name="trash-outline"
-                      size={19}
-                      color="#FFFFFF"
-                    />
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={sairModoSelecao}
-                  disabled={excluindoSelecionados}
-                  style={[
-                    styles.selectionIconButton,
-                    {
-                      backgroundColor:
-                        theme.backgroundContainer,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="close"
-                    size={20}
-                    color={theme.textoContainer}
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <SelecaoListaButton
-                title="SELECIONAR VEÍCULOS"
-                onPress={abrirModoSelecao}
-              />
-            )
-          ) : null}
-
-        {erro === "" &&
-        veiculos.length === 0 ? (
+        {erro === "" && veiculos.length === 0 ? (
           <View
             style={[
               styles.empty,
@@ -656,10 +576,7 @@ export default function Veiculos() {
               color={theme.textoSub}
             />
 
-            <Text
-              weight="SemiBold"
-              style={styles.emptyTitle}
-            >
+            <Text weight="SemiBold" style={styles.emptyTitle}>
               Nenhum veículo encontrado
             </Text>
 
@@ -711,10 +628,7 @@ export default function Veiculos() {
                   {veiculo.logo_path ? (
                     <Image
                       source={{
-                        uri:
-                          obterUrlLogoVeiculo(
-                            veiculo.logo_path
-                          ) ?? "",
+                        uri: obterUrlLogoVeiculo(veiculo.logo_path) ?? "",
                       }}
                       style={styles.logoImage}
                       resizeMode="contain"
@@ -749,18 +663,14 @@ export default function Veiculos() {
                   >
                     {[
                       rotuloTier(veiculo.tier),
-                      veiculo.descricao
-                        ? veiculo.descricao
-                        : "Sem descrição",
-                      veiculo.ativo === 1
-                        ? "Ativo"
-                        : "Inativo",
+                      veiculo.descricao ? veiculo.descricao : "Sem descrição",
+                      veiculo.ativo === 1 ? "Ativo" : "Inativo",
                     ]
                       .filter(Boolean)
                       .join(" • ")}
                   </Text>
-                  {(Number(veiculo.contatos_vinculados) > 0 ||
-                    Number(veiculo.clippings_vinculados) > 0) ? (
+                  {Number(veiculo.contatos_vinculados) > 0 ||
+                  Number(veiculo.clippings_vinculados) > 0 ? (
                     <View style={styles.linkedInfo}>
                       <Ionicons
                         name="link-outline"
@@ -771,10 +681,7 @@ export default function Veiculos() {
                       <Text
                         weight="Medium"
                         numberOfLines={1}
-                        style={[
-                          styles.linkedText,
-                          { color: theme.alteracao },
-                        ]}
+                        style={[styles.linkedText, { color: theme.alteracao }]}
                       >
                         {resumoVinculos(veiculo)}
                       </Text>

@@ -1,5 +1,6 @@
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useVoltarEdicaoRelatorioWeb } from "@/hooks/useVoltarEdicaoRelatorioWeb";
 import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
   KeyboardAvoidingView,
@@ -12,7 +13,7 @@ import {
 } from "react-native";
 import SecaoEdicao from "@/components/forms/SecaoEdicao";
 import SalvarAlteracoes from "@/components/forms/SalvarAlteracoes";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -51,10 +52,25 @@ export default function RelatorioEdicaoModal({
     Number(titulo !== relatorio.titulo) +
     Number(inclusaoAutomatica !== relatorio.inclusao_automatica);
   const saida = useSaidaFormulario(quantidadeAlteracoes > 0, salvando);
+  useVoltarEdicaoRelatorioWeb(
+    quantidadeAlteracoes > 0,
+    salvando,
+    saida.confirmarSaida
+  );
+  const salvamentoEmCurso = useRef(false);
+  const montado = useRef(true);
+
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+
   function fecharEdicao() {
+    if (salvamentoEmCurso.current) return;
     saida.confirmarSaida(onClose);
   }
-  const salvamentoEmCurso = useRef(false);
 
   async function salvar() {
     if (salvamentoEmCurso.current) return;
@@ -76,14 +92,15 @@ export default function RelatorioEdicaoModal({
         inclusao_automatica: inclusaoAutomatica,
       });
 
-      onSaved(resposta.relatorio);
+      if (montado.current) onSaved(resposta.relatorio);
     } catch (e) {
+      if (!montado.current) return;
       setErroSalvar(
         e instanceof Error ? e.message : "Não foi possível salvar o relatório."
       );
     } finally {
       salvamentoEmCurso.current = false;
-      setSalvando(false);
+      if (montado.current) setSalvando(false);
     }
   }
 
@@ -183,7 +200,20 @@ export default function RelatorioEdicaoModal({
           </View>
         </KeyboardAvoidingView>
       </EdicaoCompacta>
-      <FeedbackAlert {...saida.alertaProps} inline />
+      <FeedbackAlert
+        {...saida.alertaProps}
+        inline
+        title="Salvar alterações antes de sair?"
+        message="Você pode salvar o que editou, continuar a edição ou descartar as alterações."
+        primaryLabel="DESCARTAR"
+        secondaryLabel="CONTINUAR"
+        tertiaryLabel="SALVAR"
+        loading={salvando}
+        onTertiary={() => {
+          saida.alertaProps.onClose();
+          void salvar();
+        }}
+      />
     </Modal>
   );
 }

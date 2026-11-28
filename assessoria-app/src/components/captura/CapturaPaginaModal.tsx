@@ -15,12 +15,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { File as ExpoFile } from "expo-file-system";
-import {
-  ImageManipulator,
-  SaveFormat,
-} from "expo-image-manipulator";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 import Text from "@/components/ui/Text";
+import { liberarArquivoCapturado } from "@/services/arquivosCapturados";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   capturarPagina,
@@ -51,9 +49,7 @@ interface Props {
   link: string;
   origem: OrigemCaptura;
   onFechar: () => void;
-  onConfirmar: (
-    imagem: ImagemRecortada
-  ) => void | Promise<void>;
+  onConfirmar: (imagem: ImagemRecortada) => void | Promise<void>;
   embutido?: boolean;
 }
 
@@ -125,7 +121,9 @@ function SessaoCaptura({
   const [erroTrecho, setErroTrecho] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [carregando, setCarregando] = useState(true);
-  const [mensagemCaptura, setMensagemCaptura] = useState("Solicitando captura...");
+  const [mensagemCaptura, setMensagemCaptura] = useState(
+    "Solicitando captura..."
+  );
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -184,7 +182,7 @@ function SessaoCaptura({
   const larguraBase = Math.min(tela.width - 28, 800);
   const larguraImagem = larguraBase * zoom;
   const alturaImagem = captura
-    ? larguraImagem * captura.altura / captura.largura
+    ? (larguraImagem * captura.altura) / captura.largura
     : 0;
   const podeRecortar =
     Boolean(captura) &&
@@ -215,136 +213,126 @@ function SessaoCaptura({
   }, [visivel]);
 
   function consultarTrecho(novoTrecho: number) {
-  if (carregando || processando) return;
+    if (carregando || processando) return;
 
-  Keyboard.dismiss();
-  gestoRecorte.current = null;
+    Keyboard.dismiss();
+    gestoRecorte.current = null;
 
-  setCaptura(null);
-  setArea(null);
-  setModo("recortar");
-  setErro("");
-  setErroTrecho("");
-  setCarregando(true);
-  setMensagemCaptura("Solicitando captura...");
-  setTrechoDigitado(String(novoTrecho + 1));
+    setCaptura(null);
+    setArea(null);
+    setModo("recortar");
+    setErro("");
+    setErroTrecho("");
+    setCarregando(true);
+    setMensagemCaptura("Solicitando captura...");
+    setTrechoDigitado(String(novoTrecho + 1));
 
-  if (novoTrecho === trecho) {
-    setTentativa((atual) => atual + 1);
-  } else {
-    setTrecho(novoTrecho);
+    if (novoTrecho === trecho) {
+      setTentativa((atual) => atual + 1);
+    } else {
+      setTrecho(novoTrecho);
+    }
   }
-}
 
-function irParaTrecho() {
-  if (carregando || processando) return;
+  function irParaTrecho() {
+    if (carregando || processando) return;
 
-  const numero = Number(trechoDigitado);
+    const numero = Number(trechoDigitado);
 
-  if (
-    !/^\d{1,3}$/.test(trechoDigitado) ||
-    numero < 1 ||
-    numero > TOTAL_TRECHOS
-  ) {
-    setErroTrecho(
-      `Informe um trecho de 1 a ${TOTAL_TRECHOS}.`
+    if (
+      !/^\d{1,3}$/.test(trechoDigitado) ||
+      numero < 1 ||
+      numero > TOTAL_TRECHOS
+    ) {
+      setErroTrecho(`Informe um trecho de 1 a ${TOTAL_TRECHOS}.`);
+      return;
+    }
+
+    consultarTrecho(numero - 1);
+  }
+
+  function iniciarRecorte(evento: GestureResponderEvent) {
+    if (!podeRecortar || gestoRecorte.current) return;
+
+    const toque = evento.nativeEvent.touches?.[0] ?? evento.nativeEvent;
+
+    gestoRecorte.current = {
+      identificador: toque.identifier,
+      pageX: toque.pageX,
+      pageY: toque.pageY,
+      x: limitar(toque.locationX / larguraImagem),
+      y: limitar(toque.locationY / alturaImagem),
+      largura: larguraImagem,
+      altura: alturaImagem,
+      anterior: area,
+      atual: null,
+    };
+
+    setErro("");
+  }
+
+  function moverRecorte(evento: GestureResponderEvent) {
+    const gesto = gestoRecorte.current;
+
+    if (!gesto || !podeRecortar) return;
+
+    const toques = [
+      ...(evento.nativeEvent.touches ?? []),
+      ...(evento.nativeEvent.changedTouches ?? []),
+      evento.nativeEvent,
+    ];
+
+    const toque = toques.find(
+      (item) => item.identifier === gesto.identificador
     );
-    return;
+
+    if (!toque) return;
+
+    const x = limitar(gesto.x + (toque.pageX - gesto.pageX) / gesto.largura);
+
+    const y = limitar(gesto.y + (toque.pageY - gesto.pageY) / gesto.altura);
+
+    const deslocamento = Math.hypot(
+      (x - gesto.x) * gesto.largura,
+      (y - gesto.y) * gesto.altura
+    );
+
+    if (deslocamento < 4) return;
+
+    const proxima = {
+      x: Math.min(gesto.x, x),
+      y: Math.min(gesto.y, y),
+      largura: Math.abs(x - gesto.x),
+      altura: Math.abs(y - gesto.y),
+    };
+
+    gesto.atual = proxima;
+    setArea(proxima);
   }
 
-  consultarTrecho(numero - 1);
-}
+  function finalizarRecorte(evento: GestureResponderEvent) {
+    moverRecorte(evento);
 
-function iniciarRecorte(evento: GestureResponderEvent) {
-  if (!podeRecortar || gestoRecorte.current) return;
+    const gesto = gestoRecorte.current;
+    if (!gesto) return;
 
-  const toque =
-    evento.nativeEvent.touches?.[0] ??
-    evento.nativeEvent;
+    const valida =
+      gesto.atual &&
+      gesto.atual.largura * gesto.largura >= 4 &&
+      gesto.atual.altura * gesto.altura >= 4;
 
-  gestoRecorte.current = {
-    identificador: toque.identifier,
-    pageX: toque.pageX,
-    pageY: toque.pageY,
-    x: limitar(toque.locationX / larguraImagem),
-    y: limitar(toque.locationY / alturaImagem),
-    largura: larguraImagem,
-    altura: alturaImagem,
-    anterior: area,
-    atual: null,
-  };
-
-  setErro("");
-}
-
-function moverRecorte(evento: GestureResponderEvent) {
-  const gesto = gestoRecorte.current;
-
-  if (!gesto || !podeRecortar) return;
-
-  const toques = [
-    ...(evento.nativeEvent.touches ?? []),
-    ...(evento.nativeEvent.changedTouches ?? []),
-    evento.nativeEvent,
-  ];
-
-  const toque = toques.find(
-    (item) => item.identifier === gesto.identificador
-  );
-
-  if (!toque) return;
-
-  const x = limitar(
-    gesto.x +
-      (toque.pageX - gesto.pageX) / gesto.largura
-  );
-
-  const y = limitar(
-    gesto.y +
-      (toque.pageY - gesto.pageY) / gesto.altura
-  );
-
-  const deslocamento = Math.hypot(
-    (x - gesto.x) * gesto.largura,
-    (y - gesto.y) * gesto.altura
-  );
-
-  if (deslocamento < 4) return;
-
-  const proxima = {
-    x: Math.min(gesto.x, x),
-    y: Math.min(gesto.y, y),
-    largura: Math.abs(x - gesto.x),
-    altura: Math.abs(y - gesto.y),
-  };
-
-  gesto.atual = proxima;
-  setArea(proxima);
-}
-
-function finalizarRecorte(evento: GestureResponderEvent) {
-  moverRecorte(evento);
-
-  const gesto = gestoRecorte.current;
-  if (!gesto) return;
-
-  const valida =
-    gesto.atual &&
-    gesto.atual.largura * gesto.largura >= 4 &&
-    gesto.atual.altura * gesto.altura >= 4;
-
-  setArea(valida ? gesto.atual : gesto.anterior);
-  gestoRecorte.current = null;
-}
-
-function cancelarRecorte() {
-  const gesto = gestoRecorte.current;
-  gestoRecorte.current = null;
-
-  if (gesto) {
-    setArea(gesto.anterior);
+    setArea(valida ? gesto.atual : gesto.anterior);
+    gestoRecorte.current = null;
   }
-}
+
+  function cancelarRecorte() {
+    const gesto = gestoRecorte.current;
+    gestoRecorte.current = null;
+
+    if (gesto) {
+      setArea(gesto.anterior);
+    }
+  }
 
   async function confirmar() {
     if (!captura || !area || processando) return;
@@ -368,6 +356,8 @@ function cancelarRecorte() {
 
     setProcessando(true);
     setErro("");
+    let recorteUri: string | null = null;
+    let entregue = false;
 
     try {
       const manipulador = ImageManipulator.manipulate(captura.uri);
@@ -383,6 +373,7 @@ function cancelarRecorte() {
         format: SaveFormat.JPEG,
         compress: 0.9,
       });
+      recorteUri = resultado.uri;
 
       const nome = `captura-${Date.now()}.jpg`;
 
@@ -410,6 +401,7 @@ function cancelarRecorte() {
           tamanhoBytes: arquivo.size,
         });
       }
+      entregue = true;
     } catch (falha) {
       setErro(
         falha instanceof Error
@@ -417,28 +409,21 @@ function cancelarRecorte() {
           : "Não foi possível recortar a imagem."
       );
     } finally {
+      if (!entregue && recorteUri) liberarArquivoCapturado(recorteUri);
       setProcessando(false);
     }
   }
 
   const conteudo = (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: theme.background },
-      ]}
+      style={[styles.container, { backgroundColor: theme.background }]}
     >
       <View style={styles.cabecalho}>
         <View style={styles.cabecalhoTexto}>
           <Text weight="Bold" style={styles.titulo}>
             Capturar imagem
           </Text>
-          <Text
-            style={[
-              styles.subtitulo,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.subtitulo, { color: theme.textoSub }]}>
             Escolha a parte da página que deseja usar.
           </Text>
         </View>
@@ -467,9 +452,7 @@ function cancelarRecorte() {
                   {
                     borderColor: theme.borda,
                     backgroundColor:
-                      modo === opcao
-                        ? theme.primaria
-                        : theme.background,
+                      modo === opcao ? theme.primaria : theme.background,
                   },
                 ]}
                 disabled={processando}
@@ -479,16 +462,11 @@ function cancelarRecorte() {
                   style={[
                     styles.textoBotaoModo,
                     {
-                      color:
-                        modo === opcao
-                          ? theme.branco
-                          : theme.texto,
+                      color: modo === opcao ? theme.branco : theme.texto,
                     },
                   ]}
                 >
-                  {opcao === "recortar"
-                    ? "RECORTAR"
-                    : "NAVEGAR"}
+                  {opcao === "recortar" ? "RECORTAR" : "NAVEGAR"}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -509,9 +487,7 @@ function cancelarRecorte() {
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.valorZoom}>
-              {Math.round(zoom * 100)}%
-            </Text>
+            <Text style={styles.valorZoom}>{Math.round(zoom * 100)}%</Text>
 
             <TouchableOpacity
               accessibilityRole="button"
@@ -528,12 +504,7 @@ function cancelarRecorte() {
             </TouchableOpacity>
           </View>
 
-          <Text
-            style={[
-              styles.instrucao,
-              { color: theme.textoSub },
-            ]}
-          >
+          <Text style={[styles.instrucao, { color: theme.textoSub }]}>
             {modo === "recortar"
               ? "Arraste sobre a imagem para marcar o recorte."
               : "Deslize para navegar pela imagem ampliada."}
@@ -603,12 +574,8 @@ function cancelarRecorte() {
                 ) : null}
 
                 <View
-                  pointerEvents={
-                    modo === "recortar" ? "auto" : "none"
-                  }
-                  onStartShouldSetResponder={() =>
-                    modo === "recortar"
-                  }
+                  pointerEvents={modo === "recortar" ? "auto" : "none"}
+                  onStartShouldSetResponder={() => modo === "recortar"}
                   onResponderTerminationRequest={() => false}
                   onResponderGrant={iniciarRecorte}
                   onResponderMove={moverRecorte}
@@ -631,10 +598,7 @@ function cancelarRecorte() {
             onPress={() => consultarTrecho(trecho)}
             style={styles.refazer}
           >
-            <Text
-              weight="SemiBold"
-              style={{ color: theme.textoTerciaria }}
-            >
+            <Text weight="SemiBold" style={{ color: theme.textoTerciaria }}>
               Refazer captura
             </Text>
           </TouchableOpacity>
@@ -644,18 +608,13 @@ function cancelarRecorte() {
           {carregando ? (
             <>
               <ActivityIndicator color={theme.primaria} />
-              <Text style={styles.textoCarregando}>
-                {mensagemCaptura}
-              </Text>
+              <Text style={styles.textoCarregando}>{mensagemCaptura}</Text>
             </>
           ) : (
             <>
               {erro ? (
                 <View
-                  style={[
-                    styles.caixaErroCaptura,
-                    { borderColor: theme.erro },
-                  ]}
+                  style={[styles.caixaErroCaptura, { borderColor: theme.erro }]}
                 >
                   <Ionicons
                     name="alert-circle-outline"
@@ -679,10 +638,7 @@ function cancelarRecorte() {
                 accessibilityRole="button"
                 onPress={() => setTentativa((atual) => atual + 1)}
               >
-                <Text
-                  weight="SemiBold"
-                  style={{ color: theme.textoTerciaria }}
-                >
+                <Text weight="SemiBold" style={{ color: theme.textoTerciaria }}>
                   Tentar novamente
                 </Text>
               </TouchableOpacity>
@@ -703,18 +659,13 @@ function cancelarRecorte() {
             accessibilityRole="button"
             accessibilityLabel="Capturar trecho anterior da página"
             disabled={trecho === 0 || carregando || processando}
-            onPress={() =>
-              consultarTrecho(Math.max(0, trecho - 1))
-            }
+            onPress={() => consultarTrecho(Math.max(0, trecho - 1))}
             style={[
               styles.botaoTrecho,
               {
                 borderColor: theme.borda,
                 backgroundColor: theme.backgroundSecundario,
-                opacity:
-                  trecho === 0 || carregando || processando
-                    ? 0.45
-                    : 1,
+                opacity: trecho === 0 || carregando || processando ? 0.45 : 1,
               },
             ]}
           >
@@ -725,10 +676,7 @@ function cancelarRecorte() {
             />
             <Text
               weight="SemiBold"
-              style={[
-                styles.botaoTrechoTexto,
-                { color: theme.textoTerciaria },
-              ]}
+              style={[styles.botaoTrechoTexto, { color: theme.textoTerciaria }]}
             >
               ANTERIOR
             </Text>
@@ -782,13 +730,9 @@ function cancelarRecorte() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Capturar próximo trecho da página"
-            disabled={
-              !captura?.temProxima || carregando || processando
-            }
+            disabled={!captura?.temProxima || carregando || processando}
             onPress={() =>
-              consultarTrecho(
-                Math.min(TOTAL_TRECHOS - 1, trecho + 1)
-              )
+              consultarTrecho(Math.min(TOTAL_TRECHOS - 1, trecho + 1))
             }
             style={[
               styles.botaoTrecho,
@@ -796,18 +740,13 @@ function cancelarRecorte() {
                 borderColor: theme.borda,
                 backgroundColor: theme.backgroundSecundario,
                 opacity:
-                  !captura?.temProxima || carregando || processando
-                    ? 0.45
-                    : 1,
+                  !captura?.temProxima || carregando || processando ? 0.45 : 1,
               },
             ]}
           >
             <Text
               weight="SemiBold"
-              style={[
-                styles.botaoTrechoTexto,
-                { color: theme.textoTerciaria },
-              ]}
+              style={[styles.botaoTrechoTexto, { color: theme.textoTerciaria }]}
             >
               PRÓXIMO
             </Text>
@@ -831,8 +770,8 @@ function cancelarRecorte() {
           accessibilityRole="alert"
           style={[styles.avisoCarregamento, { color: theme.aviso }]}
         >
-          Você atingiu o limite de navegação desta captura. Ainda pode
-          recortar este trecho ou fechar para escolher uma imagem manualmente.
+          Você atingiu o limite de navegação desta captura. Ainda pode recortar
+          este trecho ou fechar para escolher uma imagem manualmente.
         </Text>
       ) : null}
 
@@ -840,19 +779,14 @@ function cancelarRecorte() {
         <Text
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
-          style={[
-            styles.avisoCarregamento,
-            { color: theme.aviso },
-          ]}
+          style={[styles.avisoCarregamento, { color: theme.aviso }]}
         >
           {avisoCaptura}
         </Text>
       ) : null}
 
       {erro && captura ? (
-        <Text style={[styles.erro, { color: theme.erro }]}>
-          {erro}
-        </Text>
+        <Text style={[styles.erro, { color: theme.erro }]}>{erro}</Text>
       ) : null}
 
       <View style={styles.acoes}>
@@ -877,20 +811,12 @@ function cancelarRecorte() {
             styles.botaoAcao,
             {
               backgroundColor: theme.primaria,
-              opacity:
-                !area || !captura || processando
-                  ? 0.5
-                  : 1,
+              opacity: !area || !captura || processando ? 0.5 : 1,
             },
           ]}
         >
-          <Text
-            weight="Bold"
-            style={{ color: theme.branco }}
-          >
-            {processando
-              ? "RECORTANDO..."
-              : "USAR RECORTE"}
+          <Text weight="Bold" style={{ color: theme.branco }}>
+            {processando ? "RECORTANDO..." : "USAR RECORTE"}
           </Text>
         </TouchableOpacity>
       </View>

@@ -16,7 +16,7 @@ final class CapturaPaginaService
         if (
             $assessoriaId < 1 ||
             $usuarioId < 1 ||
-            !in_array($origem, ['clipping', 'relatorio'], true)
+            !in_array($origem, ['clipping', 'relatorio', 'veiculo'], true)
         ) {
             throw new \InvalidArgumentException(
                 'Solicitante da captura inválido.'

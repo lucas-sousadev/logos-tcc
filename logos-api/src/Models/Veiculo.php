@@ -54,6 +54,8 @@ class Veiculo
             $params['ativo'] = $ativo;
         }
 
+        self::aplicarFiltroTier($filtros, $where, $params);
+
         $contagemVinculos = "
             (
                 SELECT COUNT(*)
@@ -196,6 +198,8 @@ class Veiculo
             $where[] = 'v.ativo = :ativo';
             $params['ativo'] = $ativo;
         }
+
+        self::aplicarFiltroTier($filtros, $where, $params);
 
         $contagemVinculos = "
             (
@@ -487,6 +491,37 @@ class Veiculo
         }
 
         return (int) $minimo;
+    }
+
+    private static function aplicarFiltroTier(array $filtros, array &$where, array &$params): void
+    {
+        $tier = $filtros['tier'] ?? null;
+        $semTier = $filtros['sem_tier'] ?? null;
+
+        if ($semTier === null || $semTier === '') {
+            $semTier = false;
+        } elseif (
+            !is_scalar($semTier)
+            || ($semTier = filter_var($semTier, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) === null
+        ) {
+            throw new \InvalidArgumentException('Filtro de Tier não definido inválido.');
+        }
+
+        if ($tier !== null && $tier !== '') {
+            if (
+                (!is_int($tier) && !is_string($tier))
+                || !in_array((string) $tier, ['1', '2', '3'], true)
+                || $semTier
+            ) {
+                throw new \InvalidArgumentException(
+                    'Selecione apenas um Tier entre 1 e 3 ou Tier não definido.'
+                );
+            }
+            $where[] = 'v.tier = :tier';
+            $params['tier'] = (int) $tier;
+        } elseif ($semTier) {
+            $where[] = 'v.tier IS NULL';
+        }
     }
 
     private static function filtroMaximoContatos(

@@ -2906,6 +2906,12 @@ class RelatorioService
             $estado['dados']['veiculo']['logo_path'] = null;
         }
 
+        if (array_key_exists('imagem_escala', $edicoes)) {
+            $estado['dados']['imagem']['escala'] = RelatorioSlideLayout::escalaImagem(
+                $edicoes['imagem_escala']
+            );
+        }
+
         return $estado;
     }
 
@@ -3137,13 +3143,14 @@ class RelatorioService
             'data_publicacao' => 10,
             'link' => 2048,
             'veiculo_nome' => 255,
-            'veiculo_descricao' => 3000,
+            'veiculo_descricao' => RelatorioSlideLayout::LIMITE_DESCRICAO,
             'veiculo_alcance' => 1000,
         ];
         $permitidos = [
             ...array_keys($limites),
             'imagem_midia_id',
             'logo_midia_id',
+            'imagem_escala',
         ];
 
         if (!$dados || array_diff(array_keys($dados), $permitidos)) {
@@ -3153,7 +3160,13 @@ class RelatorioService
         }
 
         foreach ($dados as $campo => &$valor) {
-            if (isset($limites[$campo])) {
+            if ($campo === 'imagem_escala') {
+                if (!is_int($valor) || $valor < 25 || $valor > 100) {
+                    throw new \InvalidArgumentException(
+                        'O tamanho da imagem deve estar entre 25% e 100%.'
+                    );
+                }
+            } elseif (isset($limites[$campo])) {
                 if ($valor !== null && !is_string($valor)) {
                     throw new \InvalidArgumentException(
                         'Valor inválido para ' . $campo . '.'
@@ -3168,7 +3181,11 @@ class RelatorioService
                     && mb_strlen($valor, 'UTF-8') > $limites[$campo]
                 ) {
                     throw new \InvalidArgumentException(
-                        'O campo ' . $campo . ' excede o limite permitido.'
+                        $campo === 'veiculo_descricao'
+                            ? 'A descrição do slide deve ter até '
+                                . RelatorioSlideLayout::LIMITE_DESCRICAO
+                                . ' caracteres.'
+                            : 'O campo ' . $campo . ' excede o limite permitido.'
                     );
                 }
             } elseif ($valor !== null && (!is_int($valor) || $valor < 1)) {
@@ -3281,7 +3298,7 @@ class RelatorioService
                 }
             }
 
-            foreach (['imagem_midia_id', 'logo_midia_id'] as $campo) {
+            foreach (['imagem_midia_id', 'logo_midia_id', 'imagem_escala'] as $campo) {
                 if (array_key_exists($campo, $dados)) {
                     $edicoes[$campo] = $dados[$campo];
                 }

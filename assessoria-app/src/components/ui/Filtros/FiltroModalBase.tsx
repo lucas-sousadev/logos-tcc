@@ -41,10 +41,7 @@ export default function FiltroModalBase({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-        />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View
           style={[
@@ -61,32 +58,24 @@ export default function FiltroModalBase({
                 FILTROS
               </Text>
 
-              <Text
-                style={[
-                  styles.subtitle,
-                  { color: theme.textoSub },
-                ]}
-              >
+              <Text style={[styles.subtitle, { color: theme.textoSub }]}>
                 {subtitle}
               </Text>
             </View>
 
             <TouchableOpacity
               onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Fechar filtros"
               activeOpacity={0.8}
               style={[
                 styles.closeButton,
                 {
-                  backgroundColor:
-                    theme.backgroundContainer,
+                  backgroundColor: theme.backgroundContainer,
                 },
               ]}
             >
-              <Ionicons
-                name="close"
-                size={22}
-                color={theme.textoContainer}
-              />
+              <Ionicons name="close" size={22} color={theme.textoContainer} />
             </TouchableOpacity>
           </View>
 
@@ -98,12 +87,7 @@ export default function FiltroModalBase({
             {children}
           </ScrollView>
 
-          <View
-            style={[
-              styles.footer,
-              { borderTopColor: theme.borda },
-            ]}
-          >
+          <View style={[styles.footer, { borderTopColor: theme.borda }]}>
             <Button
               title="LIMPAR"
               variant="outline"

@@ -6,6 +6,7 @@ use PhpOffice\PhpPresentation\DocumentLayout;
 use PhpOffice\PhpPresentation\IOFactory;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Shape\RichText;
+use PhpOffice\PhpPresentation\Shape\RichText\Paragraph;
 use PhpOffice\PhpPresentation\Slide;
 use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Alignment;
@@ -48,6 +49,11 @@ final class RelatorioPptxService
             $forma->getActiveParagraph()
                 ->getAlignment()
                 ->setVertical(Alignment::VERTICAL_BOTTOM);
+        }
+
+        if ($url !== null) {
+            $forma->setHorizontalOverflow(RichText::OVERFLOW_CLIP)
+                ->setVerticalOverflow(RichText::OVERFLOW_CLIP);
         }
 
         $trecho = $forma->createTextRun($valor);
@@ -107,7 +113,8 @@ final class RelatorioPptxService
         array $registro,
         int $assessoriaId,
         int $relatorioId,
-        array &$arquivosTemporarios
+        array &$arquivosTemporarios,
+        array $layoutImagem
     ): void {
         $midiaId = (int) ($registro['imagem_midia_id'] ?? 0);
 
@@ -191,14 +198,17 @@ final class RelatorioPptxService
         }
 
         $caixaX = 430;
-        $caixaY = 155;
+        $caixaY = $layoutImagem['topoImagem'];
         $caixaLargura = 480;
-        $caixaAltura = 275;
+        $caixaAltura = $layoutImagem['alturaImagem'];
 
+        $porcentagem = RelatorioSlideLayout::escalaImagem(
+            $registro['dados_json']['imagem']['escala'] ?? null
+        );
         $escala = min(
             $caixaLargura / $dimensoes[0],
             $caixaAltura / $dimensoes[1]
-        );
+        ) * $porcentagem / 100;
 
         $largura = max(1, (int) round($dimensoes[0] * $escala));
         $altura = max(1, (int) round($dimensoes[1] * $escala));
@@ -335,11 +345,12 @@ final class RelatorioPptxService
         $clipping = $dados['clipping'] ?? [];
         $veiculo = $dados['veiculo'] ?? [];
 
-        $nomeVeiculo =
-            trim((string) ($veiculo['nome'] ?? ''))
-            ?: 'Veículo não informado';
+        $nomeVeiculo = trim((string) ($veiculo['nome'] ?? ''));
+        if ($nomeVeiculo === '') {
+            $nomeVeiculo = 'Veículo não informado';
+        }
 
-        $descricao = trim((string) ($veiculo['descricao'] ?? ''));
+        $descricao = RelatorioSlideLayout::descricao($veiculo['descricao'] ?? null);
         $alcance = trim((string) ($veiculo['alcance'] ?? ''));
 
         self::adicionarLogo(
@@ -352,36 +363,44 @@ final class RelatorioPptxService
 
         $data = self::data($clipping['data_publicacao'] ?? null);
 
-        $formaDados = $slide->createRichTextShape()
-            ->setOffsetX(42)
-            ->setOffsetY(145)
-            ->setWidth(350)
-            ->setHeight($data !== '' ? 310 : 355);
-
-        $formaDados
-            ->setAutoFit(RichText::AUTOFIT_NORMAL)
-            ->setInsetTop(0)
-            ->setInsetBottom(0)
-            ->setInsetLeft(0)
-            ->setInsetRight(0);
-
-        $formaDados->getActiveParagraph()
-            ->getAlignment()
-            ->setVertical(Alignment::VERTICAL_BOTTOM);
-
-        self::campo($formaDados, 'Veículo', $nomeVeiculo);
-
-        foreach ([
-            'Descrição' => $descricao,
-            'Alcance' => $alcance,
-        ] as $rotulo => $valor) {
-            if ($valor === '') {
-                continue;
+        $campos = RelatorioSlideLayout::dados(
+            $nomeVeiculo,
+            $descricao,
+            $alcance,
+            $data !== ''
+        );
+        foreach ($campos as $campo) {
+            $forma = $slide->createRichTextShape()
+                ->setOffsetX(42)
+                ->setOffsetY($campo['topo'])
+                ->setWidth(350)
+                ->setHeight($campo['altura'])
+                ->setAutoFit(RichText::AUTOFIT_NOAUTOFIT)
+                ->setWrap(RichText::WRAP_NONE)
+                ->setVerticalOverflow(RichText::OVERFLOW_CLIP)
+                ->setHorizontalOverflow(RichText::OVERFLOW_CLIP)
+                ->setInsetTop(0)
+                ->setInsetBottom(0)
+                ->setInsetLeft(0)
+                ->setInsetRight(0);
+            $paragrafo = $forma->getActiveParagraph();
+            $paragrafo->setLineSpacingMode(Paragraph::LINE_SPACING_MODE_POINT)
+                ->setLineSpacing(16)
+                ->setSpacingBefore(0)
+                ->setSpacingAfter(0);
+            $paragrafo->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+            self::campo(
+                $forma,
+                $campo['rotulo'],
+                mb_substr($campo['linhas'][0], mb_strlen($campo['rotulo']) + 2)
+            );
+            foreach (array_slice($campo['linhas'], 1) as $linha) {
+                $forma->createBreak();
+                $forma->createTextRun($linha)->getFont()
+                    ->setName('Arial')
+                    ->setSize(12)
+                    ->setColor(new Color('FF172033'));
             }
-
-            $formaDados->getActiveParagraph()->setSpacingAfter(6);
-            $formaDados->createParagraph();
-            self::campo($formaDados, $rotulo, $valor);
         }
 
         if ($data !== '') {
@@ -393,6 +412,9 @@ final class RelatorioPptxService
             );
         }
 
+        $link = trim((string) ($registro['link'] ?? ''));
+        $layoutLink = RelatorioSlideLayout::link($link);
+
         if (
             !empty($registro['imagem_midia_id'])
             || !empty($registro['imagem_anexo_id'])
@@ -403,23 +425,23 @@ final class RelatorioPptxService
                 $registro,
                 $assessoriaId,
                 $relatorioId,
-                $arquivosTemporarios
+                $arquivosTemporarios,
+                $layoutLink
             );
         } else {
             self::texto(
                 $slide,
                 'Sem imagem para o slide',
-                500, 280, 340, 35,
+                500, $layoutLink['topoImagem'] + (int) (($layoutLink['alturaImagem'] - 35) / 2),
+                340, 35,
                 10, '697587'
             );
         }
 
-        $link = trim((string) ($registro['link'] ?? ''));
-
         self::texto(
             $slide,
-            $link,
-            430, 430, 480, 60,
+            $layoutLink['texto'],
+            430, $layoutLink['topoLink'], 480, $layoutLink['alturaLink'],
             10, '008C95', false, $link, true
         );
     }

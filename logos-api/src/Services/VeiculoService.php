@@ -468,16 +468,23 @@ class VeiculoService
                 $assessoriaId
             );
         } catch (\PDOException $e) {
-            /*
-             * O FK dos jornalistas usa RESTRICT.
-             * Se o veículo estiver vinculado,
-             * a exclusão será bloqueada.
-             */
+            // Contatos e clippings protegem o veículo por chaves estrangeiras.
             if (
                 (int) ($e->errorInfo[1] ?? 0) === 1451
             ) {
+                $atual = Veiculo::buscarPorId($id, $assessoriaId) ?? $veiculo;
+                $vinculos = [];
+                if ((int) $atual['contatos_vinculados'] > 0) {
+                    $vinculos[] = 'contatos';
+                }
+                if ((int) $atual['clippings_vinculados'] > 0) {
+                    $vinculos[] = 'clippings';
+                }
+                $motivo = $vinculos ? implode(' e ', $vinculos) : 'registros';
                 throw new \RuntimeException(
-                    'Este veículo possui contatos vinculados e não pode ser excluído.'
+                    'Este veículo possui ' . $motivo . ' vinculados e não pode ser excluído.',
+                    0,
+                    $e
                 );
             }
 

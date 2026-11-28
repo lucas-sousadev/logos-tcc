@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { API_URL } from "@/constants/api";
 import { authenticatedFetch } from "@/services/api/auth";
 
-export type OrigemCaptura = "clipping" | "relatorio";
+export type OrigemCaptura = "clipping" | "relatorio" | "veiculo";
 export type EstadoCaptura = "aguardando" | "processando";
 export const TOTAL_TRECHOS_CAPTURA = 200;
 export type AvisoCaptura =
@@ -96,7 +96,9 @@ async function solicitar(
     if (sinal?.aborted) throw erroCancelamento();
 
     if (expirou) {
-      throw new Error("A conexão com a captura demorou demais. Tente novamente.");
+      throw new Error(
+        "A conexão com a captura demorou demais. Tente novamente."
+      );
     }
 
     throw erro;
@@ -154,13 +156,10 @@ async function lerCaptura(
     largura,
     altura,
     incompleta:
-      resposta.headers.get("X-Captura-Incompleta") === "1" ||
-      aviso !== null,
+      resposta.headers.get("X-Captura-Incompleta") === "1" || aviso !== null,
     aviso,
-    temProxima:
-      resposta.headers.get("X-Captura-Tem-Proxima") === "1",
-    limiteTrechos:
-      resposta.headers.get("X-Captura-Limite-Trechos") === "1",
+    temProxima: resposta.headers.get("X-Captura-Tem-Proxima") === "1",
+    limiteTrechos: resposta.headers.get("X-Captura-Limite-Trechos") === "1",
   };
 
   if (Platform.OS === "web") {
@@ -219,7 +218,9 @@ export async function capturarPagina(
   const rota =
     origem === "clipping"
       ? "/api/clippings/capturar-pagina"
-      : "/api/relatorios/capturar-pagina";
+      : origem === "veiculo"
+        ? "/api/veiculos/capturar-pagina"
+        : "/api/relatorios/capturar-pagina";
 
   const controlador = new AbortController();
   const cancelar = () => controlador.abort();
@@ -297,7 +298,9 @@ export async function capturarPagina(
     }
   } catch (erro) {
     if (expirou) {
-      throw new Error("A captura demorou demais. Tente novamente em instantes.");
+      throw new Error(
+        "A captura demorou demais. Tente novamente em instantes."
+      );
     }
 
     throw erro;
@@ -311,7 +314,7 @@ export async function capturarPagina(
       void solicitar(rota, {
         acao: "cancelar",
         captura_id: capturaId,
-      }).catch(() => { });
+      }).catch(() => {});
     }
   }
 }

@@ -1,5 +1,6 @@
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useVoltarEdicaoRelatorioWeb } from "@/hooks/useVoltarEdicaoRelatorioWeb";
 import EdicaoCompacta from "@/components/forms/EdicaoCompacta";
 import {
   KeyboardAvoidingView,
@@ -18,7 +19,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@/services/seletorArquivos";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { File as ExpoFile } from "expo-file-system";
+import { liberarArquivoCapturado } from "@/services/arquivosCapturados";
+import CapturaSiteBotao from "@/components/captura/CapturaSiteBotao";
+import RelatorioSlideTamanhoImagem from "@/components/relatorios/RelatorioSlideTamanhoImagem";
 
 import Input from "@/components/ui/Input";
 import Text from "@/components/ui/Text";
@@ -39,6 +42,10 @@ import {
   type SlideRelatorio,
 } from "@/services/api/relatorio";
 import { obterUrlLogoVeiculo } from "@/services/api/veiculo";
+import {
+  normalizarEscalaImagemSlide,
+  LIMITE_DESCRICAO_SLIDE,
+} from "@/utils/relatorioSlideLayout";
 import {
   dataBRParaISO,
   dataISOParaBR,
@@ -84,7 +91,7 @@ export default function RelatorioSlideEdicaoModal({
   const [estadoLogo, setEstadoLogo] = useState<EstadoMidia>("manter");
   const [arquivoImagem, setArquivoImagem] =
     useState<ArquivoImagemRascunho | null>(null);
-  const [arquivoLogo, setArquivoLogo] = useState<ArquivoMidiaSlide | null>(
+  const [arquivoLogo, setArquivoLogo] = useState<ArquivoImagemRascunho | null>(
     null
   );
   const enviarMidia = useMemo(
@@ -101,7 +108,14 @@ export default function RelatorioSlideEdicaoModal({
   const [midiaAmpliada, setMidiaAmpliada] = useState<MidiaAmpliada | null>(
     null
   );
-  const [capturaAberta, setCapturaAberta] = useState(false);
+  const [captura, setCaptura] = useState<{
+    tipo: "imagem" | "logo";
+    link: string;
+  } | null>(null);
+  const escalaOriginal = normalizarEscalaImagemSlide(
+    slide.dados_json?.imagem?.escala
+  );
+  const [escalaImagem, setEscalaImagem] = useState(escalaOriginal);
   const podeCapturarPagina = /^https?:\/\/\S+$/i.test(link.trim());
 
   const [erro, setErro] = useState("");
@@ -110,6 +124,10 @@ export default function RelatorioSlideEdicaoModal({
   const selecaoEmCurso = useRef(false);
   const montado = useRef(true);
   const ocupado = salvando || selecionando;
+  const descricaoExcedida = descricao.length > LIMITE_DESCRICAO_SLIDE;
+  const erroDescricao = descricaoExcedida
+    ? `Use até ${LIMITE_DESCRICAO_SLIDE} caracteres na descrição do slide.`
+    : "";
   useEffect(() => {
     montado.current = true;
     return () => {
@@ -123,23 +141,18 @@ export default function RelatorioSlideEdicaoModal({
 
   useEffect(() => {
     return () => {
-      if (!arquivoImagem?.geradoPelaCaptura) return;
-
-      if (Platform.OS === "web") {
-        if (arquivoImagem.uri.startsWith("blob:")) {
-          URL.revokeObjectURL(arquivoImagem.uri);
-        }
-        return;
-      }
-
-      try {
-        const arquivo = new ExpoFile(arquivoImagem.uri);
-        if (arquivo.exists) arquivo.delete();
-      } catch {
-        // o sistema também pode limpar os arquivos de cache
-      }
+      if (arquivoImagem?.geradoPelaCaptura)
+        liberarArquivoCapturado(arquivoImagem.uri);
     };
   }, [arquivoImagem]);
+
+  useEffect(
+    () => () => {
+      if (arquivoLogo?.geradoPelaCaptura)
+        liberarArquivoCapturado(arquivoLogo.uri);
+    },
+    [arquivoLogo]
+  );
 
   function limparErroCampo(campo: "data" | "link") {
     setErrosCampos((atuais) => ({ ...atuais, [campo]: undefined }));
@@ -172,6 +185,7 @@ export default function RelatorioSlideEdicaoModal({
       },
       imagem: {
         ...slide.dados_json?.imagem,
+        escala: escalaImagem,
         anexo_id: estadoImagem === "manter" ? slide.imagem_anexo_id : null,
         arquivo_path:
           estadoImagem === "manter"
@@ -270,15 +284,28 @@ export default function RelatorioSlideEdicaoModal({
     alcance !== (veiculo?.alcance ?? ""),
     estadoImagem !== "manter",
     estadoLogo !== "manter",
+    escalaImagem !== escalaOriginal,
   ].filter(Boolean).length;
   const saida = useSaidaFormulario(quantidadeAlteracoes > 0, ocupado);
-  function fecharEdicao() {
-    saida.confirmarSaida(onClose);
-  }
+  useVoltarEdicaoRelatorioWeb(
+    quantidadeAlteracoes > 0,
+    ocupado,
+    saida.confirmarSaida
+  );
   const salvamentoEmCurso = useRef(false);
 
-  async function salvar() {
+  function fecharEdicao() {
     if (salvamentoEmCurso.current || selecaoEmCurso.current) return;
+    saida.confirmarSaida(onClose);
+  }
+
+  async function salvar() {
+    if (
+      salvamentoEmCurso.current ||
+      selecaoEmCurso.current ||
+      descricaoExcedida
+    )
+      return;
 
     const novosErros: { data?: string; link?: string } = {};
 
@@ -301,6 +328,7 @@ export default function RelatorioSlideEdicaoModal({
     if (estadoLogo === "trocar" && !arquivoLogo) return;
 
     const dados: DadosEdicaoSlide = {};
+    if (escalaImagem !== escalaOriginal) dados.imagem_escala = escalaImagem;
 
     if (valor(pauta) !== (clipping?.pauta ?? null)) dados.pauta = valor(pauta);
     if (dataISO !== (clipping?.data_publicacao ?? null))
@@ -338,8 +366,9 @@ export default function RelatorioSlideEdicaoModal({
       }
 
       await atualizarSlideRelatorio(slide.relatorio_id, slide.id, dados);
-      onSaved();
+      if (montado.current) onSaved();
     } catch (error) {
+      if (!montado.current) return;
       setErro(
         error instanceof Error
           ? error.message
@@ -347,7 +376,7 @@ export default function RelatorioSlideEdicaoModal({
       );
     } finally {
       salvamentoEmCurso.current = false;
-      setSalvando(false);
+      if (montado.current) setSalvando(false);
     }
   }
 
@@ -359,28 +388,28 @@ export default function RelatorioSlideEdicaoModal({
       onRequestClose={() => {
         if (saida.alertaProps.visible) saida.alertaProps.onClose();
         else if (midiaAmpliada) setMidiaAmpliada(null);
-        else if (capturaAberta) setCapturaAberta(false);
+        else if (captura) setCaptura(null);
         else if (!ocupado) fecharEdicao();
       }}
     >
-      {capturaAberta ? (
+      {captura ? (
         <CapturaPaginaModal
           embutido
           visivel
-          link={link.trim()}
+          link={captura.link}
           origem="relatorio"
-          onFechar={() => setCapturaAberta(false)}
+          onFechar={() => setCaptura(null)}
           onConfirmar={(imagem) => {
-            setArquivoImagem({
-              uri: imagem.uri,
-              nome: imagem.nome,
-              mimeType: imagem.mimeType,
-              file: imagem.file,
-              geradoPelaCaptura: true,
-            });
-            setEstadoImagem("trocar");
+            const arquivo = { ...imagem, geradoPelaCaptura: true };
+            if (captura.tipo === "logo") {
+              setArquivoLogo(arquivo);
+              setEstadoLogo("trocar");
+            } else {
+              setArquivoImagem(arquivo);
+              setEstadoImagem("trocar");
+            }
             setErro("");
-            setCapturaAberta(false);
+            setCaptura(null);
           }}
         />
       ) : (
@@ -479,9 +508,20 @@ export default function RelatorioSlideEdicaoModal({
                       setEstadoImagem("manter");
                       setArquivoImagem(null);
                     }}
-                    onCapturar={() => setCapturaAberta(true)}
+                    onCapturar={() =>
+                      setCaptura({ tipo: "imagem", link: link.trim() })
+                    }
                     capturaDisponivel={podeCapturarPagina}
                   />
+                  {(estadoImagem === "trocar" && arquivoImagem) ||
+                  (estadoImagem === "manter" && imagemAtual) ? (
+                    <RelatorioSlideTamanhoImagem
+                      valor={escalaImagem}
+                      original={escalaOriginal}
+                      disabled={ocupado}
+                      onChange={setEscalaImagem}
+                    />
+                  ) : null}
                   <Input
                     label="DATA DE PUBLICAÇÃO"
                     value={data}
@@ -537,36 +577,59 @@ export default function RelatorioSlideEdicaoModal({
                     containerStyle={styles.campo}
                     clearable
                   />
-                  <RelatorioSlideCampoMidia
-                    tipo="logo"
-                    estado={estadoLogo}
-                    temOriginal={logoAtual}
-                    arquivo={arquivoLogo}
-                    disabled={ocupado}
-                    onEscolher={() => void escolherMidia("logo")}
-                    onAmpliar={() => ampliarMidia("logo")}
-                    onRemover={() => {
-                      setEstadoLogo(logoAtual ? "remover" : "manter");
-                      setArquivoLogo(null);
-                    }}
-                    onDesfazer={() => {
-                      setEstadoLogo("manter");
-                      setArquivoLogo(null);
-                    }}
-                  />
-                  <Input
-                    label="Descrição"
-                    value={descricao}
-                    onChangeText={setDescricao}
-                    multiline
-                    maxLength={3000}
-                    style={styles.multilinha}
-                    editable={!ocupado}
-                    showChanged={descricao !== (veiculo?.descricao ?? "")}
-                    onUndo={() => setDescricao(veiculo?.descricao ?? "")}
-                    containerStyle={styles.campo}
-                    clearable
-                  />
+                  <View style={{ gap: 4 }}>
+                    <RelatorioSlideCampoMidia
+                      tipo="logo"
+                      estado={estadoLogo}
+                      temOriginal={logoAtual}
+                      arquivo={arquivoLogo}
+                      disabled={ocupado}
+                      onEscolher={() => void escolherMidia("logo")}
+                      onAmpliar={() => ampliarMidia("logo")}
+                      onRemover={() => {
+                        setEstadoLogo(logoAtual ? "remover" : "manter");
+                        setArquivoLogo(null);
+                      }}
+                      onDesfazer={() => {
+                        setEstadoLogo("manter");
+                        setArquivoLogo(null);
+                      }}
+                    />
+                    <CapturaSiteBotao
+                      linkInicial={link}
+                      disabled={ocupado}
+                      onCapturar={(endereco) =>
+                        setCaptura({ tipo: "logo", link: endereco })
+                      }
+                    />
+                  </View>
+                  <View style={{ gap: 4 }}>
+                    <Input
+                      label="Descrição"
+                      value={descricao}
+                      onChangeText={setDescricao}
+                      multiline
+                      maxLength={LIMITE_DESCRICAO_SLIDE}
+                      style={styles.multilinha}
+                      editable={!ocupado}
+                      error={erroDescricao}
+                      showChanged={descricao !== (veiculo?.descricao ?? "")}
+                      onUndo={() => setDescricao(veiculo?.descricao ?? "")}
+                      containerStyle={styles.campo}
+                      clearable
+                    />
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={{
+                        color: descricaoExcedida ? theme.erro : theme.textoSub,
+                        fontSize: 12,
+                      }}
+                    >
+                      {descricaoExcedida
+                        ? `Reduza ${descricao.length - LIMITE_DESCRICAO_SLIDE} caracteres para salvar.`
+                        : `${LIMITE_DESCRICAO_SLIDE - descricao.length} caracteres restantes`}
+                    </Text>
+                  </View>
                   <Input
                     label="Alcance"
                     value={alcance}
@@ -599,7 +662,10 @@ export default function RelatorioSlideEdicaoModal({
                 alterations={quantidadeAlteracoes}
                 saving={salvando}
                 busy={selecionando}
-                error={erro || errosCampos.data || errosCampos.link}
+                disabled={descricaoExcedida}
+                error={
+                  erro || erroDescricao || errosCampos.data || errosCampos.link
+                }
                 onSave={() => void salvar()}
                 onDiscard={fecharEdicao}
               />
@@ -658,7 +724,20 @@ export default function RelatorioSlideEdicaoModal({
           </KeyboardAvoidingView>
         </EdicaoCompacta>
       )}
-      <FeedbackAlert {...saida.alertaProps} inline />
+      <FeedbackAlert
+        {...saida.alertaProps}
+        inline
+        title="Salvar alterações antes de sair?"
+        message="Você pode salvar o que editou, continuar a edição ou descartar as alterações."
+        primaryLabel="DESCARTAR"
+        secondaryLabel="CONTINUAR"
+        tertiaryLabel={descricaoExcedida ? undefined : "SALVAR"}
+        loading={ocupado}
+        onTertiary={() => {
+          saida.alertaProps.onClose();
+          void salvar();
+        }}
+      />
     </Modal>
   );
 }

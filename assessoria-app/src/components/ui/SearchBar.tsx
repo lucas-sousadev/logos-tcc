@@ -21,7 +21,6 @@ interface SearchBarProps {
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-
 export default function SearchBar({
   value,
   onChangeText,
@@ -36,13 +35,10 @@ export default function SearchBar({
   const temTexto = value.trim().length > 0;
 
   return (
-      <View style={[styles.container, containerStyle]}>
-        <View style={styles.searchContainer}>
-        <Input  
-          style={[
-            styles.input,
-            temTexto && styles.inputWithClear,
-          ]}
+    <View style={[styles.container, containerStyle]}>
+      <View style={styles.searchContainer}>
+        <Input
+          style={[styles.input, temTexto && styles.inputWithClear]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -67,10 +63,7 @@ export default function SearchBar({
             accessibilityRole="button"
             accessibilityLabel="Limpar busca"
           >
-            <X
-              size={18}
-              color={theme.textoContainer}
-            />
+            <X size={18} color={theme.textoContainer} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -83,22 +76,19 @@ export default function SearchBar({
           ]}
           activeOpacity={0.8}
         >
-          <Search
-            size={20}
-            color={theme.textoContainer}
-          />
+          <Search size={20} color={theme.textoContainer} />
         </TouchableOpacity>
       </View>
 
       {onFilterPress && (
         <TouchableOpacity
           onPress={onFilterPress}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir filtros"
           style={[
             styles.filterButton,
             {
-              borderColor: filterActive
-                ? theme.primaria
-                : theme.borda,
+              borderColor: filterActive ? theme.primaria : theme.borda,
               backgroundColor: filterActive
                 ? theme.backgroundContainer
                 : theme.background,
@@ -108,11 +98,7 @@ export default function SearchBar({
         >
           <SlidersHorizontal
             size={20}
-            color={
-              filterActive
-                ? theme.textoContainer
-                : theme.texto
-            }
+            color={filterActive ? theme.textoContainer : theme.texto}
           />
         </TouchableOpacity>
       )}

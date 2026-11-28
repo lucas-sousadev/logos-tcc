@@ -38,6 +38,7 @@ export interface ArquivoLogoVeiculo {
 }
 
 export interface ListarVeiculosParams {
+  tier?: Tier | null;
   page?: number;
   limit?: number;
   busca?: string;
@@ -78,6 +79,12 @@ export async function listarVeiculos(
 
   if (params.ativo !== undefined) {
     query.set("ativo", String(params.ativo));
+  }
+
+  if (params.tier === null) {
+    query.set("sem_tier", "1");
+  } else if (params.tier !== undefined) {
+    query.set("tier", String(params.tier));
   }
 
   if (params.ordem) {

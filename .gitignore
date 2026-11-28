@@ -14,6 +14,9 @@ tests/
 !/logos-api/tests/perfil.php
 !/logos-api/tests/duplicacao.php
 !/logos-api/tests/vinculos.php
+!/logos-api/tests/filtros_cadastros.php
+!/logos-api/tests/relatorios_slides.php
+!/logos-api/tests/relatorios_edicao.php
 !/assessoria-app/tests/
 /assessoria-app/tests/*
 !/assessoria-app/tests/navegacao.test.cjs

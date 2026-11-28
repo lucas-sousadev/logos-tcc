@@ -59,6 +59,7 @@ export interface SlideRelatorio {
     >;
     veiculo?: Partial<Record<"nome" | "descricao" | "alcance", string | null>>;
     imagem_midia_id?: number | null;
+    imagem_escala?: number;
     logo_midia_id?: number | null;
   } | null;
   revisao_pendente: boolean;
@@ -87,6 +88,7 @@ export interface SlideRelatorio {
       logo_path?: string | null;
     };
     imagem?: {
+      escala?: number;
       anexo_id?: number | null;
       arquivo_path?: string | null;
     };
@@ -277,6 +279,7 @@ export async function buscarRelatorio(
 export type DecisaoRevisaoSlide = "INCLUIR" | "ALTERAR" | "IGNORAR";
 
 export interface DadosEdicaoSlide {
+  imagem_escala?: number;
   pauta?: string | null;
   data_publicacao?: string | null;
   link?: string | null;

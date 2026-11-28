@@ -4,6 +4,7 @@ namespace Logos\AssessoriaApi\Controllers;
 
 use Logos\AssessoriaApi\Services\AuthContext;
 use Logos\AssessoriaApi\Services\CapturaPaginaService;
+use Logos\AssessoriaApi\Services\PermissaoService;
 
 final class CapturaPaginaController
 {
@@ -48,7 +49,7 @@ final class CapturaPaginaController
             if (
                 !is_string($caminho) ||
                 preg_match(
-                    '~/(clippings|relatorios)/capturar-pagina/?$~D',
+                    '~/(clippings|relatorios|veiculos)/capturar-pagina/?$~D',
                     $caminho,
                     $rota
                 ) !== 1
@@ -58,10 +59,35 @@ final class CapturaPaginaController
                 );
             }
 
+            if (
+                $rota[1] === 'veiculos'
+                && !PermissaoService::usuarioTemPermissao(
+                    (int) $usuario->sub,
+                    $usuario->perfil,
+                    'VEICULOS',
+                    'CRIAR'
+                )
+                && !PermissaoService::usuarioTemPermissao(
+                    (int) $usuario->sub,
+                    $usuario->perfil,
+                    'VEICULOS',
+                    'EDITAR'
+                )
+            ) {
+                $this->erro('Você não tem permissão para capturar logos de veículos.', 403);
+                return;
+            }
+
+            $origem = match ($rota[1]) {
+                'clippings' => 'clipping',
+                'veiculos' => 'veiculo',
+                default => 'relatorio',
+            };
+
             $resultado = CapturaPaginaService::processar(
                 (int) ($usuario->assessoria_id ?? 0),
                 (int) ($usuario->sub ?? 0),
-                $rota[1] === 'clippings' ? 'clipping' : 'relatorio',
+                $origem,
                 get_object_vars($dados)
             );
 

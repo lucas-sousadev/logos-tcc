@@ -830,6 +830,11 @@ function VeiculoDetalhesConta() {
               </SecaoEdicao>
               <SecaoEdicao titulo="Identidade visual">
                 <LogoPicker
+                  permitirCapturaSite
+                  linkCaptura={
+                    enderecosRascunho.find((endereco) => endereco.host.trim())
+                      ?.host
+                  }
                   logoAtualUri={
                     logoRemovido
                       ? null

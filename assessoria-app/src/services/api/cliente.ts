@@ -46,6 +46,10 @@ export interface ArquivoLogoCliente {
 }
 
 export interface ListarClientesParams {
+  min_clippings?: number;
+  max_clippings?: number;
+  ordem?: "nome" | "clippings";
+  direcao?: "ASC" | "DESC";
   page?: number;
   limit?: number;
   busca?: string;
@@ -95,6 +99,17 @@ export async function listarClientes(
 
   if (params.ativo !== undefined) {
     query.set("ativo", String(params.ativo));
+  }
+
+  for (const campo of [
+    "min_clippings",
+    "max_clippings",
+    "ordem",
+    "direcao",
+  ] as const) {
+    if (params[campo] !== undefined) {
+      query.set(campo, String(params[campo]));
+    }
   }
 
   const response = await authenticatedFetch(

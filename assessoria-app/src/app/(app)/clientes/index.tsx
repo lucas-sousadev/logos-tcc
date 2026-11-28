@@ -7,16 +7,9 @@ import {
   View,
 } from "react-native";
 
-import {
-  useCallback,
-  useState,
-  useRef
-} from "react";
+import { useCallback, useState, useRef } from "react";
 
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -24,7 +17,9 @@ import Header from "@/components/layout/Header";
 import SearchBar from "@/components/ui/SearchBar";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
-import ClienteFilterModal, { FiltrosClientes } from "@/components/ui/Filtros/ClienteFilterModal";
+import ClienteFilterModal, {
+  FiltrosClientes,
+} from "@/components/ui/Filtros/ClienteFilterModal";
 import LimparFiltrosButton from "@/components/ui/LimparFiltrosButton";
 import ContadorLista from "@/components/ui/ContadorLista";
 import PaginacaoLista from "@/components/ui/PaginacaoLista";
@@ -33,7 +28,9 @@ import SelecaoListaButton from "@/components/ui/SelecaoListaButton";
 import { useListaPaginada } from "@/hooks/useListaPaginada";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import FeedbackAlert, { type FeedbackAlertVariant } from "@/components/forms/FeedbackAlert";
+import FeedbackAlert, {
+  type FeedbackAlertVariant,
+} from "@/components/forms/FeedbackAlert";
 import {
   Cliente,
   listarClientes,
@@ -58,29 +55,29 @@ export default function Clientes() {
   const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
   const { temPermissao } = useAuth();
+  const podeVerClippings = temPermissao("CLIPPING", "VISUALIZAR");
 
   const [busca, setBusca] = useState("");
-  const [buscaAplicada, setBuscaAplicada] =
-    useState("");
-  
+  const [buscaAplicada, setBuscaAplicada] = useState("");
+
   const [filtrosAberto, setFiltrosAberto] = useState(false);
-  const [filtros, setFiltros] =
-  useState<FiltrosClientes>({
+  const [filtros, setFiltros] = useState<FiltrosClientes>({
     estado: "",
     cidade: "",
     segmento: "",
     ativo: undefined,
+    minClippings: "",
+    maxClippings: "",
+    ordem: "nome",
+    direcao: "ASC",
   });
   const [modoSelecao, setModoSelecao] = useState(false);
 
   const [idsSelecionados, setIdsSelecionados] = useState<number[]>([]);
 
-  const [
-    excluindoSelecionados,
-    setExcluindoSelecionados,
-  ] = useState(false);
+  const [excluindoSelecionados, setExcluindoSelecionados] = useState(false);
 
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null); 
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   const consultarPagina = useCallback(
     async (page: number, limit: number) => {
@@ -92,6 +89,16 @@ export default function Clientes() {
         cidade: filtros.cidade,
         segmento: filtros.segmento,
         ativo: filtros.ativo,
+        min_clippings:
+          podeVerClippings && filtros.minClippings?.trim()
+            ? Number(filtros.minClippings)
+            : undefined,
+        max_clippings:
+          podeVerClippings && filtros.maxClippings?.trim()
+            ? Number(filtros.maxClippings)
+            : undefined,
+        ordem: podeVerClippings ? filtros.ordem : undefined,
+        direcao: podeVerClippings ? filtros.direcao : undefined,
       });
 
       return {
@@ -105,6 +112,11 @@ export default function Clientes() {
       filtros.cidade,
       filtros.segmento,
       filtros.ativo,
+      filtros.minClippings,
+      filtros.maxClippings,
+      filtros.ordem,
+      filtros.direcao,
+      podeVerClippings,
     ]
   );
 
@@ -117,7 +129,7 @@ export default function Clientes() {
     limite,
     carregarPagina,
   } = useListaPaginada<Cliente>({
-    chave: JSON.stringify([buscaAplicada, filtros]),
+    chave: JSON.stringify([buscaAplicada, filtros, podeVerClippings]),
     consultar: consultarPagina,
   });
 
@@ -126,10 +138,13 @@ export default function Clientes() {
   }
 
   useFocusEffect(
-    useCallback(() => () => {
-      setIdsSelecionados([]);
-      setModoSelecao(false);
-    }, [])
+    useCallback(
+      () => () => {
+        setIdsSelecionados([]);
+        setModoSelecao(false);
+      },
+      []
+    )
   );
 
   function realizarBusca() {
@@ -164,13 +179,9 @@ export default function Clientes() {
     });
   }
 
-  function aplicarFiltros(
-    novosFiltros: FiltrosClientes
-  ) {
+  function aplicarFiltros(novosFiltros: FiltrosClientes) {
     sairModoSelecao();
-    const mesmos =
-      JSON.stringify(novosFiltros) ===
-      JSON.stringify(filtros);
+    const mesmos = JSON.stringify(novosFiltros) === JSON.stringify(filtros);
 
     setFiltros(novosFiltros);
     setFiltrosAberto(false);
@@ -185,96 +196,77 @@ export default function Clientes() {
       filtros.ativo !== undefined ||
       filtros.estado.trim() !== "" ||
       filtros.cidade.trim() !== "" ||
-      filtros.segmento.trim() !== ""
+      filtros.segmento.trim() !== "" ||
+      (podeVerClippings &&
+        (Boolean(filtros.minClippings?.trim()) ||
+          Boolean(filtros.maxClippings?.trim()) ||
+          (filtros.ordem ?? "nome") !== "nome" ||
+          (filtros.direcao ?? "ASC") !== "ASC"))
     );
   }
 
-  function mostrarFeedback(
-  dados: FeedbackState
-) {
-  setFeedback(dados);
-}
-
-function fecharFeedback() {
-  setFeedback(null);
-}
-
-function abrirModoSelecao() {
-  setIdsSelecionados([]);
-  setModoSelecao(true);
-}
-
-function sairModoSelecao() {
-  setIdsSelecionados([]);
-  setModoSelecao(false);
-}
-
-function alternarClienteSelecionado(id: number) {
-  if (idsSelecionados.includes(id)) {
-    setIdsSelecionados((atual) =>
-      atual.filter((item) => item !== id)
-    );
-
-    return;
+  function mostrarFeedback(dados: FeedbackState) {
+    setFeedback(dados);
   }
 
-  if (
-    idsSelecionados.length >=
-    LIMITE_SELECAO_EM_LOTE
-  ) {
-    mostrarFeedback({
-      variant: "warning",
-      title: "Limite de seleção atingido",
-      message:
-        "Você pode selecionar até 100 clientes por vez. Desmarque algum cliente antes de selecionar outro.",
-    });
-
-    return;
+  function fecharFeedback() {
+    setFeedback(null);
   }
 
-  setIdsSelecionados((atual) => [
-    ...atual,
-    id,
-  ]);
-}
+  function abrirModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(true);
+  }
+
+  function sairModoSelecao() {
+    setIdsSelecionados([]);
+    setModoSelecao(false);
+  }
+
+  function alternarClienteSelecionado(id: number) {
+    if (idsSelecionados.includes(id)) {
+      setIdsSelecionados((atual) => atual.filter((item) => item !== id));
+
+      return;
+    }
+
+    if (idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE) {
+      mostrarFeedback({
+        variant: "warning",
+        title: "Limite de seleção atingido",
+        message:
+          "Você pode selecionar até 100 clientes por vez. Desmarque algum cliente antes de selecionar outro.",
+      });
+
+      return;
+    }
+
+    setIdsSelecionados((atual) => [...atual, id]);
+  }
 
   function selecionarTodosVisiveis() {
-    const idsVisiveis = clientes.map(
-      (cliente) => cliente.id
-    );
+    const idsVisiveis = clientes.map((cliente) => cliente.id);
 
     const todosSelecionados =
       idsVisiveis.length > 0 &&
-      idsVisiveis.every((id) =>
-        idsSelecionados.includes(id)
-      );
+      idsVisiveis.every((id) => idsSelecionados.includes(id));
 
-    if (
-      todosSelecionados ||
-      idsSelecionados.length >=
-        LIMITE_SELECAO_EM_LOTE
-    ) {
+    if (todosSelecionados || idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE) {
       setIdsSelecionados([]);
       return;
     }
 
-    const vagasRestantes =
-      LIMITE_SELECAO_EM_LOTE -
-      idsSelecionados.length;
+    const vagasRestantes = LIMITE_SELECAO_EM_LOTE - idsSelecionados.length;
 
     const idsParaAdicionar = idsVisiveis
       .filter((id) => !idsSelecionados.includes(id))
       .slice(0, vagasRestantes);
 
-    setIdsSelecionados((atual) => [
-      ...atual,
-      ...idsParaAdicionar,
-    ]);
+    setIdsSelecionados((atual) => [...atual, ...idsParaAdicionar]);
 
     const existemMaisVisiveis =
-      idsVisiveis.filter(
-        (id) => !idsSelecionados.includes(id)
-      ).length > idsParaAdicionar.length;
+      idsVisiveis.filter((id) => !idsSelecionados.includes(id)).length >
+      idsParaAdicionar.length;
 
     if (existemMaisVisiveis) {
       mostrarFeedback({
@@ -293,8 +285,7 @@ function alternarClienteSelecionado(id: number) {
       mostrarFeedback({
         variant: "warning",
         title: "Nenhum cliente selecionado",
-        message:
-          "Selecione pelo menos um cliente para excluir.",
+        message: "Selecione pelo menos um cliente para excluir.",
       });
 
       return;
@@ -326,8 +317,7 @@ function alternarClienteSelecionado(id: number) {
     setExcluindoSelecionados(true);
 
     try {
-      const resultado =
-        await excluirClientesEmLote(ids);
+      const resultado = await excluirClientesEmLote(ids);
 
       sairModoSelecao();
 
@@ -337,8 +327,7 @@ function alternarClienteSelecionado(id: number) {
         variant: "success",
         title: "Clientes excluídos",
         message:
-          `${resultado.excluidos} cliente(s) ` +
-          "foram excluídos com sucesso.",
+          `${resultado.excluidos} cliente(s) ` + "foram excluídos com sucesso.",
       });
     } catch (error) {
       mostrarFeedback({
@@ -356,9 +345,7 @@ function alternarClienteSelecionado(id: number) {
 
   const todosClientesVisiveisSelecionados =
     clientes.length > 0 &&
-    clientes.every((cliente) =>
-      idsSelecionados.includes(cliente.id)
-    );
+    clientes.every((cliente) => idsSelecionados.includes(cliente.id));
 
   if (carregando) {
     return (
@@ -373,10 +360,7 @@ function alternarClienteSelecionado(id: number) {
         <Header title="Clientes" showBackButton />
 
         <View style={styles.loading}>
-          <ActivityIndicator
-            size="large"
-            color={theme.primaria}
-          />
+          <ActivityIndicator size="large" color={theme.primaria} />
         </View>
       </View>
     );
@@ -416,17 +400,12 @@ function alternarClienteSelecionado(id: number) {
             {total} {total === 1 ? "cliente" : "clientes"}
           </ContadorLista>
 
-          {temPermissao(
-            "CLIENTES",
-            "CRIAR"
-          ) ? (
+          {temPermissao("CLIENTES", "CRIAR") ? (
             <Button
               icon="add-outline"
               title="CLIENTE"
               size="small"
-              onPress={() =>
-                router.push("/clientes/novo")
-              }
+              onPress={() => router.push("/clientes/novo")}
               style={styles.newButton}
             />
           ) : null}
@@ -438,8 +417,7 @@ function alternarClienteSelecionado(id: number) {
               styles.errorBox,
               {
                 borderColor: theme.borda,
-                backgroundColor:
-                  theme.backgroundContainer,
+                backgroundColor: theme.backgroundContainer,
               },
             ]}
           >
@@ -464,143 +442,112 @@ function alternarClienteSelecionado(id: number) {
             <Button
               title="TENTAR NOVAMENTE"
               size="small"
-              onPress={() =>
-                void carregarClientes(true)
-              }
+              onPress={() => void carregarClientes(true)}
             />
           </View>
         ) : null}
-        
+
         <LimparFiltrosButton
           visible={filtrosAtivos()}
-          disabled={
-            carregando ||
-            excluindoSelecionados
-          }
+          disabled={carregando || excluindoSelecionados}
           onPress={() => {
             aplicarFiltros({
               estado: "",
               cidade: "",
               segmento: "",
               ativo: undefined,
+              minClippings: "",
+              maxClippings: "",
+              ordem: "nome",
+              direcao: "ASC",
             });
           }}
         />
 
-        {temPermissao("CLIENTES", "EXCLUIR") &&
-          clientes.length > 0 ? (
-            modoSelecao ? (
-              <View
+        {temPermissao("CLIENTES", "EXCLUIR") && clientes.length > 0 ? (
+          modoSelecao ? (
+            <View
+              style={[
+                styles.selectionToolbar,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.borda,
+                },
+              ]}
+            >
+              <View style={styles.selectionInfo}>
+                <Text weight="SemiBold" style={styles.selectionTitle}>
+                  {idsSelecionados.length} de {LIMITE_SELECAO_EM_LOTE}{" "}
+                  selecionado(s)
+                </Text>
+
+                <Text
+                  style={[styles.selectionSubtitle, { color: theme.textoSub }]}
+                >
+                  Escolha os clientes que deseja excluir.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={selecionarTodosVisiveis}
+                disabled={excluindoSelecionados}
+                style={[styles.selectAllButton, { borderColor: theme.borda }]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={[styles.selectAllText, { color: theme.texto }]}
+                >
+                  {todosClientesVisiveisSelecionados ||
+                  idsSelecionados.length >= LIMITE_SELECAO_EM_LOTE
+                    ? "LIMPAR"
+                    : "TODOS"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={confirmarExclusaoSelecionados}
+                disabled={idsSelecionados.length === 0 || excluindoSelecionados}
                 style={[
-                  styles.selectionToolbar,
+                  styles.selectionIconButton,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.borda,
+                    backgroundColor: "#EF4444",
+                    opacity:
+                      idsSelecionados.length === 0 || excluindoSelecionados
+                        ? 0.5
+                        : 1,
                   },
                 ]}
               >
-                <View style={styles.selectionInfo}>
-                  <Text
-                    weight="SemiBold"
-                    style={styles.selectionTitle}
-                  >
-                    {idsSelecionados.length} de{" "}
-                    {LIMITE_SELECAO_EM_LOTE} selecionado(s)
-                  </Text>
+                {excluindoSelecionados ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="trash-outline" size={19} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
 
-                  <Text
-                    style={[
-                      styles.selectionSubtitle,
-                      { color: theme.textoSub },
-                    ]}
-                  >
-                    Escolha os clientes que deseja excluir.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={selecionarTodosVisiveis}
-                  disabled={excluindoSelecionados}
-                  style={[
-                    styles.selectAllButton,
-                    { borderColor: theme.borda },
-                  ]}
-                >
-                  <Text
-                    weight="SemiBold"
-                    style={[
-                      styles.selectAllText,
-                      { color: theme.texto },
-                    ]}
-                  >
-                    {todosClientesVisiveisSelecionados ||
-                    idsSelecionados.length >=
-                      LIMITE_SELECAO_EM_LOTE
-                      ? "LIMPAR"
-                      : "TODOS"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={confirmarExclusaoSelecionados}
-                  disabled={
-                    idsSelecionados.length === 0 ||
-                    excluindoSelecionados
-                  }
-                  style={[
-                    styles.selectionIconButton,
-                    {
-                      backgroundColor: "#EF4444",
-                      opacity:
-                        idsSelecionados.length === 0 ||
-                        excluindoSelecionados
-                          ? 0.5
-                          : 1,
-                    },
-                  ]}
-                >
-                  {excluindoSelecionados ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFFFFF"
-                    />
-                  ) : (
-                    <Ionicons
-                      name="trash-outline"
-                      size={19}
-                      color="#FFFFFF"
-                    />
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={sairModoSelecao}
-                  disabled={excluindoSelecionados}
-                  style={[
-                    styles.selectionIconButton,
-                    {
-                      backgroundColor:
-                        theme.backgroundContainer,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="close"
-                    size={20}
-                    color={theme.textoContainer}
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <SelecaoListaButton
-                title="SELECIONAR CLIENTES"
-                onPress={abrirModoSelecao}
-              />
-            )
-          ) : null}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={sairModoSelecao}
+                disabled={excluindoSelecionados}
+                style={[
+                  styles.selectionIconButton,
+                  {
+                    backgroundColor: theme.backgroundContainer,
+                  },
+                ]}
+              >
+                <Ionicons name="close" size={20} color={theme.textoContainer} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <SelecaoListaButton
+              title="SELECIONAR CLIENTES"
+              onPress={abrirModoSelecao}
+            />
+          )
+        ) : null}
 
         {erro === "" && clientes.length === 0 ? (
           <View
@@ -617,10 +564,7 @@ function alternarClienteSelecionado(id: number) {
               color={theme.textoSub}
             />
 
-            <Text
-              weight="SemiBold"
-              style={styles.emptyTitle}
-            >
+            <Text weight="SemiBold" style={styles.emptyTitle}>
               Nenhum cliente encontrado
             </Text>
 
@@ -639,23 +583,16 @@ function alternarClienteSelecionado(id: number) {
           </View>
         ) : (
           clientes.map((cliente) => {
-            const logoUrl = obterUrlLogoCliente(
-              cliente.logo_path
-            );
+            const logoUrl = obterUrlLogoCliente(cliente.logo_path);
 
-            const localizacao = [
-              cliente.cidade,
-              cliente.estado,
-            ]
+            const localizacao = [cliente.cidade, cliente.estado]
               .filter(Boolean)
               .join(" - ");
 
             const informacoes = [
               cliente.segmento,
               localizacao,
-              cliente.ativo === 1
-                ? "Ativo"
-                : "Inativo",
+              cliente.ativo === 1 ? "Ativo" : "Inativo",
             ]
               .filter(Boolean)
               .join(" • ");
@@ -727,30 +664,30 @@ function alternarClienteSelecionado(id: number) {
                     {informacoes || "Sem informações adicionais"}
                   </Text>
                   {cliente.total_clippings_ano_atual !== undefined &&
-                    cliente.ano_clippings !== undefined ? (
-                      <View style={styles.itemVinculos}>
-                        <Ionicons
-                          name="attach-outline"
-                          size={14}
-                          color={theme.alteracao}
-                        />
+                  cliente.ano_clippings !== undefined ? (
+                    <View style={styles.itemVinculos}>
+                      <Ionicons
+                        name="attach-outline"
+                        size={14}
+                        color={theme.alteracao}
+                      />
 
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.itemVinculosTexto,
-                            { color: theme.alteracao },
-                          ]}
-                        >
-                          {cliente.total_clippings_ano_atual}{" "}
-                          {cliente.total_clippings_ano_atual === 1
-                            ? "clipping"
-                            : "clippings"}
-                          {" • "}
-                          {cliente.ano_clippings}
-                        </Text>
-                      </View>
-                    ) : null}
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.itemVinculosTexto,
+                          { color: theme.alteracao },
+                        ]}
+                      >
+                        {cliente.total_clippings_ano_atual}{" "}
+                        {cliente.total_clippings_ano_atual === 1
+                          ? "clipping"
+                          : "clippings"}
+                        {" • "}
+                        {cliente.ano_clippings}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {modoSelecao ? (
@@ -761,9 +698,7 @@ function alternarClienteSelecionado(id: number) {
                         borderColor: idsSelecionados.includes(cliente.id)
                           ? theme.backgroundContainer
                           : theme.borda,
-                        backgroundColor: idsSelecionados.includes(
-                          cliente.id
-                        )
+                        backgroundColor: idsSelecionados.includes(cliente.id)
                           ? theme.backgroundContainer
                           : theme.background,
                       },
@@ -818,6 +753,7 @@ function alternarClienteSelecionado(id: number) {
       <ClienteFilterModal
         visible={filtrosAberto}
         filtros={filtros}
+        filtrarClippings={podeVerClippings}
         onClose={() => setFiltrosAberto(false)}
         onApply={aplicarFiltros}
       />

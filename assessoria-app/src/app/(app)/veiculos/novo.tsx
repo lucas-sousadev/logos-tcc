@@ -183,6 +183,10 @@ export default function NovoVeiculo() {
           </SecaoEdicao>
           <SecaoEdicao titulo="Identidade visual">
             <LogoPicker
+              permitirCapturaSite
+              linkCaptura={
+                enderecos.find((endereco) => endereco.host.trim())?.host
+              }
               logoSelecionado={logo}
               onSelect={setLogo}
               onRemove={() => setLogo(null)}

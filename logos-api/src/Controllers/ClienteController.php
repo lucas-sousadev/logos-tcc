@@ -26,6 +26,24 @@ class ClienteController
         }
 
         try {
+            $podeVisualizarClipping = PermissaoService::usuarioTemPermissao(
+                (int) $usuario->sub,
+                $usuario->perfil,
+                'CLIPPING',
+                'VISUALIZAR'
+            );
+            if (!$podeVisualizarClipping && (
+                (isset($_GET['min_clippings']) && $_GET['min_clippings'] !== '')
+                || (isset($_GET['max_clippings']) && $_GET['max_clippings'] !== '')
+                || ($_GET['ordem'] ?? 'nome') === 'clippings'
+            )) {
+                $this->responderErro(
+                    403,
+                    'Você precisa visualizar Clipping para filtrar os vínculos dos clientes.'
+                );
+                return;
+            }
+
             $resultado = ClienteService::listar(
                 (int) $usuario->assessoria_id,
                 [
@@ -36,17 +54,13 @@ class ClienteController
                     'cidade' => $_GET['cidade'] ?? null,
                     'segmento' => $_GET['segmento'] ?? null,
                     'ativo' => $_GET['ativo'] ?? null,
+                    'min_clippings' => $_GET['min_clippings'] ?? null,
+                    'max_clippings' => $_GET['max_clippings'] ?? null,
+                    'ordem' => $_GET['ordem'] ?? 'nome',
+                    'direcao' => $_GET['direcao'] ?? 'ASC',
                 ]
             );
             
-            $podeVisualizarClipping =
-                PermissaoService::usuarioTemPermissao(
-                    (int) $usuario->sub,
-                    $usuario->perfil,
-                    'CLIPPING',
-                    'VISUALIZAR'
-                );
-
             if ($podeVisualizarClipping) {
                 $anoAtual = (int) (
                     new \DateTimeImmutable(

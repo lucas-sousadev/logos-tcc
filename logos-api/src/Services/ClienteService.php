@@ -62,6 +62,8 @@ class ClienteService
             $filtros['ativo'] ?? null
         );
 
+        $vinculos = self::filtrosClippings($filtros);
+
         $offset = ($page - 1) * $limit;
 
         $clientes = Cliente::listarPorAssessoria(
@@ -72,7 +74,8 @@ class ClienteService
             $estado,
             $cidade,
             $segmento,
-            $ativo
+            $ativo,
+            $vinculos
         );
 
         $total = Cliente::contarPorAssessoria(
@@ -81,7 +84,8 @@ class ClienteService
             $estado,
             $cidade,
             $segmento,
-            $ativo
+            $ativo,
+            $vinculos
         );
 
         return [
@@ -93,6 +97,47 @@ class ClienteService
                 'has_next' => ($offset + count($clientes)) < $total,
             ],
         ];
+    }
+
+    private static function filtrosClippings(array $filtros): array
+    {
+        $resultado = [];
+        foreach (['min_clippings', 'max_clippings'] as $campo) {
+            $valor = $filtros[$campo] ?? null;
+            if ($valor === null || $valor === '') {
+                $resultado[$campo] = null;
+                continue;
+            }
+            if (
+                (!is_int($valor) && !is_string($valor))
+                || !preg_match('/^[0-9]+$/D', (string) $valor)
+                || filter_var($valor, FILTER_VALIDATE_INT) === false
+            ) {
+                throw new \InvalidArgumentException(
+                    'Informe uma quantidade inteira igual ou maior que zero para os clippings.'
+                );
+            }
+            $resultado[$campo] = (int) $valor;
+        }
+
+        if (
+            $resultado['min_clippings'] !== null
+            && $resultado['max_clippings'] !== null
+            && $resultado['max_clippings'] < $resultado['min_clippings']
+        ) {
+            throw new \InvalidArgumentException(
+                'A quantidade máxima de clippings não pode ser menor que a mínima.'
+            );
+        }
+        $resultado['ordem'] = $filtros['ordem'] ?? 'nome';
+        $resultado['direcao'] = $filtros['direcao'] ?? 'ASC';
+        if (
+            !in_array($resultado['ordem'], ['nome', 'clippings'], true)
+            || !in_array($resultado['direcao'], ['ASC', 'DESC'], true)
+        ) {
+            throw new \InvalidArgumentException('Ordenação de clientes inválida.');
+        }
+        return $resultado;
     }
 
     public static function buscarPorId(

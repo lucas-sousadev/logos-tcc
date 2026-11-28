@@ -28,6 +28,8 @@ class VeiculoController
                         'limit' => $_GET['limit'] ?? 50,
                         'busca' => $_GET['busca'] ?? '',
                         'ativo' => $_GET['ativo'] ?? null,
+                        'tier' => $_GET['tier'] ?? null,
+                        'sem_tier' => $_GET['sem_tier'] ?? null,
                         'ordem' => $_GET['ordem'] ?? 'nome',
                         'direcao' => $_GET['direcao'] ?? 'ASC',
                         'min_contatos' => $_GET['min_contatos'] ?? null,
@@ -41,6 +43,9 @@ class VeiculoController
                 'success' => true,
                 ...$resultado
             ]);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         } catch (\Throwable $e) {
             http_response_code(500);
 

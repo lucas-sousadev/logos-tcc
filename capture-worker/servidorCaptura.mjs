@@ -79,7 +79,7 @@ export function criarServidorCaptura({
         dono.assessoria_id < 1 ||
         !Number.isSafeInteger(dono.usuario_id) ||
         dono.usuario_id < 1 ||
-        !["clipping", "relatorio"].includes(dono.origem)
+        !["clipping", "relatorio", "veiculo"].includes(dono.origem)
       ) {
         throw erroCaptura("Solicitante da captura inválido.");
       }

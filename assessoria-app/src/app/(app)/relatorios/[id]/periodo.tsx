@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ClippingDataInput from "@/components/clipping/ClippingDataInput";
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
+import { useVoltarEdicaoRelatorioWeb } from "@/hooks/useVoltarEdicaoRelatorioWeb";
 import { useRetornoSeguro } from "@/hooks/useNavegacaoModulos";
 import FeedbackAlert from "@/components/forms/FeedbackAlert";
 import Button from "@/components/ui/Button";
@@ -105,6 +106,7 @@ function EditarPeriodoConta() {
       todasMarcadas)
   );
   const saida = useSaidaFormulario(alterado, salvando);
+  useVoltarEdicaoRelatorioWeb(alterado, salvando, saida.confirmarSaida);
 
   useEffect(() => {
     let ativo = true;

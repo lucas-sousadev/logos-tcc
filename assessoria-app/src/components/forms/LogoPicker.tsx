@@ -1,7 +1,9 @@
 import { useEdicaoCompacta } from "@/components/forms/EdicaoCompacta";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import CapturaLogoSite from "@/components/captura/CapturaLogoSite";
+import { liberarArquivoCapturado } from "@/services/arquivosCapturados";
 import * as DocumentPicker from "@/services/seletorArquivos";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -9,6 +11,7 @@ import Text from "@/components/ui/Text";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export interface ArquivoLogo {
+  geradoPelaCaptura?: boolean;
   uri: string;
   nome: string;
   mimeType: string;
@@ -16,6 +19,8 @@ export interface ArquivoLogo {
 }
 
 interface LogoPickerProps {
+  permitirCapturaSite?: boolean;
+  linkCaptura?: string;
   logoAtualUri?: string | null;
   logoSelecionado?: ArquivoLogo | null;
   onSelect: (arquivo: ArquivoLogo) => void;
@@ -57,6 +62,8 @@ export default function LogoPicker({
   disabled = false,
   error,
   showChanged = false,
+  permitirCapturaSite = false,
+  linkCaptura,
 }: LogoPickerProps) {
   const compacto = useEdicaoCompacta();
 
@@ -64,6 +71,14 @@ export default function LogoPicker({
   const [erroLocal, setErroLocal] = useState("");
 
   const uriLogo = logoSelecionado?.uri ?? logoAtualUri;
+
+  useEffect(
+    () => () => {
+      if (logoSelecionado?.geradoPelaCaptura)
+        liberarArquivoCapturado(logoSelecionado.uri);
+    },
+    [logoSelecionado]
+  );
 
   async function selecionarLogo() {
     try {
@@ -226,6 +241,19 @@ export default function LogoPicker({
           </View>
         </TouchableOpacity>
       )}
+
+      {permitirCapturaSite ? (
+        <View style={{ marginTop: 4 }}>
+          <CapturaLogoSite
+            linkInicial={linkCaptura}
+            disabled={disabled}
+            onSelect={(arquivo) => {
+              setErroLocal("");
+              onSelect(arquivo);
+            }}
+          />
+        </View>
+      ) : null}
 
       {showChanged ? (
         <Text

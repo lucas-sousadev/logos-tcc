@@ -6,6 +6,12 @@ use Logos\AssessoriaApi\Database\Connection;
 
 class Cliente
 {
+    private const CONTAGEM_CLIPPINGS = '(
+        SELECT COUNT(*) FROM clippings vinculo
+        WHERE vinculo.cliente_id = c.id
+          AND vinculo.assessoria_id = c.assessoria_id
+    )';
+
     public static function listarPorAssessoria(
         int $assessoriaId,
         int $limit,
@@ -14,7 +20,8 @@ class Cliente
         ?string $estado = null,
         ?string $cidade = null,
         ?string $segmento = null,
-        ?int $ativo = null
+        ?int $ativo = null,
+        array $vinculos = []
     ): array {
         [$where, $params] = self::filtros(
             $assessoriaId,
@@ -22,8 +29,14 @@ class Cliente
             $estado,
             $cidade,
             $segmento,
-            $ativo
+            $ativo,
+            $vinculos
         );
+
+        $direcao = ($vinculos['direcao'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
+        $ordenacao = ($vinculos['ordem'] ?? 'nome') === 'clippings'
+            ? self::CONTAGEM_CLIPPINGS . ' ' . $direcao . ', c.nome ASC, c.id ASC'
+            : 'c.nome ' . $direcao . ', c.id ' . $direcao;
 
         $sql = "
             SELECT
@@ -45,7 +58,7 @@ class Cliente
                 c.updated_at
             FROM clientes c
             WHERE " . implode(' AND ', $where) . "
-            ORDER BY c.nome ASC
+            ORDER BY {$ordenacao}
             LIMIT :limit OFFSET :offset
         ";
 
@@ -69,7 +82,8 @@ class Cliente
         ?string $estado = null,
         ?string $cidade = null,
         ?string $segmento = null,
-        ?int $ativo = null
+        ?int $ativo = null,
+        array $vinculos = []
     ): int {
         [$where, $params] = self::filtros(
             $assessoriaId,
@@ -77,7 +91,8 @@ class Cliente
             $estado,
             $cidade,
             $segmento,
-            $ativo
+            $ativo,
+            $vinculos
         );
 
         $sql = "
@@ -331,7 +346,8 @@ class Cliente
         ?string $estado,
         ?string $cidade,
         ?string $segmento,
-        ?int $ativo
+        ?int $ativo,
+        array $vinculos = []
     ): array {
         $where = [
             'c.assessoria_id = :assessoria_id',
@@ -393,6 +409,13 @@ class Cliente
         if ($ativo !== null) {
             $where[] = 'c.ativo = :ativo';
             $params[':ativo'] = $ativo;
+        }
+
+        foreach (['min_clippings' => '>=', 'max_clippings' => '<='] as $campo => $operador) {
+            if (($vinculos[$campo] ?? null) !== null) {
+                $where[] = self::CONTAGEM_CLIPPINGS . ' ' . $operador . ' :' . $campo;
+                $params[':' . $campo] = $vinculos[$campo];
+            }
         }
 
         return [$where, $params];

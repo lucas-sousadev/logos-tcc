@@ -77,7 +77,7 @@ export const MODULOS_NAVEGACAO = [
   },
   {
     id: "funcionarios",
-    titulo: "Funcionários",
+    titulo: "Colaboradores",
     rotulo: "Equipe",
     descricao: "Pessoas e permissões",
     icone: "person-circle-outline",

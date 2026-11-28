@@ -1,3 +1,4 @@
+import "@/utils/voltarEdicaoWeb";
 import { Stack } from "expo-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import {
