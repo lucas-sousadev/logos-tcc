@@ -48,6 +48,12 @@ function conferirSlide(bool $condicao, string $mensagem): void
 }
 
 try {
+    foreach (['H', '=', '?', '_'] as $caractereLargo) {
+        $campos = RelatorioSlideLayout::dados('Jornal', str_repeat($caractereLargo, 80), null, true);
+        $descricao = $campos[1];
+        conferirSlide(!$descricao['abreviado'], 'Descrição válida mantém todos os caracteres largos.');
+        conferirSlide(substr_count(implode('', $descricao['linhas']), $caractereLargo) === 80, 'Quebras não descartam caracteres.');
+    }
     foreach ([0, 24, 101, '50', 50.5, null] as $escalaInvalida) {
         $rejeitou = false;
         try {
@@ -160,8 +166,12 @@ try {
         $xpath->registerNamespace('p', 'http://schemas.openxmlformats.org/presentationml/2006/main');
         $formas = $xpath->query('//p:sp');
         conferirSlide($formas->length > 0, 'Texto presente no PPTX.');
-        conferirSlide($xpath->query('//a:bodyPr/a:noAutofit')->length === 3, 'Caixas dos metadados têm altura explícita.');
-        conferirSlide($xpath->query('//p:sp[p:txBody/a:bodyPr/a:noAutofit]/p:txBody/a:p')->length === 3, 'Campos separados não dependem do espaçamento de parágrafos do visualizador.');
+        $metadados = $xpath->query('//p:sp[p:txBody/a:p/a:r/a:t[starts-with(., "Veículo:") or starts-with(., "Descrição:") or starts-with(., "Alcance:")]]');
+        conferirSlide($metadados->length === 3, 'Metadados mantêm caixas separadas com altura explícita.');
+        foreach ($metadados as $forma) {
+            conferirSlide($xpath->query('p:txBody/a:bodyPr[not(@wrap) or @wrap="square"]/a:normAutofit', $forma)->length === 1, 'Fonte e quebra podem se ajustar a fontes substituídas no PowerPoint.');
+            conferirSlide($xpath->query('p:txBody/a:p', $forma)->length === 1, 'Campo não depende de espaçamento entre parágrafos.');
+        }
         conferirSlide($xpath->query('//a:br')->length > 0, 'Linhas dos metadados usam quebras explícitas.');
         conferirSlide(
             !str_contains($xml->textContent, str_repeat('A', 201)),

@@ -103,7 +103,7 @@ export default function Configuracoes() {
               styles.opcaoCard,
               {
                 backgroundColor: theme.backgroundSecundario,
-                borderColor: theme.borda + "40",
+                borderColor: theme.borda + "95",
               },
             ]}
           >
@@ -119,6 +119,7 @@ export default function Configuracoes() {
                 color={theme.textoTerciaria}
               />
             </View>
+          
             <View style={styles.opcaoTexto}>
               <Text weight="SemiBold" style={styles.nomeOpcao}>
                 Barra de navegação
@@ -164,6 +165,7 @@ export default function Configuracoes() {
                 {mode === "dark" ? "Ativado" : "Desativado"}
               </Text>
             </View>
+
             <Switch
               value={mode === "dark"}
               onValueChange={toggleTheme}
@@ -222,6 +224,7 @@ export default function Configuracoes() {
             <Ionicons name="chevron-forward" size={18} color={theme.erro} />
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </View>
   );

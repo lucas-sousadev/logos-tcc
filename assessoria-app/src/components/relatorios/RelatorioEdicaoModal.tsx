@@ -69,7 +69,7 @@ export default function RelatorioEdicaoModal({
 
   function fecharEdicao() {
     if (salvamentoEmCurso.current) return;
-    saida.confirmarSaida(onClose);
+    saida.confirmarSaida(onClose, { executarAposSalvar: false });
   }
 
   async function salvar() {
@@ -92,7 +92,9 @@ export default function RelatorioEdicaoModal({
         inclusao_automatica: inclusaoAutomatica,
       });
 
-      if (montado.current) onSaved(resposta.relatorio);
+      if (montado.current) {
+        saida.concluirSalvamento(() => onSaved(resposta.relatorio));
+      }
     } catch (e) {
       if (!montado.current) return;
       setErroSalvar(
@@ -210,7 +212,7 @@ export default function RelatorioEdicaoModal({
         tertiaryLabel="SALVAR"
         loading={salvando}
         onTertiary={() => {
-          saida.alertaProps.onClose();
+          saida.iniciarSalvamentoSaida();
           void salvar();
         }}
       />

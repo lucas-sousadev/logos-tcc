@@ -1,3 +1,8 @@
+import {
+  LARGURA_LINHA_TEXTO_SLIDE,
+  LARGURAS_TEXTO_SLIDE,
+} from "@/utils/relatorioTextoMetricas";
+
 const MAXIMO_LINHAS = 5;
 const LARGURA_LINHA = 48;
 export const LIMITE_DESCRICAO_SLIDE = 200;
@@ -11,17 +16,10 @@ export function normalizarEscalaImagemSlide(valor: unknown) {
     : 100;
 }
 
-function pesoTexto(texto: string) {
+function larguraTexto(texto: string) {
   return Array.from(texto).reduce(
     (total, caractere) =>
-      total +
-      (/[il1.:/\-_?=]/.test(caractere)
-        ? 0.5
-        : /[MWmw@#%&]|[^\x00-\x7F]/.test(caractere)
-          ? 2
-          : /[A-Z]/.test(caractere)
-            ? 1.2
-            : 1),
+      total + (LARGURAS_TEXTO_SLIDE[caractere.codePointAt(0)! - 32] ?? 24),
     0
   );
 }
@@ -31,15 +29,16 @@ function linhasCampo(texto: string, maximo: number) {
   let linha = "";
   let abreviado = false;
   for (const caractere of texto.replace(/\s+/gu, " ").trim()) {
-    if (pesoTexto(linha + caractere) > 40) {
+    if (larguraTexto(linha + caractere) > LARGURA_LINHA_TEXTO_SLIDE) {
       const espaco = linha.lastIndexOf(" ");
       linhas.push(espaco > 0 ? linha.slice(0, espaco) : linha);
       linha = espaco > 0 ? linha.slice(espaco + 1) : "";
       if (linhas.length === maximo) {
-        linhas[maximo - 1] =
-          Array.from(linhas[maximo - 1])
-            .slice(0, -3)
-            .join("") + "…";
+        let ultima = linhas[maximo - 1];
+        while (larguraTexto(ultima + "…") > LARGURA_LINHA_TEXTO_SLIDE) {
+          ultima = Array.from(ultima).slice(0, -1).join("");
+        }
+        linhas[maximo - 1] = ultima.trimEnd() + "…";
         abreviado = true;
         break;
       }

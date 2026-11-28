@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,11 +23,13 @@ import type {
   SlideRelatorio,
 } from "@/services/api/relatorio";
 import { dataISOParaBR } from "@/utils/clippingFormatacao";
+import type { NavegacaoSlidesRelatorio } from "@/hooks/useNavegacaoSlidesRelatorio";
 
 interface Props {
   visible?: boolean;
   slide: SlideRelatorio;
   relatorio: RelatorioDetalhado;
+  navegacao: NavegacaoSlidesRelatorio;
   onClose: () => void;
   onDecidir: (decisao: "INCLUIR" | "ALTERAR") => void;
   onIgnorar: () => void;
@@ -75,6 +77,7 @@ export default function RelatorioSlidePreview({
   visible = true,
   slide,
   relatorio,
+  navegacao,
   onClose,
   onDecidir,
   onIgnorar,
@@ -102,6 +105,19 @@ export default function RelatorioSlidePreview({
     };
   }, [visible]);
 
+  useLayoutEffect(() => {
+    posicao.current = 0;
+    restaurando.current = true;
+    if (quadro.current !== null) {
+      cancelAnimationFrame(quadro.current);
+    }
+    quadro.current = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+      restaurando.current = false;
+      quadro.current = null;
+    });
+  }, [slide.id]);
+
   function restaurarRolagem() {
     if (!visible) {
       return;
@@ -126,6 +142,18 @@ export default function RelatorioSlidePreview({
   const [confirmacao, setConfirmacao] = useState<
     "INCLUIR" | "ALTERAR" | "IGNORAR" | null
   >(null);
+  const acoesBloqueadas = revisando || navegacao.carregando;
+  const navegacaoBloqueada =
+    acoesBloqueadas || navegacao.bloqueada || confirmacao !== null;
+
+  function navegar(acao?: () => void) {
+    if (!acao || navegacaoBloqueada) return;
+
+    setErroLink("");
+    setMostrarMateriaNova(false);
+    setMostrarVeiculoNovo(false);
+    acao();
+  }
   const podeVerClipping = temPermissao("CLIPPING", "VISUALIZAR");
   const ehMateria = slide.tipo === "CLIPPING";
   const revisaoAtiva =
@@ -508,13 +536,13 @@ export default function RelatorioSlidePreview({
                   accessibilityRole="button"
                   accessibilityLabel="Editar este slide"
                   activeOpacity={0.8}
-                  disabled={revisando}
+                  disabled={acoesBloqueadas}
                   onPress={onEditar}
                   style={[
                     styles.acaoHeader,
                     {
                       borderColor: `${theme.textoTerciaria}70`,
-                      opacity: revisando ? 0.5 : 1,
+                      opacity: acoesBloqueadas ? 0.5 : 1,
                     },
                   ]}
                 >
@@ -533,14 +561,14 @@ export default function RelatorioSlidePreview({
                   accessibilityLabel="Excluir este slide"
                   accessibilityHint="Abre a confirmação de exclusão"
                   activeOpacity={0.8}
-                  disabled={revisando}
+                  disabled={acoesBloqueadas}
                   onPress={onExcluir}
                   style={[
                     styles.acaoHeader,
                     {
                       backgroundColor: `${theme.erro}10`,
                       borderColor: `${theme.erro}70`,
-                      opacity: revisando ? 0.5 : 1,
+                      opacity: acoesBloqueadas ? 0.5 : 1,
                     },
                   ]}
                 >
@@ -562,8 +590,118 @@ export default function RelatorioSlidePreview({
             </View>
           </View>
 
+          <View
+            style={[
+              styles.navegacao,
+              { borderBottomColor: `${theme.borda}40` },
+            ]}
+          >
+            <View style={styles.navegacaoLinha}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Slide anterior"
+                accessibilityState={{
+                  disabled: navegacaoBloqueada || !navegacao.anterior,
+                }}
+                disabled={navegacaoBloqueada || !navegacao.anterior}
+                onPress={() => navegar(navegacao.anterior)}
+                activeOpacity={0.75}
+                style={[
+                  styles.navegacaoBotao,
+                  {
+                    backgroundColor: `${theme.primaria}0D`,
+                    opacity:
+                      navegacaoBloqueada || !navegacao.anterior ? 0.4 : 1,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={18}
+                  color={theme.textoTerciaria}
+                />
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.navegacaoTexto,
+                    { color: theme.textoTerciaria },
+                  ]}
+                >
+                  Anterior
+                </Text>
+              </TouchableOpacity>
+
+              <View
+                style={styles.navegacaoPosicao}
+                accessibilityLiveRegion="polite"
+              >
+                <Text weight="Bold" style={styles.navegacaoContagem}>
+                  {navegacao.posicao !== null
+                    ? `${navegacao.posicao} de ${navegacao.total}`
+                    : navegacao.total}
+                </Text>
+                {navegacao.carregando ? (
+                  <ActivityIndicator
+                    accessibilityLabel="Carregando slide"
+                    size="small"
+                    color={theme.primaria}
+                  />
+                ) : (
+                  <Text
+                    style={[styles.navegacaoLegenda, { color: theme.textoSub }]}
+                  >
+                    slides na lista
+                  </Text>
+                )}
+              </View>
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Próximo slide"
+                accessibilityState={{
+                  disabled: navegacaoBloqueada || !navegacao.proximo,
+                }}
+                disabled={navegacaoBloqueada || !navegacao.proximo}
+                onPress={() => navegar(navegacao.proximo)}
+                activeOpacity={0.75}
+                style={[
+                  styles.navegacaoBotao,
+                  {
+                    backgroundColor: `${theme.primaria}0D`,
+                    opacity: navegacaoBloqueada || !navegacao.proximo ? 0.4 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  weight="SemiBold"
+                  style={[
+                    styles.navegacaoTexto,
+                    { color: theme.textoTerciaria },
+                  ]}
+                >
+                  Próximo
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.textoTerciaria}
+                />
+              </TouchableOpacity>
+            </View>
+            {navegacao.erro ? (
+              <Text
+                accessibilityRole="alert"
+                style={[styles.navegacaoErro, { color: theme.erro }]}
+              >
+                {navegacao.erro}
+              </Text>
+            ) : null}
+          </View>
+
           <ScrollView
+            key={slide.id}
             ref={scrollRef}
+            pointerEvents={navegacao.carregando ? "none" : "auto"}
             scrollEventThrottle={16}
             onScroll={(evento) => {
               if (visible && !restaurando.current) {
@@ -619,14 +757,15 @@ export default function RelatorioSlidePreview({
                   </View>
                   <RelatorioSlideVisual slide={slideParaPrevia} />
                   <Text
-                        weight="SemiBold"
-                        style={{
-                          fontSize: 10,
-                          color: theme.textoSub
-                        }}
-                      >
-                        (!) Algumas imagens/textos podem ficar diferentes na exportação final
-                      </Text>
+                    weight="SemiBold"
+                    style={{
+                      fontSize: 10,
+                      color: theme.textoSub,
+                    }}
+                  >
+                    (!) Algumas imagens/textos podem ficar diferentes da prévia na
+                    exportação final
+                  </Text>
                 </View>
 
                 <View
@@ -1026,8 +1165,8 @@ export default function RelatorioSlidePreview({
                           ? "Incluir slide no relatório"
                           : "Aplicar alterações ao slide"
                       }
-                      accessibilityState={{ disabled: revisando }}
-                      disabled={revisando}
+                      accessibilityState={{ disabled: acoesBloqueadas }}
+                      disabled={acoesBloqueadas}
                       onPress={() =>
                         setConfirmacao(
                           slide.revisao_pendente ? "INCLUIR" : "ALTERAR"
@@ -1061,15 +1200,15 @@ export default function RelatorioSlidePreview({
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel="Ignorar revisão do slide"
-                      accessibilityState={{ disabled: revisando }}
-                      disabled={revisando}
+                      accessibilityState={{ disabled: acoesBloqueadas }}
+                      disabled={acoesBloqueadas}
                       onPress={() => setConfirmacao("IGNORAR")}
                       style={[
                         styles.slideRevisaoBotao,
                         {
                           borderColor: theme.borda,
                           backgroundColor: theme.background,
-                          opacity: revisando ? 0.5 : 1,
+                          opacity: acoesBloqueadas ? 0.5 : 1,
                         },
                       ]}
                     >
@@ -1183,6 +1322,44 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
     borderBottomWidth: 1,
+  },
+  navegacao: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  navegacaoLinha: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  navegacaoBotao: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 8,
+    gap: 4,
+    borderRadius: 12,
+  },
+  navegacaoTexto: {
+    fontSize: 12,
+  },
+  navegacaoPosicao: {
+    minWidth: 76,
+    alignItems: "center",
+    gap: 2,
+  },
+  navegacaoContagem: {
+    fontSize: 13,
+  },
+  navegacaoLegenda: {
+    fontSize: 10,
+  },
+  navegacaoErro: {
+    marginTop: 8,
+    fontSize: 12,
   },
   headerTextos: {
     flex: 1,

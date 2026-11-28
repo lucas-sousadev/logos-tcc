@@ -8,7 +8,12 @@ import type FeedbackAlert from "@/components/forms/FeedbackAlert";
 export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
   const navigation = useNavigation();
   const focado = useIsFocused();
-  const pendente = useRef<{ acao: () => void; remover: boolean } | null>(null);
+  const pendente = useRef<{
+    acao: () => void;
+    remover: boolean;
+    executarAposSalvar?: boolean;
+  } | null>(null);
+  const salvamentoSaida = useRef(false);
   const [avisar, setAvisar] = useState(false);
   const [liberado, setLiberado] = useState(false);
 
@@ -24,7 +29,8 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
   }, [alterado, ocupado, liberado, focado]);
 
   usePreventRemove(!liberado && (alterado || ocupado), ({ data }) => {
-    if (ocupado || pendente.current) return;
+    if (ocupado || (pendente.current && !salvamentoSaida.current)) return;
+    salvamentoSaida.current = false;
     pendente.current = {
       acao: () => navigation.dispatch(data.action),
       remover: true,
@@ -40,23 +46,49 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
   }, [liberado, focado]);
 
   function continuar() {
+    salvamentoSaida.current = false;
     pendente.current = null;
     setAvisar(false);
   }
 
-  function confirmarSaida(acao: () => void) {
+  function confirmarSaida(
+    acao: () => void,
+    opcoes: { executarAposSalvar?: boolean } = {}
+  ) {
     if (ocupado) return;
+    salvamentoSaida.current = false;
     if (!alterado) {
+      pendente.current = null;
       acao();
       return;
     }
-    pendente.current = { acao, remover: false };
+    pendente.current = { acao, remover: false, ...opcoes };
     setAvisar(true);
   }
 
   function concluirSaida(acao: () => void) {
+    salvamentoSaida.current = false;
+    setAvisar(false);
     pendente.current = { acao, remover: true };
     setLiberado(true);
+  }
+
+  function iniciarSalvamentoSaida() {
+    salvamentoSaida.current = pendente.current !== null;
+    setAvisar(false);
+  }
+
+  function concluirSalvamento(aposSalvar: () => void) {
+    const pedido = pendente.current;
+    if (!salvamentoSaida.current || !pedido) {
+      aposSalvar();
+      return;
+    }
+
+    concluirSaida(() => {
+      aposSalvar();
+      if (pedido.executarAposSalvar !== false) pedido.acao();
+    });
   }
 
   const alertaProps: ComponentProps<typeof FeedbackAlert> = {
@@ -81,5 +113,11 @@ export function useSaidaFormulario(alterado: boolean, ocupado: boolean) {
     },
   };
 
-  return { confirmarSaida, concluirSaida, alertaProps };
+  return {
+    confirmarSaida,
+    concluirSaida,
+    iniciarSalvamentoSaida,
+    concluirSalvamento,
+    alertaProps,
+  };
 }

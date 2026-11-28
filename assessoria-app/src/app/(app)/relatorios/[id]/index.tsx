@@ -22,6 +22,10 @@ import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import { useSaidaFormulario } from "@/hooks/useSaidaFormulario";
 import { useRetornoVinculo } from "@/hooks/useRetornoVinculo";
+import {
+  useNavegacaoSlidesRelatorio,
+  type PaginaSlidesRelatorio,
+} from "@/hooks/useNavegacaoSlidesRelatorio";
 import { useVoltarNaPilha, useAbrirModulo } from "@/hooks/useNavegacaoModulos";
 import Button from "@/components/ui/Button";
 import Text from "@/components/ui/Text";
@@ -453,6 +457,10 @@ export default function DetalheRelatorio() {
   const [slideParaEditar, setSlideParaEditar] = useState<SlideRelatorio | null>(null);
   const slideReabrirId = useRef<number | null>(null);
   const ultimaConsultaSlides = useRef("");
+  const paginaPreparadaSlides = useRef<{
+    chave: string;
+    resposta: PaginaSlidesRelatorio;
+  } | null>(null);
   const [slideDecidindoId, setSlideDecidindoId] = useState<number | null>(null);
   const [slideParaIgnorar, setSlideParaIgnorar] = useState<SlideRelatorio | null>(null);
   const [slideParaValidar, setSlideParaValidar] = useState<SlideRelatorio | null>(null);
@@ -487,6 +495,40 @@ export default function DetalheRelatorio() {
   const travaPptx = useRef(false);
 
   const saida = useSaidaFormulario(false, excluindo);
+
+  const { navegacao: navegacaoSlides, cancelar: cancelarNavegacaoSlides } =
+    useNavegacaoSlidesRelatorio({
+      id,
+      slide: slideAberto,
+      slides,
+      paginacao,
+      busca: buscaAplicada,
+      revisao: filtroRevisao,
+      origens: origensRevisao,
+      versao: tentativa,
+      ativo: focado && !slideParaEditar,
+      bloqueado:
+        carregando || slideDecidindoId !== null || processandoAcaoSlides,
+      onAbrir: setSlideAberto,
+      onPagina: (resposta) => {
+        const novaPagina = resposta.pagination.page;
+        paginaPreparadaSlides.current = {
+          chave: JSON.stringify([
+            id,
+            novaPagina,
+            tentativa,
+            buscaAplicada,
+            filtroRevisao,
+            origensRevisao,
+          ]),
+          resposta,
+        };
+        setPagina(novaPagina);
+        setRelatorio(resposta.relatorio);
+        setSlides(resposta.slides);
+        setPaginacao(resposta.pagination);
+      },
+    });
 
   const voltarParaOrigemVinculada = useCallback(() => {
     if (retornarAoClipping()) {
@@ -557,14 +599,26 @@ export default function DetalheRelatorio() {
       ultimaConsultaSlides.current = chave;
 
       async function carregar() {
+        const preparada = paginaPreparadaSlides.current;
+        paginaPreparadaSlides.current = null;
+        const respostaPreparada =
+          preparada?.chave === chave ? preparada.resposta : null;
         setCarregando(true);
         setErro("");
-        if (!manterSlides) {
+        if (!manterSlides && !respostaPreparada) {
           setSlides([]);
         }
 
         try {
-          const resposta = await buscarRelatorio(id, pagina, buscaAplicada, filtroRevisao, origensRevisao);
+          const resposta =
+            respostaPreparada ??
+            (await buscarRelatorio(
+              id,
+              pagina,
+              buscaAplicada,
+              filtroRevisao,
+              origensRevisao
+            ));
 
           if (!ativo) return;
 
@@ -1862,7 +1916,11 @@ export default function DetalheRelatorio() {
           visible={focado}
           slide={slideAberto}
           relatorio={relatorio}
-          onClose={() => setSlideAberto(null)}
+          navegacao={navegacaoSlides}
+          onClose={() => {
+            cancelarNavegacaoSlides();
+            setSlideAberto(null);
+          }}
           onEditar={
             temPermissao("RELATORIOS", "EDITAR") && slideAberto.tipo === "CLIPPING"
               ? () => setSlideParaEditar(slideAberto)

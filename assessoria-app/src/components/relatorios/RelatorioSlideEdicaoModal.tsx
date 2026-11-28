@@ -296,7 +296,7 @@ export default function RelatorioSlideEdicaoModal({
 
   function fecharEdicao() {
     if (salvamentoEmCurso.current || selecaoEmCurso.current) return;
-    saida.confirmarSaida(onClose);
+    saida.confirmarSaida(onClose, { executarAposSalvar: false });
   }
 
   async function salvar() {
@@ -348,7 +348,7 @@ export default function RelatorioSlideEdicaoModal({
       estadoImagem !== "trocar" &&
       estadoLogo !== "trocar"
     ) {
-      onClose();
+      saida.concluirSalvamento(onClose);
       return;
     }
 
@@ -366,7 +366,7 @@ export default function RelatorioSlideEdicaoModal({
       }
 
       await atualizarSlideRelatorio(slide.relatorio_id, slide.id, dados);
-      if (montado.current) onSaved();
+      if (montado.current) saida.concluirSalvamento(onSaved);
     } catch (error) {
       if (!montado.current) return;
       setErro(
@@ -734,7 +734,7 @@ export default function RelatorioSlideEdicaoModal({
         tertiaryLabel={descricaoExcedida ? undefined : "SALVAR"}
         loading={ocupado}
         onTertiary={() => {
-          saida.alertaProps.onClose();
+          saida.iniciarSalvamentoSaida();
           void salvar();
         }}
       />

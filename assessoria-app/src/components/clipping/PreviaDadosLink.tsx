@@ -833,7 +833,7 @@ export default function PreviaDadosLink({
                       }}
                       style={[
                         styles.cadastrar,
-                        { opacity: erroSecao ? 0.5 : 1 },
+                        { opacity: erroSecao ? 0.5 : 1, marginTop: 7, marginBottom: -10 },
                       ]}
                     >
                       <Ionicons
